@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -23,7 +24,9 @@ func NewCSVRepository() repository.CSVRepository {
 func (cr *csvRepository) List(f *os.File) (*model.CSV, error) {
 	r := csv.NewReader(f)
 
-	var c model.CSV
+	c := model.CSV{
+		Name: filepath.Base(f.Name()),
+	}
 	for {
 		row, err := r.Read()
 		if err == io.EOF {

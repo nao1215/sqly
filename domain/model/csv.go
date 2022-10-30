@@ -1,8 +1,11 @@
 // Package model defines Data Transfer Object (Entity, Value Object)
 package model
 
+import "strings"
+
 // CSV is csv data with header.
 type CSV struct {
+	Name    string
 	Header  Header
 	Records []Record
 }
@@ -26,4 +29,13 @@ func (c *CSV) SetHeader(header Header) {
 // SetRecord set csv record.
 func (c *CSV) SetRecord(record Record) {
 	c.Records = append(c.Records, record)
+}
+
+// ToTable convert CSV to Table.
+func (c *CSV) ToTable() *Table {
+	return &Table{
+		Name:    strings.TrimSuffix(c.Name, ".csv"),
+		Header:  c.Header,
+		Records: c.Records,
+	}
 }
