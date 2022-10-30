@@ -3,6 +3,7 @@ package sqlite3
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -47,6 +48,35 @@ func (cr *sqlite3Repository) Insert(t *model.Table) error {
 			return err
 		}
 	}
+	return tx.Commit()
+}
+
+func (cr *sqlite3Repository) Exec(query string) error {
+	tx, err := cr.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		aa := ""
+		err := rows.Scan(&aa)
+		if err != nil {
+			return err
+		}
+		fmt.Println(aa)
+	}
+	err = rows.Err()
+	if err != nil {
+		return err
+	}
+	fmt.Println(query)
 	return tx.Commit()
 }
 

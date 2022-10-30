@@ -11,4 +11,6 @@ type SQLite3Repository interface {
 	CreateTable(t *model.Table) error
 	// Insert set records in DB
 	Insert(t *model.Table) error
+	// Exec execute query
+	Exec(query string) error
 }

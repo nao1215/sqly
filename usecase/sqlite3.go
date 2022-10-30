@@ -22,3 +22,7 @@ func (si *SQLite3Interactor) CreateTable(t *model.Table) error {
 func (si *SQLite3Interactor) Insert(t *model.Table) error {
 	return si.Repository.Insert(t)
 }
+
+func (si *SQLite3Interactor) Exec(query string) error {
+	return si.Repository.Exec(query)
+}

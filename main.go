@@ -17,7 +17,7 @@ var Version string
 
 func main() {
 	os.Remove("./foo.db")
-	db, err := sql.Open("sqlite3", "foo.db")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,5 +39,10 @@ func main() {
 	if err := sqlite3Inreractor.Insert(table); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := sqlite3Inreractor.Exec("SELECT 配達区分 FROM sample;"); err != nil {
+		log.Fatal(err)
+	}
+
 	fmt.Println("success")
 }
