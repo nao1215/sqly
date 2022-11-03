@@ -57,7 +57,6 @@ func (c CommandList) sortCommandNameKey() []string {
 
 // exitCommand return ErrExitSqly. The caller shall terminate the sqly command.
 func (c CommandList) exitCommand() error {
-	fmt.Println("")
 	return ErrExitSqly
 }
 

@@ -24,7 +24,8 @@ func NewShell() (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	commandList := shell.NewCommands()
-	interactive := shell.NewInteractive()
+	history := shell.NewHistory()
+	interactive := shell.NewInteractive(history)
 	csvRepository := csv.NewCSVRepository()
 	csvInteractor := usecase.NewCSVInteractor(csvRepository)
 	db, cleanup, err := config.NewDB()

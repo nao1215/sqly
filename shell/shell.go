@@ -62,7 +62,7 @@ func (s *Shell) Run() error {
 }
 
 // communicate is interactive command prompt for sqly.
-// This function recieve user input (it's SQL query or helper command) and
+// This function receive user input (it's SQL query or helper command) and
 // request the usecase layer to process it.
 func (s *Shell) communicate() error {
 	tty, err := tty.Open()
@@ -72,7 +72,9 @@ func (s *Shell) communicate() error {
 	defer tty.Close()
 
 	for {
-		fmt.Fprintf(Stdout, "\r%s>>%s", color.GreenString("sqly"), s.interactive.currentInput)
+		s.interactive.clearLine()
+		s.interactive.printPrompt()
+
 		r, err := tty.ReadRune()
 		if err != nil {
 			return err
@@ -101,13 +103,12 @@ func (s *Shell) communicate() error {
 					return err
 				}
 				switch r {
-				// TODO: add execute history
 				case 'A':
-					fmt.Println("ALLOW-UP")
+					s.interactive.olderInput()
 				case 'B':
-					fmt.Println("ALLOW-DOWN")
-				// TODO: add completion
+					s.interactive.newerInput()
 				case 'C':
+					// TODO: add completion
 					fmt.Println("ALLOW-RIGHT")
 				case 'D':
 					fmt.Println("ALLOW-LEFT")
@@ -148,7 +149,7 @@ func (s *Shell) printWelcomeMessage() {
 
 // exec execute sqly helper command or sql query.
 func (s *Shell) exec() error {
-	defer s.interactive.resetUserInput()
+	defer s.interactive.history.alloc()
 
 	req := s.interactive.request()
 	if s.commands.has(req) {
