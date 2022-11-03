@@ -23,6 +23,9 @@ func NewShell() (*shell.Shell, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	commandList := shell.NewCommands()
+	history := shell.NewHistory()
+	interactive := shell.NewInteractive(history)
 	csvRepository := csv.NewCSVRepository()
 	csvInteractor := usecase.NewCSVInteractor(csvRepository)
 	db, cleanup, err := config.NewDB()
@@ -31,7 +34,7 @@ func NewShell() (*shell.Shell, func(), error) {
 	}
 	sqLite3Repository := sqlite3.NewSQLite3Repository(db)
 	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository)
-	shellShell := shell.NewShell(arg, csvInteractor, sqLite3Interactor)
+	shellShell := shell.NewShell(arg, commandList, interactive, csvInteractor, sqLite3Interactor)
 	return shellShell, func() {
 		cleanup()
 	}, nil

@@ -50,10 +50,13 @@ func Test_generateInsertStatement(t *testing.T) {
 			args: args{
 				t: &model.Table{
 					Name:   "test",
-					Header: model.Header{"abc", "def", "ghj"},
+					Header: model.Header{"a_header", "b_header", "c_header"},
+					Records: []model.Record{
+						{"a", "b", "c"},
+					},
 				},
 			},
-			want: "INSERT INTO `test`VALUES(?, ?, ?);",
+			want: "INSERT INTO `test` VALUES ('a', 'b', 'c');",
 		},
 	}
 	for _, tt := range tests {
