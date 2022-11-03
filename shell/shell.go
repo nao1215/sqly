@@ -1,8 +1,11 @@
+// Package shell is sqly-shell. shell control user input
+// (it's SQL query or helper command) and request the usecase layer to process it.
 package shell
 
 import (
+	"errors"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
@@ -24,15 +27,20 @@ var (
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
 	currentInput      string
+	commands          CommandList
+	interactive       *Interactive
 	argument          *config.Arg
 	csvInteractor     *usecase.CSVInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
-func NewShell(arg *config.Arg, csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
+func NewShell(arg *config.Arg, cmds CommandList, interactive *Interactive,
+	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
 		argument:          arg,
+		commands:          cmds,
+		interactive:       interactive,
 		csvInteractor:     csv,
 		sqlite3Interactor: sqlite3,
 	}
@@ -49,10 +57,66 @@ func (s *Shell) Run() error {
 	if err := s.init(); err != nil {
 		return err
 	}
-
 	s.printWelcomeMessage()
-	s.interactive()
-	return nil
+	return s.communicate()
+}
+
+// communicate is interactive command prompt for sqly.
+// This function recieve user input (it's SQL query or helper command) and
+// request the usecase layer to process it.
+func (s *Shell) communicate() error {
+	tty, err := tty.Open()
+	if err != nil {
+		return err
+	}
+	defer tty.Close()
+
+	for {
+		fmt.Fprintf(Stdout, "\r%s>>%s", color.GreenString("sqly"), s.interactive.currentInput)
+		r, err := tty.ReadRune()
+		if err != nil {
+			return err
+		}
+
+		switch r {
+		case runeBackSpace, runeDelete:
+			s.interactive.deleteLastInput()
+		case runeEnter:
+			fmt.Println("")
+			if err := s.exec(); err != nil {
+				if errors.Is(err, ErrExitSqly) {
+					return nil // user input ".exit"
+				}
+				fmt.Fprintln(os.Stderr, err)
+			}
+		case runeTabKey:
+			// TODO: completion
+			fmt.Println("Tab")
+			continue
+		case runeEscapeKey:
+			r, err = tty.ReadRune()
+			if err == nil && r == 0x5b {
+				r, err = tty.ReadRune()
+				if err != nil {
+					return err
+				}
+				switch r {
+				// TODO: add execute history
+				case 'A':
+					fmt.Println("ALLOW-UP")
+				case 'B':
+					fmt.Println("ALLOW-DOWN")
+				// TODO: add completion
+				case 'C':
+					fmt.Println("ALLOW-RIGHT")
+				case 'D':
+					fmt.Println("ALLOW-LEFT")
+				}
+			}
+		default:
+			s.interactive.append(r)
+		}
+	}
 }
 
 // init store CSV data to DB.
@@ -75,30 +139,28 @@ func (s *Shell) init() error {
 
 // printWelcomeMessage print version and help information.
 func (s *Shell) printWelcomeMessage() {
-	fmt.Fprintf(Stdout, "%s %s\n", color.GreenString("sqly"), Version)
-	fmt.Fprintf(Stdout, "enter %s for usage hints.\n", color.CyanString("\".help\""))
+	fmt.Fprintf(Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), Version)
+	fmt.Println("")
+	fmt.Println("enter \"SQL query\" or \"sqly command that beginning with a dot\".")
+	fmt.Fprintf(Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
+	fmt.Println("")
 }
 
-// interactive is interactive shell for sqly command.
-// This function recieve user input (it's SQL query or helper command) and
-// request the usecase layer to process it.
-func (s *Shell) interactive() {
-	tty, err := tty.Open()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer tty.Close()
+// exec execute sqly helper command or sql query.
+func (s *Shell) exec() error {
+	defer s.interactive.resetUserInput()
 
-	fmt.Fprintf(Stdout, "%s>>", color.GreenString("sqly"))
-	input := ""
-	for {
-		r, err := tty.ReadRune()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Enter押下したかの判定と補完処理を追加する
-		input += string(r)
-		fmt.Fprintf(Stdout, "\r%s>>%s", color.GreenString("sqly"), input)
+	req := s.interactive.request()
+	if s.commands.has(req) {
+		return s.commands[req].execute()
 	}
+
+	if s.commands.hasPrefix(req) {
+		return errors.New("no such sqly command: " + color.CyanString(req))
+	}
+
+	// Exec query here
+	// Check if it is the correct query
+
+	return nil
 }
