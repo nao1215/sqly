@@ -42,7 +42,9 @@ func (r *sqlite3Repository) ShowTables(ctx context.Context) ([]*model.Table, err
 	tables := []*model.Table{}
 	var name string
 	for res.Next() {
-		res.Scan(&name)
+		if err := res.Scan(&name); err != nil {
+			return nil, err
+		}
 		tables = append(tables, &model.Table{Name: name})
 	}
 	return tables, nil
