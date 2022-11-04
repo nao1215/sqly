@@ -1,13 +1,12 @@
-package shell
+// Package cmd define sqly helper commands
+package cmd
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"sort"
 	"strings"
 
-	"github.com/fatih/color"
+	"github.com/nao1215/sqly/shell"
 )
 
 var (
@@ -17,7 +16,7 @@ var (
 
 // command is type of sqly helper command
 type command struct {
-	execute     func(s *Shell) error
+	execute     func(s *shell.Shell) error
 	description string
 }
 
@@ -33,14 +32,14 @@ func NewCommands() CommandList {
 	return c
 }
 
-// has return whether command list has command that key(command name)
-func (c CommandList) has(key string) bool {
+// hasCmd return whether command list hasCmd command that key(command name)
+func (c CommandList) hasCmd(key string) bool {
 	_, ok := c[key]
 	return ok
 }
 
-// hasPrefix returns whether s has dot prefix or not
-func (c CommandList) hasPrefix(s string) bool {
+// hasCmdPrefix returns whether s has dot prefix or not
+func (c CommandList) hasCmdPrefix(s string) bool {
 	return strings.HasPrefix(s, ".")
 }
 
@@ -53,17 +52,4 @@ func (c CommandList) sortCommandNameKey() []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// exitCommand return ErrExitSqly. The caller shall terminate the sqly command.
-func (c CommandList) exitCommand(s *Shell) error {
-	return ErrExitSqly
-}
-
-// helpCommand print all sqly command and their description.
-func (c CommandList) helpCommand(s *Shell) error {
-	for _, cmdName := range c.sortCommandNameKey() {
-		fmt.Fprintf(os.Stdout, "      %10s: %s\n", color.CyanString(cmdName), c[cmdName].description)
-	}
-	return nil
 }
