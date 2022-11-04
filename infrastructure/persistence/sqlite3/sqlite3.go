@@ -2,6 +2,7 @@
 package sqlite3
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -19,24 +20,29 @@ func NewSQLite3Repository(db *sql.DB) repository.SQLite3Repository {
 }
 
 // CreateTable create a DB table with columns given as model.Table
-func (cr *sqlite3Repository) CreateTable(t *model.Table) error {
+func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) error {
 	if err := t.Valid(); err != nil {
 		return err
 	}
-	_, err := cr.db.Exec(generateCreateTableStatement((t)))
+	_, err := r.db.ExecContext(ctx, generateCreateTableStatement((t)))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+// ShowTables return all table name.
+func (r *sqlite3Repository) ShowTables(ctx context.Context) ([]*model.Table, error) {
+	return nil, nil
+}
+
 // Insert set records in DB
-func (cr *sqlite3Repository) Insert(t *model.Table) error {
+func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	if err := t.Valid(); err != nil {
 		return err
 	}
 
-	tx, err := cr.db.Begin()
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -44,21 +50,22 @@ func (cr *sqlite3Repository) Insert(t *model.Table) error {
 
 	// TODO: Improvement in execution speed
 	for _, v := range t.Records {
-		if _, err := tx.Exec(generateInsertStatement(t.Name, v)); err != nil {
+		if _, err := tx.ExecContext(ctx, generateInsertStatement(t.Name, v)); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-func (cr *sqlite3Repository) Exec(query string) error {
-	tx, err := cr.db.Begin()
+// Exec execute query
+func (r *sqlite3Repository) Exec(ctx context.Context, query string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.Query(query)
+	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -76,7 +83,7 @@ func (cr *sqlite3Repository) Exec(query string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(query)
+
 	return tx.Commit()
 }
 

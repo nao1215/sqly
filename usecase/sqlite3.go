@@ -1,6 +1,8 @@
 package usecase
 
 import (
+	"context"
+
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 )
@@ -15,14 +17,22 @@ func NewSQLite3Interactor(r repository.SQLite3Repository) *SQLite3Interactor {
 	return &SQLite3Interactor{Repository: r}
 }
 
-func (si *SQLite3Interactor) CreateTable(t *model.Table) error {
-	return si.Repository.CreateTable(t)
+// CreateTable create a DB table with columns given as model.Table
+func (si *SQLite3Interactor) CreateTable(ctx context.Context, t *model.Table) error {
+	return si.Repository.CreateTable(ctx, t)
 }
 
-func (si *SQLite3Interactor) Insert(t *model.Table) error {
-	return si.Repository.Insert(t)
+// ShowTables return all table name.
+func (si *SQLite3Interactor) ShowTables(ctx context.Context) ([]*model.Table, error) {
+	return si.Repository.ShowTables(ctx)
 }
 
-func (si *SQLite3Interactor) Exec(query string) error {
-	return si.Repository.Exec(query)
+// Insert set records in DB
+func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
+	return si.Repository.Insert(ctx, t)
+}
+
+// Exec execute query
+func (si *SQLite3Interactor) Exec(ctx context.Context, query string) error {
+	return si.Repository.Exec(ctx, query)
 }

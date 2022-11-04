@@ -3,6 +3,7 @@
 package shell
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,7 +27,7 @@ var (
 // Shell is main class of the sqly command.
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
-	currentInput      string
+	ctx               context.Context
 	commands          CommandList
 	interactive       *Interactive
 	argument          *config.Arg
@@ -38,6 +39,7 @@ type Shell struct {
 func NewShell(arg *config.Arg, cmds CommandList, interactive *Interactive,
 	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
+		ctx:               context.Background(),
 		argument:          arg,
 		commands:          cmds,
 		interactive:       interactive,
@@ -128,11 +130,11 @@ func (s *Shell) init() error {
 	}
 
 	table := csv.ToTable()
-	if err := s.sqlite3Interactor.CreateTable(table); err != nil {
+	if err := s.sqlite3Interactor.CreateTable(s.ctx, table); err != nil {
 		return err
 	}
 
-	if err := s.sqlite3Interactor.Insert(table); err != nil {
+	if err := s.sqlite3Interactor.Insert(s.ctx, table); err != nil {
 		return err
 	}
 	return nil
@@ -153,7 +155,7 @@ func (s *Shell) exec() error {
 
 	req := s.interactive.request()
 	if s.commands.has(req) {
-		return s.commands[req].execute()
+		return s.commands[req].execute(s)
 	}
 
 	if s.commands.hasPrefix(req) {

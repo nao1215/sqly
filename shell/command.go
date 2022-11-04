@@ -17,7 +17,7 @@ var (
 
 // command is type of sqly helper command
 type command struct {
-	execute     func() error
+	execute     func(s *Shell) error
 	description string
 }
 
@@ -56,12 +56,12 @@ func (c CommandList) sortCommandNameKey() []string {
 }
 
 // exitCommand return ErrExitSqly. The caller shall terminate the sqly command.
-func (c CommandList) exitCommand() error {
+func (c CommandList) exitCommand(s *Shell) error {
 	return ErrExitSqly
 }
 
 // helpCommand print all sqly command and their description.
-func (c CommandList) helpCommand() error {
+func (c CommandList) helpCommand(s *Shell) error {
 	for _, cmdName := range c.sortCommandNameKey() {
 		fmt.Fprintf(os.Stdout, "      %10s: %s\n", color.CyanString(cmdName), c[cmdName].description)
 	}
