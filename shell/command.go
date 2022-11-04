@@ -1,12 +1,9 @@
-// Package cmd define sqly helper commands
-package cmd
+package shell
 
 import (
 	"errors"
 	"sort"
 	"strings"
-
-	"github.com/nao1215/sqly/shell"
 )
 
 var (
@@ -16,7 +13,7 @@ var (
 
 // command is type of sqly helper command
 type command struct {
-	execute     func(s *shell.Shell) error
+	execute     func(s *Shell) error
 	description string
 }
 
@@ -28,6 +25,7 @@ type CommandList map[string]command
 func NewCommands() CommandList {
 	c := CommandList{}
 	c[".exit"] = command{execute: c.exitCommand, description: "exit sqly"}
+	c[".tables"] = command{execute: c.tablesCommand, description: "print tables"}
 	c[".help"] = command{execute: c.helpCommand, description: "print help message"}
 	return c
 }
