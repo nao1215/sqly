@@ -33,7 +33,19 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 
 // ShowTables return all table name.
 func (r *sqlite3Repository) ShowTables(ctx context.Context) ([]*model.Table, error) {
-	return nil, nil
+	res, err := r.db.QueryContext(ctx,
+		"SELECT name FROM sqlite_master WHERE type = 'table'")
+	if err != nil {
+		return nil, err
+	}
+
+	tables := []*model.Table{}
+	var name string
+	for res.Next() {
+		res.Scan(&name)
+		tables = append(tables, &model.Table{Name: name})
+	}
+	return tables, nil
 }
 
 // Insert set records in DB
