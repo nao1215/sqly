@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
@@ -124,29 +125,20 @@ func (s *Shell) communicate() error {
 
 // init store CSV data to DB.
 func (s *Shell) init() error {
-	csv, err := s.CsvInteractor.List(s.argument.FilePath)
-	if err != nil {
-		return err
+	if len(s.argument.FilePaths) == 0 {
+		return nil
 	}
-
-	table := csv.ToTable()
-	if err := s.Sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {
-		return err
-	}
-
-	if err := s.Sqlite3Interactor.Insert(s.Ctx, table); err != nil {
-		return err
-	}
+	s.commands[".import"].execute(s, s.argument.FilePaths)
 	return nil
 }
 
 // printWelcomeMessage print version and help information.
 func (s *Shell) printWelcomeMessage() {
 	fmt.Fprintf(Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), Version)
-	fmt.Println("")
-	fmt.Println("enter \"SQL query\" or \"sqly command that beginning with a dot\".")
+	fmt.Fprintln(Stdout, "")
+	fmt.Fprintln(Stdout, "enter \"SQL query\" or \"sqly command that beginning with a dot\".")
 	fmt.Fprintf(Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
-	fmt.Println("")
+	fmt.Fprintln(Stdout, "")
 }
 
 // exec execute sqly helper command or sql query.
@@ -154,8 +146,9 @@ func (s *Shell) exec() error {
 	defer s.interactive.history.alloc()
 
 	req := s.interactive.request()
-	if s.commands.hasCmd(req) {
-		return s.commands[req].execute(s)
+	argv := strings.Split(trimWordGaps(req), " ")
+	if s.commands.hasCmd(argv[0]) {
+		return s.commands[argv[0]].execute(s, argv[1:])
 	}
 
 	if s.commands.hasCmdPrefix(req) {

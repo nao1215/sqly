@@ -2,7 +2,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/fatih/color"
@@ -15,7 +14,7 @@ var Version string
 // Arg is a structure for managing options and arguments
 type Arg struct {
 	// FilePath is CSV file paths that are imported into the DB.
-	FilePath string
+	FilePaths []string
 	// HelpFlag is HelpFlag flag.
 	HelpFlag bool
 	// Usage print help message
@@ -29,11 +28,7 @@ func NewArg() (*Arg, error) {
 	pflag.Parse()
 
 	arg.Usage = usage
-
-	if !arg.HelpFlag && len(pflag.Args()) == 0 {
-		return nil, errors.New("need to specify csv file path")
-	}
-	arg.FilePath = pflag.Arg(0)
+	arg.FilePaths = pflag.Args()
 
 	return arg, nil
 }

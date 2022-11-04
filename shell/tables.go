@@ -8,7 +8,7 @@ import (
 )
 
 // tablesCommand print all tables name in DB.
-func (c CommandList) tablesCommand(s *Shell) error {
+func (c CommandList) tablesCommand(s *Shell, argv []string) error {
 	tables, err := s.Sqlite3Interactor.ShowTables(s.Ctx)
 	if err != nil {
 		return err
