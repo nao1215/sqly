@@ -4,7 +4,7 @@ env:
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
+    #- go generate ./...
 builds:
   - main: .
     ldflags:
