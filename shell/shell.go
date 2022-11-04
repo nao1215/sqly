@@ -128,7 +128,9 @@ func (s *Shell) init() error {
 	if len(s.argument.FilePaths) == 0 {
 		return nil
 	}
-	s.commands[".import"].execute(s, s.argument.FilePaths)
+	if err := s.commands[".import"].execute(s, s.argument.FilePaths); err != nil {
+		return err
+	}
 	return nil
 }
 
