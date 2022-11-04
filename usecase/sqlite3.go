@@ -22,9 +22,9 @@ func (si *SQLite3Interactor) CreateTable(ctx context.Context, t *model.Table) er
 	return si.Repository.CreateTable(ctx, t)
 }
 
-// ShowTables return all table name.
-func (si *SQLite3Interactor) ShowTables(ctx context.Context) ([]*model.Table, error) {
-	return si.Repository.ShowTables(ctx)
+// TablesName return all table name.
+func (si *SQLite3Interactor) TablesName(ctx context.Context) ([]*model.Table, error) {
+	return si.Repository.TablesName(ctx)
 }
 
 // Insert set records in DB
@@ -33,6 +33,6 @@ func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
 }
 
 // Exec execute query
-func (si *SQLite3Interactor) Exec(ctx context.Context, query string) error {
+func (si *SQLite3Interactor) Exec(ctx context.Context, query string) ([]*model.Table, error) {
 	return si.Repository.Exec(ctx, query)
 }
