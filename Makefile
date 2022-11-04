@@ -15,7 +15,7 @@ GOOS        = ""
 GOARCH      = ""
 GO_PKGROOT  = ./...
 GO_PACKAGES = $(shell $(GO_LIST) $(GO_PKGROOT))
-GO_LDFLAGS  = -ldflags '-X github.com/nao1215/sqly/shell.Version=${VERSION}'  -ldflags '-X github.com/nao1215/sqly/config.Version=${VERSION}'
+GO_LDFLAGS  = -ldflags '-X github.com/nao1215/sqly/config.Version=${VERSION} -X github.com/nao1215/sqly/shell.Version=${VERSION}'
 
 build:  ## Build binary
 	env GO111MODULE=on CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO_BUILD) $(GO_LDFLAGS) -o $(APP) main.go
