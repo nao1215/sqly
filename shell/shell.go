@@ -3,6 +3,7 @@
 package shell
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,23 +27,24 @@ var (
 // Shell is main class of the sqly command.
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
-	currentInput      string
+	Ctx               context.Context
 	commands          CommandList
 	interactive       *Interactive
 	argument          *config.Arg
-	csvInteractor     *usecase.CSVInteractor
-	sqlite3Interactor *usecase.SQLite3Interactor
+	CsvInteractor     *usecase.CSVInteractor
+	Sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cmds CommandList, interactive *Interactive,
 	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
+		Ctx:               context.Background(),
 		argument:          arg,
 		commands:          cmds,
 		interactive:       interactive,
-		csvInteractor:     csv,
-		sqlite3Interactor: sqlite3,
+		CsvInteractor:     csv,
+		Sqlite3Interactor: sqlite3,
 	}
 }
 
@@ -122,17 +124,17 @@ func (s *Shell) communicate() error {
 
 // init store CSV data to DB.
 func (s *Shell) init() error {
-	csv, err := s.csvInteractor.List(s.argument.FilePath)
+	csv, err := s.CsvInteractor.List(s.argument.FilePath)
 	if err != nil {
 		return err
 	}
 
 	table := csv.ToTable()
-	if err := s.sqlite3Interactor.CreateTable(table); err != nil {
+	if err := s.Sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {
 		return err
 	}
 
-	if err := s.sqlite3Interactor.Insert(table); err != nil {
+	if err := s.Sqlite3Interactor.Insert(s.Ctx, table); err != nil {
 		return err
 	}
 	return nil
@@ -152,11 +154,11 @@ func (s *Shell) exec() error {
 	defer s.interactive.history.alloc()
 
 	req := s.interactive.request()
-	if s.commands.has(req) {
-		return s.commands[req].execute()
+	if s.commands.hasCmd(req) {
+		return s.commands[req].execute(s)
 	}
 
-	if s.commands.hasPrefix(req) {
+	if s.commands.hasCmdPrefix(req) {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
