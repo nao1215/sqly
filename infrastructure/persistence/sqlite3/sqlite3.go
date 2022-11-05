@@ -4,7 +4,6 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -31,8 +30,8 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	return nil
 }
 
-// ShowTables return all table name.
-func (r *sqlite3Repository) ShowTables(ctx context.Context) ([]*model.Table, error) {
+// TablesName return all table name.
+func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
 	res, err := r.db.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table'")
 	if err != nil {
@@ -72,33 +71,58 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 }
 
 // Exec execute query
-func (r *sqlite3Repository) Exec(ctx context.Context, query string) error {
+func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		aa := ""
-		err := rows.Scan(&aa)
-		if err != nil {
-			return err
-		}
-		fmt.Println(aa)
-	}
-	err = rows.Err()
+	header, err := rows.Columns()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return tx.Commit()
+	table := model.Table{
+		Name:   "",
+		Header: header,
+	}
+
+	scanDest := make([]interface{}, len(header))
+	rawResult := make([][]byte, len(header))
+
+	for i := range header {
+		scanDest[i] = &rawResult[i]
+	}
+
+	for rows.Next() {
+		result := make([]string, len(header))
+		err := rows.Scan(scanDest...)
+		if err != nil {
+			return nil, err
+		}
+
+		for i, raw := range rawResult {
+			result[i] = string(raw)
+		}
+		table.Records = append(table.Records, result)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &table, nil
 }
 
 func generateCreateTableStatement(t *model.Table) string {

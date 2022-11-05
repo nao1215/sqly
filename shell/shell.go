@@ -60,6 +60,18 @@ func (s *Shell) Run() error {
 	if err := s.init(); err != nil {
 		return err
 	}
+
+	if s.argument.Query != "" {
+		table, err := s.Sqlite3Interactor.Exec(s.Ctx, s.argument.Query)
+		if err != nil {
+			return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(s.argument.Query))
+		}
+		if table != nil {
+			table.Print(os.Stdout)
+		}
+		return nil
+	}
+
 	s.printWelcomeMessage()
 	return s.communicate()
 }
@@ -158,7 +170,14 @@ func (s *Shell) exec() error {
 	}
 
 	// Exec query here
-	// Check if it is the correct query
+	// TODO:Check if it is the correct query or usecase.
+	table, err := s.Sqlite3Interactor.Exec(s.Ctx, req)
+	if err != nil {
+		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(req))
+	}
+	if table != nil {
+		table.Print(os.Stdout)
+	}
 
 	return nil
 }
