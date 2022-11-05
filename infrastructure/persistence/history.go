@@ -6,7 +6,9 @@ import (
 	"database/sql"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
+	infra "github.com/nao1215/sqly/infrastructure"
 )
 
 const historyTableName = "`history`"
@@ -28,7 +30,7 @@ func (h *historyRepository) CreateTable(ctx context.Context) error {
 	}
 	defer tx.Rollback()
 
-	q := "CREATE TABLE IF NOT EXISTS `history` (id INTEGER, request TEXT)"
+	q := "CREATE TABLE IF NOT EXISTS `history` (id INTEGER PRIMARY KEY AUTOINCREMENT, request TEXT)"
 	_, err = tx.ExecContext(ctx, q)
 	if err != nil {
 		return err
@@ -38,6 +40,26 @@ func (h *historyRepository) CreateTable(ctx context.Context) error {
 	_, err = tx.ExecContext(ctx, q)
 	if err != nil {
 		return err
+	}
+	return tx.Commit()
+}
+
+// Create set record in DB
+func (h *historyRepository) Create(ctx context.Context, t *model.Table) error {
+	if err := t.Valid(); err != nil {
+		return err
+	}
+
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, v := range t.Records {
+		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name, v)); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
