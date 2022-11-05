@@ -10,17 +10,17 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 	}
 
 	for _, v := range argv {
-		csv, err := s.CsvInteractor.List(v)
+		csv, err := s.csvInteractor.List(v)
 		if err != nil {
 			return err
 		}
 
 		table := csv.ToTable()
-		if err := s.Sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {
+		if err := s.sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {
 			return err
 		}
 
-		if err := s.Sqlite3Interactor.Insert(s.Ctx, table); err != nil {
+		if err := s.sqlite3Interactor.Insert(s.Ctx, table); err != nil {
 			return err
 		}
 	}

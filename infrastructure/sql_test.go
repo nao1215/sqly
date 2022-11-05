@@ -1,5 +1,4 @@
-// Package sqlite3 handle sqlite3 database.
-package sqlite3
+package infrastructure
 
 import (
 	"testing"
@@ -29,7 +28,7 @@ func Test_generateCreateTableStatement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := generateCreateTableStatement(tt.args.t); got != tt.want {
+			if got := GenerateCreateTableStatement(tt.args.t); got != tt.want {
 				t.Errorf("createTableQuery() = %v, want %v", got, tt.want)
 			}
 		})
@@ -61,7 +60,7 @@ func Test_generateInsertStatement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := generateInsertStatement(tt.args.t.Name, tt.args.t.Records[0]); got != tt.want {
+			if got := GenerateInsertStatement(tt.args.t.Name, tt.args.t.Records[0]); got != tt.want {
 				t.Errorf("generateInsertStatement() = %v, want %v", got, tt.want)
 			}
 		})
