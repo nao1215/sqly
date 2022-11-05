@@ -4,7 +4,6 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -114,7 +113,6 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 		}
 		table.Records = append(table.Records, result)
 	}
-	fmt.Println(table.Records)
 
 	err = rows.Err()
 	if err != nil {
