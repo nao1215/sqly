@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	"github.com/fatih/color"
 	"github.com/spf13/pflag"
@@ -19,21 +20,27 @@ var (
 type Arg struct {
 	// FilePath is CSV file paths that are imported into the DB.
 	FilePaths []string
-	// HelpFlag is HelpFlag flag (for --help option)
+	// HelpFlag is flag whethe print usage or not (for --help option)
 	HelpFlag bool
+	// VersionFlag is flag whethe print version or not (for --version option)
+	VersionFlag bool
 	// Query is SQL query (for --sql option)
 	Query string
 	// Usage print help message
 	Usage func()
+	// Version print version message
+	Version func()
 }
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 func NewArg() (*Arg, error) {
 	arg := &Arg{}
-	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "show help message")
+	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
+	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
 	pflag.Parse()
 
 	arg.Usage = usage
+	arg.Version = version
 	arg.FilePaths = pflag.Args()
 	arg.Query = *query
 
@@ -41,7 +48,7 @@ func NewArg() (*Arg, error) {
 }
 
 func usage() {
-	fmt.Printf("%s - execute SQL against CSV easily (%s)\n", color.GreenString("sqly"), Version)
+	fmt.Printf("%s - execute SQL against CSV easily (%s)\n", color.GreenString("sqly"), GetVersion())
 	fmt.Println("")
 	fmt.Println("[Usage]")
 	fmt.Printf("  %s [OPTIONS] [FILE_PATH]\n", color.GreenString("sqly"))
@@ -64,4 +71,20 @@ func usage() {
 	fmt.Println("")
 	fmt.Println("sqly runs the DB in SQLite3 in-memory mode.")
 	fmt.Println("So, SQL supported by sqly is the same as SQLite3 syntax.")
+}
+
+func version() {
+	fmt.Printf("%s %s\n", color.GreenString("sqly"), GetVersion())
+}
+
+// GetVersion return sqly command version.
+// Version global variable is set by ldflags.
+func GetVersion() string {
+	version := "unknown"
+	if Version != "" {
+		version = Version
+	} else if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		version = buildInfo.Main.Version
+	}
+	return version
 }
