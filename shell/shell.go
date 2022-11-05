@@ -68,7 +68,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		return s.execSQL(s.argument.Query)
+		return s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query)
 	}
 
 	s.printWelcomeMessage()
