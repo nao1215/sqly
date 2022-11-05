@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,9 +25,19 @@ type Interactive struct {
 // NewInteractive return *Interactive
 func NewInteractive(h *History) *Interactive {
 	return &Interactive{
-		promptPrefix: "sqly>>",
+		promptPrefix: "sqly> ",
 		history:      h,
 	}
+}
+
+// initialize for Interactive.
+func (i *Interactive) initialize(ctx context.Context) error {
+	return i.history.initialize(ctx)
+}
+
+// recordUserRequest store user input
+func (i *Interactive) recordUserRequest(ctx context.Context) error {
+	return i.history.record(ctx)
 }
 
 // printPrompt print "sqly>>" prompt

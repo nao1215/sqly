@@ -1,5 +1,4 @@
-// Package csv handle csv file.
-package csv
+package persistence
 
 import (
 	"encoding/csv"

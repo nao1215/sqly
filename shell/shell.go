@@ -29,23 +29,25 @@ var (
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
 	Ctx               context.Context
+	argument          *config.Arg
+	config            *config.Config
 	commands          CommandList
 	interactive       *Interactive
-	argument          *config.Arg
-	CsvInteractor     *usecase.CSVInteractor
-	Sqlite3Interactor *usecase.SQLite3Interactor
+	csvInteractor     *usecase.CSVInteractor
+	sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
-func NewShell(arg *config.Arg, cmds CommandList, interactive *Interactive,
+func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList, interactive *Interactive,
 	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		argument:          arg,
+		config:            cfg,
 		commands:          cmds,
 		interactive:       interactive,
-		CsvInteractor:     csv,
-		Sqlite3Interactor: sqlite3,
+		csvInteractor:     csv,
+		sqlite3Interactor: sqlite3,
 	}
 }
 
@@ -62,14 +64,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		table, err := s.Sqlite3Interactor.Exec(s.Ctx, s.argument.Query)
-		if err != nil {
-			return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(s.argument.Query))
-		}
-		if table != nil {
-			table.Print(os.Stdout)
-		}
-		return nil
+		return s.execQuery(s.argument.Query)
 	}
 
 	s.printWelcomeMessage()
@@ -135,15 +130,15 @@ func (s *Shell) communicate() error {
 	}
 }
 
-// init store CSV data to DB.
+// init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init() error {
+	if err := s.interactive.initialize(s.Ctx); err != nil {
+		return err
+	}
 	if len(s.argument.FilePaths) == 0 {
 		return nil
 	}
-	if err := s.commands[".import"].execute(s, s.argument.FilePaths); err != nil {
-		return err
-	}
-	return nil
+	return s.commands[".import"].execute(s, s.argument.FilePaths)
 }
 
 // printWelcomeMessage print version and help information.
@@ -156,11 +151,16 @@ func (s *Shell) printWelcomeMessage() {
 }
 
 // exec execute sqly helper command or sql query.
-func (s *Shell) exec() error {
-	defer s.interactive.history.alloc()
-
+func (s *Shell) exec() (err error) {
 	req := s.interactive.request()
 	argv := strings.Split(trimWordGaps(req), " ")
+	if argv[0] == "" {
+		return nil // user only input enter, space tab
+	}
+	defer func() {
+		err = s.interactive.recordUserRequest(s.Ctx)
+	}()
+
 	if s.commands.hasCmd(argv[0]) {
 		return s.commands[argv[0]].execute(s, argv[1:])
 	}
@@ -169,15 +169,22 @@ func (s *Shell) exec() error {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	// Exec query here
+	// TODO: A query to a nonexistent table produces no standard output and no standard error.
 	// TODO:Check if it is the correct query or usecase.
-	table, err := s.Sqlite3Interactor.Exec(s.Ctx, req)
+	if err := s.execQuery(req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Shell) execQuery(query string) error {
+	table, err := s.sqlite3Interactor.Exec(s.Ctx, query)
 	if err != nil {
-		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(req))
+		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(query))
 	}
 	if table != nil {
 		table.Print(os.Stdout)
 	}
-
 	return nil
 }

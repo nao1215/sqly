@@ -3,6 +3,7 @@ module github.com/nao1215/sqly
 go 1.19
 
 require (
+	github.com/caarlos0/env/v6 v6.10.1
 	github.com/fatih/color v1.13.0
 	github.com/google/wire v0.5.0
 	github.com/mattn/go-colorable v0.1.13

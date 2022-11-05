@@ -1,12 +1,14 @@
-// Package sqlite3 handle sqlite3 database.
-package sqlite3
+// Package memory handle sqlite3 in memory mode
+package memory
 
 import (
 	"context"
 	"database/sql"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
+	infra "github.com/nao1215/sqly/infrastructure"
 )
 
 type sqlite3Repository struct {
@@ -14,7 +16,7 @@ type sqlite3Repository struct {
 }
 
 // NewSQLite3Repository return sqlite3Repository
-func NewSQLite3Repository(db *sql.DB) repository.SQLite3Repository {
+func NewSQLite3Repository(db config.MemoryDB) repository.SQLite3Repository {
 	return &sqlite3Repository{db: db}
 }
 
@@ -23,16 +25,29 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	if err := t.Valid(); err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, generateCreateTableStatement((t)))
+
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	return nil
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // TablesName return all table name.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
-	res, err := r.db.QueryContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table'")
 	if err != nil {
 		return nil, err
@@ -40,11 +55,20 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 
 	tables := []*model.Table{}
 	var name string
-	for res.Next() {
-		if err := res.Scan(&name); err != nil {
+	for rows.Next() {
+		if err := rows.Scan(&name); err != nil {
 			return nil, err
 		}
 		tables = append(tables, &model.Table{Name: name})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	return tables, nil
 }
@@ -61,9 +85,8 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	}
 	defer tx.Rollback()
 
-	// TODO: Improvement in execution speed
 	for _, v := range t.Records {
-		if _, err := tx.ExecContext(ctx, generateInsertStatement(t.Name, v)); err != nil {
+		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name, v)); err != nil {
 			return err
 		}
 	}
@@ -123,30 +146,4 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 		return nil, err
 	}
 	return &table, nil
-}
-
-func generateCreateTableStatement(t *model.Table) string {
-	ddl := "CREATE TABLE " + quote(t.Name) + "("
-	for i, v := range t.Header {
-		ddl += quote(v)
-		if i != len(t.Header)-1 {
-			ddl += ", "
-		} else {
-			ddl += ");"
-		}
-	}
-	return ddl
-}
-
-func generateInsertStatement(name string, record model.Record) string {
-	dml := "INSERT INTO " + quote(name) + " VALUES ("
-	for i, v := range record {
-		dml += singleQuote(v)
-		if i != len(record)-1 {
-			dml += ", "
-		} else {
-			dml += ");"
-		}
-	}
-	return dml
 }
