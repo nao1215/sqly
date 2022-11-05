@@ -8,6 +8,7 @@ package di
 
 import (
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/shell"
 	"github.com/nao1215/sqly/usecase"
@@ -42,7 +43,7 @@ func NewShell() (*shell.Shell, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	sqLite3Repository := persistence.NewSQLite3Repository(memoryDB)
+	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository)
 	shellShell := shell.NewShell(arg, configConfig, commandList, interactive, csvInteractor, sqLite3Interactor)
 	return shellShell, func() {

@@ -7,6 +7,7 @@ package di
 import (
 	"github.com/google/wire"
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/shell"
 	"github.com/nao1215/sqly/usecase"
