@@ -42,3 +42,16 @@ func (cr *csvRepository) List(f *os.File) (*model.CSV, error) {
 	}
 	return &c, nil
 }
+
+// Dump write contents of DB table to CSV file
+func (cr *csvRepository) Dump(f *os.File, table *model.Table) error {
+	w := csv.NewWriter(f)
+
+	records := [][]string{
+		table.Header,
+	}
+	for _, v := range table.Records {
+		records = append(records, v)
+	}
+	return w.WriteAll(records)
+}
