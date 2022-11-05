@@ -132,10 +132,9 @@ func (s *Shell) communicate() error {
 
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init() error {
-	if err := s.interactive.initHistory(s.Ctx); err != nil {
+	if err := s.interactive.initialize(s.Ctx); err != nil {
 		return err
 	}
-
 	if len(s.argument.FilePaths) == 0 {
 		return nil
 	}
@@ -153,12 +152,15 @@ func (s *Shell) printWelcomeMessage() {
 
 // exec execute sqly helper command or sql query.
 func (s *Shell) exec() (err error) {
+	req := s.interactive.request()
+	argv := strings.Split(trimWordGaps(req), " ")
+	if argv[0] == "" {
+		return nil // user only input enter, space tab
+	}
 	defer func() {
 		err = s.interactive.recordUserRequest(s.Ctx)
 	}()
 
-	req := s.interactive.request()
-	argv := strings.Split(trimWordGaps(req), " ")
 	if s.commands.hasCmd(argv[0]) {
 		return s.commands[argv[0]].execute(s, argv[1:])
 	}
@@ -167,12 +169,11 @@ func (s *Shell) exec() (err error) {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
+	// TODO: A query to a nonexistent table produces no standard output and no standard error.
+	// TODO:Check if it is the correct query or usecase.
 	if err := s.execQuery(req); err != nil {
 		return err
 	}
-
-	// Exec query here
-	// TODO:Check if it is the correct query or usecase.
 
 	return nil
 }

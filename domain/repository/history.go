@@ -10,6 +10,8 @@ import (
 type HistoryRepository interface {
 	// CreateTable create a DB table for sqly shell history
 	CreateTable(ctx context.Context) error
-	// Insert set history record in DB
+	// Create set history record in DB
 	Create(ctx context.Context, t *model.Table) error
+	// List get sql shell all history.
+	List(ctx context.Context) (model.Histories, error)
 }

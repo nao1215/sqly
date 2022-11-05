@@ -11,8 +11,6 @@ import (
 	infra "github.com/nao1215/sqly/infrastructure"
 )
 
-const historyTableName = "`history`"
-
 type historyRepository struct {
 	db *sql.DB
 }
@@ -62,4 +60,42 @@ func (h *historyRepository) Create(ctx context.Context, t *model.Table) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// List get sql shell all history.
+func (h *historyRepository) List(ctx context.Context) (model.Histories, error) {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx,
+		"SELECT `id`, `request` FROM `history` ORDER BY `id` ASC")
+	if err != nil {
+		return nil, err
+	}
+
+	var id int
+	var request string
+	histories := model.Histories{}
+	for rows.Next() {
+		if err := rows.Scan(&id, &request); err != nil {
+			return nil, err
+		}
+		histories = append(histories, &model.History{
+			ID:      id,
+			Request: request,
+		})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return histories, nil
 }
