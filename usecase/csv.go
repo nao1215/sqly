@@ -34,3 +34,14 @@ func (ci *CSVInteractor) List(csvFilePath string) (*model.CSV, error) {
 
 	return csv, nil
 }
+
+// Dump write contents of DB table to CSV file
+func (ci *CSVInteractor) Dump(csvFilePath string, table *model.Table) error {
+	f, err := os.OpenFile(csvFilePath, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return ci.Repository.Dump(f, table)
+}

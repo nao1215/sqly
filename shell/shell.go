@@ -123,9 +123,10 @@ func (s *Shell) communicate() error {
 					s.interactive.newerInput()
 				case 'C':
 					// TODO: add completion
-					fmt.Println("ALLOW-RIGHT")
+					//"ALLOW-RIGHT"
 				case 'D':
-					// TODO: back
+					// TODO: back input cursor
+					//"ALLOW-LEFT"
 				}
 			}
 		default:

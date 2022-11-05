@@ -41,6 +41,11 @@ func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
 	return si.Repository.Insert(ctx, t)
 }
 
+// List get records in the specified table
+func (si *SQLite3Interactor) List(ctx context.Context, tableName string) (*model.Table, error) {
+	return si.Repository.List(ctx, tableName)
+}
+
 // Query execute "SELECT" or "EXPLAIN" query
 func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Table, error) {
 	return si.Repository.Query(ctx, query)

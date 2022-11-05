@@ -4,6 +4,7 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -91,6 +92,11 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// List get records in the specified table
+func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
+	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s", infra.Quote(tableName)))
 }
 
 // Query execute "SELECT" or "EXPLAIN" query

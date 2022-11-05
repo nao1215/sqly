@@ -14,4 +14,6 @@ import (
 type CSVRepository interface {
 	// List get csv all data with header.
 	List(csv *os.File) (*model.CSV, error)
+	// Dump write contents of DB table to CSV file
+	Dump(csv *os.File, table *model.Table) error
 }
