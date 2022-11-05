@@ -31,7 +31,7 @@ func NewShell() (*shell.Shell, func(), error) {
 		usecase.NewSQLite3Interactor,
 		persistence.NewCSVRepository,
 		persistence.NewHistoryRepository,
-		persistence.NewSQLite3Repository,
+		memory.NewSQLite3Repository,
 	)
 	return nil, nil, nil
 }
