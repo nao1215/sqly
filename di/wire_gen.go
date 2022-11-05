@@ -44,7 +44,8 @@ func NewShell() (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
-	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository)
+	sql := usecase.NewSQL()
+	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository, sql)
 	shellShell := shell.NewShell(arg, configConfig, commandList, interactive, csvInteractor, sqLite3Interactor)
 	return shellShell, func() {
 		cleanup2()
