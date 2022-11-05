@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/nao1215/sqly/domain/model"
 )
 
 const (
@@ -34,6 +35,20 @@ func NewInteractive(h *History) *Interactive {
 // If there is no directory to store DB files, create it.
 func (i *Interactive) initHistory(ctx context.Context) error {
 	return i.history.interactor.CreateTable(ctx)
+}
+
+// recordUserRequest store user input
+func (i *Interactive) recordUserRequest(ctx context.Context) error {
+	h := model.History{
+		ID:      i.history.index + 1,
+		Request: i.history.currentInput(),
+	}
+
+	if err := i.history.interactor.Create(ctx, h); err != nil {
+		return err
+	}
+	i.history.alloc()
+	return nil
 }
 
 // printPrompt print "sqly>>" prompt

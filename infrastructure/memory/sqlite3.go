@@ -8,7 +8,7 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
-	"github.com/nao1215/sqly/infrastructure"
+	infra "github.com/nao1215/sqly/infrastructure"
 )
 
 type sqlite3Repository struct {
@@ -32,7 +32,7 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, generateCreateTableStatement((t)))
+	_, err = tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
 	if err != nil {
 		return err
 	}
@@ -80,9 +80,8 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	}
 	defer tx.Rollback()
 
-	// TODO: Improvement in execution speed
 	for _, v := range t.Records {
-		if _, err := tx.ExecContext(ctx, generateInsertStatement(t.Name, v)); err != nil {
+		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name, v)); err != nil {
 			return err
 		}
 	}
@@ -142,30 +141,4 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 		return nil, err
 	}
 	return &table, nil
-}
-
-func generateCreateTableStatement(t *model.Table) string {
-	ddl := "CREATE TABLE " + infrastructure.Quote(t.Name) + "("
-	for i, v := range t.Header {
-		ddl += infrastructure.Quote(v)
-		if i != len(t.Header)-1 {
-			ddl += ", "
-		} else {
-			ddl += ");"
-		}
-	}
-	return ddl
-}
-
-func generateInsertStatement(name string, record model.Record) string {
-	dml := "INSERT INTO " + infrastructure.Quote(name) + " VALUES ("
-	for i, v := range record {
-		dml += infrastructure.SingleQuote(v)
-		if i != len(record)-1 {
-			dml += ", "
-		} else {
-			dml += ");"
-		}
-	}
-	return dml
 }

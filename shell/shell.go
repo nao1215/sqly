@@ -152,8 +152,10 @@ func (s *Shell) printWelcomeMessage() {
 }
 
 // exec execute sqly helper command or sql query.
-func (s *Shell) exec() error {
-	defer s.interactive.history.alloc()
+func (s *Shell) exec() (err error) {
+	defer func() {
+		err = s.interactive.recordUserRequest(s.Ctx)
+	}()
 
 	req := s.interactive.request()
 	argv := strings.Split(trimWordGaps(req), " ")
