@@ -8,15 +8,21 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// Version is sqly command version. Version value is assigned by LDFLAGS.
-var Version string
+var (
+	// Version is sqly command version. Version value is assigned by LDFLAGS.
+	Version string
+	// query is SQL statement (for --sql option)
+	query = pflag.StringP("sql", "s", "", "execute sql query for file")
+)
 
 // Arg is a structure for managing options and arguments
 type Arg struct {
 	// FilePath is CSV file paths that are imported into the DB.
 	FilePaths []string
-	// HelpFlag is HelpFlag flag.
+	// HelpFlag is HelpFlag flag (for --help option)
 	HelpFlag bool
+	// Query is SQL query (for --sql option)
+	Query string
 	// Usage print help message
 	Usage func()
 }
@@ -29,6 +35,7 @@ func NewArg() (*Arg, error) {
 
 	arg.Usage = usage
 	arg.FilePaths = pflag.Args()
+	arg.Query = *query
 
 	return arg, nil
 }
@@ -38,6 +45,12 @@ func usage() {
 	fmt.Println("")
 	fmt.Println("[Usage]")
 	fmt.Printf("  %s [OPTIONS] [FILE_PATH]\n", color.GreenString("sqly"))
+	fmt.Println("")
+	fmt.Println("[Example]")
+	fmt.Printf("  - %s\n", color.HiYellowString("run sqly shell"))
+	fmt.Printf("    sqly\n")
+	fmt.Printf("  - %s\n", color.HiYellowString("Execute query for csv file"))
+	fmt.Printf("    sqly --sql 'SELECT * FROM sample' ./path/to/file.csv\n")
 	fmt.Println("")
 	fmt.Println("[OPTIONS]")
 	pflag.PrintDefaults()
