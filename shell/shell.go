@@ -59,6 +59,11 @@ func (s *Shell) Run() error {
 		return nil
 	}
 
+	if s.argument.VersionFlag {
+		s.argument.Version()
+		return nil
+	}
+
 	if err := s.init(); err != nil {
 		return err
 	}
@@ -143,7 +148,7 @@ func (s *Shell) init() error {
 
 // printWelcomeMessage print version and help information.
 func (s *Shell) printWelcomeMessage() {
-	fmt.Fprintf(Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), Version)
+	fmt.Fprintf(Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), config.GetVersion())
 	fmt.Fprintln(Stdout, "")
 	fmt.Fprintln(Stdout, "enter \"SQL query\" or \"sqly command that beginning with a dot\".")
 	fmt.Fprintf(Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
