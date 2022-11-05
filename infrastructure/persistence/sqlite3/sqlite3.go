@@ -4,6 +4,7 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -71,7 +72,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 }
 
 // Exec execute query
-func (r *sqlite3Repository) Exec(ctx context.Context, query string) ([]*model.Table, error) {
+func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -84,18 +85,37 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) ([]*model.Ta
 	}
 	defer rows.Close()
 
+	header, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
 	table := model.Table{
 		Name:   "",
-		Header: []string{},
+		Header: header,
 	}
-	var record model.Record
+
+	scanDest := make([]interface{}, len(header))
+	rawResult := make([][]byte, len(header))
+
+	for i := range header {
+		scanDest[i] = &rawResult[i]
+	}
+
 	for rows.Next() {
-		err := rows.Scan(&record)
+		result := make([]string, len(header))
+		err := rows.Scan(scanDest...)
 		if err != nil {
 			return nil, err
 		}
-		table.Records = append(table.Records, record)
+
+		for i, raw := range rawResult {
+			result[i] = string(raw)
+		}
+		table.Records = append(table.Records, result)
 	}
+	fmt.Println(table.Records)
+
 	err = rows.Err()
 	if err != nil {
 		return nil, err
@@ -104,7 +124,7 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) ([]*model.Ta
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &table, nil
 }
 
 func generateCreateTableStatement(t *model.Table) string {

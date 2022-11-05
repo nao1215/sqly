@@ -33,6 +33,6 @@ func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
 }
 
 // Exec execute query
-func (si *SQLite3Interactor) Exec(ctx context.Context, query string) ([]*model.Table, error) {
+func (si *SQLite3Interactor) Exec(ctx context.Context, query string) (*model.Table, error) {
 	return si.Repository.Exec(ctx, query)
 }
