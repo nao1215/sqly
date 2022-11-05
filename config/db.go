@@ -20,8 +20,8 @@ func NewInMemDB() (MemoryDB, func(), error) {
 
 // NewHistoryDB create *sql.DB for history.
 // The return function is the function to close the DB.
-func NewHistoryDB() (HistoryDB, func(), error) {
-	db, err := sql.Open("sqlite3", ":memory:")
+func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
+	db, err := sql.Open("sqlite3", c.HistoryDBPath)
 	if err != nil {
 		return nil, nil, err
 	}
