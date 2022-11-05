@@ -1,18 +1,20 @@
 package shell
 
-import "github.com/nao1215/sqly/usecase"
+import (
+	"context"
+	"fmt"
 
-const current = -1
+	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/usecase"
+)
 
 // History is user input history manager.
 type History struct {
 	// index for working cache
-	index int
-	// workingCache 0:oldest, n:current
+	index uint
+	// workingCache 1:oldest, n:current
 	// workingCache also store the string while the user is typing.
-	workingCache []string
-	// cache store only the string that the user typed Enter (The sqly command or query executed is stored)
-	cache []string
+	workingCache model.Histories
 	// maxLength is max string length in cache.
 	maxLength int
 	// interactor control history usecase
@@ -22,27 +24,52 @@ type History struct {
 // NewHistory return *History.
 func NewHistory(interactor *usecase.HistoryInteractor) *History {
 	return &History{
-		index:        0,
-		workingCache: []string{""},
-		maxLength:    0,
-		interactor:   interactor,
+		index:      0,
+		maxLength:  0,
+		interactor: interactor,
 	}
 }
 
-// alloc allocate cache for storing strings
-func (h *History) alloc() {
-	h.cache = append(h.cache, h.workingCache[h.index])
-	h.workingCache = append([]string{}, h.cache...)
-	h.setMaxLength()
-
-	h.workingCache = append(h.workingCache, "")
-	h.index = len(h.workingCache) - 1
+// initialize for
+func (h *History) initialize(ctx context.Context) error {
+	if err := h.interactor.CreateTable(ctx); err != nil {
+		return fmt.Errorf("failed to create table for sqly history: %v", err)
+	}
+	return h.refreshWorkingCache(ctx)
 }
 
-func (h *History) setMaxLength() {
+func (h *History) refreshWorkingCache(ctx context.Context) error {
+	histories, err := h.interactor.List(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to refresh history cache: %v", err)
+	}
+	h.workingCache = histories
+	h.workingCache = append(h.workingCache, &model.History{
+		ID:      len(h.workingCache),
+		Request: "",
+	})
+	h.index = uint(len(h.workingCache) - 1)
+	h.setMaxInputLength()
+	return nil
+}
+
+// record record user input in DB
+func (h *History) record(ctx context.Context) error {
+	history := model.History{
+		ID:      len(h.workingCache) + 1,
+		Request: h.currentInput(),
+	}
+
+	if err := h.interactor.Create(ctx, history); err != nil {
+		return fmt.Errorf("failed to store user input history: %v", err)
+	}
+	return h.refreshWorkingCache(ctx)
+}
+
+func (h *History) setMaxInputLength() {
 	max := -1
-	for _, v := range h.cache {
-		l := len(v)
+	for _, v := range h.workingCache {
+		l := len(v.Request)
 		if max < l {
 			max = l
 		}
@@ -51,21 +78,21 @@ func (h *History) setMaxLength() {
 }
 
 func (h *History) appendChar(r rune) {
-	h.workingCache[h.index] = h.currentInput() + string(r)
-	if len(h.workingCache[h.index]) > h.maxLength {
-		h.maxLength = len(h.workingCache[h.index])
+	h.workingCache[h.index].Request = h.currentInput() + string(r)
+	if len(h.workingCache[h.index].Request) > h.maxLength {
+		h.maxLength = len(h.workingCache[h.index].Request)
 	}
 }
 
 func (h *History) replace(s string) {
-	h.workingCache[h.index] = s
+	h.workingCache[h.index].Request = s
 }
 
 func (h *History) older() {
 	if h.index == h.oldestIndex() {
 		return
 	}
-	h.setMaxLength()
+	h.setMaxInputLength()
 	h.index--
 }
 
@@ -73,18 +100,18 @@ func (h *History) newer() {
 	if h.index == h.newstIndex() {
 		return
 	}
-	h.setMaxLength()
+	h.setMaxInputLength()
 	h.index++
 }
 
 func (h *History) currentInput() string {
-	return h.workingCache[h.index]
+	return h.workingCache[h.index].Request
 }
 
-func (h *History) newstIndex() int {
-	return len(h.workingCache) - 1
+func (h *History) newstIndex() uint {
+	return uint(len(h.workingCache) - 1)
 }
 
-func (h *History) oldestIndex() int {
+func (h *History) oldestIndex() uint {
 	return 0
 }

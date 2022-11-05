@@ -47,7 +47,7 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 	}
 	defer tx.Rollback()
 
-	res, err := tx.QueryContext(ctx,
+	rows, err := tx.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table'")
 	if err != nil {
 		return nil, err
@@ -55,11 +55,16 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 
 	tables := []*model.Table{}
 	var name string
-	for res.Next() {
-		if err := res.Scan(&name); err != nil {
+	for rows.Next() {
+		if err := rows.Scan(&name); err != nil {
 			return nil, err
 		}
 		tables = append(tables, &model.Table{Name: name})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {

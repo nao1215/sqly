@@ -27,3 +27,8 @@ func (hi *HistoryInteractor) Create(ctx context.Context, history model.History) 
 	h := model.Histories{&history}
 	return hi.Repository.Create(ctx, h.ToTable())
 }
+
+// List get all sqly history.
+func (hi *HistoryInteractor) List(ctx context.Context) (model.Histories, error) {
+	return hi.Repository.List(ctx)
+}
