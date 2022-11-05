@@ -1,5 +1,4 @@
-// Package sqlite3 handle sqlite3 database.
-package sqlite3
+package persistence
 
 import "strings"
 

@@ -7,8 +7,7 @@ package di
 import (
 	"github.com/google/wire"
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/infrastructure/persistence/csv"
-	"github.com/nao1215/sqly/infrastructure/persistence/sqlite3"
+	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/shell"
 	"github.com/nao1215/sqly/usecase"
 )
@@ -26,9 +25,11 @@ func NewShell() (*shell.Shell, func(), error) {
 		shell.NewInteractive,
 		shell.NewHistory,
 		usecase.NewCSVInteractor,
-		csv.NewCSVRepository,
+		usecase.NewHistoryInteractor,
 		usecase.NewSQLite3Interactor,
-		sqlite3.NewSQLite3Repository,
+		persistence.NewCSVRepository,
+		persistence.NewHistoryRepository,
+		persistence.NewSQLite3Repository,
 	)
 	return nil, nil, nil
 }

@@ -32,20 +32,22 @@ type Shell struct {
 	commands          CommandList
 	interactive       *Interactive
 	argument          *config.Arg
-	CsvInteractor     *usecase.CSVInteractor
-	Sqlite3Interactor *usecase.SQLite3Interactor
+	csvInteractor     *usecase.CSVInteractor
+	historyInteractor *usecase.HistoryInteractor
+	sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cmds CommandList, interactive *Interactive,
-	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
+	csv *usecase.CSVInteractor, h *usecase.HistoryInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		argument:          arg,
 		commands:          cmds,
 		interactive:       interactive,
-		CsvInteractor:     csv,
-		Sqlite3Interactor: sqlite3,
+		csvInteractor:     csv,
+		historyInteractor: h,
+		sqlite3Interactor: sqlite3,
 	}
 }
 
@@ -62,7 +64,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		table, err := s.Sqlite3Interactor.Exec(s.Ctx, s.argument.Query)
+		table, err := s.sqlite3Interactor.Exec(s.Ctx, s.argument.Query)
 		if err != nil {
 			return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(s.argument.Query))
 		}
@@ -171,7 +173,7 @@ func (s *Shell) exec() error {
 
 	// Exec query here
 	// TODO:Check if it is the correct query or usecase.
-	table, err := s.Sqlite3Interactor.Exec(s.Ctx, req)
+	table, err := s.sqlite3Interactor.Exec(s.Ctx, req)
 	if err != nil {
 		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(req))
 	}

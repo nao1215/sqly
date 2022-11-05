@@ -8,8 +8,7 @@ package di
 
 import (
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/infrastructure/persistence/csv"
-	"github.com/nao1215/sqly/infrastructure/persistence/sqlite3"
+	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/shell"
 	"github.com/nao1215/sqly/usecase"
 )
@@ -26,15 +25,17 @@ func NewShell() (*shell.Shell, func(), error) {
 	commandList := shell.NewCommands()
 	history := shell.NewHistory()
 	interactive := shell.NewInteractive(history)
-	csvRepository := csv.NewCSVRepository()
+	csvRepository := persistence.NewCSVRepository()
 	csvInteractor := usecase.NewCSVInteractor(csvRepository)
+	historyRepository := persistence.NewHistoryRepository()
+	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
 	db, cleanup, err := config.NewDB()
 	if err != nil {
 		return nil, nil, err
 	}
-	sqLite3Repository := sqlite3.NewSQLite3Repository(db)
+	sqLite3Repository := persistence.NewSQLite3Repository(db)
 	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository)
-	shellShell := shell.NewShell(arg, commandList, interactive, csvInteractor, sqLite3Interactor)
+	shellShell := shell.NewShell(arg, commandList, interactive, csvInteractor, historyInteractor, sqLite3Interactor)
 	return shellShell, func() {
 		cleanup()
 	}, nil

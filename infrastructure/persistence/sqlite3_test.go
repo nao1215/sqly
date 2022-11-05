@@ -1,5 +1,5 @@
-// Package sqlite3 handle sqlite3 database.
-package sqlite3
+// Package persistence handle sqlite3, csv, history (it's sqlite3 database)
+package persistence
 
 import (
 	"testing"
