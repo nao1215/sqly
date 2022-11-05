@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,9 +25,15 @@ type Interactive struct {
 // NewInteractive return *Interactive
 func NewInteractive(h *History) *Interactive {
 	return &Interactive{
-		promptPrefix: "sqly>>",
+		promptPrefix: "sqly> ",
 		history:      h,
 	}
+}
+
+// initHistory create history table in DB.
+// If there is no directory to store DB files, create it.
+func (i *Interactive) initHistory(ctx context.Context) error {
+	return i.history.interactor.CreateTable(ctx)
 }
 
 // printPrompt print "sqly>>" prompt

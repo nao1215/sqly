@@ -23,16 +23,29 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	if err := t.Valid(); err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, generateCreateTableStatement((t)))
+
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	return nil
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, generateCreateTableStatement((t)))
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // TablesName return all table name.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
-	res, err := r.db.QueryContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table'")
 	if err != nil {
 		return nil, err
@@ -45,6 +58,10 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 			return nil, err
 		}
 		tables = append(tables, &model.Table{Name: name})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	return tables, nil
 }
