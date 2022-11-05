@@ -37,6 +37,8 @@ func NewArg() (*Arg, error) {
 	arg := &Arg{}
 	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
+
+	pflag.Usage = usage
 	pflag.Parse()
 
 	arg.Usage = usage

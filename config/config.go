@@ -10,7 +10,7 @@ import (
 
 // Config is sqly configuration.
 type Config struct {
-	HistoryDBPath string `env:"SQLY_HISTORY_DB"`
+	HistoryDBPath string `env:"SQLY_HISTORY_DB_PATH"`
 }
 
 // NewConfig return *Config.

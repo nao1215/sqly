@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -69,7 +68,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		return s.execQuery(s.argument.Query)
+		return s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query)
 	}
 
 	s.printWelcomeMessage()
@@ -99,16 +98,16 @@ func (s *Shell) communicate() error {
 		case runeBackSpace, runeDelete:
 			s.interactive.deleteLastInput()
 		case runeEnter:
-			fmt.Println("")
-			if err := s.exec(); err != nil {
+			fmt.Println("") // Not delete it.
+			if err = s.exec(); err != nil {
 				if errors.Is(err, ErrExitSqly) {
 					return nil // user input ".exit"
 				}
-				fmt.Fprintln(os.Stderr, err)
+				fmt.Fprintf(Stderr, "%v\n", err)
+				continue
 			}
 		case runeTabKey:
-			// TODO: completion
-			fmt.Println("Tab")
+			// TODO: add completion
 			continue
 		case runeEscapeKey:
 			r, err = tty.ReadRune()
@@ -124,9 +123,10 @@ func (s *Shell) communicate() error {
 					s.interactive.newerInput()
 				case 'C':
 					// TODO: add completion
-					fmt.Println("ALLOW-RIGHT")
+					//"ALLOW-RIGHT"
 				case 'D':
-					fmt.Println("ALLOW-LEFT")
+					// TODO: back input cursor
+					//"ALLOW-LEFT"
 				}
 			}
 		default:
@@ -156,15 +156,16 @@ func (s *Shell) printWelcomeMessage() {
 }
 
 // exec execute sqly helper command or sql query.
-func (s *Shell) exec() (err error) {
+func (s *Shell) exec() error {
 	req := s.interactive.request()
 	argv := strings.Split(trimWordGaps(req), " ")
 	if argv[0] == "" {
 		return nil // user only input enter, space tab
 	}
-	defer func() {
-		err = s.interactive.recordUserRequest(s.Ctx)
-	}()
+
+	if err := s.interactive.recordUserRequest(s.Ctx); err != nil {
+		return err
+	}
 
 	if s.commands.hasCmd(argv[0]) {
 		return s.commands[argv[0]].execute(s, argv[1:])
@@ -174,22 +175,8 @@ func (s *Shell) exec() (err error) {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	// TODO: A query to a nonexistent table produces no standard output and no standard error.
-	// TODO:Check if it is the correct query or usecase.
-	if err := s.execQuery(req); err != nil {
+	if err := s.sqlite3Interactor.ExecSQL(s.Ctx, req); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (s *Shell) execQuery(query string) error {
-	table, err := s.sqlite3Interactor.Exec(s.Ctx, query)
-	if err != nil {
-		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(query))
-	}
-	if table != nil {
-		table.Print(os.Stdout)
 	}
 	return nil
 }

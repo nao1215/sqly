@@ -4,6 +4,7 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -93,8 +94,13 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	return tx.Commit()
 }
 
-// Exec execute query
-func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Table, error) {
+// List get records in the specified table
+func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
+	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s", infra.Quote(tableName)))
+}
+
+// Query execute "SELECT" or "EXPLAIN" query
+func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -110,6 +116,10 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 	header, err := rows.Columns()
 	if err != nil {
 		return nil, err
+	}
+	if len(header) == 0 {
+
+		return nil, infra.ErrNoRows
 	}
 
 	table := model.Table{
@@ -146,4 +156,23 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 		return nil, err
 	}
 	return &table, nil
+}
+
+// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
+func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, statement)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

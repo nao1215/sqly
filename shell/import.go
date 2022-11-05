@@ -7,6 +7,7 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		fmt.Fprintln(Stdout, "[Usage]")
 		fmt.Fprintln(Stdout, "  .import CSV_FILE_PATH(S)")
+		return nil
 	}
 
 	for _, v := range argv {

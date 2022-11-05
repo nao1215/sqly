@@ -37,7 +37,7 @@ func (i *Interactive) initialize(ctx context.Context) error {
 
 // recordUserRequest store user input
 func (i *Interactive) recordUserRequest(ctx context.Context) error {
-	return i.history.record(ctx)
+	return i.history.recordAndRefreshCache(ctx)
 }
 
 // printPrompt print "sqly>>" prompt

@@ -15,6 +15,10 @@ type SQLite3Repository interface {
 	TablesName(ctx context.Context) ([]*model.Table, error)
 	// Insert set records in DB
 	Insert(ctx context.Context, t *model.Table) error
-	// Exec execute query
-	Exec(ctx context.Context, query string) (*model.Table, error)
+	// List get records in the specified table
+	List(ctx context.Context, tableName string) (*model.Table, error)
+	// Query execute "SELECT" or "EXPLAIN" query
+	Query(ctx context.Context, query string) (*model.Table, error)
+	// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
+	Exec(ctx context.Context, statement string) (int64, error)
 }

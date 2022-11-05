@@ -30,6 +30,7 @@ func NewShell() (*shell.Shell, func(), error) {
 		usecase.NewCSVInteractor,
 		usecase.NewHistoryInteractor,
 		usecase.NewSQLite3Interactor,
+		usecase.NewSQL,
 		persistence.NewCSVRepository,
 		persistence.NewHistoryRepository,
 		memory.NewSQLite3Repository,
