@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -33,21 +32,19 @@ type Shell struct {
 	config            *config.Config
 	commands          CommandList
 	interactive       *Interactive
-	completion        *Completion
 	csvInteractor     *usecase.CSVInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList, interactive *Interactive,
-	com *Completion, csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
+	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		argument:          arg,
 		config:            cfg,
 		commands:          cmds,
 		interactive:       interactive,
-		completion:        com,
 		csvInteractor:     csv,
 		sqlite3Interactor: sqlite3,
 	}
@@ -106,12 +103,11 @@ func (s *Shell) communicate() error {
 				if errors.Is(err, ErrExitSqly) {
 					return nil // user input ".exit"
 				}
-				fmt.Fprintln(Stderr, err)
+				fmt.Fprintf(Stderr, "%v\n", err)
 				continue
 			}
 		case runeTabKey:
-			// TODO: completion
-			fmt.Println("Tab")
+			// TODO: add completion
 			continue
 		case runeEscapeKey:
 			r, err = tty.ReadRune()
@@ -129,7 +125,7 @@ func (s *Shell) communicate() error {
 					// TODO: add completion
 					fmt.Println("ALLOW-RIGHT")
 				case 'D':
-					fmt.Println("ALLOW-LEFT")
+					// TODO: back
 				}
 			}
 		default:
@@ -178,20 +174,8 @@ func (s *Shell) exec() error {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	// TODO:Check if it is the correct query or usecase.
-	if err := s.execSQL(req); err != nil {
+	if err := s.sqlite3Interactor.ExecSQL(s.Ctx, req); err != nil {
 		return err
-	}
-	return nil
-}
-
-func (s *Shell) execSQL(query string) error {
-	table, err := s.sqlite3Interactor.Query(s.Ctx, query)
-	if err != nil {
-		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(query))
-	}
-	if table != nil {
-		table.Print(os.Stdout)
 	}
 	return nil
 }
