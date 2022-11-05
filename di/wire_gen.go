@@ -23,20 +23,26 @@ func NewShell() (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	commandList := shell.NewCommands()
-	history := shell.NewHistory()
-	interactive := shell.NewInteractive(history)
-	csvRepository := persistence.NewCSVRepository()
-	csvInteractor := usecase.NewCSVInteractor(csvRepository)
-	historyRepository := persistence.NewHistoryRepository()
-	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
-	db, cleanup, err := config.NewDB()
+	historyDB, cleanup, err := config.NewHistoryDB()
 	if err != nil {
 		return nil, nil, err
 	}
-	sqLite3Repository := persistence.NewSQLite3Repository(db)
+	historyRepository := persistence.NewHistoryRepository(historyDB)
+	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
+	history := shell.NewHistory(historyInteractor)
+	interactive := shell.NewInteractive(history)
+	csvRepository := persistence.NewCSVRepository()
+	csvInteractor := usecase.NewCSVInteractor(csvRepository)
+	memoryDB, cleanup2, err := config.NewInMemDB()
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	sqLite3Repository := persistence.NewSQLite3Repository(memoryDB)
 	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository)
-	shellShell := shell.NewShell(arg, commandList, interactive, csvInteractor, historyInteractor, sqLite3Interactor)
+	shellShell := shell.NewShell(arg, commandList, interactive, csvInteractor, sqLite3Interactor)
 	return shellShell, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }

@@ -1,5 +1,7 @@
 package shell
 
+import "github.com/nao1215/sqly/usecase"
+
 const current = -1
 
 // History is user input history manager.
@@ -13,14 +15,17 @@ type History struct {
 	cache []string
 	// maxLength is max string length in cache.
 	maxLength int
+	// interactor control history usecase
+	interactor *usecase.HistoryInteractor
 }
 
 // NewHistory return *History.
-func NewHistory() *History {
+func NewHistory(interactor *usecase.HistoryInteractor) *History {
 	return &History{
 		index:        0,
 		workingCache: []string{""},
 		maxLength:    0,
+		interactor:   interactor,
 	}
 }
 

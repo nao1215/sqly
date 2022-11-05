@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 )
@@ -13,7 +14,7 @@ type sqlite3Repository struct {
 }
 
 // NewSQLite3Repository return sqlite3Repository
-func NewSQLite3Repository(db *sql.DB) repository.SQLite3Repository {
+func NewSQLite3Repository(db config.MemoryDB) repository.SQLite3Repository {
 	return &sqlite3Repository{db: db}
 }
 

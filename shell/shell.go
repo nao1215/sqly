@@ -33,20 +33,18 @@ type Shell struct {
 	interactive       *Interactive
 	argument          *config.Arg
 	csvInteractor     *usecase.CSVInteractor
-	historyInteractor *usecase.HistoryInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cmds CommandList, interactive *Interactive,
-	csv *usecase.CSVInteractor, h *usecase.HistoryInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
+	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		argument:          arg,
 		commands:          cmds,
 		interactive:       interactive,
 		csvInteractor:     csv,
-		historyInteractor: h,
 		sqlite3Interactor: sqlite3,
 	}
 }
