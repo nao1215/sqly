@@ -1,8 +1,10 @@
 package shell
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/olekukonko/tablewriter"
 )
@@ -19,6 +21,13 @@ func (c CommandList) tablesCommand(s *Shell, argv []string) error {
 
 // printTables print table name
 func printTables(out *os.File, t []*model.Table) {
+	if len(t) == 0 {
+		fmt.Fprintf(Stderr,
+			"there is no table. use %s for importing csv file\n",
+			color.CyanString(".import"))
+		return
+	}
+
 	tableData := [][]string{}
 	for _, v := range t {
 		tableData = append(tableData, []string{v.Name})

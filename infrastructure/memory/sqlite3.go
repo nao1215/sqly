@@ -93,8 +93,8 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	return tx.Commit()
 }
 
-// Exec execute query
-func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Table, error) {
+// Query execute SELECT query
+func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -110,6 +110,10 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 	header, err := rows.Columns()
 	if err != nil {
 		return nil, err
+	}
+	if len(header) == 0 {
+
+		return nil, infra.ErrNoRows
 	}
 
 	table := model.Table{
