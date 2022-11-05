@@ -18,7 +18,8 @@ import (
 // The return function is the function to close the DB.
 func NewShell() (*shell.Shell, func(), error) {
 	wire.Build(
-		config.NewDB,
+		config.NewInMemDB,
+		config.NewHistoryDB,
 		config.NewArg,
 		shell.NewShell,
 		shell.NewCommands,

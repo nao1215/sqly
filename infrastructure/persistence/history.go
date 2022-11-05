@@ -1,10 +1,17 @@
 package persistence
 
-import "github.com/nao1215/sqly/domain/repository"
+import (
+	"database/sql"
 
-type historyRepository struct{}
+	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/repository"
+)
+
+type historyRepository struct {
+	db *sql.DB
+}
 
 // NewHistoryRepository return HistoryRepository
-func NewHistoryRepository() repository.HistoryRepository {
-	return &historyRepository{}
+func NewHistoryRepository(db config.HistoryDB) repository.HistoryRepository {
+	return &historyRepository{db: db}
 }
