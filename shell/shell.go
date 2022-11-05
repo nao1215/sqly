@@ -158,7 +158,14 @@ func (s *Shell) exec() error {
 	}
 
 	// Exec query here
-	// Check if it is the correct query
+	// TODO:Check if it is the correct query or usecase.
+	table, err := s.Sqlite3Interactor.Exec(s.Ctx, req)
+	if err != nil {
+		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(req))
+	}
+	if table != nil {
+		table.Print(os.Stdout)
+	}
 
 	return nil
 }
