@@ -50,6 +50,7 @@ func (t *Table) IsEmptyRecords() bool {
 func (t *Table) Print(out *os.File) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(t.Header)
+	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
 
 	for _, v := range t.Records {

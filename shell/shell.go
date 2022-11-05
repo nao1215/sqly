@@ -33,19 +33,21 @@ type Shell struct {
 	config            *config.Config
 	commands          CommandList
 	interactive       *Interactive
+	completion        *Completion
 	csvInteractor     *usecase.CSVInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 }
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList, interactive *Interactive,
-	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
+	com *Completion, csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		argument:          arg,
 		config:            cfg,
 		commands:          cmds,
 		interactive:       interactive,
+		completion:        com,
 		csvInteractor:     csv,
 		sqlite3Interactor: sqlite3,
 	}
@@ -69,7 +71,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		return s.execQuery(s.argument.Query)
+		return s.execSQL(s.argument.Query)
 	}
 
 	s.printWelcomeMessage()
@@ -99,12 +101,13 @@ func (s *Shell) communicate() error {
 		case runeBackSpace, runeDelete:
 			s.interactive.deleteLastInput()
 		case runeEnter:
-			fmt.Println("")
-			if err := s.exec(); err != nil {
+			fmt.Println("") // Not delete it.
+			if err = s.exec(); err != nil {
 				if errors.Is(err, ErrExitSqly) {
 					return nil // user input ".exit"
 				}
-				fmt.Fprintln(os.Stderr, err)
+				fmt.Fprintln(Stderr, err)
+				continue
 			}
 		case runeTabKey:
 			// TODO: completion
@@ -156,15 +159,16 @@ func (s *Shell) printWelcomeMessage() {
 }
 
 // exec execute sqly helper command or sql query.
-func (s *Shell) exec() (err error) {
+func (s *Shell) exec() error {
 	req := s.interactive.request()
 	argv := strings.Split(trimWordGaps(req), " ")
 	if argv[0] == "" {
 		return nil // user only input enter, space tab
 	}
-	defer func() {
-		err = s.interactive.recordUserRequest(s.Ctx)
-	}()
+
+	if err := s.interactive.recordUserRequest(s.Ctx); err != nil {
+		return err
+	}
 
 	if s.commands.hasCmd(argv[0]) {
 		return s.commands[argv[0]].execute(s, argv[1:])
@@ -174,17 +178,15 @@ func (s *Shell) exec() (err error) {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	// TODO: A query to a nonexistent table produces no standard output and no standard error.
 	// TODO:Check if it is the correct query or usecase.
-	if err := s.execQuery(req); err != nil {
+	if err := s.execSQL(req); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func (s *Shell) execQuery(query string) error {
-	table, err := s.sqlite3Interactor.Exec(s.Ctx, query)
+func (s *Shell) execSQL(query string) error {
+	table, err := s.sqlite3Interactor.Query(s.Ctx, query)
 	if err != nil {
 		return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(query))
 	}

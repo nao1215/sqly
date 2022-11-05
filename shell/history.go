@@ -53,8 +53,9 @@ func (h *History) refreshWorkingCache(ctx context.Context) error {
 	return nil
 }
 
-// record record user input in DB
-func (h *History) record(ctx context.Context) error {
+// recordAndRefreshCache record user input in DB.
+// The cache is refreshed, so the string data that was temporarily entered is deleted.
+func (h *History) recordAndRefreshCache(ctx context.Context) error {
 	history := model.History{
 		ID:      len(h.workingCache) + 1,
 		Request: h.currentInput(),
