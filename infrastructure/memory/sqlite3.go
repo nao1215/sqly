@@ -1,4 +1,5 @@
-package persistence
+// Package memory handle sqlite3 in memory mode
+package memory
 
 import (
 	"context"
@@ -144,7 +145,7 @@ func (r *sqlite3Repository) Exec(ctx context.Context, query string) (*model.Tabl
 }
 
 func generateCreateTableStatement(t *model.Table) string {
-	ddl := "CREATE TABLE " + infrastructure.Quote(t.Name) + "("
+	ddl := "CREATE TABLE " + quote(t.Name) + "("
 	for i, v := range t.Header {
 		ddl += infrastructure.Quote(v)
 		if i != len(t.Header)-1 {
@@ -157,7 +158,7 @@ func generateCreateTableStatement(t *model.Table) string {
 }
 
 func generateInsertStatement(name string, record model.Record) string {
-	dml := "INSERT INTO " + infrastructure.Quote(name) + " VALUES ("
+	dml := "INSERT INTO " + quote(name) + " VALUES ("
 	for i, v := range record {
 		dml += infrastructure.SingleQuote(v)
 		if i != len(record)-1 {

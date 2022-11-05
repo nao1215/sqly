@@ -1,5 +1,4 @@
-// Package persistence handle sqlite3, csv, history (it's sqlite3 database)
-package persistence
+package memory
 
 import (
 	"testing"

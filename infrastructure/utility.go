@@ -1,8 +1,8 @@
-package persistence
+package infrastructure
 
 import "strings"
 
-func quote(s string) string {
+func Quote(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s) + len("``"))
 
@@ -17,7 +17,7 @@ func quote(s string) string {
 	return buf.String()
 }
 
-func singleQuote(s string) string {
+func SingleQuote(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s) + len("''"))
 
