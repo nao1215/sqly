@@ -1,6 +1,11 @@
 package model
 
-import "github.com/nao1215/sqly/domain"
+import (
+	"os"
+
+	"github.com/nao1215/sqly/domain"
+	"github.com/olekukonko/tablewriter"
+)
 
 // Table is DB table.
 type Table struct {
@@ -39,4 +44,16 @@ func (t *Table) IsEmptyHeader() bool {
 // IsEmptyRecords return wherther table records is empty or not
 func (t *Table) IsEmptyRecords() bool {
 	return len(t.Records) == 0
+}
+
+// Print print all record with header
+func (t *Table) Print(out *os.File) {
+	table := tablewriter.NewWriter(out)
+	table.SetHeader(t.Header)
+	table.SetAutoWrapText(false)
+
+	for _, v := range t.Records {
+		table.Append(v)
+	}
+	table.Render()
 }
