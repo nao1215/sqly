@@ -36,7 +36,6 @@ func NewShell() (*shell.Shell, func(), error) {
 	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
 	history := shell.NewHistory(historyInteractor)
 	interactive := shell.NewInteractive(history)
-	completion := shell.NewCompletion()
 	csvRepository := persistence.NewCSVRepository()
 	csvInteractor := usecase.NewCSVInteractor(csvRepository)
 	memoryDB, cleanup2, err := config.NewInMemDB()
@@ -45,8 +44,9 @@ func NewShell() (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
-	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository)
-	shellShell := shell.NewShell(arg, configConfig, commandList, interactive, completion, csvInteractor, sqLite3Interactor)
+	sql := usecase.NewSQL()
+	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository, sql)
+	shellShell := shell.NewShell(arg, configConfig, commandList, interactive, csvInteractor, sqLite3Interactor)
 	return shellShell, func() {
 		cleanup2()
 		cleanup()

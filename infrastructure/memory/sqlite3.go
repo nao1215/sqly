@@ -93,7 +93,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	return tx.Commit()
 }
 
-// Query execute SELECT query
+// Query execute "SELECT" or "EXPLAIN" query
 func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -150,4 +150,23 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 		return nil, err
 	}
 	return &table, nil
+}
+
+// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
+func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, statement)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
