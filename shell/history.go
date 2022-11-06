@@ -90,12 +90,9 @@ func (h *History) appendChar(r rune, position int) {
 		}
 	} else {
 		if r == runeBackSpace {
-			if position == 1 {
-				// Bug is here
-				h.workingCache[h.index].Request = current[:position] + string(r) + current[position:]
-				return
-			}
-			h.workingCache[h.index].Request = current[:position+1] + string(r) + current[position+1:]
+			backspaceCnt := strings.Count(h.currentInput(), "\b")
+			pureCurrentInput := strings.ReplaceAll(h.currentInput(), "\b", "")
+			h.workingCache[h.index].Request = pureCurrentInput + strings.Repeat("\b", backspaceCnt+1)
 		} else {
 			h.workingCache[h.index].Request = current[:position] + string(r) + current[position:]
 		}

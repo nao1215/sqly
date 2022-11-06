@@ -58,11 +58,20 @@ func (i *Interactive) deleteChar() {
 		return
 	}
 
+	if i.cursor.position() < 0 {
+		i.cursor.moveHead()
+		// beep
+		return
+	}
+
 	r := []rune(i.history.currentInput())
 	if i.cursor.position() == i.history.currentInputLen() {
 		i.history.replace(string(r[:(len(r) - 1)]))
+	} else if i.cursor.position() == 0 {
+		// beep
+		return
 	} else {
-		i.history.replace(string(r[:i.cursor.position()]) + string(r[i.cursor.position()+1:]))
+		i.history.replace(string(r[:i.cursor.position()-1]) + string(r[i.cursor.position():]))
 	}
 	i.cursor.moveLeft()
 }
