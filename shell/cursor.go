@@ -1,8 +1,8 @@
 package shell
 
-// cursor is current user input positon in terminal
+// cursor is current user input position in terminal
 type cursor struct {
-	// pos is cursor positon; 0 is head (left)
+	// pos is cursor position; 0 is head (left)
 	pos int
 }
 
