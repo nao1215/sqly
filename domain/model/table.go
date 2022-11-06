@@ -1,10 +1,22 @@
 package model
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/nao1215/sqly/domain"
 	"github.com/olekukonko/tablewriter"
+)
+
+// PrintMode is enum to specify output method
+type PrintMode uint
+
+const (
+	// PrintModeTable print data in table format
+	PrintModeTable PrintMode = iota
+	// PrintModeCSV print data in csv format
+	PrintModeCSV
 )
 
 // Table is DB table.
@@ -47,7 +59,19 @@ func (t *Table) IsEmptyRecords() bool {
 }
 
 // Print print all record with header
-func (t *Table) Print(out *os.File) {
+func (t *Table) Print(out *os.File, mode PrintMode) {
+	switch mode {
+	case PrintModeTable:
+		t.printTable(out)
+	case PrintModeCSV:
+		t.printCSV(out)
+	default:
+		t.printTable(out)
+	}
+}
+
+// Print print all record with header; output format is table
+func (t *Table) printTable(out *os.File) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(t.Header)
 	table.SetAutoFormatHeaders(false)
@@ -57,4 +81,12 @@ func (t *Table) Print(out *os.File) {
 		table.Append(v)
 	}
 	table.Render()
+}
+
+// Print print all record with header; output format is csv
+func (t *Table) printCSV(out *os.File) {
+	fmt.Fprintln(out, strings.Join(t.Header, ","))
+	for _, v := range t.Records {
+		fmt.Fprintln(out, strings.Join(v, ","))
+	}
 }
