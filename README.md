@@ -14,7 +14,7 @@ The sqly command has sqly-shell. You can interactively execute SQL. However, DDL
 ### Use "go install"
 If you does not have the golang development environment installed on your system, please install golang from the [golang official website](https://go.dev/doc/install).
 ```
-$ go install github.com/mattn/go-sqlite3@latest  ※ required gcc
+$ go install github.com/mattn/go-sqlite3@latest  ※ go-sqlite required gcc
 $ go install github.com/nao1215/sqly@latest
 ```
 
@@ -101,7 +101,12 @@ sqly> SELECT * FROM user WHERE identifier = '2'
 
 # Features to be added
 - import json, tsv, swagger
-- sqly shell input completion
+  - The file type is determined by the file extension. This specification is to reduce the number of options.
+- sqly shell input control (key-bindings)
+  - change input position (left arrow)
+  - input completion (Tab, right arrow)
+  - emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
+  - history search (Ctrl-r)
 
 # Contributing
 First off, thanks for taking the time to contribute! ❤️ Contributions are not only related to development. For example, GitHub Star motivates me to develop!  
