@@ -68,7 +68,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		return s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query)
+		return s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query, s.argument.Output.Mode)
 	}
 
 	s.printWelcomeMessage()
@@ -175,7 +175,7 @@ func (s *Shell) exec() error {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	if err := s.sqlite3Interactor.ExecSQL(s.Ctx, req); err != nil {
+	if err := s.sqlite3Interactor.ExecSQL(s.Ctx, req, s.argument.Output.Mode); err != nil {
 		return err
 	}
 	return nil

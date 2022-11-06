@@ -57,7 +57,7 @@ func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64,
 }
 
 // ExecSQL execute "SELECT/EXPLAIN"query or "INSERT/UPDATE/DELETE" statement
-func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) error {
+func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string, mode model.PrintMode) error {
 	argv := strings.Split(trimWordGaps(statement), " ")
 
 	// NOTE: SQLY uses SQLite3. There is some SQL that can be changed from non-support
@@ -82,7 +82,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) erro
 			return fmt.Errorf("execute query error: %v: %s", err, color.CyanString(statement))
 		}
 		if table != nil {
-			table.Print(os.Stdout)
+			table.Print(os.Stdout, mode)
 		}
 	} else if si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]) {
 		affectedRows, err := si.Repository.Exec(ctx, statement)
