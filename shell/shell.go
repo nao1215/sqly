@@ -183,7 +183,7 @@ func (s *Shell) exec() error {
 }
 
 func (s *Shell) execSQL(req string) error {
-	table, affectedRows, err := s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query, s.argument.Output.Mode)
+	table, affectedRows, err := s.sqlite3Interactor.ExecSQL(s.Ctx, req, s.argument.Output.Mode)
 	if err != nil {
 		return err
 	}
