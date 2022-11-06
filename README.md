@@ -14,9 +14,10 @@ The sqly command has sqly-shell. You can interactively execute SQL. However, DDL
 ### Use "go install"
 If you does not have the golang development environment installed on your system, please install golang from the [golang official website](https://go.dev/doc/install).
 ```
-$ go install github.com/mattn/go-sqlite3@latest  ※ go-sqlite required gcc
 $ go install github.com/nao1215/sqly@latest
 ```
+※ Main dependency is [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) and gcc.
+
 
 # How to use
 sqly command automatically imports the CSV file into the DB when you pass a CSV file as an argument. DB table name is the same as the CSV file name (e.g., if you import user.csv, sqly command create the user table)
