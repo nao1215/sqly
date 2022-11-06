@@ -14,7 +14,9 @@ var (
 	// Version is sqly command version. Version value is assigned by LDFLAGS.
 	Version string
 	// query is SQL statement (for --sql option)
-	query = pflag.StringP("sql", "s", "", "execute sql query for file")
+	query = pflag.StringP("sql", "s", "", "sql query you want to execute")
+	// output is output destionation when user use --sql option (for --option option)
+	output = pflag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 )
 
 // Output is configuration for output data to file.
@@ -55,7 +57,7 @@ func NewArg() (*Arg, error) {
 
 	arg.Usage = usage
 	arg.Version = version
-	arg.Output = newOutput("", csvFlag)
+	arg.Output = newOutput(*output, csvFlag)
 	arg.FilePaths = pflag.Args()
 	arg.Query = *query
 
@@ -68,16 +70,15 @@ func newOutput(filePath string, csvFlag bool) *Output {
 	if csvFlag {
 		mode = model.PrintModeCSV
 	}
-
 	return &Output{
-		FilePath: "",
+		FilePath: filePath,
 		Mode:     mode,
 	}
 }
 
-// NeedsOutputToFile whether the data needs to be output to a file
-func (o *Output) NeedsOutputToFile() bool {
-	return o.FilePath != ""
+// NeedsOutputToFile whether the data needs to be output to the file
+func (a *Arg) NeedsOutputToFile() bool {
+	return a.Output.FilePath != "" && a.Query != ""
 }
 
 func usage() {

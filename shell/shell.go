@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -68,7 +69,7 @@ func (s *Shell) Run() error {
 	}
 
 	if s.argument.Query != "" {
-		return s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query, s.argument.Output.Mode)
+		return s.execSQL(s.argument.Query)
 	}
 
 	s.printWelcomeMessage()
@@ -175,8 +176,34 @@ func (s *Shell) exec() error {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	if err := s.sqlite3Interactor.ExecSQL(s.Ctx, req, s.argument.Output.Mode); err != nil {
+	if err := s.execSQL(req); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Shell) execSQL(req string) error {
+	table, affectedRows, err := s.sqlite3Interactor.ExecSQL(s.Ctx, s.argument.Query, s.argument.Output.Mode)
+	if err != nil {
+		return err
+	}
+	if table == nil {
+		fmt.Printf("affected is %d row(s)\n", affectedRows)
+		return nil
+	}
+
+	// use --sql option and user want to output table data to file.
+	if s.argument.NeedsOutputToFile() {
+		// I am having difficulty in designing. Therefore, I do not save files in TABLE format.
+		// Also, only Windows users need to save files with the --output option, and Linux users (it's me)
+		// can save data in table format with redirection.
+		if err := s.csvInteractor.Dump(s.argument.Output.FilePath, table); err != nil {
+			return err
+		}
+		fmt.Fprintf(Stdout, "Output sql result to %s\n", color.HiCyanString(s.argument.Output.FilePath))
+		return nil
+	}
+
+	table.Print(os.Stdout, s.argument.Output.Mode)
 	return nil
 }
