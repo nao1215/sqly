@@ -100,15 +100,15 @@ sqly> SELECT * FROM user WHERE identifier = '2'
 ```
 
 # Features to be added
-- [] import json
-- [] import tsv
-- [] import swagger
-- [] The file type is determined by the file extension. This specification is to reduce the number of options.
+- [ ] import json
+- [ ] import tsv
+- [ ] import swagger
+- [ ] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
-- [] input completion (Tab, right arrow)
-- [] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
-- [] history search (Ctrl-r)
-- [] Convert CSV character encoding to UTF-8 if necessary
+- [ ] input completion (Tab, right arrow)
+- [ ] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
+- [ ] history search (Ctrl-r)
+- [ ] Convert CSV character encoding to UTF-8 if necessary
 
 # Contributing
 First off, thanks for taking the time to contribute! ❤️ Contributions are not only related to development. For example, GitHub Star motivates me to develop!  
