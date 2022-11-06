@@ -97,7 +97,7 @@ func (s *Shell) communicate() error {
 
 		switch r {
 		case runeBackSpace, runeDelete:
-			s.interactive.deleteLastInput()
+			s.interactive.deleteChar()
 		case runeEnter:
 			fmt.Println("") // Not delete it.
 			if err = s.exec(); err != nil {
@@ -124,10 +124,9 @@ func (s *Shell) communicate() error {
 					s.interactive.newerInput()
 				case 'C':
 					// TODO: add completion
-					//"ALLOW-RIGHT"
+					s.interactive.cursorRight()
 				case 'D':
-					// TODO: back input cursor
-					//"ALLOW-LEFT"
+					s.interactive.cursorLeft()
 				}
 			}
 		default:
