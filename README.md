@@ -53,6 +53,17 @@ sqly> .help
     .tables: print tables
 ```
 
+## Output sql result to file
+### For linux user 
+sqly command can save SQL execution results to a file using shell redirection. The --csv option outputs SQL execution results in CSV format instead of table format.
+```
+$ sqly --sql "SELECT * FROM user" testdata/user.csv --csv > test.csv
+```
+### For windows user
+ ```
+$ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
+```
+
 ## Execute query sample
 ```
 sqly> .tables                                                                                      
