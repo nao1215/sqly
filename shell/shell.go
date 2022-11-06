@@ -182,6 +182,7 @@ func (s *Shell) exec() error {
 }
 
 func (s *Shell) execSQL(req string) error {
+	req = strings.TrimRight(req, ";")
 	table, affectedRows, err := s.sqlite3Interactor.ExecSQL(s.Ctx, req, s.argument.Output.Mode)
 	if err != nil {
 		return err
