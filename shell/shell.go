@@ -87,7 +87,11 @@ func (s *Shell) communicate() error {
 	defer tty.Close()
 
 	for {
-		s.interactive.clearLine()
+		_, x, err := tty.Size()
+		if err != nil {
+			return err
+		}
+		s.interactive.clearLine(x)
 		s.interactive.printPrompt()
 
 		r, err := tty.ReadRune()

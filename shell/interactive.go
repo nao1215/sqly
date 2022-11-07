@@ -76,8 +76,16 @@ func (i *Interactive) deleteChar() {
 	i.cursor.moveLeft()
 }
 
-func (i *Interactive) clearLine() {
-	fmt.Fprintf(Stdout, "\r%s", strings.Repeat(" ", len(i.promptPrefix)+i.history.maxLength))
+func (i *Interactive) clearLine(x int) {
+	lines := (len((i.promptPrefix + i.history.currentInput())) - 1) / x
+	if lines == 0 {
+		fmt.Printf("\x1b[2K") // Delete current line
+	} else {
+		fmt.Printf("\x1b[2K") // Delete current line
+		for i := 0; i < lines; i++ {
+			fmt.Printf("\x1bM")
+		}
+	}
 }
 
 func (i *Interactive) olderInput() {
