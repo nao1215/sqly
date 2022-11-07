@@ -16,8 +16,6 @@ type History struct {
 	// workingCache 1:oldest, n:current
 	// workingCache also store the string while the user is typing.
 	workingCache model.Histories
-	// maxLength is max string length in cache.
-	maxLength int
 	// interactor control history usecase
 	interactor *usecase.HistoryInteractor
 }
@@ -26,7 +24,6 @@ type History struct {
 func NewHistory(interactor *usecase.HistoryInteractor) *History {
 	return &History{
 		index:      0,
-		maxLength:  0,
 		interactor: interactor,
 	}
 }
@@ -50,7 +47,6 @@ func (h *History) refreshWorkingCache(ctx context.Context) error {
 		Request: "",
 	})
 	h.index = uint(len(h.workingCache) - 1)
-	h.setMaxInputLength()
 	return nil
 }
 
@@ -66,17 +62,6 @@ func (h *History) recordAndRefreshCache(ctx context.Context) error {
 		return fmt.Errorf("failed to store user input history: %v", err)
 	}
 	return h.refreshWorkingCache(ctx)
-}
-
-func (h *History) setMaxInputLength() {
-	max := -1
-	for _, v := range h.workingCache {
-		l := len(v.Request)
-		if max < l {
-			max = l
-		}
-	}
-	h.maxLength = max
 }
 
 func (h *History) appendChar(r rune, position int) {
@@ -97,10 +82,6 @@ func (h *History) appendChar(r rune, position int) {
 			h.workingCache[h.index].Request = current[:position] + string(r) + current[position:]
 		}
 	}
-
-	if len(h.workingCache[h.index].Request) > h.maxLength {
-		h.maxLength = len(h.workingCache[h.index].Request)
-	}
 }
 
 func (h *History) replace(s string) {
@@ -111,7 +92,6 @@ func (h *History) older() {
 	if h.index == h.oldestIndex() {
 		return
 	}
-	h.setMaxInputLength()
 	h.index--
 }
 
@@ -119,7 +99,6 @@ func (h *History) newer() {
 	if h.index == h.newstIndex() {
 		return
 	}
-	h.setMaxInputLength()
 	h.index++
 }
 
