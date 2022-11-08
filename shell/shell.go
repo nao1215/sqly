@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
+	"github.com/c-bata/go-prompt"
+	"github.com/c-bata/go-prompt/completer"
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-tty"
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/usecase"
 )
 
@@ -29,25 +32,27 @@ var (
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
 	Ctx               context.Context
+	promptPrefix      string
 	argument          *config.Arg
 	config            *config.Config
 	commands          CommandList
-	interactive       *Interactive
 	csvInteractor     *usecase.CSVInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
+	historyInteractor *usecase.HistoryInteractor
 }
 
 // NewShell return *Shell.
-func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList, interactive *Interactive,
-	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor) *Shell {
+func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
+	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor, history *usecase.HistoryInteractor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
+		promptPrefix:      "sqly> ",
 		argument:          arg,
 		config:            cfg,
 		commands:          cmds,
-		interactive:       interactive,
 		csvInteractor:     csv,
 		sqlite3Interactor: sqlite3,
+		historyInteractor: history,
 	}
 }
 
@@ -80,70 +85,39 @@ func (s *Shell) Run() error {
 // This function receive user input (it's SQL query or helper command) and
 // request the usecase layer to process it.
 func (s *Shell) communicate() error {
-	tty, err := tty.Open()
-	if err != nil {
-		return err
-	}
-	defer tty.Close()
+	// workaround
+	// bug :https://github.com/c-bata/go-prompt/issues/228
+	defer func() {
+		rawModeOff := exec.Command("/bin/stty", "-raw", "echo")
+		rawModeOff.Stdin = os.Stdin
+		_ = rawModeOff.Run()
+		rawModeOff.Wait()
+	}()
 
 	for {
-		s.interactive.clearLine()
-		s.interactive.printPrompt()
-
-		r, err := tty.ReadRune()
+		input, err := s.prompt(s.Ctx)
 		if err != nil {
 			return err
 		}
-
-		switch r {
-		case runeBackSpace, runeDelete:
-			s.interactive.deleteChar()
-		case runeEnter:
-			fmt.Println("") // Not delete it.
-			if err = s.exec(); err != nil {
-				if errors.Is(err, ErrExitSqly) {
-					return nil // user input ".exit"
-				}
-				fmt.Fprintf(Stderr, "%v\n", err)
-				continue
+		if err = s.exec(input); err != nil {
+			if errors.Is(err, ErrExitSqly) {
+				return nil // user input ".exit"
 			}
-		case runeTabKey:
-			// TODO: add completion
+			fmt.Fprintf(Stderr, "%v\n", err)
 			continue
-		case runeEscapeKey:
-			r, err = tty.ReadRune()
-			if err == nil && r == 0x5b {
-				r, err = tty.ReadRune()
-				if err != nil {
-					return err
-				}
-				switch r {
-				case 'A':
-					s.interactive.olderInput()
-				case 'B':
-					s.interactive.newerInput()
-				case 'C':
-					// TODO: add completion
-					s.interactive.cursorRight()
-				case 'D':
-					s.interactive.cursorLeft()
-				}
-			}
-		default:
-			s.interactive.append(r)
 		}
 	}
 }
 
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init() error {
-	if err := s.interactive.initialize(s.Ctx); err != nil {
-		return err
+	if err := s.historyInteractor.CreateTable(s.Ctx); err != nil {
+		return fmt.Errorf("failed to create table for sqly history: %v", err)
 	}
 	if len(s.argument.FilePaths) == 0 {
 		return nil
 	}
-	return s.commands[".import"].execute(s, s.argument.FilePaths)
+	return s.commands.importCommand(s, s.argument.FilePaths)
 }
 
 // printWelcomeMessage print version and help information.
@@ -155,15 +129,77 @@ func (s *Shell) printWelcomeMessage() {
 	fmt.Fprintln(Stdout, "")
 }
 
+// printPrompt print "sqly>" prompt and getting user input
+func (s *Shell) prompt(ctx context.Context) (string, error) {
+	histories, err := s.historyInteractor.List(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return prompt.Input(s.promptPrefix,
+		s.completer,
+		prompt.OptionTitle("sqly"),
+		prompt.OptionPrefixTextColor(prompt.Cyan),
+		prompt.OptionSuggestionBGColor(prompt.DarkBlue),
+		prompt.OptionSuggestionTextColor(prompt.Black),
+		prompt.OptionDescriptionBGColor(prompt.DarkGray),
+		prompt.OptionSelectedSuggestionBGColor(prompt.Blue),
+		prompt.OptionSelectedDescriptionBGColor(prompt.Cyan),
+		prompt.OptionSelectedSuggestionTextColor(prompt.DarkRed),
+		prompt.OptionSelectedDescriptionTextColor(prompt.DarkRed),
+		prompt.OptionCompletionWordSeparator(completer.FilePathCompletionSeparator),
+		prompt.OptionHistory(histories.ToStringList())), nil
+}
+
+func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
+	suggest := []prompt.Suggest{
+		{Text: "SELECT", Description: "get records from table"},
+		{Text: "INSERT INTO", Description: "creates one or more new records in an existing table"},
+		{Text: "UPDATE", Description: "update one or more records"},
+		{Text: "AS", Description: "set alias name"},
+		{Text: "FROM", Description: "specify the table"},
+		{Text: "WHERE", Description: "search condition"},
+		{Text: "GROUP BY", Description: "groping records"},
+		{Text: "HAVING", Description: "extraction conditions for records after grouping"},
+		{Text: "ORDER BY", Description: "sort result"},
+		{Text: "VALUES", Description: "specify values to be inserted or updated"},
+		{Text: "SET", Description: "specify values to be updated"},
+		{Text: "DELETE FROM", Description: "specify tables to be deleted"},
+		{Text: "IN", Description: "condition grouping"},
+		{Text: "INNER JOIN", Description: "inner join tables"},
+		{Text: "LIMIT", Description: "upper Limit of records"},
+	}
+
+	for _, v := range s.commands {
+		suggest = append(suggest, prompt.Suggest{
+			Text:        v.name,
+			Description: v.description,
+		})
+	}
+
+	tables, err := s.sqlite3Interactor.TablesName(s.Ctx)
+	if err != nil {
+		return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
+	}
+
+	for _, v := range tables {
+		suggest = append(suggest, prompt.Suggest{
+			Text:        v.Name,
+			Description: v.Name + " table",
+		})
+	}
+	return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
+}
+
 // exec execute sqly helper command or sql query.
-func (s *Shell) exec() error {
-	req := s.interactive.request()
+func (s *Shell) exec(request string) error {
+	req := strings.TrimSpace(request)
 	argv := strings.Split(trimWordGaps(req), " ")
 	if argv[0] == "" {
 		return nil // user only input enter, space tab
 	}
 
-	if err := s.interactive.recordUserRequest(s.Ctx); err != nil {
+	if err := s.recordUserRequest(s.Ctx, req); err != nil {
 		return err
 	}
 
@@ -205,5 +241,23 @@ func (s *Shell) execSQL(req string) error {
 	}
 
 	table.Print(os.Stdout, s.argument.Output.Mode)
+	return nil
+}
+
+// recordUserRequest record user request in DB.
+func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
+	histories, err := s.historyInteractor.List(ctx)
+	if err != nil {
+		return err
+	}
+
+	history := model.History{
+		ID:      len(histories) + 1,
+		Request: request,
+	}
+
+	if err := s.historyInteractor.Create(ctx, history); err != nil {
+		return fmt.Errorf("failed to store user input history: %v", err)
+	}
 	return nil
 }
