@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/c-bata/go-prompt"
@@ -84,6 +85,15 @@ func (s *Shell) Run() error {
 // This function receive user input (it's SQL query or helper command) and
 // request the usecase layer to process it.
 func (s *Shell) communicate() error {
+	// workaround
+	// bug :https://github.com/c-bata/go-prompt/issues/228
+	defer func() {
+		rawModeOff := exec.Command("/bin/stty", "-raw", "echo")
+		rawModeOff.Stdin = os.Stdin
+		_ = rawModeOff.Run()
+		rawModeOff.Wait()
+	}()
+
 	for {
 		input, err := s.prompt(s.Ctx)
 		if err != nil {
@@ -119,7 +129,7 @@ func (s *Shell) printWelcomeMessage() {
 	fmt.Fprintln(Stdout, "")
 }
 
-// printPrompt print "sqly>>" prompt and getting user input
+// printPrompt print "sqly>" prompt and getting user input
 func (s *Shell) prompt(ctx context.Context) (string, error) {
 	histories, err := s.historyInteractor.List(ctx)
 	if err != nil {
@@ -130,33 +140,34 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 		s.completer,
 		prompt.OptionTitle("sqly"),
 		prompt.OptionPrefixTextColor(prompt.Cyan),
-		prompt.OptionInputTextColor(prompt.Yellow),
-		prompt.OptionSuggestionBGColor(prompt.Purple),
-		prompt.OptionDescriptionBGColor(prompt.Blue),
+		prompt.OptionSuggestionBGColor(prompt.DarkBlue),
+		prompt.OptionSuggestionTextColor(prompt.Black),
+		prompt.OptionDescriptionBGColor(prompt.DarkGray),
 		prompt.OptionSelectedSuggestionBGColor(prompt.Blue),
-		prompt.OptionSelectedDescriptionBGColor(prompt.Purple),
-		prompt.OptionSelectedSuggestionTextColor(prompt.Red),
+		prompt.OptionSelectedDescriptionBGColor(prompt.Cyan),
+		prompt.OptionSelectedSuggestionTextColor(prompt.DarkRed),
+		prompt.OptionSelectedDescriptionTextColor(prompt.DarkRed),
 		prompt.OptionCompletionWordSeparator(completer.FilePathCompletionSeparator),
 		prompt.OptionHistory(histories.ToStringList())), nil
 }
 
 func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 	suggest := []prompt.Suggest{
-		{Text: "SELECT", Description: ""},
-		{Text: "INSERT INTO", Description: ""},
-		{Text: "UPDATE", Description: ""},
-		{Text: "AS", Description: ""},
-		{Text: "FROM", Description: ""},
-		{Text: "WHERE", Description: ""},
-		{Text: "GROUP BY", Description: ""},
-		{Text: "HAVING", Description: ""},
-		{Text: "ORDER BY", Description: ""},
-		{Text: "VALUES", Description: ""},
-		{Text: "SET", Description: ""},
-		{Text: "DELETE FROM", Description: ""},
-		{Text: "IN", Description: ""},
-		{Text: "INNER JOIN", Description: ""},
-		{Text: "LIMIT", Description: ""},
+		{Text: "SELECT", Description: "get records from table"},
+		{Text: "INSERT INTO", Description: "creates one or more new records in an existing table"},
+		{Text: "UPDATE", Description: "update one or more records"},
+		{Text: "AS", Description: "set alias name"},
+		{Text: "FROM", Description: "specify the table"},
+		{Text: "WHERE", Description: "search condition"},
+		{Text: "GROUP BY", Description: "groping records"},
+		{Text: "HAVING", Description: "extraction conditions for records after grouping"},
+		{Text: "ORDER BY", Description: "sort result"},
+		{Text: "VALUES", Description: "specify values to be inserted or updated"},
+		{Text: "SET", Description: "specify values to be updated"},
+		{Text: "DELETE FROM", Description: "specify tables to be deleted"},
+		{Text: "IN", Description: "condition grouping"},
+		{Text: "INNER JOIN", Description: "inner join tables"},
+		{Text: "LIMIT", Description: "upper Limit of records"},
 	}
 
 	for _, v := range s.commands {
