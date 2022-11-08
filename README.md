@@ -8,7 +8,9 @@
 
 **sqly** command imports CSV file(s) into an in-memory DB and executes SQL against the CSV. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
 
-The sqly command has sqly-shell. You can interactively execute SQL. However, DDL such as CREATE, DML such as GRANT, and TCL such as transactions are intentionally not supported; only DML, i.e., "SELECT", "INSERT", "UPDATE", "DELETE", and "EXPLAIN" are supported.
+The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
+
+![demo](./doc/shell-demo.png)  
 
 # How to install
 ### Use "go install"
@@ -82,14 +84,6 @@ sqly> SELECT user_name, position FROM user INNER JOIN identifier ON user.identif
 | jenkins46 | manager   |
 | smith79   | neet      |
 +-----------+-----------+
-sqly> SELECT * FROM user;                                                                          
-+-----------+------------+------------+-----------+
-| user_name | identifier | first_name | last_name |
-+-----------+------------+------------+-----------+
-| booker12  |          1 | Rachel     | Booker    |
-| jenkins46 |          2 | Mary       | Jenkins   |
-| smith79   |          3 | Jamie      | Smith     |
-+-----------+------------+------------+-----------+
 sqly> UPDATE user SET user_name = 'nchika' WHERE identifier = '2'                                  
 affected is 1 row(s)
 sqly> SELECT * FROM user WHERE identifier = '2'                                                    
@@ -106,11 +100,16 @@ sqly> SELECT * FROM user WHERE identifier = '2'
 - [ ] import swagger
 - [ ] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
-- [ ] sqly Fix problem where multiple lines of input in the shell would cause display corruption. To be fixed using escape sequences.
-- [ ] input completion (Tab, right arrow)
-- [ ] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
+- [x] sqly Fix problem where multiple lines of input in the shell would cause display corruption. To be fixed using escape sequences.
+- [x] input completion (Tab)
+- [x] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
 - [ ] history search (Ctrl-r)
 - [ ] Convert CSV character encoding to UTF-8 if necessary
+
+# Limitions (Not support)
+- DDL such as CREATE
+- DML such as GRANT
+- TCL such as Transactions
 
 # Contributing
 First off, thanks for taking the time to contribute! ❤️ Contributions are not only related to development. For example, GitHub Star motivates me to develop!  

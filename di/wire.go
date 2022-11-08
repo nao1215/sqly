@@ -25,8 +25,6 @@ func NewShell() (*shell.Shell, func(), error) {
 		config.NewArg,
 		shell.NewShell,
 		shell.NewCommands,
-		shell.NewInteractive,
-		shell.NewHistory,
 		usecase.NewCSVInteractor,
 		usecase.NewHistoryInteractor,
 		usecase.NewSQLite3Interactor,
