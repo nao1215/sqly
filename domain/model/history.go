@@ -30,3 +30,11 @@ func (h Histories) ToTable() *Table {
 		Records: records,
 	}
 }
+
+func (h Histories) ToStringList() []string {
+	var histories []string
+	for _, v := range h {
+		histories = append(histories, v.Request)
+	}
+	return histories
+}
