@@ -106,6 +106,7 @@ sqly> SELECT * FROM user WHERE identifier = '2'
 - [ ] import swagger
 - [ ] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
+- [ ] sqly Fix problem where multiple lines of input in the shell would cause display corruption. To be fixed using escape sequences.
 - [ ] input completion (Tab, right arrow)
 - [ ] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
 - [ ] history search (Ctrl-r)
