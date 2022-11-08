@@ -14,6 +14,7 @@ var (
 // command is type of sqly helper command
 type command struct {
 	execute     func(s *Shell, argv []string) error
+	name        string
 	description string
 }
 
@@ -24,11 +25,11 @@ type CommandList map[string]command
 // NewCommands return *CommandList that set sqly helper commands.
 func NewCommands() CommandList {
 	c := CommandList{}
-	c[".dump"] = command{execute: c.dumpCommand, description: "dump db table to csv file"}
-	c[".exit"] = command{execute: c.exitCommand, description: "exit sqly"}
-	c[".help"] = command{execute: c.helpCommand, description: "print help message"}
-	c[".import"] = command{execute: c.importCommand, description: "import csv file(s)"}
-	c[".tables"] = command{execute: c.tablesCommand, description: "print tables"}
+	c[".dump"] = command{execute: c.dumpCommand, name: ".dump", description: "dump db table to csv file"}
+	c[".exit"] = command{execute: c.exitCommand, name: ".exit", description: "exit sqly"}
+	c[".help"] = command{execute: c.helpCommand, name: ".help", description: "print help message"}
+	c[".import"] = command{execute: c.importCommand, name: ".import", description: "import csv file(s)"}
+	c[".tables"] = command{execute: c.tablesCommand, name: ".tables", description: "print tables"}
 	return c
 }
 
