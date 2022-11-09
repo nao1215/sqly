@@ -37,13 +37,15 @@ type Shell struct {
 	config            *config.Config
 	commands          CommandList
 	csvInteractor     *usecase.CSVInteractor
+	jsonInteractor    *usecase.JSONInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 	historyInteractor *usecase.HistoryInteractor
 }
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
-	csv *usecase.CSVInteractor, sqlite3 *usecase.SQLite3Interactor, history *usecase.HistoryInteractor) *Shell {
+	csv *usecase.CSVInteractor, json *usecase.JSONInteractor,
+	sqlite3 *usecase.SQLite3Interactor, history *usecase.HistoryInteractor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		promptPrefix:      "sqly> ",
@@ -51,6 +53,7 @@ func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
 		config:            cfg,
 		commands:          cmds,
 		csvInteractor:     csv,
+		jsonInteractor:    json,
 		sqlite3Interactor: sqlite3,
 		historyInteractor: history,
 	}

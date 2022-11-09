@@ -48,16 +48,18 @@ type Arg struct {
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 func NewArg() (*Arg, error) {
 	csvFlag := false
+	jsonFlag := false
 
 	arg := &Arg{}
 	pflag.BoolVarP(&csvFlag, "csv", "c", false, "change output format to csv (default: table)")
+	pflag.BoolVarP(&jsonFlag, "json", "j", false, "change output format to json (default: table)")
 	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
 	pflag.Parse()
 
 	arg.Usage = usage
 	arg.Version = version
-	arg.Output = newOutput(*output, csvFlag)
+	arg.Output = newOutput(*output, csvFlag, jsonFlag)
 	arg.FilePaths = pflag.Args()
 	arg.Query = *query
 
@@ -65,10 +67,12 @@ func NewArg() (*Arg, error) {
 }
 
 // newOutput retur *Output
-func newOutput(filePath string, csvFlag bool) *Output {
+func newOutput(filePath string, csvFlag, jsonFlag bool) *Output {
 	mode := model.PrintModeTable
 	if csvFlag {
 		mode = model.PrintModeCSV
+	} else if jsonFlag {
+		mode = model.PrintModeJSON
 	}
 	return &Output{
 		FilePath: filePath,
