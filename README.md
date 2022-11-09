@@ -43,14 +43,15 @@ If the --sql option is not specified, the sqly shell is started. sqly command ar
 The command beginning with a dot is the sqly helper command; I plan to add more features in the future to make the sqly shell run more comfortably.
 ```
 $ sqly 
-sqly v0.0.7 (work in progress)
+sqly v0.2.1 (work in progress)
 
 enter "SQL query" or "sqly command that beginning with a dot".
 .help print usage, .exit exit sqly.
 
-sqly> .help                                                                                        
+sqly> .help
       .dump: dump db table to csv file
       .exit: exit sqly
+    .header: print table header
       .help: print help message
     .import: import csv file(s)
     .tables: print tables
