@@ -177,31 +177,28 @@ func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 		})
 	}
 
-	tables, err := s.sqlite3Interactor.TablesName(s.Ctx)
+	tableNames, err := s.sqlite3Interactor.TablesName(s.Ctx)
 	if err != nil {
 		return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 	}
-
-	for _, v := range tables {
+	for _, v := range tableNames {
 		suggest = append(suggest, prompt.Suggest{
 			Text:        v.Name,
 			Description: v.Name + " table",
 		})
 
-		table, err := s.sqlite3Interactor.List(s.Ctx, v.Name)
+		table, err := s.sqlite3Interactor.Header(s.Ctx, v.Name)
 		if err != nil {
-			// TODO: error logging
-			continue
+			return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 		}
-		table.Name = v.Name
-
 		for _, h := range table.Header {
 			suggest = append(suggest, prompt.Suggest{
 				Text:        h,
-				Description: "header in " + table.Name + " table",
+				Description: "header in " + v.Name + " table",
 			})
 		}
 	}
+
 	return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 }
 
