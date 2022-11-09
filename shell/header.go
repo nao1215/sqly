@@ -16,7 +16,7 @@ func (c CommandList) headerCommand(s *Shell, argv []string) error {
 		return nil
 	}
 
-	table, err := s.sqlite3Interactor.List(s.Ctx, argv[0])
+	table, err := s.sqlite3Interactor.Header(s.Ctx, argv[0])
 	if err != nil {
 		return err
 	}

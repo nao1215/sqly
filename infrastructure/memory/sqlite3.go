@@ -99,6 +99,11 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s", infra.Quote(tableName)))
 }
 
+// Header get table header name.
+func (r *sqlite3Repository) Header(ctx context.Context, tableName string) (*model.Table, error) {
+	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", infra.Quote(tableName)))
+}
+
 // Query execute "SELECT" or "EXPLAIN" query
 func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -118,7 +123,6 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 		return nil, err
 	}
 	if len(header) == 0 {
-
 		return nil, infra.ErrNoRows
 	}
 
