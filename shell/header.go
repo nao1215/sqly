@@ -27,9 +27,6 @@ func (c CommandList) headerCommand(s *Shell, argv []string) error {
 
 // printHeader print header
 func printHeader(out *os.File, t *model.Table) {
-	tableData := [][]string{}
-	tableData = append(tableData, []string{t.Name})
-
 	table := tablewriter.NewWriter(out)
 	table.SetHeader([]string{t.Name})
 	table.SetAutoWrapText(false)
