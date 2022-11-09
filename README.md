@@ -3,10 +3,10 @@
 [![reviewdog](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nao1215/sqly)](https://goreportcard.com/report/github.com/nao1215/sqly)
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
-# sqly - execute SQL against CSV easily 
+# sqly - execute SQL against CSV / JSON easily 
 ![demo](./doc/demo.gif)  
 
-**sqly** command imports CSV file(s) into an in-memory DB and executes SQL against the CSV. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
+**sqly** command imports CSV / JSON file(s) into an in-memory DB and executes SQL against the CSV / JSON. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
 
 The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
@@ -22,28 +22,54 @@ $ go install github.com/nao1215/sqly@latest
 
 
 # How to use
-sqly command automatically imports the CSV file into the DB when you pass a CSV file as an argument. DB table name is the same as the CSV file name (e.g., if you import user.csv, sqly command create the user table)
+sqly command automatically imports the CSV / JSON file into the DB when you pass a CSV / JSON file as an argument. DB table name is the same as the file name (e.g., if you import user.csv, sqly command create the user table)
+
 ## --sql option: execute sql in terminal
---sql option takes an SQL statement as an optional argument. 
+--sql option takes an SQL statement as an optional argument. You pass file path(s) as arguments to the sqly command. sqly command import them. sqly command automatically determines the file format from the file extension.
 ```
-$ sqly --sql 'SELECT * FROM user' testdata/user.csv 
-+-----------+------------+------------+-----------+
-| user_name | identifier | first_name | last_name |
-+-----------+------------+------------+-----------+
-| booker12  |          1 | Rachel     | Booker    |
-| jenkins46 |          2 | Mary       | Jenkins   |
-| smith79   |          3 | Jamie      | Smith     |
-+-----------+------------+------------+-----------+
+$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv 
++-----------+-----------+
+| user_name | position  |
++-----------+-----------+
+| booker12  | developrt |
+| jenkins46 | manager   |
+| smith79   | neet      |
++-----------+-----------+
+```
+
+## Change output format
+sqly command output sql results in ASCII table format (in faorto), CSV format (--csv option), and JSON format (--json option).
+```
+$ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
+user_name,identifier,first_name,last_name
+booker12,1,Rachel,Booker
+jenkins46,2,Mary,Jenkins
+
+$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv 
+[
+   {
+      "first_name": "Rachel",
+      "identifier": "1",
+      "last_name": "Booker",
+      "user_name": "booker12"
+   },
+   {
+      "first_name": "Mary",
+      "identifier": "2",
+      "last_name": "Jenkins",
+      "user_name": "jenkins46"
+   }
+]
 ```
 
 ## run sqly shell
-If the --sql option is not specified, the sqly shell is started. sqly command arguments may or may not specify CSV file(s). The sqly shell functions similarly to a common SQL client (e.g., sqlite3 command or mysql command). sqly shell has helper commands and SQL execution history management.
+If the --sql option is not specified, the sqly shell is started. When you execute sqly command, it is optional whether or not to specify file(s). The sqly shell functions similarly to a common SQL client (e.g., sqlite3 command or mysql command). sqly shell has helper commands, SQL execution history management and input complement.
 
 ### sqly helper command
 The command beginning with a dot is the sqly helper command; I plan to add more features in the future to make the sqly shell run more comfortably.
 ```
 $ sqly 
-sqly v0.2.1 (work in progress)
+sqly v0.3.0 (work in progress)
 
 enter "SQL query" or "sqly command that beginning with a dot".
 .help print usage, .exit exit sqly.
@@ -54,6 +80,7 @@ sqly> .help
     .header: print table header
       .help: print help message
     .import: import csv file(s)
+      .mode: change output mode
     .tables: print tables
 ```
 
@@ -68,38 +95,11 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --csv > test.csv
 $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 ```
 
-## Execute query sample
-```
-sqly> .tables                                                                                      
-+------------+
-| TABLE NAME |
-+------------+
-| user       |
-| identifier |
-+------------+
-sqly> SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id
-+-----------+-----------+
-| user_name | position  |
-+-----------+-----------+
-| booker12  | developrt |
-| jenkins46 | manager   |
-| smith79   | neet      |
-+-----------+-----------+
-sqly> UPDATE user SET user_name = 'nchika' WHERE identifier = '2'                                  
-affected is 1 row(s)
-sqly> SELECT * FROM user WHERE identifier = '2'                                                    
-+-----------+------------+------------+-----------+
-| user_name | identifier | first_name | last_name |
-+-----------+------------+------------+-----------+
-| nchika    |          2 | Mary       | Jenkins   |
-+-----------+------------+------------+-----------+
-```
-
 # Features to be added
-- [ ] import json
+- [x] import json
 - [ ] import tsv
 - [ ] import swagger
-- [ ] The file type is determined by the file extension. This specification is to reduce the number of options.
+- [x] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
 - [x] sqly Fix problem where multiple lines of input in the shell would cause display corruption. To be fixed using escape sequences.
 - [x] input completion (Tab)
