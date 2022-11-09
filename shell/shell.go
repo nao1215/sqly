@@ -187,6 +187,20 @@ func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 			Text:        v.Name,
 			Description: v.Name + " table",
 		})
+
+		table, err := s.sqlite3Interactor.List(s.Ctx, v.Name)
+		if err != nil {
+			// TODO: error logging
+			continue
+		}
+		table.Name = v.Name
+
+		for _, h := range table.Header {
+			suggest = append(suggest, prompt.Suggest{
+				Text:        h,
+				Description: "header in " + table.Name + " table",
+			})
+		}
 	}
 	return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 }
