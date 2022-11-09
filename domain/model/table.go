@@ -22,6 +22,18 @@ const (
 	PrintModeJSON
 )
 
+func (p PrintMode) String() string {
+	switch p {
+	case PrintModeTable:
+		return "table"
+	case PrintModeCSV:
+		return "csv"
+	case PrintModeJSON:
+		return "json"
+	}
+	return "unknown"
+}
+
 // Table is DB table.
 type Table struct {
 	Name    string
