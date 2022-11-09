@@ -17,6 +17,8 @@ type SQLite3Repository interface {
 	Insert(ctx context.Context, t *model.Table) error
 	// List get records in the specified table
 	List(ctx context.Context, tableName string) (*model.Table, error)
+	// Header get table header name.
+	Header(ctx context.Context, tableName string) (*model.Table, error)
 	// Query execute "SELECT" or "EXPLAIN" query
 	Query(ctx context.Context, query string) (*model.Table, error)
 	// Exec execute "INSERT" or "UPDATE" or "DELETE" statement

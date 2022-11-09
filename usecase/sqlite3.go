@@ -45,6 +45,11 @@ func (si *SQLite3Interactor) List(ctx context.Context, tableName string) (*model
 	return si.Repository.List(ctx, tableName)
 }
 
+// Header get table header name.
+func (si *SQLite3Interactor) Header(ctx context.Context, tableName string) (*model.Table, error) {
+	return si.Repository.Header(ctx, tableName)
+}
+
 // Query execute "SELECT" or "EXPLAIN" query
 func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Table, error) {
 	return si.Repository.Query(ctx, query)
