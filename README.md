@@ -3,14 +3,12 @@
 [![reviewdog](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nao1215/sqly)](https://goreportcard.com/report/github.com/nao1215/sqly)
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
-# sqly - execute SQL against CSV / JSON easily 
+# sqly - execute SQL against CSV / JSON with shell.
 ![demo](./doc/demo.gif)  
 
 **sqly** command imports CSV / JSON file(s) into an in-memory DB and executes SQL against the CSV / JSON. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
 
 The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
-
-![demo](./doc/shell-demo.png)  
 
 # How to install
 ### Use "go install"
@@ -38,7 +36,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ## Change output format
-sqly command output sql results in ASCII table format (in faorto), CSV format (--csv option), and JSON format (--json option).
+sqly command output sql results in ASCII table format (in faorto), CSV format (--csv option), and JSON format (--json option). This means that conversion between csv and json is supported.
 ```
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
 user_name,identifier,first_name,last_name
@@ -60,6 +58,13 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv
       "user_name": "jenkins46"
    }
 ]
+
+$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv > user.json
+
+$ sqly --sql "SELECT * FROM user LIMIT 2" --csv user.json 
+first_name,identifier,last_name,user_name
+Rachel,1,Booker,booker12
+Mary,2,Jenkins,jenkins46
 ```
 
 ## run sqly shell
@@ -83,6 +88,8 @@ sqly> .help
       .mode: change output mode
     .tables: print tables
 ```
+
+![demo](./doc/shell-demo.png)  
 
 ## Output sql result to file
 ### For linux user 
