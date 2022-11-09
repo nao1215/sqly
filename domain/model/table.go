@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -17,6 +18,8 @@ const (
 	PrintModeTable PrintMode = iota
 	// PrintModeCSV print data in csv format
 	PrintModeCSV
+	// PrintModeJSON print data in json format
+	PrintModeJSON
 )
 
 // Table is DB table.
@@ -65,6 +68,8 @@ func (t *Table) Print(out *os.File, mode PrintMode) {
 		t.printTable(out)
 	case PrintModeCSV:
 		t.printCSV(out)
+	case PrintModeJSON:
+		t.printJSON(out)
 	default:
 		t.printTable(out)
 	}
@@ -89,4 +94,22 @@ func (t *Table) printCSV(out *os.File) {
 	for _, v := range t.Records {
 		fmt.Fprintln(out, strings.Join(v, ","))
 	}
+}
+
+// Print print all record in json format
+func (t *Table) printJSON(out *os.File) {
+	data := make([]map[string]interface{}, 0)
+
+	for _, v := range t.Records {
+		d := make(map[string]interface{}, 0)
+		for i, r := range v {
+			d[t.Header[i]] = r
+		}
+		data = append(data, d)
+	}
+	b, err := json.MarshalIndent(data, "", "   ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "json marshal error: "+err.Error())
+	}
+	fmt.Fprintln(out, string(b))
 }
