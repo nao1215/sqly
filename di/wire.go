@@ -26,10 +26,12 @@ func NewShell() (*shell.Shell, func(), error) {
 		shell.NewShell,
 		shell.NewCommands,
 		usecase.NewCSVInteractor,
+		usecase.NewJSONInteractor,
 		usecase.NewHistoryInteractor,
 		usecase.NewSQLite3Interactor,
 		usecase.NewSQL,
 		persistence.NewCSVRepository,
+		persistence.NewJSONRepository,
 		persistence.NewHistoryRepository,
 		memory.NewSQLite3Repository,
 	)
