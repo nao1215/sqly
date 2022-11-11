@@ -1,6 +1,9 @@
 package shell
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 func trimWordGaps(s string) string {
 	return strings.Join(strings.Fields(s), " ")
@@ -15,6 +18,14 @@ func isCSV(path string) bool {
 }
 
 func ext(path string) string {
-	pos := strings.LastIndex(path, ".")
-	return path[pos:]
+	base := filepath.Base(path)
+	pos := strings.LastIndex(base, ".")
+	if pos <= 0 {
+		return ""
+	}
+	// hidden file
+	if strings.HasPrefix(path, ".") && pos == 0 {
+		return ""
+	}
+	return base[pos:]
 }
