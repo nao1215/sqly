@@ -55,6 +55,10 @@ func (t *Table) Valid() error {
 		return domain.ErrEmptyRecords
 	}
 
+	if t.IsSameHeaderColumnName() {
+		return domain.ErrSameHeaderColumns
+	}
+
 	return nil
 }
 
@@ -71,6 +75,20 @@ func (t *Table) IsEmptyHeader() bool {
 // IsEmptyRecords return wherther table records is empty or not
 func (t *Table) IsEmptyRecords() bool {
 	return len(t.Records) == 0
+}
+
+// IsSameHeaderColumnName return whether the table has a header column with the same name
+func (t *Table) IsSameHeaderColumnName() bool {
+	encountered := map[string]bool{}
+	for i := 0; i < len(t.Header); i++ {
+		if !encountered[t.Header[i]] {
+			encountered[t.Header[i]] = true
+			continue
+		} else {
+			return true
+		}
+	}
+	return false
 }
 
 // Print print all record with header

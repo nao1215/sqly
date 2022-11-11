@@ -9,4 +9,6 @@ var (
 	ErrEmptyHeader = errors.New("header value is empty")
 	// ErrEmptyRecords means records are empty.
 	ErrEmptyRecords = errors.New("records is empty")
+	// ErrSameHeaderColumns means table has a header column with a duplicate names
+	ErrSameHeaderColumns = errors.New("table has a header column with a duplicate names")
 )
