@@ -103,9 +103,13 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 ```
 
 # Features to be added
-- [x] import json
-- [ ] import tsv
+- [x] import json 
+- [x] output json file 
+- [ ] import tsv (output tsv)
+- [ ] import ltsv (output ltsv)
 - [ ] import swagger
+- [ ] print markdown format
+- [ ] ignore csv header option
 - [x] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
 - [x] sqly Fix problem where multiple lines of input in the shell would cause display corruption. To be fixed using escape sequences.
@@ -113,6 +117,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 - [x] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
 - [ ] history search (Ctrl-r)
 - [ ] Convert CSV character encoding to UTF-8 if necessary
+- [ ] Unit test coverage 80%
 
 # Limitions (Not support)
 - DDL such as CREATE
