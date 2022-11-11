@@ -3,8 +3,8 @@ env:
   - GO111MODULE=on
 before:
   hooks:
+    - go mod download
     - go mod tidy
-    #- go generate ./...
 builds:
   - main: .
     ldflags:
@@ -13,6 +13,8 @@ builds:
       - CGO_ENABLED=1
     goos:
       - linux
+      - windows
+      - darwin
     goarch:
       - amd64
 archives:
@@ -21,7 +23,6 @@ archives:
       darwin: Darwin
       linux: Linux
       windows: Windows
-      386: i386
       amd64: x86_64
     format_overrides:
       - goos: windows
@@ -36,3 +37,12 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+nfpms:
+  - maintainer: Naohiro CHIKAMATSU <n.chika156@gmail.com>
+    description: sqly - execute SQL against CSV / JSON with shell.
+    homepage: https://github.com/nao1215/sqly
+    license: MIT License
+    formats:
+      - deb
+      - rpm
+      - apk
