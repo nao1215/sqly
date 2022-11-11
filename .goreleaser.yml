@@ -6,15 +6,44 @@ before:
     - go mod download
     - go mod tidy
 builds:
-  - main: .
+  - id: darwin-amd64
+    binary: sqly
     ldflags:
       - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
     env:
       - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    main: .
+    goos:
+      - darwin
+    goarch:
+      - amd64
+  - id: linux-amd64
+    binary: sqly
+    env:
+      - CGO_ENABLED=1
+    main: .
+    ldflags:
+      - -extldflags "-static"
+      - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
     goos:
       - linux
+    goarch:
+      - amd64
+  - id: windows-amd64
+    binary: sqly
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-w64-mingw32-gcc
+      - CXX=x86_64-w64-mingw32-g++
+    main: .
+    ldflags:
+      - -H=windowsgui
+      - -extldflags "-static"
+      - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
+    goos:
       - windows
-      - darwin
     goarch:
       - amd64
 archives:
