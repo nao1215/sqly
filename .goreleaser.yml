@@ -3,47 +3,16 @@ env:
   - GO111MODULE=on
 before:
   hooks:
-    - go mod download
     - go mod tidy
+    #- go generate ./...
 builds:
-  - id: darwin-amd64
-    binary: sqly
+  - main: .
     ldflags:
       - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
     env:
       - CGO_ENABLED=1
-      - CC=o64-clang
-      - CXX=o64-clang++
-    main: .
-    goos:
-      - darwin
-    goarch:
-      - amd64
-  - id: linux-amd64
-    binary: sqly
-    env:
-      - CGO_ENABLED=1
-    main: .
-    ldflags:
-      - -extldflags "-static"
-      - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
     goos:
       - linux
-    goarch:
-      - amd64
-  - id: windows-amd64
-    binary: sqly
-    env:
-      - CGO_ENABLED=1
-      - CC=x86_64-w64-mingw32-gcc
-      - CXX=x86_64-w64-mingw32-g++
-    main: .
-    ldflags:
-      - -H=windowsgui
-      - -extldflags "-static"
-      - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
-    goos:
-      - windows
     goarch:
       - amd64
 archives:
@@ -52,6 +21,7 @@ archives:
       darwin: Darwin
       linux: Linux
       windows: Windows
+      386: i386
       amd64: x86_64
     format_overrides:
       - goos: windows
