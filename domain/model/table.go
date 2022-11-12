@@ -18,6 +18,8 @@ const (
 	PrintModeTable PrintMode = iota
 	// PrintModeCSV print data in csv format
 	PrintModeCSV
+	// PrintModeTSV print data in tsv format
+	PrintModeTSV
 	// PrintModeJSON print data in json format
 	PrintModeJSON
 )
@@ -28,6 +30,8 @@ func (p PrintMode) String() string {
 		return "table"
 	case PrintModeCSV:
 		return "csv"
+	case PrintModeTSV:
+		return "tsv"
 	case PrintModeJSON:
 		return "json"
 	}
@@ -98,6 +102,8 @@ func (t *Table) Print(out *os.File, mode PrintMode) {
 		t.printTable(out)
 	case PrintModeCSV:
 		t.printCSV(out)
+	case PrintModeTSV:
+		t.printTSV(out)
 	case PrintModeJSON:
 		t.printJSON(out)
 	default:
@@ -123,6 +129,14 @@ func (t *Table) printCSV(out *os.File) {
 	fmt.Fprintln(out, strings.Join(t.Header, ","))
 	for _, v := range t.Records {
 		fmt.Fprintln(out, strings.Join(v, ","))
+	}
+}
+
+// Print print all record with header; output format is tsv
+func (t *Table) printTSV(out *os.File) {
+	fmt.Fprintln(out, strings.Join(t.Header, "\t"))
+	for _, v := range t.Records {
+		fmt.Fprintln(out, strings.Join(v, "\t"))
 	}
 }
 
