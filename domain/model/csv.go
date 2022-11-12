@@ -10,12 +10,6 @@ type CSV struct {
 	Records []Record
 }
 
-// Header is CSV header.
-type Header []string
-
-// Record is CSV records.
-type Record []string
-
 // IsHeaderEmpty return wherther header is empty or not
 func (c *CSV) IsHeaderEmpty() bool {
 	return len(c.Header) == 0

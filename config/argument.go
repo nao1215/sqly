@@ -45,21 +45,27 @@ type Arg struct {
 	Version func()
 }
 
+type outputFlag struct {
+	csv  bool
+	tsv  bool
+	json bool
+}
+
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 func NewArg() (*Arg, error) {
-	csvFlag := false
-	jsonFlag := false
+	outputFlag := outputFlag{}
 
 	arg := &Arg{}
-	pflag.BoolVarP(&csvFlag, "csv", "c", false, "change output format to csv (default: table)")
-	pflag.BoolVarP(&jsonFlag, "json", "j", false, "change output format to json (default: table)")
+	pflag.BoolVarP(&outputFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
+	pflag.BoolVarP(&outputFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
+	pflag.BoolVarP(&outputFlag.json, "json", "j", false, "change output format to json (default: table)")
 	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
 	pflag.Parse()
 
 	arg.Usage = usage
 	arg.Version = version
-	arg.Output = newOutput(*output, csvFlag, jsonFlag)
+	arg.Output = newOutput(*output, &outputFlag)
 	arg.FilePaths = pflag.Args()
 	arg.Query = *query
 
@@ -67,11 +73,13 @@ func NewArg() (*Arg, error) {
 }
 
 // newOutput retur *Output
-func newOutput(filePath string, csvFlag, jsonFlag bool) *Output {
+func newOutput(filePath string, of *outputFlag) *Output {
 	mode := model.PrintModeTable
-	if csvFlag {
+	if of.csv {
 		mode = model.PrintModeCSV
-	} else if jsonFlag {
+	} else if of.tsv {
+		mode = model.PrintModeTSV
+	} else if of.json {
 		mode = model.PrintModeJSON
 	}
 	return &Output{

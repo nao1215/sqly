@@ -17,6 +17,10 @@ func isCSV(path string) bool {
 	return ext(path) == ".csv"
 }
 
+func isTSV(path string) bool {
+	return ext(path) == ".tsv"
+}
+
 func ext(path string) string {
 	base := filepath.Base(path)
 	pos := strings.LastIndex(base, ".")
