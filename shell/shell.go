@@ -37,6 +37,7 @@ type Shell struct {
 	config            *config.Config
 	commands          CommandList
 	csvInteractor     *usecase.CSVInteractor
+	tsvInteractor     *usecase.TSVInteractor
 	jsonInteractor    *usecase.JSONInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 	historyInteractor *usecase.HistoryInteractor
@@ -44,7 +45,7 @@ type Shell struct {
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
-	csv *usecase.CSVInteractor, json *usecase.JSONInteractor,
+	csv *usecase.CSVInteractor, tsv *usecase.TSVInteractor, json *usecase.JSONInteractor,
 	sqlite3 *usecase.SQLite3Interactor, history *usecase.HistoryInteractor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
@@ -53,6 +54,7 @@ func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
 		config:            cfg,
 		commands:          cmds,
 		csvInteractor:     csv,
+		tsvInteractor:     tsv,
 		jsonInteractor:    json,
 		sqlite3Interactor: sqlite3,
 		historyInteractor: history,

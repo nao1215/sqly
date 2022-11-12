@@ -3,10 +3,10 @@
 [![reviewdog](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nao1215/sqly)](https://goreportcard.com/report/github.com/nao1215/sqly)
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
-# sqly - execute SQL against CSV / JSON with shell.
+# execute SQL against CSV / TSV / JSON with shell.
 ![demo](./doc/demo.gif)  
 
-**sqly** command imports CSV / JSON file(s) into an in-memory DB and executes SQL against the CSV / JSON. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
+**sqly** command imports CSV / TSV / JSON file(s) into an in-memory DB and executes SQL against the CSV / TSV / JSON. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
 
 The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
@@ -20,7 +20,7 @@ $ go install github.com/nao1215/sqly@latest
 
 
 # How to use
-sqly command automatically imports the CSV / JSON file into the DB when you pass a CSV / JSON file as an argument. DB table name is the same as the file name (e.g., if you import user.csv, sqly command create the user table)
+sqly command automatically imports the CSV / TSV / JSON file into the DB when you pass a CSV / TSV / JSON file as an argument. DB table name is the same as the file name (e.g., if you import user.csv, sqly command create the user table)
 
 ## --sql option: execute sql in terminal
 --sql option takes an SQL statement as an optional argument. You pass file path(s) as arguments to the sqly command. sqly command import them. sqly command automatically determines the file format from the file extension.
@@ -36,7 +36,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ## Change output format
-sqly command output sql results in ASCII table format (in faorto), CSV format (--csv option), and JSON format (--json option). This means that conversion between csv and json is supported.
+sqly command output sql results in ASCII table format, CSV format (--csv option), TSV format (--tsv option) and JSON format (--json option). This means that conversion between csv and json is supported.
 ```
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
 user_name,identifier,first_name,last_name
@@ -104,9 +104,14 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 
 # Features to be added
 - [x] import json 
-- [x] output json file 
-- [ ] import tsv (output tsv)
-- [ ] import ltsv (output ltsv)
+- [x] print json format
+- [ ] dump json file
+- [x] import tsv
+- [x] ptint tsv format
+- [ ] dump tsv file
+- [ ] import ltsv 
+- [ ] print ltsv format
+- [ ] dump ltsv file
 - [ ] import swagger
 - [ ] print markdown format
 - [ ] ignore csv header option
