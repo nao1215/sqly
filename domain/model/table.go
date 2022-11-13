@@ -192,6 +192,7 @@ func (t *Table) printJSON(out *os.File) {
 	b, err := json.MarshalIndent(data, "", "   ")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "json marshal error: "+err.Error())
+		return
 	}
 	fmt.Fprintln(out, string(b))
 }
