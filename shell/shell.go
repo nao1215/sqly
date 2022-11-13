@@ -161,27 +161,33 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 
 func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 	suggest := []prompt.Suggest{
-		{Text: "SELECT", Description: "get records from table"},
-		{Text: "INSERT INTO", Description: "creates one or more new records in an existing table"},
-		{Text: "UPDATE", Description: "update one or more records"},
-		{Text: "AS", Description: "set alias name"},
-		{Text: "FROM", Description: "specify the table"},
-		{Text: "WHERE", Description: "search condition"},
-		{Text: "GROUP BY", Description: "groping records"},
-		{Text: "HAVING", Description: "extraction conditions for records after grouping"},
-		{Text: "ORDER BY", Description: "sort result"},
-		{Text: "VALUES", Description: "specify values to be inserted or updated"},
-		{Text: "SET", Description: "specify values to be updated"},
-		{Text: "DELETE FROM", Description: "specify tables to be deleted"},
-		{Text: "IN", Description: "condition grouping"},
-		{Text: "INNER JOIN", Description: "inner join tables"},
-		{Text: "LIMIT", Description: "upper Limit of records"},
+		{Text: "SELECT", Description: "SQL: get records from table"},
+		{Text: "INSERT INTO", Description: "SQL: creates one or more new records in an existing table"},
+		{Text: "UPDATE", Description: "SQL: update one or more records"},
+		{Text: "AS", Description: "SQL: set alias name"},
+		{Text: "FROM", Description: "SQL: specify the table"},
+		{Text: "WHERE", Description: "SQL: search condition"},
+		{Text: "GROUP BY", Description: "SQL: groping records"},
+		{Text: "HAVING", Description: "SQL: extraction conditions for records after grouping"},
+		{Text: "ORDER BY", Description: "SQL: sort result"},
+		{Text: "VALUES", Description: "SQL: specify values to be inserted or updated"},
+		{Text: "SET", Description: "SQL: specify values to be updated"},
+		{Text: "DELETE FROM", Description: "SQL: specify tables to be deleted"},
+		{Text: "IN", Description: "SQL: condition grouping"},
+		{Text: "INNER JOIN", Description: "SQL: inner join tables"},
+		{Text: "LIMIT", Description: "SQL: upper Limit of records"},
+		{Text: "table", Description: "sqly command argument: table output format"},
+		{Text: "markdown", Description: "sqly command argument: markdown table output format"},
+		{Text: "csv", Description: "sqly command argument: csv output format"},
+		{Text: "tsv", Description: "sqly command argument: tsv output format"},
+		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
+		{Text: "json", Description: "sqly command argument: json output format"},
 	}
 
 	for _, v := range s.commands {
 		suggest = append(suggest, prompt.Suggest{
 			Text:        v.name,
-			Description: v.description,
+			Description: "sqly command: " + v.description,
 		})
 	}
 
@@ -192,7 +198,7 @@ func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 	for _, v := range tableNames {
 		suggest = append(suggest, prompt.Suggest{
 			Text:        v.Name,
-			Description: v.Name + " table",
+			Description: "table: " + v.Name,
 		})
 
 		table, err := s.sqlite3Interactor.Header(s.Ctx, v.Name)
@@ -202,7 +208,7 @@ func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 		for _, h := range table.Header {
 			suggest = append(suggest, prompt.Suggest{
 				Text:        h,
-				Description: "header in " + v.Name + " table",
+				Description: "header: " + h + " column in " + v.Name + " table",
 			})
 		}
 	}
