@@ -20,6 +20,8 @@ const (
 	PrintModeCSV
 	// PrintModeTSV print data in tsv format
 	PrintModeTSV
+	// PrintModeLTSV print data in ltsv format
+	PrintModeLTSV
 	// PrintModeJSON print data in json format
 	PrintModeJSON
 )
@@ -32,6 +34,8 @@ func (p PrintMode) String() string {
 		return "csv"
 	case PrintModeTSV:
 		return "tsv"
+	case PrintModeLTSV:
+		return "ltsv"
 	case PrintModeJSON:
 		return "json"
 	}
@@ -104,6 +108,8 @@ func (t *Table) Print(out *os.File, mode PrintMode) {
 		t.printCSV(out)
 	case PrintModeTSV:
 		t.printTSV(out)
+	case PrintModeLTSV:
+		t.printLTSV(out)
 	case PrintModeJSON:
 		t.printJSON(out)
 	default:
@@ -111,7 +117,7 @@ func (t *Table) Print(out *os.File, mode PrintMode) {
 	}
 }
 
-// Print print all record with header; output format is table
+// printTables print all record with header; output format is table
 func (t *Table) printTable(out *os.File) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(t.Header)
@@ -124,7 +130,7 @@ func (t *Table) printTable(out *os.File) {
 	table.Render()
 }
 
-// Print print all record with header; output format is csv
+// printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out *os.File) {
 	fmt.Fprintln(out, strings.Join(t.Header, ","))
 	for _, v := range t.Records {
@@ -132,7 +138,7 @@ func (t *Table) printCSV(out *os.File) {
 	}
 }
 
-// Print print all record with header; output format is tsv
+// printTSV print all record with header; output format is tsv
 func (t *Table) printTSV(out *os.File) {
 	fmt.Fprintln(out, strings.Join(t.Header, "\t"))
 	for _, v := range t.Records {
@@ -140,7 +146,18 @@ func (t *Table) printTSV(out *os.File) {
 	}
 }
 
-// Print print all record in json format
+// Print print all record with header; output format is tsv
+func (t *Table) printLTSV(out *os.File) {
+	for _, v := range t.Records {
+		r := []string{}
+		for i, data := range v {
+			r = append(r, t.Header[i]+":"+data)
+		}
+		fmt.Fprintln(out, strings.Join(r, "\t"))
+	}
+}
+
+// printJSON print all record in json format
 func (t *Table) printJSON(out *os.File) {
 	data := make([]map[string]interface{}, 0)
 

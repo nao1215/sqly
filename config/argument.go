@@ -48,6 +48,7 @@ type Arg struct {
 type outputFlag struct {
 	csv  bool
 	tsv  bool
+	ltsv bool
 	json bool
 }
 
@@ -58,6 +59,7 @@ func NewArg() (*Arg, error) {
 	arg := &Arg{}
 	pflag.BoolVarP(&outputFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
 	pflag.BoolVarP(&outputFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
+	pflag.BoolVarP(&outputFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
 	pflag.BoolVarP(&outputFlag.json, "json", "j", false, "change output format to json (default: table)")
 	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
@@ -79,6 +81,8 @@ func newOutput(filePath string, of *outputFlag) *Output {
 		mode = model.PrintModeCSV
 	} else if of.tsv {
 		mode = model.PrintModeTSV
+	} else if of.ltsv {
+		mode = model.PrintModeLTSV
 	} else if of.json {
 		mode = model.PrintModeJSON
 	}
@@ -94,7 +98,7 @@ func (a *Arg) NeedsOutputToFile() bool {
 }
 
 func usage() {
-	fmt.Printf("%s - execute SQL against CSV easily (%s)\n", color.GreenString("sqly"), GetVersion())
+	fmt.Printf("%s - execute SQL against CSV/TSV/LTSV/JSON with shell (%s)\n", color.GreenString("sqly"), GetVersion())
 	fmt.Println("")
 	fmt.Println("[Usage]")
 	fmt.Printf("  %s [OPTIONS] [FILE_PATH]\n", color.GreenString("sqly"))
@@ -103,7 +107,7 @@ func usage() {
 	fmt.Printf("  - %s\n", color.HiYellowString("run sqly shell"))
 	fmt.Printf("    sqly\n")
 	fmt.Printf("  - %s\n", color.HiYellowString("Execute query for csv file"))
-	fmt.Printf("    sqly --sql 'SELECT * FROM sample' ./path/to/file.csv\n")
+	fmt.Printf("    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n")
 	fmt.Println("")
 	fmt.Println("[OPTIONS]")
 	pflag.PrintDefaults()

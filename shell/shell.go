@@ -14,6 +14,7 @@ import (
 	"github.com/c-bata/go-prompt/completer"
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
+	"github.com/nao1215/gorky/str"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/usecase"
@@ -38,6 +39,7 @@ type Shell struct {
 	commands          CommandList
 	csvInteractor     *usecase.CSVInteractor
 	tsvInteractor     *usecase.TSVInteractor
+	ltsvInteractor    *usecase.LTSVInteractor
 	jsonInteractor    *usecase.JSONInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 	historyInteractor *usecase.HistoryInteractor
@@ -45,7 +47,7 @@ type Shell struct {
 
 // NewShell return *Shell.
 func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
-	csv *usecase.CSVInteractor, tsv *usecase.TSVInteractor, json *usecase.JSONInteractor,
+	csv *usecase.CSVInteractor, tsv *usecase.TSVInteractor, ltsv *usecase.LTSVInteractor, json *usecase.JSONInteractor,
 	sqlite3 *usecase.SQLite3Interactor, history *usecase.HistoryInteractor) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
@@ -55,6 +57,7 @@ func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
 		commands:          cmds,
 		csvInteractor:     csv,
 		tsvInteractor:     tsv,
+		ltsvInteractor:    ltsv,
 		jsonInteractor:    json,
 		sqlite3Interactor: sqlite3,
 		historyInteractor: history,
@@ -210,7 +213,7 @@ func (s *Shell) completer(d prompt.Document) []prompt.Suggest {
 // exec execute sqly helper command or sql query.
 func (s *Shell) exec(request string) error {
 	req := strings.TrimSpace(request)
-	argv := strings.Split(trimWordGaps(req), " ")
+	argv := strings.Split(str.TrimGaps(req), " ")
 	if argv[0] == "" {
 		return nil // user only input enter, space tab
 	}

@@ -15,6 +15,7 @@ func (c CommandList) modeCommand(s *Shell, argv []string) error {
 		fmt.Fprintln(Stdout, "  table")
 		fmt.Fprintln(Stdout, "  csv")
 		fmt.Fprintln(Stdout, "  tsv")
+		fmt.Fprintln(Stdout, "  ltsv")
 		fmt.Fprintln(Stdout, "  json")
 		return nil
 	}
@@ -34,6 +35,9 @@ func (c CommandList) modeCommand(s *Shell, argv []string) error {
 	case model.PrintModeTSV.String():
 		fmt.Printf("Change output mode from %s to tsv\n", s.argument.Output.Mode.String())
 		s.argument.Output.Mode = model.PrintModeTSV
+	case model.PrintModeLTSV.String():
+		fmt.Printf("Change output mode from %s to ltsv\n", s.argument.Output.Mode.String())
+		s.argument.Output.Mode = model.PrintModeLTSV
 	case model.PrintModeJSON.String():
 		fmt.Printf("Change output mode from %s to json\n", s.argument.Output.Mode.String())
 		s.argument.Output.Mode = model.PrintModeJSON
