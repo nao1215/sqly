@@ -23,7 +23,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 		return err
 	}
 
-	if err := dumpToFile(s, argv[0], table); err != nil {
+	if err := dumpToFile(s, argv[1], table); err != nil {
 		return err
 	}
 	fmt.Fprintf(Stdout, "dump `%s` table to %s (mode=%s)\n",
@@ -39,6 +39,8 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 		err = s.csvInteractor.Dump(filePath, table)
 	case model.PrintModeTSV:
 		err = s.tsvInteractor.Dump(filePath, table)
+	case model.PrintModeLTSV:
+		err = s.ltsvInteractor.Dump(filePath, table)
 	default:
 		err = s.csvInteractor.Dump(filePath, table)
 	}

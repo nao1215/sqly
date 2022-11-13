@@ -170,7 +170,7 @@ func (t *Table) printTSV(out *os.File) {
 // Print print all record with header; output format is ltsv
 func (t *Table) printLTSV(out *os.File) {
 	for _, v := range t.Records {
-		r := []string{}
+		r := Record{}
 		for i, data := range v {
 			r = append(r, t.Header[i]+":"+data)
 		}
