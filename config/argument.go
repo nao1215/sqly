@@ -48,6 +48,7 @@ type Arg struct {
 type outputFlag struct {
 	csv  bool
 	tsv  bool
+	ltsv bool
 	json bool
 }
 
@@ -58,6 +59,7 @@ func NewArg() (*Arg, error) {
 	arg := &Arg{}
 	pflag.BoolVarP(&outputFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
 	pflag.BoolVarP(&outputFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
+	pflag.BoolVarP(&outputFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
 	pflag.BoolVarP(&outputFlag.json, "json", "j", false, "change output format to json (default: table)")
 	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
@@ -79,6 +81,8 @@ func newOutput(filePath string, of *outputFlag) *Output {
 		mode = model.PrintModeCSV
 	} else if of.tsv {
 		mode = model.PrintModeTSV
+	} else if of.ltsv {
+		mode = model.PrintModeLTSV
 	} else if of.json {
 		mode = model.PrintModeJSON
 	}

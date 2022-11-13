@@ -1,35 +1,21 @@
 package shell
 
 import (
-	"path/filepath"
-	"strings"
+	"github.com/nao1215/gorky/path"
 )
 
-func trimWordGaps(s string) string {
-	return strings.Join(strings.Fields(s), " ")
+func isJSON(filePath string) bool {
+	return path.Ext(filePath) == ".json"
 }
 
-func isJSON(path string) bool {
-	return ext(path) == ".json"
+func isCSV(filePath string) bool {
+	return path.Ext(filePath) == ".csv"
 }
 
-func isCSV(path string) bool {
-	return ext(path) == ".csv"
+func isTSV(filePath string) bool {
+	return path.Ext(filePath) == ".tsv"
 }
 
-func isTSV(path string) bool {
-	return ext(path) == ".tsv"
-}
-
-func ext(path string) string {
-	base := filepath.Base(path)
-	pos := strings.LastIndex(base, ".")
-	if pos <= 0 {
-		return ""
-	}
-	// hidden file
-	if strings.HasPrefix(path, ".") && pos == 0 {
-		return ""
-	}
-	return base[pos:]
+func isLTSV(filePath string) bool {
+	return path.Ext(filePath) == ".ltsv"
 }
