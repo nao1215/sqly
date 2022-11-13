@@ -127,7 +127,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 - [x] print ltsv format
 - [ ] dump ltsv file
 - [ ] import swagger
-- [ ] print markdown format
+- [x] print markdown format
 - [ ] ignore csv header option
 - [x] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
