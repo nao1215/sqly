@@ -41,3 +41,17 @@ func (tr *tsvRepository) List(f *os.File) (*model.TSV, error) {
 	}
 	return &t, nil
 }
+
+// Dump write contents of DB table to TSV file
+func (tr *tsvRepository) Dump(f *os.File, table *model.Table) error {
+	w := csv.NewWriter(f)
+	w.Comma = '\t'
+
+	records := [][]string{
+		table.Header,
+	}
+	for _, v := range table.Records {
+		records = append(records, v)
+	}
+	return w.WriteAll(records)
+}

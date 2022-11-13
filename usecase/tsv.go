@@ -33,3 +33,14 @@ func (ti *TSVInteractor) List(TSVFilePath string) (*model.TSV, error) {
 	}
 	return TSV, nil
 }
+
+// Dump write contents of DB table to TSV file
+func (ti *TSVInteractor) Dump(tsvFilePath string, table *model.Table) error {
+	f, err := os.OpenFile(tsvFilePath, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return ti.Repository.Dump(f, table)
+}

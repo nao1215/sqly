@@ -60,6 +60,22 @@ func (lr *ltsvRepository) List(f *os.File) (*model.LTSV, error) {
 	return &t, nil
 }
 
+// Dump write contents of DB table to LTSV file
+func (lr *ltsvRepository) Dump(f *os.File, table *model.Table) error {
+	w := csv.NewWriter(f)
+	w.Comma = '\t'
+
+	records := [][]string{}
+	for _, v := range table.Records {
+		r := model.Record{}
+		for i, data := range v {
+			r = append(r, table.Header[i]+":"+data)
+		}
+		records = append(records, r)
+	}
+	return w.WriteAll(records)
+}
+
 func (lr *ltsvRepository) labelAndData(s string) (string, string, error) {
 	idx := strings.Index(s, ":")
 	if idx == -1 || idx == 0 {
