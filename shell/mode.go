@@ -13,6 +13,7 @@ func (c CommandList) modeCommand(s *Shell, argv []string) error {
 		fmt.Fprintf(Stdout, "  .mode OUTPUT_MODE   ※ current mode=%s\n", s.argument.Output.Mode.String())
 		fmt.Fprintln(Stdout, "[Output mode list]")
 		fmt.Fprintln(Stdout, "  table")
+		fmt.Fprintln(Stdout, "  markdown")
 		fmt.Fprintln(Stdout, "  csv")
 		fmt.Fprintln(Stdout, "  tsv")
 		fmt.Fprintln(Stdout, "  ltsv")
@@ -29,6 +30,9 @@ func (c CommandList) modeCommand(s *Shell, argv []string) error {
 	case model.PrintModeTable.String():
 		fmt.Printf("Change output mode from %s to table\n", s.argument.Output.Mode.String())
 		s.argument.Output.Mode = model.PrintModeTable
+	case model.PrintModeMarkdownTable.String():
+		fmt.Printf("Change output mode from %s to markdown table\n", s.argument.Output.Mode.String())
+		s.argument.Output.Mode = model.PrintModeMarkdownTable
 	case model.PrintModeCSV.String():
 		fmt.Printf("Change output mode from %s to csv\n", s.argument.Output.Mode.String())
 		s.argument.Output.Mode = model.PrintModeCSV
