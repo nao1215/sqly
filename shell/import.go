@@ -29,6 +29,12 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 				return err
 			}
 			table = tsv.ToTable()
+		} else if isLTSV(v) {
+			ltsv, err := s.ltsvInteractor.List(v)
+			if err != nil {
+				return err
+			}
+			table = ltsv.ToTable()
 		} else if isJSON(v) {
 			json, err := s.jsonInteractor.List(v)
 			if err != nil {
