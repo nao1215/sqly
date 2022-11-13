@@ -61,7 +61,7 @@ func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64,
 }
 
 // ExecSQL execute "SELECT/EXPLAIN"query or "INSERT/UPDATE/DELETE" statement
-func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string, mode model.PrintMode) (*model.Table, int64, error) {
+func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	argv := strings.Split(trimWordGaps(statement), " ")
 
 	// NOTE: SQLY uses SQLite3. There is some SQL that can be changed from non-support

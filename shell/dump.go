@@ -41,6 +41,8 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 		err = s.tsvInteractor.Dump(filePath, table)
 	case model.PrintModeLTSV:
 		err = s.ltsvInteractor.Dump(filePath, table)
+	case model.PrintModeJSON:
+		err = s.jsonInteractor.Dump(filePath, table)
 	default:
 		err = s.csvInteractor.Dump(filePath, table)
 	}
