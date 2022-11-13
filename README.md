@@ -74,13 +74,13 @@ If the --sql option is not specified, the sqly shell is started. When you execut
 The command beginning with a dot is the sqly helper command; I plan to add more features in the future to make the sqly shell run more comfortably.
 ```
 $ sqly 
-sqly v0.3.0 (work in progress)
+sqly v0.5.0 (work in progress)
 
 enter "SQL query" or "sqly command that beginning with a dot".
 .help print usage, .exit exit sqly.
 
 sqly> .help
-      .dump: dump db table to csv file
+      .dump: dump db table to file in a format according to output mode (default: csv)
       .exit: exit sqly
     .header: print table header
       .help: print help message
@@ -109,7 +109,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
   -h, --help            print help message
   -j, --json            change output format to json (default: table)
   -l, --ltsv            change output format to ltsv (default: table)
-  -m, --markdown        change output format to markdown (default: table)
+  -m, --markdown        change output format to markdown table(default: table)
   -o, --output string   destination path for SQL results specified in --sql option
   -s, --sql string      sql query you want to execute
   -t, --tsv             change output format to tsv (default: table)
@@ -119,13 +119,13 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 # Features to be added
 - [x] import json 
 - [x] print json format
-- [ ] dump json file
+- [x] dump json file
 - [x] import tsv
 - [x] ptint tsv format
-- [ ] dump tsv file
+- [x] dump tsv file
 - [x] import ltsv 
 - [x] print ltsv format
-- [ ] dump ltsv file
+- [x] dump ltsv file
 - [ ] import swagger
 - [x] print markdown format
 - [ ] ignore csv header option
