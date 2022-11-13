@@ -249,13 +249,11 @@ func (s *Shell) execSQL(req string) error {
 
 	// use --sql option and user want to output table data to file.
 	if s.argument.NeedsOutputToFile() {
-		// I am having difficulty in designing. Therefore, I do not save files in TABLE format.
-		// Also, only Windows users need to save files with the --output option, and Linux users (it's me)
-		// can save data in table format with redirection.
-		if err := s.csvInteractor.Dump(s.argument.Output.FilePath, table); err != nil {
+		if err := dumpToFile(s, s.argument.Output.FilePath, table); err != nil {
 			return err
 		}
-		fmt.Fprintf(Stdout, "Output sql result to %s\n", color.HiCyanString(s.argument.Output.FilePath))
+		fmt.Fprintf(Stdout, "Output sql result to %s (output mode=%s)\n",
+			color.HiCyanString(s.argument.Output.FilePath), dumpMode(s.argument.Output.Mode))
 		return nil
 	}
 

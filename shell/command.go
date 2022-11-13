@@ -25,7 +25,7 @@ type CommandList map[string]command
 // NewCommands return *CommandList that set sqly helper commands.
 func NewCommands() CommandList {
 	c := CommandList{}
-	c[".dump"] = command{execute: c.dumpCommand, name: ".dump", description: "dump db table to csv file"}
+	c[".dump"] = command{execute: c.dumpCommand, name: ".dump", description: "dump db table to file in a format according to output mode (default: csv)"}
 	c[".exit"] = command{execute: c.exitCommand, name: ".exit", description: "exit sqly"}
 	c[".header"] = command{execute: c.headerCommand, name: ".header", description: "print table header"}
 	c[".help"] = command{execute: c.helpCommand, name: ".help", description: "print help message"}
