@@ -109,6 +109,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
   -h, --help            print help message
   -j, --json            change output format to json (default: table)
   -l, --ltsv            change output format to ltsv (default: table)
+  -m, --markdown        change output format to markdown (default: table)
   -o, --output string   destination path for SQL results specified in --sql option
   -s, --sql string      sql query you want to execute
   -t, --tsv             change output format to tsv (default: table)
@@ -126,7 +127,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 - [x] print ltsv format
 - [ ] dump ltsv file
 - [ ] import swagger
-- [ ] print markdown format
+- [x] print markdown format
 - [ ] ignore csv header option
 - [x] The file type is determined by the file extension. This specification is to reduce the number of options.
 - [x] change input position (left arrow, right arrow, delete char)
@@ -155,4 +156,3 @@ If you would like to send comments such as "find a bug" or "request for addition
 
 # LICENSE
 The sqly project is licensed under the terms of [MIT LICENSE](./LICENSE).
-

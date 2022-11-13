@@ -16,6 +16,8 @@ type PrintMode uint
 const (
 	// PrintModeTable print data in table format
 	PrintModeTable PrintMode = iota
+	// PrintModeMarkdownTable print data in markdown table format
+	PrintModeMarkdownTable
 	// PrintModeCSV print data in csv format
 	PrintModeCSV
 	// PrintModeTSV print data in tsv format
@@ -30,6 +32,8 @@ func (p PrintMode) String() string {
 	switch p {
 	case PrintModeTable:
 		return "table"
+	case PrintModeMarkdownTable:
+		return "markdown"
 	case PrintModeCSV:
 		return "csv"
 	case PrintModeTSV:
@@ -104,6 +108,8 @@ func (t *Table) Print(out *os.File, mode PrintMode) {
 	switch mode {
 	case PrintModeTable:
 		t.printTable(out)
+	case PrintModeMarkdownTable:
+		t.printMarkdownTable(out)
 	case PrintModeCSV:
 		t.printCSV(out)
 	case PrintModeTSV:
@@ -130,6 +136,21 @@ func (t *Table) printTable(out *os.File) {
 	table.Render()
 }
 
+// printMarkdownTable print all record with header; output format is markdown
+func (t *Table) printMarkdownTable(out *os.File) {
+	table := tablewriter.NewWriter(out)
+	table.SetHeader(t.Header)
+	table.SetAutoFormatHeaders(false)
+	table.SetAutoWrapText(false)
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	table.SetCenterSeparator("|")
+
+	for _, v := range t.Records {
+		table.Append(v)
+	}
+	table.Render()
+}
+
 // printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out *os.File) {
 	fmt.Fprintln(out, strings.Join(t.Header, ","))
@@ -146,7 +167,7 @@ func (t *Table) printTSV(out *os.File) {
 	}
 }
 
-// Print print all record with header; output format is tsv
+// Print print all record with header; output format is ltsv
 func (t *Table) printLTSV(out *os.File) {
 	for _, v := range t.Records {
 		r := []string{}
