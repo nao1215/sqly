@@ -98,7 +98,7 @@ func (a *Arg) NeedsOutputToFile() bool {
 }
 
 func usage() {
-	fmt.Printf("%s - execute SQL against CSV easily (%s)\n", color.GreenString("sqly"), GetVersion())
+	fmt.Printf("%s - execute SQL against CSV/TSV/LTSV/JSON with shell (%s)\n", color.GreenString("sqly"), GetVersion())
 	fmt.Println("")
 	fmt.Println("[Usage]")
 	fmt.Printf("  %s [OPTIONS] [FILE_PATH]\n", color.GreenString("sqly"))
@@ -107,7 +107,7 @@ func usage() {
 	fmt.Printf("  - %s\n", color.HiYellowString("run sqly shell"))
 	fmt.Printf("    sqly\n")
 	fmt.Printf("  - %s\n", color.HiYellowString("Execute query for csv file"))
-	fmt.Printf("    sqly --sql 'SELECT * FROM sample' ./path/to/file.csv\n")
+	fmt.Printf("    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n")
 	fmt.Println("")
 	fmt.Println("[OPTIONS]")
 	pflag.PrintDefaults()
