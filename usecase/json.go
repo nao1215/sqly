@@ -1,6 +1,8 @@
 package usecase
 
 import (
+	"os"
+
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 )
@@ -18,4 +20,15 @@ func NewJSONInteractor(r repository.JSONRepository) *JSONInteractor {
 // List get JSON data.
 func (i *JSONInteractor) List(jsonFilePath string) (*model.JSON, error) {
 	return i.Repository.List(jsonFilePath)
+}
+
+// Dump write contents of DB table to JSON file
+func (i *JSONInteractor) Dump(jsonFilePath string, table *model.Table) error {
+	f, err := os.OpenFile(jsonFilePath, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return i.Repository.Dump(f, table)
 }
