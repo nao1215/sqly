@@ -102,7 +102,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --csv > test.csv
 $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 ```
 
-## All options
+# All options
 ```
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
@@ -116,6 +116,21 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
   -v, --version         print help message
 ```
 
+# Key Binding
+|Key Binding	|Description|
+|:--|:--|
+|Ctrl + A	|Go to the beginning of the line (Home)|
+|Ctrl + E	|Go to the end of the line (End)|
+|Ctrl + P	|Previous command (Up arrow)|
+|Ctrl + N	|Next command (Down arrow)|
+|Ctrl + F	|Forward one character|
+|Ctrl + B	|Backward one character|
+|Ctrl + D	|Delete character under the cursor|
+|Ctrl + H	|Delete character before the cursor (Backspace)|
+|Ctrl + W	|Cut the word before the cursor to the clipboard|
+|Ctrl + K	|Cut the line after the cursor to the clipboard|
+|Ctrl + U	|Cut the line before the cursor to the clipboard|
+|Ctrl + L	|Clear the screen|  
 # Features to be added
 - [x] import json 
 - [x] print json format
@@ -126,7 +141,9 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 - [x] import ltsv 
 - [x] print ltsv format
 - [x] dump ltsv file
+- [ ] import excel format (using [qax-os/excelize](https://github.com/qax-os/excelize))
 - [ ] import swagger
+- [ ] import .gz file
 - [x] print markdown format
 - [ ] ignore csv header option
 - [x] The file type is determined by the file extension. This specification is to reduce the number of options.
