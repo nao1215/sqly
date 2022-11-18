@@ -10,6 +10,12 @@
 
 The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
+# Features
+✅ execute SQL against CSV / TSV / LTSV / JSON.
+✅ output SQL result to CSV / TSV / LTSV / JSON file format.
+✅ print SQL result in ASCII Table / CSV / TSV / LTSV / JSON file format.
+✅ interactive sqly shell with input completion, emacs-keybindings, input history.
+
 # How to install
 ### Use "go install"
 If you does not have the golang development environment installed on your system, please install golang from the [golang official website](https://go.dev/doc/install).
@@ -153,6 +159,8 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 - [x] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
 - [ ] history search (Ctrl-r)
 - [ ] Convert CSV character encoding to UTF-8 if necessary
+- [ ] Support MySQL driver
+- [ ] Support PostgreSQL driver
 - [ ] Unit test coverage 80%
 
 # Limitions (Not support)
