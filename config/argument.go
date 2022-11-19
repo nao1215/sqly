@@ -3,9 +3,11 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"runtime/debug"
 
 	"github.com/fatih/color"
+	"github.com/mattn/go-colorable"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/spf13/pflag"
 )
@@ -13,10 +15,16 @@ import (
 var (
 	// Version is sqly command version. Version value is assigned by LDFLAGS.
 	Version string
+	// Stdout is new instance of Writer which handles escape sequence for stdout.
+	Stdout = colorable.NewColorableStdout()
+	// Stderr is new instance of Writer which handles escape sequence for stderr.
+	Stderr = colorable.NewColorableStderr()
 	// query is SQL statement (for --sql option)
-	query = pflag.StringP("sql", "s", "", "sql query you want to execute")
+	query *string
 	// output is output destionation when user use --sql option (for --option option)
-	output = pflag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
+	output *string
+	// oFlag is output flag
+	oFlag outputFlag
 )
 
 // Output is configuration for output data to file.
@@ -39,8 +47,8 @@ type Arg struct {
 	VersionFlag bool
 	// Query is SQL query (for --sql option)
 	Query string
-	// Usage print help message
-	Usage func()
+	// Usage message
+	Usage string
 	// Version print version message
 	Version func()
 }
@@ -54,22 +62,31 @@ type outputFlag struct {
 }
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
-func NewArg() (*Arg, error) {
-	outputFlag := outputFlag{}
-
+// NOTE: Adding options directly to the pflag package results in a double
+// option definition error when NewArg() is called multiple times.
+// Therefore, create a new FlagSet() and add it to pflags.
+// Ref. https://stackoverflow.com/questions/61216174/how-to-test-cli-flags-currently-failing-with-flag-redefined
+func NewArg(args []string) (*Arg, error) {
+	oFlag = outputFlag{}
 	arg := &Arg{}
-	pflag.BoolVarP(&outputFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
-	pflag.BoolVarP(&outputFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
-	pflag.BoolVarP(&outputFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
-	pflag.BoolVarP(&outputFlag.json, "json", "j", false, "change output format to json (default: table)")
-	pflag.BoolVarP(&outputFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
-	pflag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
-	pflag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print help message")
+	os.Args = args
+
+	flag := pflag.FlagSet{}
+	flag.BoolVarP(&oFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
+	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
+	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
+	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
+	flag.BoolVarP(&oFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
+	query = flag.StringP("sql", "s", "", "sql query you want to execute")
+	output = flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
+	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
+	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print sqly version")
+	pflag.CommandLine.AddFlagSet(&flag)
 	pflag.Parse()
 
-	arg.Usage = usage
+	arg.Usage = usage(flag)
 	arg.Version = version
-	arg.Output = newOutput(*output, &outputFlag)
+	arg.Output = newOutput(*output, oFlag)
 	arg.FilePaths = pflag.Args()
 	arg.Query = *query
 
@@ -77,7 +94,7 @@ func NewArg() (*Arg, error) {
 }
 
 // newOutput retur *Output
-func newOutput(filePath string, of *outputFlag) *Output {
+func newOutput(filePath string, of outputFlag) *Output {
 	mode := model.PrintModeTable
 	if of.csv {
 		mode = model.PrintModeCSV
@@ -101,34 +118,35 @@ func (a *Arg) NeedsOutputToFile() bool {
 	return a.Output.FilePath != "" && a.Query != ""
 }
 
-func usage() {
-	fmt.Printf("%s - execute SQL against CSV/TSV/LTSV/JSON with shell (%s)\n", color.GreenString("sqly"), GetVersion())
-	fmt.Println("")
-	fmt.Println("[Usage]")
-	fmt.Printf("  %s [OPTIONS] [FILE_PATH]\n", color.GreenString("sqly"))
-	fmt.Println("")
-	fmt.Println("[Example]")
-	fmt.Printf("  - %s\n", color.HiYellowString("run sqly shell"))
-	fmt.Printf("    sqly\n")
-	fmt.Printf("  - %s\n", color.HiYellowString("Execute query for csv file"))
-	fmt.Printf("    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n")
-	fmt.Println("")
-	fmt.Println("[OPTIONS]")
-	pflag.PrintDefaults()
-	fmt.Println("")
-	fmt.Println("[LICENSE]")
-	fmt.Printf("  %s - Copyright (c) 2022 CHIKAMATSU Naohiro\n", color.CyanString("MIT LICENSE"))
-	fmt.Println("  https://github.com/nao1215/sqly/blob/main/LICENSE")
-	fmt.Println("")
-	fmt.Println("[CONTACT]")
-	fmt.Println("  https://github.com/nao1215/sqly/issues")
-	fmt.Println("")
-	fmt.Println("sqly runs the DB in SQLite3 in-memory mode.")
-	fmt.Println("So, SQL supported by sqly is the same as SQLite3 syntax.")
+func usage(flag pflag.FlagSet) string {
+	s := fmt.Sprintf("%s - execute SQL against CSV/TSV/LTSV/JSON with shell (%s)\n", color.GreenString("sqly"), GetVersion())
+	s += "\n"
+	s += "[Usage]\n"
+	s += fmt.Sprintf("  %s [OPTIONS] [FILE_PATH]\n", color.GreenString("sqly"))
+	s += "\n"
+	s += "[Example]\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run sqly shell"))
+	s += "    sqly\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Execute query for csv file"))
+	s += fmt.Sprintf("    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n")
+	s += "\n"
+	s += "[OPTIONS]\n"
+	s += flag.FlagUsages()
+	s += "\n"
+	s += "[LICENSE]\n"
+	s += fmt.Sprintf("  %s - Copyright (c) 2022 CHIKAMATSU Naohiro\n", color.CyanString("MIT LICENSE"))
+	s += fmt.Sprintf("  https://github.com/nao1215/sqly/blob/main/LICENSE\n")
+	s += "\n"
+	s += "[CONTACT]\n"
+	s += "  https://github.com/nao1215/sqly/issues\n"
+	s += "\n"
+	s += "sqly runs the DB in SQLite3 in-memory mode.\n"
+	s += "So, SQL supported by sqly is the same as SQLite3 syntax.\n"
+	return s
 }
 
 func version() {
-	fmt.Printf("%s %s\n", color.GreenString("sqly"), GetVersion())
+	fmt.Fprintf(Stdout, "%s %s\n", color.GreenString("sqly"), GetVersion())
 }
 
 // GetVersion return sqly command version.

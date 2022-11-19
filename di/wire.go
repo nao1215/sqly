@@ -17,7 +17,7 @@ import (
 
 // NewShell initailize main class of sqly application.
 // The return function is the function to close the DB.
-func NewShell() (*shell.Shell, func(), error) {
+func NewShell(args []string) (*shell.Shell, func(), error) {
 	wire.Build(
 		config.NewConfig,
 		config.NewInMemDB,
