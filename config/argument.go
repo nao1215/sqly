@@ -128,14 +128,14 @@ func usage(flag pflag.FlagSet) string {
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run sqly shell"))
 	s += "    sqly\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Execute query for csv file"))
-	s += fmt.Sprintf("    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n")
+	s += "    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n"
 	s += "\n"
 	s += "[OPTIONS]\n"
 	s += flag.FlagUsages()
 	s += "\n"
 	s += "[LICENSE]\n"
 	s += fmt.Sprintf("  %s - Copyright (c) 2022 CHIKAMATSU Naohiro\n", color.CyanString("MIT LICENSE"))
-	s += fmt.Sprintf("  https://github.com/nao1215/sqly/blob/main/LICENSE\n")
+	s += "  https://github.com/nao1215/sqly/blob/main/LICENSE\n"
 	s += "\n"
 	s += "[CONTACT]\n"
 	s += "  https://github.com/nao1215/sqly/issues\n"
