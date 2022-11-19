@@ -27,6 +27,9 @@ test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverprofile=cover.out
 	$(GO_TOOL) cover -html=cover.out -o cover.html
 
+update-golden: ## Update golden file
+	env GOOS=$(GOOS) $(GO_TEST) -update $(GO_PKGROOT) 
+
 vet: ## Start go vet
 	$(GO_VET) $(GO_PACKAGES)
 

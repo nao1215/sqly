@@ -68,7 +68,7 @@ func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
 // After successful initialization, start the interactive shell.
 func (s *Shell) Run() error {
 	if s.argument.HelpFlag {
-		s.argument.Usage()
+		fmt.Fprintf(config.Stdout, "%s", s.argument.Usage)
 		return nil
 	}
 
