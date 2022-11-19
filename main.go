@@ -10,14 +10,14 @@ import (
 
 // main is entry point for sqly command.
 func main() {
-	os.Exit(run())
+	os.Exit(run(os.Args))
 }
 
 // run execute sqly command. This function do dependency injection
 // and run the interactive shell.
 // Returns 0 for success case, 1 for error case.
-func run() int {
-	shell, cleanup, err := di.NewShell()
+func run(args []string) int {
+	shell, cleanup, err := di.NewShell(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", "failed to initialize sqly shell", err)
 		return 1
