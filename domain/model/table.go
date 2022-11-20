@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -104,7 +105,7 @@ func (t *Table) IsSameHeaderColumnName() bool {
 }
 
 // Print print all record with header
-func (t *Table) Print(out *os.File, mode PrintMode) {
+func (t *Table) Print(out io.Writer, mode PrintMode) {
 	switch mode {
 	case PrintModeTable:
 		t.printTable(out)
@@ -124,7 +125,7 @@ func (t *Table) Print(out *os.File, mode PrintMode) {
 }
 
 // printTables print all record with header; output format is table
-func (t *Table) printTable(out *os.File) {
+func (t *Table) printTable(out io.Writer) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(t.Header)
 	table.SetAutoFormatHeaders(false)
@@ -137,7 +138,7 @@ func (t *Table) printTable(out *os.File) {
 }
 
 // printMarkdownTable print all record with header; output format is markdown
-func (t *Table) printMarkdownTable(out *os.File) {
+func (t *Table) printMarkdownTable(out io.Writer) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(t.Header)
 	table.SetAutoFormatHeaders(false)
@@ -152,7 +153,7 @@ func (t *Table) printMarkdownTable(out *os.File) {
 }
 
 // printCSV print all record with header; output format is csv
-func (t *Table) printCSV(out *os.File) {
+func (t *Table) printCSV(out io.Writer) {
 	fmt.Fprintln(out, strings.Join(t.Header, ","))
 	for _, v := range t.Records {
 		fmt.Fprintln(out, strings.Join(v, ","))
@@ -160,7 +161,7 @@ func (t *Table) printCSV(out *os.File) {
 }
 
 // printTSV print all record with header; output format is tsv
-func (t *Table) printTSV(out *os.File) {
+func (t *Table) printTSV(out io.Writer) {
 	fmt.Fprintln(out, strings.Join(t.Header, "\t"))
 	for _, v := range t.Records {
 		fmt.Fprintln(out, strings.Join(v, "\t"))
@@ -168,7 +169,7 @@ func (t *Table) printTSV(out *os.File) {
 }
 
 // Print print all record with header; output format is ltsv
-func (t *Table) printLTSV(out *os.File) {
+func (t *Table) printLTSV(out io.Writer) {
 	for _, v := range t.Records {
 		r := Record{}
 		for i, data := range v {
@@ -179,7 +180,7 @@ func (t *Table) printLTSV(out *os.File) {
 }
 
 // printJSON print all record in json format
-func (t *Table) printJSON(out *os.File) {
+func (t *Table) printJSON(out io.Writer) {
 	data := make([]map[string]interface{}, 0)
 
 	for _, v := range t.Records {
