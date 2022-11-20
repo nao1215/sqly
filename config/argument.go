@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"runtime/debug"
 
 	"github.com/fatih/color"
@@ -21,10 +20,6 @@ var (
 	Stderr = colorable.NewColorableStderr()
 	// query is SQL statement (for --sql option)
 	query *string
-	// output is output destionation when user use --sql option (for --option option)
-	output *string
-	// oFlag is output flag
-	oFlag outputFlag
 )
 
 // Output is configuration for output data to file.
@@ -67,9 +62,8 @@ type outputFlag struct {
 // Therefore, create a new FlagSet() and add it to pflags.
 // Ref. https://stackoverflow.com/questions/61216174/how-to-test-cli-flags-currently-failing-with-flag-redefined
 func NewArg(args []string) (*Arg, error) {
-	oFlag = outputFlag{}
+	oFlag := outputFlag{}
 	arg := &Arg{}
-	os.Args = args
 
 	flag := pflag.FlagSet{}
 	flag.BoolVarP(&oFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
@@ -77,17 +71,18 @@ func NewArg(args []string) (*Arg, error) {
 	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
 	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
 	flag.BoolVarP(&oFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
-	query = flag.StringP("sql", "s", "", "sql query you want to execute")
-	output = flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
+	query := flag.StringP("sql", "s", "", "sql query you want to execute")
+	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print sqly version")
-	pflag.CommandLine.AddFlagSet(&flag)
-	pflag.Parse()
+	if err := flag.Parse(args[1:]); err != nil {
+		return nil, err
+	}
 
 	arg.Usage = usage(flag)
 	arg.Version = version
 	arg.Output = newOutput(*output, oFlag)
-	arg.FilePaths = pflag.Args()
+	arg.FilePaths = flag.Args()
 	arg.Query = *query
 
 	return arg, nil
@@ -146,7 +141,7 @@ func usage(flag pflag.FlagSet) string {
 }
 
 func version() {
-	fmt.Fprintf(Stdout, "%s %s\n", color.GreenString("sqly"), GetVersion())
+	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion())
 }
 
 // GetVersion return sqly command version.

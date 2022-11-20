@@ -111,3 +111,111 @@ func Test_isJSON(t *testing.T) {
 		})
 	}
 }
+
+func Test_isTSV(t *testing.T) {
+	type args struct {
+		filePath string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "it's tsv file",
+			args: args{
+				filePath: "/test/path/to/sample.tsv",
+			},
+			want: true,
+		},
+		{
+			name: "not tsv, it's text file",
+			args: args{
+				filePath: "/test/path/to/sample.txt",
+			},
+			want: false,
+		},
+		{
+			name: "it's tsv file: file is hidden one with extension",
+			args: args{
+				filePath: "/test/path/to/.sample.tsv",
+			},
+			want: true,
+		},
+		{
+			name: "not get extension: no extension in path",
+			args: args{
+				filePath: "/test/path/to/sample",
+			},
+			want: false,
+		},
+		{
+			name: "not get extension: file is hidden one without extension",
+			args: args{
+				filePath: "/test/path/to/.sample",
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isTSV(tt.args.filePath); got != tt.want {
+				t.Errorf("isTSV() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_isLTSV(t *testing.T) {
+	type args struct {
+		filePath string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "it's ltsv file",
+			args: args{
+				filePath: "/test/path/to/sample.ltsv",
+			},
+			want: true,
+		},
+		{
+			name: "not ltsv, it's text file",
+			args: args{
+				filePath: "/test/path/to/sample.txt",
+			},
+			want: false,
+		},
+		{
+			name: "it's ltsv file: file is hidden one with extension",
+			args: args{
+				filePath: "/test/path/to/.sample.ltsv",
+			},
+			want: true,
+		},
+		{
+			name: "not get extension: no extension in path",
+			args: args{
+				filePath: "/test/path/to/sample",
+			},
+			want: false,
+		},
+		{
+			name: "not get extension: file is hidden one without extension",
+			args: args{
+				filePath: "/test/path/to/.sample",
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isLTSV(tt.args.filePath); got != tt.want {
+				t.Errorf("isLTSV() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

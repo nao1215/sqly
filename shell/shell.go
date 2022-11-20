@@ -273,7 +273,7 @@ func (s *Shell) execSQL(req string) error {
 		return nil
 	}
 
-	table.Print(os.Stdout, s.argument.Output.Mode)
+	table.Print(config.Stdout, s.argument.Output.Mode)
 	return nil
 }
 
