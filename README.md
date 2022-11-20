@@ -1,5 +1,8 @@
+[![codecov](https://codecov.io/gh/nao1215/sqly/branch/main/graph/badge.svg?token=iUcmwXuERb)](https://codecov.io/gh/nao1215/sqly)
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
-[![PlatformTests](https://github.com/nao1215/sqly/actions/workflows/platform_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/platform_test.yml)
+[![LinuxUnitTest](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml)
+[![MacUnitTest](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml)
+[![WindowsUnitTest](https://github.com/nao1215/sqly/actions/workflows/windows.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/windows.yml)
 [![reviewdog](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nao1215/sqly)](https://goreportcard.com/report/github.com/nao1215/sqly)
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
@@ -27,6 +30,12 @@ $ go install github.com/nao1215/sqly@latest
 
 # How to use
 sqly command automatically imports the CSV/TSV/LTSV/JSON file into the DB when you pass a CSV/TSV/LTSV/JSON file as an argument. DB table name is the same as the file name (e.g., if you import user.csv, sqly command create the user table)
+
+## Syntax
+```
+  sqly [OPTIONS] [FILE_PATH]
+```
+※ The sqly option must be specified before the file to be imported.
 
 ## --sql option: execute sql in terminal
 --sql option takes an SQL statement as an optional argument. You pass file path(s) as arguments to the sqly command. sqly command import them. sqly command automatically determines the file format from the file extension.
@@ -101,25 +110,25 @@ sqly> .help
 ### For linux user 
 sqly command can save SQL execution results to a file using shell redirection. The --csv option outputs SQL execution results in CSV format instead of table format.
 ```
-$ sqly --sql "SELECT * FROM user" testdata/user.csv --csv > test.csv
+$ sqly --sql "SELECT * FROM user" --csv testdata/user.csv > test.csv
 ```
 ### For windows user
  ```
-$ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
+$ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv 
 ```
 
 # All options
 ```
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
-  -h, --help            print help message
-  -j, --json            change output format to json (default: table)
-  -l, --ltsv            change output format to ltsv (default: table)
-  -m, --markdown        change output format to markdown table(default: table)
-  -o, --output string   destination path for SQL results specified in --sql option
-  -s, --sql string      sql query you want to execute
   -t, --tsv             change output format to tsv (default: table)
-  -v, --version         print help message
+  -l, --ltsv            change output format to ltsv (default: table)
+  -j, --json            change output format to json (default: table)
+  -m, --markdown        change output format to markdown table (default: table)
+  -s, --sql string      sql query you want to execute
+  -o, --output string   destination path for SQL results specified in --sql option
+  -h, --help            print help message
+  -v, --version         print sqly version
 ```
 
 # Key Binding

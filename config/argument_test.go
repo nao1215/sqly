@@ -5,18 +5,17 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/nao1215/golden"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/sebdah/goldie/v2"
 )
 
 func TestNewArg(t *testing.T) {
 	t.Run("user want to output result to file", func(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "output.txt")
-		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM test", "testdata/no_exist.csv", "-o", testFile})
+		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM test", "-o", testFile, "testdata/no_exist.csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,11 +104,8 @@ func TestUsage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := goldie.New(t)
-		//TODO: does not support windows?
-		if runtime.GOOS != "windows" {
-			g.Assert(t, "usage", []byte(arg.Usage))
-		}
+		g := golden.New(t)
+		g.Assert(t, "usage", []byte(arg.Usage))
 	})
 }
 
