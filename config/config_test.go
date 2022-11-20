@@ -3,6 +3,7 @@ package config
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nao1215/gorky/file"
@@ -22,9 +23,11 @@ func TestConfig_CreateDir(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := filepath.Join(homeDir, ".config", "sqly")
-		if !file.IsDir(want) {
-			t.Errorf("failed to create config directory at %s", want)
+		if runtime.GOOS != "windows" {
+			want := filepath.Join(homeDir, ".config", "sqly")
+			if !file.IsDir(want) {
+				t.Errorf("failed to create config directory at %s", want)
+			}
 		}
 	})
 }
