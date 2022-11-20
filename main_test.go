@@ -13,7 +13,7 @@ import (
 
 func Test_main(t *testing.T) {
 	t.Run("show version message", func(t *testing.T) {
-		osExit = func(code int) { return }
+		osExit = func(code int) {}
 		os.Args = []string{"sqly", "-v"}
 		defer func() {
 			osExit = os.Exit
@@ -47,6 +47,41 @@ func Test_run(t *testing.T) {
 		g.Assert(t, "select_asc_limit5_table", got)
 	})
 
+	t.Run("sqly --sql 'SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id' testdata/user.csv testdata/identifier.csv", func(t *testing.T) {
+		args := []string{"sqly", "--csv", "--sql", "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id", "testdata/user.csv", "testdata/identifier.csv"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "select_inner_join_csv", got)
+	})
+
+	t.Run("sqly --json --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
+		args := []string{"sqly", "--json", "--sql", "SELECT * FROM user", "testdata/user.csv"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "select_json", got)
+	})
+
+	t.Run("sqly --tsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
+		args := []string{"sqly", "--tsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "select_tsv", got)
+	})
+
+	t.Run("sqly --ltsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
+		args := []string{"sqly", "--ltsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "select_ltsv", got)
+	})
 }
 
 func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []byte {
