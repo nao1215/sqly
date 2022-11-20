@@ -1,3 +1,4 @@
+// Package main is sqly entry point.
 package main
 
 import (
@@ -8,9 +9,11 @@ import (
 	"github.com/nao1215/sqly/di"
 )
 
+var osExit = os.Exit
+
 // main is entry point for sqly command.
 func main() {
-	os.Exit(run(os.Args))
+	osExit(run(os.Args))
 }
 
 // run execute sqly command. This function do dependency injection
