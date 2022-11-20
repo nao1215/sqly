@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/nao1215/golden"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/sebdah/goldie/v2"
 )
 
 func TestNewArg(t *testing.T) {
@@ -105,8 +105,7 @@ func TestUsage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := goldie.New(t)
-		//TODO: does not support windows?
+		g := golden.New(t)
 		if runtime.GOOS != "windows" {
 			g.Assert(t, "usage", []byte(arg.Usage))
 		}
