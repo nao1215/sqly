@@ -1,3 +1,4 @@
+[![codecov](https://codecov.io/gh/nao1215/sqly/branch/main/graph/badge.svg?token=iUcmwXuERb)](https://codecov.io/gh/nao1215/sqly)
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
 [![LinuxUnitTest](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml)
 [![MacUnitTest](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml)
