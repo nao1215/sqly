@@ -62,6 +62,9 @@ type outputFlag struct {
 // Therefore, create a new FlagSet() and add it to pflags.
 // Ref. https://stackoverflow.com/questions/61216174/how-to-test-cli-flags-currently-failing-with-flag-redefined
 func NewArg(args []string) (*Arg, error) {
+	if len(args) == 0 {
+		return nil, ErrEmptyArg
+	}
 	oFlag := outputFlag{}
 	arg := &Arg{}
 
