@@ -3,6 +3,7 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -93,6 +94,17 @@ func TestNewArg(t *testing.T) {
 
 		if arg.Output.Mode != model.PrintModeTable {
 			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeTable)
+		}
+	})
+
+	t.Run("no argument", func(t *testing.T) {
+		_, got := NewArg([]string{})
+		if got == nil {
+			t.Fatal("expect error happen, however NewArg() return nil")
+		}
+
+		if !errors.Is(got, ErrEmptyArg) {
+			t.Errorf("mismatch got=%v, want=%v", got, ErrEmptyArg)
 		}
 	})
 }
