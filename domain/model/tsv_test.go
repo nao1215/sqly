@@ -2,7 +2,6 @@
 package model
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -171,8 +170,9 @@ func TestTSV_ToTable(t *testing.T) {
 				Header:  tt.fields.Header,
 				Records: tt.fields.Records,
 			}
-			if got := tr.ToTable(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("TSV.ToTable() = %v, want %v", got, tt.want)
+			got := tr.ToTable()
+			if diff := cmp.Diff(got, tt.want); diff != "" {
+				t.Errorf("value is mismatch (-got +want):\n%s", diff)
 			}
 		})
 	}
