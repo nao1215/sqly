@@ -31,6 +31,7 @@ func (h Histories) ToTable() *Table {
 	}
 }
 
+// ToStringList convert history to string list.
 func (h Histories) ToStringList() []string {
 	var histories []string
 	for _, v := range h {
