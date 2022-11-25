@@ -6,7 +6,7 @@ require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/caarlos0/env/v6 v6.10.1
 	github.com/fatih/color v1.13.0
-	github.com/google/go-cmp v0.2.0
+	github.com/google/go-cmp v0.5.9
 	github.com/google/wire v0.5.0
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-sqlite3 v1.14.16
