@@ -107,7 +107,10 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	config.Stdout = w
 
 	f(list)
@@ -127,7 +130,10 @@ func getStdout(t *testing.T, f func()) []byte {
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	config.Stdout = w
 
 	f()
