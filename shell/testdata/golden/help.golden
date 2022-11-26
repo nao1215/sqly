@@ -1,0 +1,31 @@
+sqly - execute SQL against CSV/TSV/LTSV/JSON with shell ((devel))
+
+[Usage]
+  sqly [OPTIONS] [FILE_PATH]
+
+[Example]
+  - run sqly shell
+    sqly
+  - Execute query for csv file
+    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv
+
+[OPTIONS]
+  -c, --csv             change output format to csv (default: table)
+  -t, --tsv             change output format to tsv (default: table)
+  -l, --ltsv            change output format to ltsv (default: table)
+  -j, --json            change output format to json (default: table)
+  -m, --markdown        change output format to markdown table (default: table)
+  -s, --sql string      sql query you want to execute
+  -o, --output string   destination path for SQL results specified in --sql option
+  -h, --help            print help message
+  -v, --version         print sqly version
+
+[LICENSE]
+  MIT LICENSE - Copyright (c) 2022 CHIKAMATSU Naohiro
+  https://github.com/nao1215/sqly/blob/main/LICENSE
+
+[CONTACT]
+  https://github.com/nao1215/sqly/issues
+
+sqly runs the DB in SQLite3 in-memory mode.
+So, SQL supported by sqly is the same as SQLite3 syntax.
