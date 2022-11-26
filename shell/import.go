@@ -3,15 +3,17 @@ package shell
 import (
 	"errors"
 	"fmt"
+	"path"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )
 
 // importCommand import csv into DB
 func (c CommandList) importCommand(s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintln(Stdout, "[Usage]")
-		fmt.Fprintln(Stdout, "  .import CSV_FILE_PATH(S)")
+		fmt.Fprintln(config.Stdout, "[Usage]")
+		fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)")
 		return nil
 	}
 
@@ -42,7 +44,7 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 			}
 			table = json.ToTable()
 		} else {
-			return errors.New("not support file format: " + v)
+			return errors.New("not support file format: " + path.Ext(v))
 		}
 
 		if err := s.sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {

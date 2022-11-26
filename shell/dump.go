@@ -4,17 +4,18 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )
 
 // dumpCommand dump specified table to csv file
 func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 	if len(argv) != 2 {
-		fmt.Fprintln(Stdout, "[Usage]")
-		fmt.Fprintln(Stdout, "  .dump TABLE_NAME FILE_PATH")
-		fmt.Fprintln(Stdout, "[Note]")
-		fmt.Fprintln(Stdout, "  Output will be in the format specified in .mode.")
-		fmt.Fprintln(Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
+		fmt.Fprintln(config.Stdout, "[Usage]")
+		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
+		fmt.Fprintln(config.Stdout, "[Note]")
+		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
+		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
 		return nil
 	}
 
@@ -26,7 +27,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 	if err := dumpToFile(s, argv[1], table); err != nil {
 		return err
 	}
-	fmt.Fprintf(Stdout, "dump `%s` table to %s (mode=%s)\n",
+	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
 		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.argument.Output.Mode))
 
 	return nil

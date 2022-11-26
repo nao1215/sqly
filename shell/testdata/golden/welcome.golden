@@ -1,0 +1,5 @@
+sqly  (work in progress)
+
+enter "SQL query" or "sqly command that beginning with a dot".
+.help print usage, .exit exit sqly.
+
