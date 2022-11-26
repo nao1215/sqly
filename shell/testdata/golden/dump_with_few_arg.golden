@@ -1,0 +1,5 @@
+[Usage]
+  .dump TABLE_NAME FILE_PATH
+[Note]
+  Output will be in the format specified in .mode.
+  table mode is not available in .dump. If mode is table, .dump output CSV file.

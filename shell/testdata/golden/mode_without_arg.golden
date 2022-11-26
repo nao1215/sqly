@@ -1,0 +1,9 @@
+[Usage]
+  .mode OUTPUT_MODE   ※ current mode=table
+[Output mode list]
+  table
+  markdown
+  csv
+  tsv
+  ltsv
+  json
