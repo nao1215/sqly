@@ -3,6 +3,7 @@ package shell
 import (
 	"errors"
 	"fmt"
+	"path"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -43,7 +44,7 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 			}
 			table = json.ToTable()
 		} else {
-			return errors.New("not support file format: " + v)
+			return errors.New("not support file format: " + path.Ext(v))
 		}
 
 		if err := s.sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {
