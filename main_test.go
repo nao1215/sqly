@@ -84,6 +84,22 @@ func Test_run(t *testing.T) {
 	})
 }
 
+func Test_runErrPatern(t *testing.T) {
+	t.Run("empty argument", func(t *testing.T) {
+		got := run([]string{})
+		if got != 1 {
+			t.Errorf("mismatch got=%d, want=%d", got, 1)
+		}
+	})
+
+	t.Run("specify ocsv file that do not exist", func(t *testing.T) {
+		got := run([]string{"sqly", "not_exist.csv"})
+		if got != 1 {
+			t.Errorf("mismatch got=%d, want=%d", got, 1)
+		}
+	})
+}
+
 func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []byte {
 	t.Helper()
 	backupColorStdout := config.Stdout
