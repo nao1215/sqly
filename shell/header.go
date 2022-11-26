@@ -2,8 +2,9 @@ package shell
 
 import (
 	"fmt"
-	"os"
+	"io"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/olekukonko/tablewriter"
 )
@@ -11,8 +12,8 @@ import (
 // headerCommand print table header.
 func (c CommandList) headerCommand(s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintln(Stdout, "[Usage]")
-		fmt.Fprintln(Stdout, "  .header TABLE_NAME")
+		fmt.Fprintln(config.Stdout, "[Usage]")
+		fmt.Fprintln(config.Stdout, "  .header TABLE_NAME")
 		return nil
 	}
 
@@ -21,12 +22,12 @@ func (c CommandList) headerCommand(s *Shell, argv []string) error {
 		return err
 	}
 	table.Name = argv[0]
-	printHeader(os.Stdout, table)
+	printHeader(config.Stdout, table)
 	return nil
 }
 
 // printHeader print header
-func printHeader(out *os.File, t *model.Table) {
+func printHeader(out io.Writer, t *model.Table) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader([]string{t.Name})
 	table.SetAutoWrapText(false)

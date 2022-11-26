@@ -130,11 +130,11 @@ func (s *Shell) init() error {
 
 // printWelcomeMessage print version and help information.
 func (s *Shell) printWelcomeMessage() {
-	fmt.Fprintf(Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), config.GetVersion())
-	fmt.Fprintln(Stdout, "")
-	fmt.Fprintln(Stdout, "enter \"SQL query\" or \"sqly command that beginning with a dot\".")
-	fmt.Fprintf(Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
-	fmt.Fprintln(Stdout, "")
+	fmt.Fprintf(config.Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), config.GetVersion())
+	fmt.Fprintln(config.Stdout, "")
+	fmt.Fprintln(config.Stdout, "enter \"SQL query\" or \"sqly command that beginning with a dot\".")
+	fmt.Fprintf(config.Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
+	fmt.Fprintln(config.Stdout, "")
 }
 
 // printPrompt print "sqly>" prompt and getting user input
@@ -268,7 +268,7 @@ func (s *Shell) execSQL(req string) error {
 		if err := dumpToFile(s, s.argument.Output.FilePath, table); err != nil {
 			return err
 		}
-		fmt.Fprintf(Stdout, "Output sql result to %s (output mode=%s)\n",
+		fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
 			color.HiCyanString(s.argument.Output.FilePath), dumpMode(s.argument.Output.Mode))
 		return nil
 	}

@@ -2,9 +2,10 @@ package shell
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/fatih/color"
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/olekukonko/tablewriter"
 )
@@ -15,15 +16,15 @@ func (c CommandList) tablesCommand(s *Shell, argv []string) error {
 	if err != nil {
 		return err
 	}
-	printTables(os.Stdout, tables)
+	printTables(config.Stdout, tables)
 	return nil
 }
 
 // printTables print table name
-func printTables(out *os.File, t []*model.Table) {
+func printTables(out io.Writer, t []*model.Table) {
 	if len(t) == 0 {
-		fmt.Fprintf(Stderr,
-			"there is no table. use %s for importing csv file\n",
+		fmt.Fprintf(config.Stdout,
+			"there is no table. use %s for importing file\n",
 			color.CyanString(".import"))
 		return
 	}

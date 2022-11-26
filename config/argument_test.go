@@ -167,7 +167,10 @@ func getStdout(t *testing.T, f func()) string {
 		Stdout = backupColorStdout
 	}()
 
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	Stdout = w
 
 	f()
