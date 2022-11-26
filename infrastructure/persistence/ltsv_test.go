@@ -3,6 +3,7 @@ package persistence
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nao1215/golden"
@@ -83,18 +84,23 @@ func Test_ltsvRepository_List(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		file := filepath.Join(t.TempDir(), "dump.ltsv")
-		f2, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0664)
-		if err != nil {
+		var tmpFile *os.File
+		var e error
+		if runtime.GOOS != "windows" {
+			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.ltsv")
+		} else {
+			// See https://github.com/golang/go/issues/51442
+			tmpFile, e = os.CreateTemp(os.TempDir(), "dump.ltsv")
+		}
+		if e != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
 
-		if err := r.Dump(f2, ltsv.ToTable()); err != nil {
+		if err := r.Dump(tmpFile, ltsv.ToTable()); err != nil {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(tmpFile.Name())
 		if err != nil {
 			t.Fatal(err)
 		}

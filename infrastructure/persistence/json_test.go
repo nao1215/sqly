@@ -3,6 +3,7 @@ package persistence
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nao1215/golden"
@@ -17,18 +18,23 @@ func Test_jsonRepository_List(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		file := filepath.Join(t.TempDir(), "dump.json")
-		f2, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0664)
-		if err != nil {
+		var tmpFile *os.File
+		var e error
+		if runtime.GOOS != "windows" {
+			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.json")
+		} else {
+			// See https://github.com/golang/go/issues/51442
+			tmpFile, e = os.CreateTemp(os.TempDir(), "dump.json")
+		}
+		if e != nil {
 			t.Fatal(err)
 		}
-		defer f2.Close()
 
-		if err := r.Dump(f2, csv.ToTable()); err != nil {
+		if err := r.Dump(tmpFile, csv.ToTable()); err != nil {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(tmpFile.Name())
 		if err != nil {
 			t.Fatal(err)
 		}
