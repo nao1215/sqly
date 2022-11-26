@@ -1,0 +1,10 @@
++-------------------+
+|       actor       |
++-------------------+
+| actor             |
+| total_gross       |
+| number_of_movies  |
+| average_per_movie |
+| best_movie        |
+| gross             |
++-------------------+

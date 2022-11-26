@@ -1,0 +1,7 @@
+               .dump: dump db table to file in a format according to output mode (default: csv)
+               .exit: exit sqly
+             .header: print table header
+               .help: print help message
+             .import: import csv file(s)
+               .mode: change output mode
+             .tables: print tables
