@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/nao1215/golden"
+	"github.com/nao1215/gorky/golden"
 	"github.com/nao1215/sqly/domain/model"
 )
 
