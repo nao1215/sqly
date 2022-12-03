@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/nao1215/golden"
+	"github.com/nao1215/gorky/golden"
 	"github.com/nao1215/sqly/config"
 )
 
