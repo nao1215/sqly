@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nao1215/golden"
+	"github.com/nao1215/gorky/golden"
 )
 
 func Test_ltsvRepository_labelAndData(t *testing.T) {
