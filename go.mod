@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/caarlos0/env/v6 v6.10.1
-	github.com/fatih/color v1.14.1
+	github.com/fatih/color v1.15.0
 	github.com/google/go-cmp v0.5.9
 	github.com/google/wire v0.5.0
 	github.com/mattn/go-colorable v0.1.13
@@ -22,5 +22,5 @@ require (
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
 )
