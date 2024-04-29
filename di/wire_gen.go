@@ -50,7 +50,9 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
-	shellShell := shell.NewShell(arg, configConfig, commandList, csvInteractor, tsvInteractor, ltsvInteractor, jsonInteractor, sqLite3Interactor, historyInteractor)
+	excelRepository := persistence.NewExcelRepository()
+	excelInteractor := usecase.NewExcelInteractor(excelRepository)
+	shellShell := shell.NewShell(arg, configConfig, commandList, csvInteractor, tsvInteractor, ltsvInteractor, jsonInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
 	return shellShell, func() {
 		cleanup2()
 		cleanup()

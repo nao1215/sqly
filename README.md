@@ -8,13 +8,13 @@
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
 ![demo](./doc/img/demo.gif)  
 
-**sqly** command imports CSV/TSV/LTSV/JSON file(s) into an in-memory DB and executes SQL against the CSV/TSV/LTSV/JSON. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
+**sqly** command imports CSV/TSV/LTSV/JSON and Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX) file(s) into an in-memory DB and executes SQL against them. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
 
 The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
 ## Features
-✅ execute SQL against CSV / TSV / LTSV / JSON.  
-✅ output SQL result to CSV / TSV / LTSV / JSON file format.  
+✅ execute SQL against CSV / TSV / LTSV / JSON and Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX).
+✅ output SQL result to CSV / TSV / LTSV / JSON and Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX).
 ✅ print SQL result in ASCII Table / CSV / TSV / LTSV / JSON file format.  
 ✅ interactive sqly shell with input completion, emacs-keybindings, input history.  
 
@@ -90,7 +90,7 @@ The command beginning with a dot is the sqly helper command; I plan to add more 
 $ sqly 
 sqly v0.5.0 (work in progress)
 
-enter "SQL query" or "sqly command that beginning with a dot".
+enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
 
 sqly> .help
@@ -120,10 +120,12 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 ```
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
-  -t, --tsv             change output format to tsv (default: table)
-  -l, --ltsv            change output format to ltsv (default: table)
+  -e, --excel           change output format to excel (default: table)
   -j, --json            change output format to json (default: table)
+  -l, --ltsv            change output format to ltsv (default: table)
   -m, --markdown        change output format to markdown table (default: table)
+  -t, --tsv             change output format to tsv (default: table)
+  -S, --sheet string    excel sheet name you want to import
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option
   -h, --help            print help message
@@ -147,30 +149,13 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |Ctrl + L	|Clear the screen|  
 
 ## Features to be added
-- [x] import json 
-- [x] print json format
-- [x] dump json file
-- [x] import tsv
-- [x] ptint tsv format
-- [x] dump tsv file
-- [x] import ltsv 
-- [x] print ltsv format
-- [x] dump ltsv file
-- [ ] import excel format (using [qax-os/excelize](https://github.com/qax-os/excelize))
 - [ ] import swagger
 - [ ] import .gz file
-- [x] print markdown format
 - [ ] ignore csv header option
-- [x] The file type is determined by the file extension. This specification is to reduce the number of options.
-- [x] change input position (left arrow, right arrow, delete char)
-- [x] sqly Fix problem where multiple lines of input in the shell would cause display corruption. To be fixed using escape sequences.
-- [x] input completion (Tab)
-- [x] emacs key-bindings (Ctrl-a, Ctrl-e, Ctrl-w)
 - [ ] history search (Ctrl-r)
 - [ ] Convert CSV character encoding to UTF-8 if necessary
 - [ ] Support MySQL driver
 - [ ] Support PostgreSQL driver
-- [ ] Unit test coverage 80%
 
 ## Unit Test Coverage Treemap
 ![treemap](./doc/img/cover-tree.svg)

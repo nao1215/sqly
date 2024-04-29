@@ -27,8 +27,11 @@ const (
 	PrintModeLTSV
 	// PrintModeJSON print data in json format
 	PrintModeJSON
+	// PrintModeExcel print data in excel format
+	PrintModeExcel
 )
 
+// String return string of PrintMode.
 func (p PrintMode) String() string {
 	switch p {
 	case PrintModeTable:
@@ -43,14 +46,19 @@ func (p PrintMode) String() string {
 		return "ltsv"
 	case PrintModeJSON:
 		return "json"
+	case PrintModeExcel:
+		return "excel"
 	}
 	return "unknown"
 }
 
 // Table is DB table.
 type Table struct {
-	Name    string
-	Header  Header
+	// Name is table name.
+	Name string
+	// Header is table header.
+	Header Header
+	// Records is table records.
 	Records []Record
 }
 
@@ -119,6 +127,8 @@ func (t *Table) Print(out io.Writer, mode PrintMode) {
 		t.printLTSV(out)
 	case PrintModeJSON:
 		t.printJSON(out)
+	case PrintModeExcel:
+		t.printExcel(out)
 	default:
 		t.printTable(out)
 	}
@@ -196,4 +206,10 @@ func (t *Table) printJSON(out io.Writer) {
 		return
 	}
 	fmt.Fprintln(out, string(b))
+}
+
+// printExcel print all record in excel format.
+// This is the same as printCSV.
+func (t *Table) printExcel(out io.Writer) {
+	t.printCSV(out)
 }
