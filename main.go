@@ -9,6 +9,8 @@ import (
 	"github.com/nao1215/sqly/di"
 )
 
+// osExit is a variable that holds the os.Exit function.
+// This variable is used to mock the os.Exit function in tests.
 var osExit = os.Exit
 
 // main is entry point for sqly command.

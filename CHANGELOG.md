@@ -1,5 +1,9 @@
 ## [](https://github.com/nao1215/sqly/compare/v0.5.2...) (2024-04-29)
 
+* Introduce numerical sorting [#48](https://github.com/nao1215/sqly/pull/48) ([nao1215](https://github.com/nao1215))
+* Fix issue 43: Panic when importing json table with numeric field. [#47](https://github.com/nao1215/sqly/pull/47) ([nao1215](https://github.com/nao1215))
+* Fix issue 42 (bug): Panic when json field is null [#46](https://github.com/nao1215/sqly/pull/46) ([nao1215](https://github.com/nao1215))
+* Update project config [#45](https://github.com/nao1215/sqly/pull/45) ([nao1215](https://github.com/nao1215))
 * Introduce octocov [#44](https://github.com/nao1215/sqly/pull/44) ([nao1215](https://github.com/nao1215))
 * Bump github.com/google/wire from 0.5.0 to 0.6.0 [#41](https://github.com/nao1215/sqly/pull/41) ([dependabot[bot]](https://github.com/apps/dependabot))
 * Bump github.com/mattn/go-sqlite3 from 1.14.19 to 1.14.22 [#40](https://github.com/nao1215/sqly/pull/40) ([dependabot[bot]](https://github.com/apps/dependabot))
