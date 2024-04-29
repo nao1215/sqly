@@ -91,6 +91,15 @@ func Test_run(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "fix_bug_issue42_csv", got)
 	})
+
+	t.Run("Fix Issue 43: Panic when importing json table with numeric field", func(t *testing.T) {
+		args := []string{"sqly", "--sql", "select * from bug_issue43 limit 1", "--csv", "testdata/bug_issue43.json"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "fix_bug_issue43_csv", got)
+	})
 }
 
 func Test_runErrPatern(t *testing.T) {
