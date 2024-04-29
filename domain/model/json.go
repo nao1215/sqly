@@ -29,8 +29,8 @@ func (j *JSON) ToTable() *Table {
 		r := Record{}
 		for _, h := range header {
 			if val, ok := json[h]; ok {
-				if val != nil {
-					r = append(r, val.(string))
+				if v, ok := val.(string); ok {
+					r = append(r, v)
 				} else {
 					r = append(r, "")
 				}
