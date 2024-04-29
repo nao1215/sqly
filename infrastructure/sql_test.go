@@ -16,14 +16,29 @@ func Test_generateCreateTableStatement(t *testing.T) {
 		want string
 	}{
 		{
-			name: "success to generate create table statement",
+			name: "success to generate create table statement with no records",
 			args: args{
 				t: &model.Table{
 					Name:   "test",
 					Header: model.Header{"abc", "def", "ghj"},
 				},
 			},
-			want: "CREATE TABLE `test`(`abc`, `def`, `ghj`);",
+			want: "CREATE TABLE `test`(`abc` TEXT, `def` TEXT, `ghj` TEXT);",
+		},
+		{
+			name: "success to generate create table statement with records",
+			args: args{
+				t: &model.Table{
+					Name:   "test",
+					Header: model.Header{"id", "name", "number_and_string"},
+					Records: []model.Record{
+						{"1", "name1", "1"},
+						{"2", "name2", "a"},
+						{"3", "name3", "3"},
+					},
+				},
+			},
+			want: "CREATE TABLE `test`(`id` INTEGER, `name` TEXT, `number_and_string` TEXT);",
 		},
 	}
 	for _, tt := range tests {

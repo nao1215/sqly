@@ -83,6 +83,31 @@ func Test_run(t *testing.T) {
 		g.Assert(t, "select_ltsv", got)
 	})
 
+	t.Run("Treat numbers as numeric types; support numerical sorting", func(t *testing.T) {
+		// SELECT * FROM numeric ORDER BY id
+		// [Previously Result]
+		// id,name
+		// 1,John
+		// 11,Ringo
+		// 12,Billy
+		// 2,Paul
+		// 3,George
+		//
+		// [Current Result]
+		// id,name
+		// 1,John
+		// 2,Paul
+		// 3,George
+		// 11,Ringo
+		// 12,Billy
+
+		args := []string{"sqly", "--sql", "SELECT * FROM numeric ORDER BY id", "--csv", "testdata/numeric.csv"}
+		got := getStdoutForRunFunc(t, run, args)
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "numeric", got)
+	})
+
 	t.Run("Fix Issue 42: Panic when json field is null", func(t *testing.T) {
 		args := []string{"sqly", "--sql", "select * from bug_issue42 limit 1", "--csv", "testdata/bug_issue42.json"}
 		got := getStdoutForRunFunc(t, run, args)
