@@ -1,4 +1,3 @@
-[![codecov](https://codecov.io/gh/nao1215/sqly/branch/main/graph/badge.svg?token=iUcmwXuERb)](https://codecov.io/gh/nao1215/sqly)
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
 [![LinuxUnitTest](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml)
 [![MacUnitTest](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml)
@@ -6,20 +5,19 @@
 [![reviewdog](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nao1215/sqly)](https://goreportcard.com/report/github.com/nao1215/sqly)
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
-# execute SQL against CSV/TSV/LTSV/JSON with shell.
-![demo](./doc/demo.gif)  
+![demo](./doc/img/demo.gif)  
 
 **sqly** command imports CSV/TSV/LTSV/JSON file(s) into an in-memory DB and executes SQL against the CSV/TSV/LTSV/JSON. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
 
 The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
-# Features
+## Features
 ✅ execute SQL against CSV / TSV / LTSV / JSON.  
 ✅ output SQL result to CSV / TSV / LTSV / JSON file format.  
 ✅ print SQL result in ASCII Table / CSV / TSV / LTSV / JSON file format.  
 ✅ interactive sqly shell with input completion, emacs-keybindings, input history.  
 
-# How to install
+## How to install
 ### Use "go install"
 If you does not have the golang development environment installed on your system, please install golang from the [golang official website](https://go.dev/doc/install).
 ```
@@ -28,16 +26,16 @@ $ go install github.com/nao1215/sqly@latest
 ※ Main dependency is [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) and gcc.
 
 
-# How to use
+## How to use
 sqly command automatically imports the CSV/TSV/LTSV/JSON file into the DB when you pass a CSV/TSV/LTSV/JSON file as an argument. DB table name is the same as the file name (e.g., if you import user.csv, sqly command create the user table)
 
-## Syntax
+### Syntax
 ```
   sqly [OPTIONS] [FILE_PATH]
 ```
 ※ The sqly option must be specified before the file to be imported.
 
-## --sql option: execute sql in terminal
+### --sql option: execute sql in terminal
 --sql option takes an SQL statement as an optional argument. You pass file path(s) as arguments to the sqly command. sqly command import them. sqly command automatically determines the file format from the file extension.
 ```
 $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv 
@@ -50,7 +48,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
-## Change output format
+### Change output format
 sqly command output sql results in ASCII table format, CSV format (--csv option), TSV format (--tsv option), LTSV format (--ltsv option) and JSON format (--json option). This means that conversion between csv and json is supported.
 ```
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -82,10 +80,10 @@ Rachel,1,Booker,booker12
 Mary,2,Jenkins,jenkins46
 ```
 
-## run sqly shell
+### run sqly shell
 If the --sql option is not specified, the sqly shell is started. When you execute sqly command, it is optional whether or not to specify file(s). The sqly shell functions similarly to a common SQL client (e.g., sqlite3 command or mysql command). sqly shell has helper commands, SQL execution history management and input complement.
 
-### sqly helper command
+#### sqly helper command
 The command beginning with a dot is the sqly helper command; I plan to add more features in the future to make the sqly shell run more comfortably.
 ```
 $ sqly 
@@ -104,20 +102,20 @@ sqly> .help
     .tables: print tables
 ```
 
-![demo](./doc/shell-demo.png)  
+![demo](./doc/img/shell-demo.png)  
 
-## Output sql result to file
-### For linux user 
+### Output sql result to file
+#### For linux user 
 sqly command can save SQL execution results to a file using shell redirection. The --csv option outputs SQL execution results in CSV format instead of table format.
 ```
 $ sqly --sql "SELECT * FROM user" --csv testdata/user.csv > test.csv
 ```
-### For windows user
+#### For windows user
  ```
 $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv 
 ```
 
-# All options
+### All options
 ```
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
@@ -131,7 +129,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
   -v, --version         print sqly version
 ```
 
-# Key Binding
+### Key Binding
 |Key Binding	|Description|
 |:--|:--|
 |Ctrl + A	|Go to the beginning of the line (Home)|
@@ -146,7 +144,8 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |Ctrl + K	|Cut the line after the cursor to the clipboard|
 |Ctrl + U	|Cut the line before the cursor to the clipboard|
 |Ctrl + L	|Clear the screen|  
-# Features to be added
+
+## Features to be added
 - [x] import json 
 - [x] print json format
 - [x] dump json file
@@ -172,21 +171,24 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - [ ] Support PostgreSQL driver
 - [ ] Unit test coverage 80%
 
-# Limitions (Not support)
+## Unit Test Coverage Treemap
+![treemap](./doc/img/cover-tree.svg)
+
+## Limitions (Not support)
 - DDL such as CREATE
 - DML such as GRANT
 - TCL such as Transactions
 
-# Contributing
+## Contributing
 First off, thanks for taking the time to contribute! ❤️ Contributions are not only related to development. For example, GitHub Star motivates me to develop!  
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nao1215/sqly&type=Date)](https://star-history.com/#nao1215/sqly&Date)
 
 
-# Contact
+## Contact
 If you would like to send comments such as "find a bug" or "request for additional features" to the developer, please use one of the following contacts.
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
 
-# LICENSE
+## LICENSE
 The sqly project is licensed under the terms of [MIT LICENSE](./LICENSE).

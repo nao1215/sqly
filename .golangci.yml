@@ -1,0 +1,52 @@
+run:
+  go: "1.20"
+
+issues:
+  exclude-use-default: false
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unused
+    - varcheck
+    - asciicheck
+    - bodyclose
+    - dogsled
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forcetypeassert
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - goimports
+    - gosec
+    - ifshort
+    - misspell
+    - nakedret
+    - noctx
+    - prealloc
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tagliatelle
+    - thelper
+    - unconvert
+    - unparam
+    - wastedassign
+    - whitespace
+linters-settings:
+  tagliatelle:
+    case:
+      use-field-name: true
+      rules:
+        json: snake
