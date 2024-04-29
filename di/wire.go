@@ -31,12 +31,14 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		usecase.NewJSONInteractor,
 		usecase.NewHistoryInteractor,
 		usecase.NewSQLite3Interactor,
+		usecase.NewExcelInteractor,
 		usecase.NewSQL,
 		persistence.NewCSVRepository,
 		persistence.NewTSVRepository,
 		persistence.NewLTSVRepository,
 		persistence.NewJSONRepository,
 		persistence.NewHistoryRepository,
+		persistence.NewExcelRepository,
 		memory.NewSQLite3Repository,
 	)
 	return nil, nil, nil

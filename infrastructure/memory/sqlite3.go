@@ -96,7 +96,12 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 
 // List get records in the specified table
 func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
-	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s", infra.Quote(tableName)))
+	table, err := r.Query(ctx, fmt.Sprintf("SELECT * FROM %s", infra.Quote(tableName)))
+	if err != nil {
+		return nil, err
+	}
+	table.Name = tableName
+	return table, nil
 }
 
 // Header get table header name.

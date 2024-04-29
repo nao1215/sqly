@@ -1,2 +1,7 @@
 [Usage]
-  .import FILE_PATH(S)
+  .import FILE_PATH(S) [--sheet=SHEET_NAME]
+
+  - Supported file format: csv, tsv, ltsv, json, xlam, xlsm, xlsx, xltm, xltx
+  - If import multiple files, separate them with spaces
+  - Not support import multiple excel sheets at once
+  - If import an Excel file, specify the sheet name with --sheet

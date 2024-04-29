@@ -1,4 +1,4 @@
-sqly  (work in progress)
+sqly 
 
 enter "SQL query" or "sqly command that beginning with a dot".
 .help print usage, .exit exit sqly.

@@ -7,6 +7,7 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+// Quote returns quoted string.
 func Quote(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s) + len("``"))
@@ -22,6 +23,7 @@ func Quote(s string) string {
 	return buf.String()
 }
 
+// SingleQuote returns single quoted string.
 func SingleQuote(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s) + len("''"))
@@ -37,6 +39,8 @@ func SingleQuote(s string) string {
 	return buf.String()
 }
 
+// GenerateCreateTableStatement returns create table statement.
+// e.g. CREATE TABLE `table_name` (`column1` INTEGER, `column2` TEXT, ...);
 func GenerateCreateTableStatement(t *model.Table) string {
 	ddl := "CREATE TABLE " + Quote(t.Name) + "("
 	for i, v := range t.Header {
@@ -54,6 +58,7 @@ func GenerateCreateTableStatement(t *model.Table) string {
 	return ddl
 }
 
+// isNumeric returns true if all records are numeric.
 func isNumeric(t *model.Table, index int) bool {
 	if len(t.Records) == 0 {
 		return false
@@ -68,6 +73,8 @@ func isNumeric(t *model.Table, index int) bool {
 	return true
 }
 
+// GenerateInsertStatement returns insert statement.
+// e.g. INSERT INTO `table_name` VALUES ('value1', 'value2', ...);
 func GenerateInsertStatement(name string, record model.Record) string {
 	dml := "INSERT INTO " + Quote(name) + " VALUES ("
 	for i, v := range record {
