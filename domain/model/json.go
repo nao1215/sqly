@@ -35,6 +35,8 @@ func (j *JSON) ToTable() *Table {
 					r = append(r, v)
 				case float64:
 					r = append(r, strconv.FormatFloat(v, 'f', -1, 64))
+				case int:
+					r = append(r, strconv.Itoa(v))
 				// TODO: If value is array, convert to string.
 				default:
 					r = append(r, "")
