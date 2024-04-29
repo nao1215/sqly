@@ -80,7 +80,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		return nil, 0, errors.New("this input is not sql query or sqly helper command: " + color.CyanString(statement))
 	}
 
-	if si.sql.isSelect(argv[0]) || si.sql.isExpalin(argv[0]) {
+	if si.sql.isSelect(argv[0]) || si.sql.isExplain(argv[0]) {
 		table, err := si.Query(ctx, statement)
 		if err != nil {
 			return nil, 0, fmt.Errorf("execute query error: %v: %s", err, color.CyanString(statement))
