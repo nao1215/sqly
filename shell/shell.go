@@ -144,7 +144,7 @@ func (s *Shell) init() error {
 func (s *Shell) printWelcomeMessage() {
 	fmt.Fprintf(config.Stdout, "%s %s\n", color.GreenString("sqly"), config.GetVersion())
 	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "enter \"SQL query\" or \"sqly command that beginning with a dot\".")
+	fmt.Fprintln(config.Stdout, "enter \"SQL query\" or \"sqly command that begins with a dot\".")
 	fmt.Fprintf(config.Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
 	fmt.Fprintln(config.Stdout, "")
 }
