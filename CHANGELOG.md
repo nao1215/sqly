@@ -12,4 +12,4 @@
 * Bump github.com/nao1215/gorky from 0.2.0 to 0.2.1 [#31](https://github.com/nao1215/sqly/pull/31) ([dependabot[bot]](https://github.com/apps/dependabot))
 * Bump github.com/fatih/color from 1.14.1 to 1.15.0 [#30](https://github.com/nao1215/sqly/pull/30) ([dependabot[bot]](https://github.com/apps/dependabot))
 * Bump github.com/fatih/color from 1.13.0 to 1.14.1 [#29](https://github.com/nao1215/sqly/pull/29) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Change golden pacakge import path [#28](https://github.com/nao1215/sqly/pull/28) ([nao1215](https://github.com/nao1215))
+* Change golden package import path [#28](https://github.com/nao1215/sqly/pull/28) ([nao1215](https://github.com/nao1215))

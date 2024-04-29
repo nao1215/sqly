@@ -1,7 +1,7 @@
 //go:build wireinject
 // +build wireinject
 
-// Pacakge di Inject dependence by wire command.
+// Package di Inject dependence by wire command.
 package di
 
 import (
