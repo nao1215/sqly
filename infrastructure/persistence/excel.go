@@ -24,7 +24,7 @@ func (r *excelRepository) List(excelFilePath string, sheetName string) (excel *m
 	}
 	defer func() {
 		if e := f.Close(); err != nil {
-			e = errors.Join(err, e)
+			err = errors.Join(err, e)
 		}
 	}()
 
@@ -54,7 +54,7 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	f := excelize.NewFile()
 	defer func() {
 		if e := f.Close(); err != nil {
-			e = errors.Join(err, e)
+			err = errors.Join(err, e)
 		}
 	}()
 
@@ -69,9 +69,14 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	}
 
 	f.SetActiveSheet(0)
-	f.SetSheetRow(table.Name, "A1", &table.Header)
+	if err := f.SetSheetRow(table.Name, "A1", &table.Header); err != nil {
+		return err
+	}
+
 	for i, record := range table.Records {
-		f.SetSheetRow(table.Name, fmt.Sprintf("A%d", i+2), &record)
+		if err := f.SetSheetRow(table.Name, fmt.Sprintf("A%d", i+2), &record); err != nil {
+			return err
+		}
 	}
 	return f.SaveAs(excelFilePath)
 }
