@@ -83,6 +83,15 @@ func Test_run(t *testing.T) {
 		g.Assert(t, "select_ltsv", got)
 	})
 
+	t.Run("import excel, output csv", func(t *testing.T) {
+		args := []string{"sqly", "--sql", "SELECT * FROM test_sheet", "-S", "test_sheet", "--csv", "testdata/sample.xlsx"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "excel_to_csv", got)
+	})
+
 	t.Run("Treat numbers as numeric types; support numerical sorting", func(t *testing.T) {
 		// SELECT * FROM numeric ORDER BY id
 		// [Previously Result]

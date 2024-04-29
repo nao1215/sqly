@@ -44,15 +44,19 @@ type Arg struct {
 	Query string
 	// Usage message
 	Usage string
+	// SheetName is excel sheet name that is imported into the DB.
+	SheetName string
 	// Version print version message
 	Version func()
 }
 
+// outputFlag is a structure for managing output format options.
 type outputFlag struct {
 	csv      bool
 	tsv      bool
 	ltsv     bool
 	json     bool
+	excel    bool
 	markdown bool
 }
 
@@ -70,10 +74,12 @@ func NewArg(args []string) (*Arg, error) {
 
 	flag := pflag.FlagSet{}
 	flag.BoolVarP(&oFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
-	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
-	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
+	flag.BoolVarP(&oFlag.excel, "excel", "e", false, "change output format to excel (default: table)")
 	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
+	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
 	flag.BoolVarP(&oFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
+	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
+	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
@@ -86,6 +92,7 @@ func NewArg(args []string) (*Arg, error) {
 	arg.Version = version
 	arg.Output = newOutput(*output, oFlag)
 	arg.FilePaths = flag.Args()
+	arg.SheetName = *sheetName
 	arg.Query = *query
 
 	return arg, nil

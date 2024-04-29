@@ -33,6 +33,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 	return nil
 }
 
+// dumpToFile is dump table data to file.
 func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	var err error
 	switch s.argument.Output.Mode {
@@ -44,12 +45,15 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 		err = s.ltsvInteractor.Dump(filePath, table)
 	case model.PrintModeJSON:
 		err = s.jsonInteractor.Dump(filePath, table)
+	case model.PrintModeExcel:
+		err = s.excelInteractor.Dump(filePath, table)
 	default:
 		err = s.csvInteractor.Dump(filePath, table)
 	}
 	return err
 }
 
+// dumpMode is dump mode.
 func dumpMode(m model.PrintMode) string {
 	switch m {
 	case model.PrintModeTable:

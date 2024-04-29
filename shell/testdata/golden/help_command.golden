@@ -2,6 +2,6 @@
                .exit: exit sqly
              .header: print table header
                .help: print help message
-             .import: import csv file(s)
+             .import: import file(s)
                .mode: change output mode
              .tables: print tables

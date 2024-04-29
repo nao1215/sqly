@@ -19,6 +19,7 @@ func (c CommandList) modeCommand(s *Shell, argv []string) error {
 		fmt.Fprintln(config.Stdout, "  tsv")
 		fmt.Fprintln(config.Stdout, "  ltsv")
 		fmt.Fprintln(config.Stdout, "  json")
+		fmt.Fprintln(config.Stdout, "  excel ※ active only when executing .dump, otherwise same as csv mode")
 		return nil
 	}
 
@@ -46,6 +47,9 @@ func (c CommandList) modeCommand(s *Shell, argv []string) error {
 	case model.PrintModeJSON.String():
 		fmt.Fprintf(config.Stdout, "Change output mode from %s to json\n", s.argument.Output.Mode.String())
 		s.argument.Output.Mode = model.PrintModeJSON
+	case model.PrintModeExcel.String():
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to excel (active only when executing .dump, otherwise same as csv mode)\n", s.argument.Output.Mode.String())
+		s.argument.Output.Mode = model.PrintModeExcel
 	default:
 		fmt.Fprintln(config.Stdout, "invalid output mode: "+argv[0])
 	}
