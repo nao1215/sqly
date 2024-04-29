@@ -2,6 +2,7 @@ package model
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -29,9 +30,15 @@ func (j *JSON) ToTable() *Table {
 		r := Record{}
 		for _, h := range header {
 			if val, ok := json[h]; ok {
-				if v, ok := val.(string); ok {
+				switch v := val.(type) {
+				case string:
 					r = append(r, v)
-				} else {
+				case float64:
+					r = append(r, strconv.FormatFloat(v, 'f', -1, 64))
+				case int:
+					r = append(r, strconv.Itoa(v))
+				// TODO: If value is array, convert to string.
+				default:
 					r = append(r, "")
 				}
 			} else {
