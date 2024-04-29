@@ -18,7 +18,7 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 		fmt.Fprintln(config.Stdout, "")
 		fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, xlam, xlsm, xlsx, xltm, xltx")
 		fmt.Fprintln(config.Stdout, "  - If import multiple files, separate them with spaces")
-		fmt.Fprintln(config.Stdout, "  - Not support import multiple excel sheets at once")
+		fmt.Fprintln(config.Stdout, "  - Does not support importing multiple excel sheets at once")
 		fmt.Fprintln(config.Stdout, "  - If import an Excel file, specify the sheet name with --sheet")
 
 		return nil

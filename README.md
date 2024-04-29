@@ -90,7 +90,7 @@ The command beginning with a dot is the sqly helper command; I plan to add more 
 $ sqly 
 sqly v0.5.0 (work in progress)
 
-enter "SQL query" or "sqly command that beginning with a dot".
+enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
 
 sqly> .help
