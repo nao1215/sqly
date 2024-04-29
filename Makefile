@@ -27,6 +27,22 @@ test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverprofile=cover.out
 	$(GO_TOOL) cover -html=cover.out -o cover.html
 
+coverage-tree: test ## Generate coverage tree
+	go-cover-treemap -statements -coverprofile cover.out > doc/img/cover-tree.svg
+
+changelog: ## Generate changelog
+	ghch --format markdown > CHANGELOG.md
+
+generate: ## Generate code from templates
+	$(GO) generate ./...
+
+tools: ## Install dependency tools 
+	$(GO_INSTALL) github.com/Songmu/ghch/cmd/ghch@latest
+	$(GO_INSTALL) github.com/nao1215/hottest@latest
+	$(GO_INSTALL) github.com/google/wire/cmd/wire@latest
+	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
+	$(GO_INSTALL) github.com/nikolaydubina/go-cover-treemap@latest
+
 vet: ## Start go vet
 	$(GO_VET) $(GO_PACKAGES)
 
