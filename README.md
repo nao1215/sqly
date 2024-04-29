@@ -1,3 +1,4 @@
+![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
 [![LinuxUnitTest](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml)
 [![MacUnitTest](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml)
