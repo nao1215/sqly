@@ -60,39 +60,35 @@ func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64,
 	return si.Repository.Exec(ctx, statement)
 }
 
-// ExecSQL execute "SELECT/EXPLAIN"query or "INSERT/UPDATE/DELETE" statement
+// ExecSQL executes "SELECT/EXPLAIN" query or "INSERT/UPDATE/DELETE" statement
 func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	argv := strings.Split(trimWordGaps(statement), " ")
 
 	// NOTE: SQLY uses SQLite3. There is some SQL that can be changed from non-support
 	// to support in the future. Currently, it is not supported because it is not needed
 	// for developer ( == me:) ) use cases.
-	if si.sql.isDDL(argv[0]) {
+	switch {
+	case si.sql.isDDL(argv[0]):
 		return nil, 0, errors.New("not support data definition language: " + strings.Join(si.sql.ddl, ", "))
-	}
-	if si.sql.isTCL(argv[0]) {
+	case si.sql.isTCL(argv[0]):
 		return nil, 0, errors.New("not support transaction control language: " + strings.Join(si.sql.tcl, ", "))
-	}
-	if si.sql.isDCL(argv[0]) {
+	case si.sql.isDCL(argv[0]):
 		return nil, 0, errors.New("not support data control language: " + strings.Join(si.sql.dcl, ", "))
-	}
-	if !si.sql.isDML(argv[0]) {
+	case !si.sql.isDML(argv[0]):
 		return nil, 0, errors.New("this input is not sql query or sqly helper command: " + color.CyanString(statement))
-	}
-
-	if si.sql.isSelect(argv[0]) || si.sql.isExpalin(argv[0]) {
+	case si.sql.isSelect(argv[0]) || si.sql.isExplain(argv[0]):
 		table, err := si.Query(ctx, statement)
 		if err != nil {
 			return nil, 0, fmt.Errorf("execute query error: %v: %s", err, color.CyanString(statement))
 		}
 		return table, 0, nil
-	} else if si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]) {
+	case si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]):
 		affectedRows, err := si.Repository.Exec(ctx, statement)
 		if err != nil {
 			return nil, 0, fmt.Errorf("execute statement error: %v: %s", err, color.CyanString(statement))
 		}
 		return nil, affectedRows, nil
-	} else {
+	default:
 		return nil, 0, fmt.Errorf("%s\n%s: %s\n%s",
 			color.HiRedString("*** sqly bug ***"),
 			"please report this log", color.CyanString(statement),

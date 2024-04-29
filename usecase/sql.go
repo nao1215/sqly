@@ -47,31 +47,37 @@ func (sql *SQL) isTCL(s string) bool {
 	return contains(sql.tcl, strings.ToUpper(s))
 }
 
-// isDCL return wherther string is dcl or not.
+// isDCL returns true if the given string represents a Data Control Language (DCL) statement.
 func (sql *SQL) isDCL(s string) bool {
 	return contains(sql.dcl, strings.ToUpper(s))
 }
 
+// isSelect returns true if the given string represents a SELECT statement.
 func (sql *SQL) isSelect(s string) bool {
 	return strings.ToUpper(s) == "SELECT"
 }
 
+// isInsert returns true if the given string represents an INSERT statement.
 func (sql *SQL) isInsert(s string) bool {
 	return strings.ToUpper(s) == "INSERT"
 }
 
+// isUpdate returns true if the given string represents an UPDATE statement.
 func (sql *SQL) isUpdate(s string) bool {
 	return strings.ToUpper(s) == "UPDATE"
 }
 
+// isDelete returns true if the given string represents a DELETE statement.
 func (sql *SQL) isDelete(s string) bool {
 	return strings.ToUpper(s) == "DELETE"
 }
 
-func (sql *SQL) isExpalin(s string) bool {
+// isExplain returns true if the given string represents an EXPLAIN statement.
+func (sql *SQL) isExplain(s string) bool {
 	return strings.ToUpper(s) == "EXPLAIN"
 }
 
+// contains checks if a string exists in a slice of strings.
 func contains(list []string, v string) bool {
 	for _, s := range list {
 		if v == s {
@@ -81,6 +87,7 @@ func contains(list []string, v string) bool {
 	return false
 }
 
+// trimWordGaps trims extra spaces between words in a string.
 func trimWordGaps(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
