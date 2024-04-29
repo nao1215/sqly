@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
@@ -39,7 +40,11 @@ func SingleQuote(s string) string {
 func GenerateCreateTableStatement(t *model.Table) string {
 	ddl := "CREATE TABLE " + Quote(t.Name) + "("
 	for i, v := range t.Header {
-		ddl += Quote(v)
+		if isNumeric(t, i) {
+			ddl += Quote(v) + " INTEGER"
+		} else {
+			ddl += Quote(v) + " TEXT"
+		}
 		if i != len(t.Header)-1 {
 			ddl += ", "
 		} else {
@@ -47,6 +52,20 @@ func GenerateCreateTableStatement(t *model.Table) string {
 		}
 	}
 	return ddl
+}
+
+func isNumeric(t *model.Table, index int) bool {
+	if len(t.Records) == 0 {
+		return false
+	}
+
+	for _, record := range t.Records {
+		_, err := strconv.ParseFloat(record[index], 64)
+		if err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func GenerateInsertStatement(name string, record model.Record) string {
