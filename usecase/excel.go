@@ -1,3 +1,4 @@
+// Package usecase provides use cases related to Multiple File Format.
 package usecase
 
 import (
