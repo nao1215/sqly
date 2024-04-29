@@ -43,12 +43,22 @@ type Shell struct {
 	jsonInteractor    *usecase.JSONInteractor
 	sqlite3Interactor *usecase.SQLite3Interactor
 	historyInteractor *usecase.HistoryInteractor
+	excelInteractor   *usecase.ExcelInteractor
 }
 
 // NewShell return *Shell.
-func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
-	csv *usecase.CSVInteractor, tsv *usecase.TSVInteractor, ltsv *usecase.LTSVInteractor, json *usecase.JSONInteractor,
-	sqlite3 *usecase.SQLite3Interactor, history *usecase.HistoryInteractor) *Shell {
+func NewShell(
+	arg *config.Arg,
+	cfg *config.Config,
+	cmds CommandList,
+	csv *usecase.CSVInteractor,
+	tsv *usecase.TSVInteractor,
+	ltsv *usecase.LTSVInteractor,
+	json *usecase.JSONInteractor,
+	sqlite3 *usecase.SQLite3Interactor,
+	history *usecase.HistoryInteractor,
+	excel *usecase.ExcelInteractor,
+) *Shell {
 	return &Shell{
 		Ctx:               context.Background(),
 		promptPrefix:      "sqly> ",
@@ -61,6 +71,7 @@ func NewShell(arg *config.Arg, cfg *config.Config, cmds CommandList,
 		jsonInteractor:    json,
 		sqlite3Interactor: sqlite3,
 		historyInteractor: history,
+		excelInteractor:   excel,
 	}
 }
 
@@ -85,6 +96,7 @@ func (s *Shell) Run() error {
 		return s.execSQL(s.argument.Query)
 	}
 
+	// Start shell
 	s.printWelcomeMessage()
 	return s.communicate()
 }
@@ -130,7 +142,7 @@ func (s *Shell) init() error {
 
 // printWelcomeMessage print version and help information.
 func (s *Shell) printWelcomeMessage() {
-	fmt.Fprintf(config.Stdout, "%s %s (work in progress)\n", color.GreenString("sqly"), config.GetVersion())
+	fmt.Fprintf(config.Stdout, "%s %s\n", color.GreenString("sqly"), config.GetVersion())
 	fmt.Fprintln(config.Stdout, "")
 	fmt.Fprintln(config.Stdout, "enter \"SQL query\" or \"sqly command that beginning with a dot\".")
 	fmt.Fprintf(config.Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))

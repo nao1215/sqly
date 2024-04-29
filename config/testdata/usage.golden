@@ -11,10 +11,12 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON with shell (test-version)
 
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
-  -t, --tsv             change output format to tsv (default: table)
-  -l, --ltsv            change output format to ltsv (default: table)
+  -e, --excel           change output format to excel (default: table)
   -j, --json            change output format to json (default: table)
+  -l, --ltsv            change output format to ltsv (default: table)
   -m, --markdown        change output format to markdown table (default: table)
+  -t, --tsv             change output format to tsv (default: table)
+  -S, --sheet string    excel sheet name you want to import
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option
   -h, --help            print help message
