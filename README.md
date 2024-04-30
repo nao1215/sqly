@@ -1,7 +1,8 @@
-![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
 [![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
+  
+![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
 [![LinuxUnitTest](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml)
 [![MacUnitTest](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml)
@@ -146,11 +147,27 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |Ctrl + U	|Cut the line before the cursor to the clipboard|
 |Ctrl + L	|Clear the screen|  
 
-## Features to be added
-- [ ] import .gz file
-- [ ] ignore csv header option
-- [ ] history search (Ctrl-r)
-- [ ] Convert CSV character encoding to UTF-8 if necessary
+## Benchmark
+CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
+Execute: 
+```sql
+SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC LIMIT 1000
+```
+
+|Records  | Columns | Time per Operation | Memory Allocated per Operation | Allocations per Operation |
+|---------|----|-------------------|--------------------------------|---------------------------|
+|100,000|   12|  1715818835 ns/op  |      441387928 B/op   |4967183 allocs/op | 
+|1,000,000|   9|   11414332112 ns/op |      2767580080 B/op | 39131122 allocs/op |
+
+
+## Altenative Tools
+|Name| Description|
+|:--|:--|
+|[harelba/q](https://github.com/harelba/q)|Run SQL directly on delimited files and multi-file sqlite databases|
+|[dinedal/textql](https://github.com/dinedal/textql)|Execute SQL against structured text like CSV or TSV|
+|[noborus/trdsql](https://github.com/noborus/trdsql)|CLI tool that can execute SQL queries on CSV, LTSV, JSON, YAML and TBLN. Can output to various formats.|
+|[mithrandie/csvq](https://github.com/mithrandie/csvq)|SQL-like query language for csv|
+
 
 ## Limitions (Not support)
 - DDL such as CREATE
