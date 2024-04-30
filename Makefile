@@ -27,6 +27,9 @@ test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverpkg=./... -coverprofile=cover.out
 	$(GO_TOOL) cover -html=cover.out -o cover.html
 
+bench: ## Start benchmark
+	env GOOS=$(GOOS) go test -bench=BenchmarkImport100000Records -benchmem
+
 coverage-tree: test ## Generate coverage tree
 	go-cover-treemap -statements -coverprofile cover.out > doc/img/cover-tree.svg
 
