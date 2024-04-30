@@ -1,4 +1,7 @@
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
 [![LinuxUnitTest](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/linux_test.yml)
 [![MacUnitTest](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/mac_test.yml)
@@ -8,37 +11,55 @@
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
 ![demo](./doc/img/demo.gif)  
 
-**sqly** command imports CSV/TSV/LTSV/JSON and Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX) file(s) into an in-memory DB and executes SQL against them. sqly uses [SQLite3](https://www.sqlite.org/index.html) as its DB. So, sql syntax is same as SQLite3.  
+**sqly** is a powerful command-line tool that can execute SQL against CSV, TSV, LTSV, JSON, and even Microsoft Excel™ files. The sqly import those files into [SQLite3](https://www.sqlite.org/index.html) in-memory database.  
 
-The sqly command has sqly-shell. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
+The sqly has **sqly-shell**. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
-## Features
-✅ execute SQL against CSV / TSV / LTSV / JSON and Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX).  
-✅ output SQL result to CSV / TSV / LTSV / JSON and Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX).  
-✅ print SQL result in ASCII Table / CSV / TSV / LTSV / JSON file format.   
-✅ interactive sqly shell with input completion, emacs-keybindings, input history.  
+> [!WARNING]
+> The support for JSON is limited. There is a possibility of discontinuing JSON support in the future.
 
 ## How to install
 ### Use "go install"
-If you does not have the golang development environment installed on your system, please install golang from the [golang official website](https://go.dev/doc/install).
-```
+```shell
 $ go install github.com/nao1215/sqly@latest
 ```
 ※ Main dependency is [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) and gcc.
 
+## Supported OS
+- Windows
+- macOS
+- Linux
 
 ## How to use
-sqly command automatically imports the CSV/TSV/LTSV/JSON file into the DB when you pass a CSV/TSV/LTSV/JSON file as an argument. DB table name is the same as the file name (e.g., if you import user.csv, sqly command create the user table)
+The sqly automatically imports the CSV/TSV/LTSV/JSON/Excel file into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
-### Syntax
-```
+The sqly automatically determines the file format from the file extension.
+
+### Syntax and Options
+```shell
+[Usage]
   sqly [OPTIONS] [FILE_PATH]
+
+[OPTIONS]
+  -c, --csv             change output format to csv (default: table)
+  -e, --excel           change output format to excel (default: table)
+  -j, --json            change output format to json (default: table)
+  -l, --ltsv            change output format to ltsv (default: table)
+  -m, --markdown        change output format to markdown table (default: table)
+  -t, --tsv             change output format to tsv (default: table)
+  -S, --sheet string    excel sheet name you want to import
+  -s, --sql string      sql query you want to execute
+  -o, --output string   destination path for SQL results specified in --sql option
+  -h, --help            print help message
+  -v, --version         print sqly version
 ```
+
 ※ The sqly option must be specified before the file to be imported.
 
-### --sql option: execute sql in terminal
---sql option takes an SQL statement as an optional argument. You pass file path(s) as arguments to the sqly command. sqly command import them. sqly command automatically determines the file format from the file extension.
-```
+### Execute sql in terminal: --sql option
+--sql option takes an SQL statement as an optional argument.
+
+```shell
 $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv 
 +-----------+-----------+
 | user_name | position  |
@@ -50,8 +71,14 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### Change output format
-sqly command output sql results in ASCII table format, CSV format (--csv option), TSV format (--tsv option), LTSV format (--ltsv option) and JSON format (--json option). This means that conversion between csv and json is supported.
-```
+The sqly output sql query results in following formats:
+- ASCII table format (default)
+- CSV format (--csv option)
+- TSV format (--tsv option)
+- LTSV format (--ltsv option)
+- JSON format (--json option)
+
+```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
@@ -81,58 +108,29 @@ Rachel,1,Booker,booker12
 Mary,2,Jenkins,jenkins46
 ```
 
-### run sqly shell
-If the --sql option is not specified, the sqly shell is started. When you execute sqly command, it is optional whether or not to specify file(s). The sqly shell functions similarly to a common SQL client (e.g., sqlite3 command or mysql command). sqly shell has helper commands, SQL execution history management and input complement.
+### Run sqly shell
+![sqly-shell](./doc/img/sqly-shell.png)  
 
-#### sqly helper command
-The command beginning with a dot is the sqly helper command; I plan to add more features in the future to make the sqly shell run more comfortably.
-```
-$ sqly 
-sqly v0.5.0 (work in progress)
-
-enter "SQL query" or "sqly command that begins with a dot".
-.help print usage, .exit exit sqly.
-
-sqly> .help
-      .dump: dump db table to file in a format according to output mode (default: csv)
-      .exit: exit sqly
-    .header: print table header
-      .help: print help message
-    .import: import csv file(s)
-      .mode: change output mode
-    .tables: print tables
-```
-
-![demo](./doc/img/shell-demo.png)  
+The sqly-shell starts when you run the sqly command without the --sql option. When you execute sqly command with file path, the sqly-shell starts after importing the file into the SQLite3 in-memory database.  
+  
+The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` command or `mysql` command). The sqly-shell has helper commands that begin with a dot. The sqly-shell also supports command history, and input completion.  
 
 ### Output sql result to file
 #### For linux user 
-sqly command can save SQL execution results to a file using shell redirection. The --csv option outputs SQL execution results in CSV format instead of table format.
-```
+The sqly can save SQL execution results to the file using shell redirection. The --csv option outputs SQL execution results in CSV format instead of table format.
+```shell
 $ sqly --sql "SELECT * FROM user" --csv testdata/user.csv > test.csv
 ```
+
 #### For windows user
- ```
+
+The sqly can save SQL execution results to the file using the --output option. The --output option specifies the destination path for SQL results specified in the --sql option.
+
+```shell
 $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv 
 ```
 
-### All options
-```
-[OPTIONS]
-  -c, --csv             change output format to csv (default: table)
-  -e, --excel           change output format to excel (default: table)
-  -j, --json            change output format to json (default: table)
-  -l, --ltsv            change output format to ltsv (default: table)
-  -m, --markdown        change output format to markdown table (default: table)
-  -t, --tsv             change output format to tsv (default: table)
-  -S, --sheet string    excel sheet name you want to import
-  -s, --sql string      sql query you want to execute
-  -o, --output string   destination path for SQL results specified in --sql option
-  -h, --help            print help message
-  -v, --version         print sqly version
-```
-
-### Key Binding
+### Key Binding for sqly-shell
 |Key Binding	|Description|
 |:--|:--|
 |Ctrl + A	|Go to the beginning of the line (Home)|
@@ -149,16 +147,10 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |Ctrl + L	|Clear the screen|  
 
 ## Features to be added
-- [ ] import swagger
 - [ ] import .gz file
 - [ ] ignore csv header option
 - [ ] history search (Ctrl-r)
 - [ ] Convert CSV character encoding to UTF-8 if necessary
-- [ ] Support MySQL driver
-- [ ] Support PostgreSQL driver
-
-## Unit Test Coverage Treemap
-![treemap](./doc/img/cover-tree.svg)
 
 ## Limitions (Not support)
 - DDL such as CREATE
@@ -170,11 +162,46 @@ First off, thanks for taking the time to contribute! ❤️ Contributions are no
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nao1215/sqly&type=Date)](https://star-history.com/#nao1215/sqly&Date)
 
-
-## Contact
+### Contact
 If you would like to send comments such as "find a bug" or "request for additional features" to the developer, please use one of the following contacts.
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
 
+### For Developers
+When adding new features or fixing bugs, please write unit tests.
+
+![treemap](./doc/img/cover-tree.svg)
+
 ## LICENSE
 The sqly project is licensed under the terms of [MIT LICENSE](./LICENSE).
+
+## Contributors ✨
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://debimate.jp/"><img src="https://avatars.githubusercontent.com/u/22737008?v=4?s=75" width="75px;" alt="CHIKAMATSU Naohiro"/><br /><sub><b>CHIKAMATSU Naohiro</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Code">💻</a> <a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Documentation">📖</a></td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td align="center" size="13px" colspan="7">
+        <img src="https://raw.githubusercontent.com/all-contributors/all-contributors-cli/1b8533af435da9854653492b1327a23a4dbd0a10/assets/logo-small.svg">
+          <a href="https://all-contributors.js.org/docs/en/bot/usage">Add your contributions</a>
+        </img>
+      </td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

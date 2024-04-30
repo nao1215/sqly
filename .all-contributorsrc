@@ -1,0 +1,26 @@
+{
+  "projectName": "sqly",
+  "projectOwner": "nao1215",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 75,
+  "commit": true,
+  "commitConvention": "atom",
+  "contributors": [
+    {
+      "login": "nao1215",
+      "name": "CHIKAMATSU Naohiro",
+      "avatar_url": "https://avatars.githubusercontent.com/u/22737008?v=4",
+      "profile": "https://debimate.jp/",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "linkToUsage": true
+}
