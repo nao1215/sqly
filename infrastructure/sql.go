@@ -1,8 +1,11 @@
 package infrastructure
 
 import (
+	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -42,13 +45,33 @@ func SingleQuote(s string) string {
 // GenerateCreateTableStatement returns create table statement.
 // e.g. CREATE TABLE `table_name` (`column1` INTEGER, `column2` TEXT, ...);
 func GenerateCreateTableStatement(t *model.Table) string {
+	indexTypeMap := make(map[int]string, len(t.Header))
+	semaphore := make(chan int, runtime.NumCPU())
+	wg := &sync.WaitGroup{}
+
+	var mu sync.RWMutex
+	for i := range t.Header {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			semaphore <- 1
+			defer func() { <-semaphore }()
+			if isNumeric(t, i) {
+				mu.Lock()
+				indexTypeMap[i] = "INTEGER"
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				indexTypeMap[i] = "TEXT"
+				mu.Unlock()
+			}
+		}(i)
+	}
+	wg.Wait()
+
 	ddl := "CREATE TABLE " + Quote(t.Name) + "("
 	for i, v := range t.Header {
-		if isNumeric(t, i) {
-			ddl += Quote(v) + " INTEGER"
-		} else {
-			ddl += Quote(v) + " TEXT"
-		}
+		ddl += fmt.Sprintf("%s %s", Quote(v), indexTypeMap[i])
 		if i != len(t.Header)-1 {
 			ddl += ", "
 		} else {
