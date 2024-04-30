@@ -1,2 +1,2 @@
-## [](https://github.com/nao1215/sqly/compare/v0.6.5...) (2024-04-29)
+## [](https://github.com/nao1215/sqly/compare/v0.7.0...) (2024-04-30)
 
