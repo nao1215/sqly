@@ -24,7 +24,7 @@ clean: ## Clean project
 	-rm -rf $(APP) cover.out cover.html
 
 test: ## Start test
-	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverprofile=cover.out
+	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverpkg=./... -coverprofile=cover.out
 	$(GO_TOOL) cover -html=cover.out -o cover.html
 
 coverage-tree: test ## Generate coverage tree
