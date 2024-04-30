@@ -50,6 +50,7 @@ func Test_excelRepository_Dump(t *testing.T) {
 		}
 
 		tempFilePath := filepath.Join(os.TempDir(), "dump.xlsx")
+		defer os.Remove(tempFilePath) // Clean up the temporary file after the test
 		if err := r.Dump(tempFilePath, excel); err != nil {
 			t.Fatal(err)
 		}
@@ -73,4 +74,5 @@ func Test_excelRepository_Dump(t *testing.T) {
 			t.Fatalf("differs: (-got +want)\n%s", diff)
 		}
 	})
+}
 }
