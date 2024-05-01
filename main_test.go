@@ -162,7 +162,7 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 	config.Stdout = w
 
 	f(list)
-	w.Close() //nolint:errcheck
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -185,7 +185,7 @@ func getStdout(t *testing.T, f func()) []byte {
 	config.Stdout = w
 
 	f()
-	w.Close() //nolint:errcheck
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

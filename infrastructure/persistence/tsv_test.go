@@ -16,7 +16,7 @@ func Test_tsvRepository_List(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close() //nolint:errcheck
+		defer f.Close() //nolint
 
 		tsv, err := r.List(f)
 		if err != nil {

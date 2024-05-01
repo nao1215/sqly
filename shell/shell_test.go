@@ -811,7 +811,7 @@ func getStdoutForRunFunc(t *testing.T, f func() error) []byte {
 	if err := f(); err != nil {
 		t.Fatal(err)
 	}
-	w.Close() //nolint:errcheck
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -834,7 +834,7 @@ func getStdout(t *testing.T, f func()) []byte {
 	config.Stdout = w
 
 	f()
-	w.Close() //nolint:errcheck
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -857,7 +857,7 @@ func getExecStdOutput(t *testing.T, f func(string) error, arg string) ([]byte, e
 	config.Stdout = w
 
 	execErr := f(arg)
-	w.Close() //nolint:errcheck
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

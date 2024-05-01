@@ -28,7 +28,7 @@ func (i *JSONInteractor) Dump(jsonFilePath string, table *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close() //nolint:errcheck
+	defer f.Close() //nolint
 
 	return i.Repository.Dump(f, table)
 }
