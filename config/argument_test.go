@@ -174,7 +174,7 @@ func getStdout(t *testing.T, f func()) string {
 	Stdout = w
 
 	f()
-	w.Close()
+	w.Close() //nolint:errcheck
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

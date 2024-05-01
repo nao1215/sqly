@@ -23,7 +23,7 @@ func (li *LTSVInteractor) List(ltsvFilePath string) (*model.LTSV, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	TSV, err := li.Repository.List(f)
 	if err != nil {
@@ -38,7 +38,7 @@ func (li *LTSVInteractor) Dump(ltsvFilePath string, table *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	return li.Repository.Dump(f, table)
 }

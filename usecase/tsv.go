@@ -25,7 +25,7 @@ func (ti *TSVInteractor) List(TSVFilePath string) (*model.TSV, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	TSV, err := ti.Repository.List(f)
 	if err != nil {
@@ -40,7 +40,7 @@ func (ti *TSVInteractor) Dump(tsvFilePath string, table *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	return ti.Repository.Dump(f, table)
 }
