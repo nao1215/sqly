@@ -25,6 +25,11 @@ The sqly has **sqly-shell**. You can interactively execute SQL with sql completi
 $ go install github.com/nao1215/sqly@latest
 ```
 
+### Use homebrew
+```shell
+brew install nao1215/tap/sqly
+```
+
 ## Supported OS
 - Windows
 - macOS
