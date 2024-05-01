@@ -16,7 +16,7 @@ func Test_csvRepository_List(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer f.Close() //nolint:errcheck
 
 		csv, err := cr.List(f)
 		if err != nil {
