@@ -1,6 +1,6 @@
 module github.com/nao1215/sqly
 
-go 1.20
+go 1.21
 
 require (
 	github.com/c-bata/go-prompt v0.2.6
