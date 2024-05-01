@@ -10,11 +10,11 @@ builds:
     ldflags:
       - -s -w -X 'github.com/nao1215/sqly/config.Version=v{{ .Version }}'
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - linux
-      #- windows
-      #- darwin
+      - windows
+      - darwin
     goarch:
       - amd64
 archives:

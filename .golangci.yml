@@ -1,5 +1,5 @@
 run:
-  go: "1.20"
+  go: "1.21"
 
 issues:
   exclude-use-default: false
@@ -7,16 +7,13 @@ issues:
 linters:
   disable-all: true
   enable:
-    - deadcode
     - errcheck
     - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
     - asciicheck
     - bodyclose
     - dogsled
@@ -30,7 +27,6 @@ linters:
     - gocritic
     - goimports
     - gosec
-    - ifshort
     - misspell
     - nakedret
     - noctx

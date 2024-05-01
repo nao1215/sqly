@@ -77,7 +77,7 @@ func Test_ltsvRepository_List(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer f.Close() //nolint
 
 		ltsv, err := r.List(f)
 		if err != nil {
