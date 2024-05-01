@@ -185,7 +185,7 @@ If you would like to send comments such as "find a bug" or "request for addition
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
 
 ### For Developers
-When adding new features or fixing bugs, please write unit tests.
+When adding new features or fixing bugs, please write unit tests. The sqly is unit tested for all packages as the unit test tree map below shows.
 
 ![treemap](./doc/img/cover-tree.svg)
 
