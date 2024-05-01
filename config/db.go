@@ -1,6 +1,13 @@
 package config
 
-import "database/sql"
+import (
+	"database/sql"
+	"database/sql/driver"
+	"fmt"
+	"sync"
+
+	"modernc.org/sqlite"
+)
 
 // MemoryDB is *sql.DB for excuting sql.
 type MemoryDB *sql.DB
@@ -26,4 +33,35 @@ func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
 		return nil, nil, err
 	}
 	return HistoryDB(db), func() { db.Close() }, nil
+}
+
+// InitSQLite3 registers the sqlite3 driver.
+func InitSQLite3() {
+	var once sync.Once
+	once.Do(func() {
+		sql.Register("sqlite3", sqliteDriver{Driver: &sqlite.Driver{}})
+	})
+}
+
+// sqliteDriver is a driver that enables foreign keys.
+type sqliteDriver struct {
+	*sqlite.Driver
+}
+
+// Open opens a database specified by its database driver name and a driver-specific data source name.
+func (d sqliteDriver) Open(name string) (driver.Conn, error) {
+	conn, err := d.Driver.Open(name)
+	if err != nil {
+		return conn, err
+	}
+	c := conn.(interface {
+		Exec(stmt string, args []driver.Value) (driver.Result, error)
+	})
+	if _, err := c.Exec("PRAGMA foreign_keys = on;", nil); err != nil {
+		if err := conn.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close connection: %w", err)
+		}
+		return nil, fmt.Errorf("failed to enable enable foreign keys: %w", err)
+	}
+	return conn, nil
 }
