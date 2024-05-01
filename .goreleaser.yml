@@ -17,6 +17,7 @@ builds:
       - darwin
     goarch:
       - amd64
+      - arm64
 archives:
   - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
@@ -34,10 +35,18 @@ changelog:
       - "^test:"
 nfpms:
   - maintainer: Naohiro CHIKAMATSU <n.chika156@gmail.com>
-    description: sqly - execute SQL against CSV / JSON with shell.
+    description: sqly - eaisly execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with shell.
     homepage: https://github.com/nao1215/sqly
     license: MIT License
     formats:
       - deb
       - rpm
       - apk
+brews:
+  - name: sqly
+    description: sqly - eaisly execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with shell.
+    license: MIT
+    repository:
+      owner: nao1215
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
