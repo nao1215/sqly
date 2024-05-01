@@ -22,7 +22,7 @@ The sqly has **sqly-shell**. You can interactively execute SQL with sql completi
 ## How to install
 ### Use "go install"
 ```shell
-$ go install github.com/nao1215/sqly@latest
+go install github.com/nao1215/sqly@latest
 ```
 
 ### Use homebrew
