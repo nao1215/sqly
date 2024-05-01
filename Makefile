@@ -18,7 +18,7 @@ GO_PACKAGES = $(shell $(GO_LIST) $(GO_PKGROOT))
 GO_LDFLAGS  = -ldflags '-X github.com/nao1215/sqly/config.Version=${VERSION}'
 
 build:  ## Build binary
-	env GO111MODULE=on CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO_BUILD) $(GO_LDFLAGS) -o $(APP) main.go
+	env GO111MODULE=on CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO_BUILD) $(GO_LDFLAGS) -o $(APP) main.go
 
 clean: ## Clean project
 	-rm -rf $(APP) cover.out cover.html
