@@ -24,7 +24,6 @@ The sqly has **sqly-shell**. You can interactively execute SQL with sql completi
 ```shell
 $ go install github.com/nao1215/sqly@latest
 ```
-※ Main dependency is [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) and gcc.
 
 ## Supported OS
 - Windows
