@@ -22,7 +22,7 @@ func NewInMemDB() (MemoryDB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return MemoryDB(db), func() { db.Close() }, nil //nolint:errcheck
+	return MemoryDB(db), func() { db.Close() }, nil //nolint
 }
 
 // NewHistoryDB create *sql.DB for history.
@@ -32,7 +32,7 @@ func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return HistoryDB(db), func() { db.Close() }, nil //nolint:errcheck
+	return HistoryDB(db), func() { db.Close() }, nil //nolint
 }
 
 // InitSQLite3 registers the sqlite3 driver.
@@ -54,14 +54,19 @@ func (d sqliteDriver) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return conn, err
 	}
-	c := conn.(interface {
+	c, ok := conn.(interface {
 		Exec(stmt string, args []driver.Value) (driver.Result, error)
 	})
+	if !ok {
+		return nil, fmt.Errorf("connection does not support Exec method")
+	}
+
 	if _, err := c.Exec("PRAGMA foreign_keys = on;", nil); err != nil {
 		if err := conn.Close(); err != nil {
 			return nil, fmt.Errorf("failed to close connection: %w", err)
 		}
 		return nil, fmt.Errorf("failed to enable enable foreign keys: %w", err)
 	}
+
 	return conn, nil
 }

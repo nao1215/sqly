@@ -121,7 +121,7 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint:errcheck
+	defer rows.Close() //nolint
 
 	header, err := rows.Columns()
 	if err != nil {
