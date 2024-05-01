@@ -25,7 +25,7 @@ func (ci *CSVInteractor) List(csvFilePath string) (*model.CSV, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint
 
 	csv, err := ci.Repository.List(f)
 	if err != nil {
@@ -41,7 +41,7 @@ func (ci *CSVInteractor) Dump(csvFilePath string, table *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint
 
 	return ci.Repository.Dump(f, table)
 }

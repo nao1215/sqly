@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/di"
 )
 
@@ -15,6 +15,7 @@ var osExit = os.Exit
 
 // main is entry point for sqly command.
 func main() {
+	config.InitSQLite3()
 	osExit(run(os.Args))
 }
 

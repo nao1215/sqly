@@ -11,23 +11,6 @@ import (
 	"github.com/nao1215/sqly/config"
 )
 
-func Test_main(t *testing.T) {
-	t.Run("show version message", func(t *testing.T) {
-		osExit = func(code int) {}
-		os.Args = []string{"sqly", "-v"}
-		defer func() {
-			osExit = os.Exit
-			os.Args = []string{}
-		}()
-
-		got := getStdout(t, main)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "version", got)
-	})
-}
-
 func Test_run(t *testing.T) {
 	t.Run("show version message", func(t *testing.T) {
 		args := []string{"sqly", "--version"}
@@ -179,7 +162,7 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 	config.Stdout = w
 
 	f(list)
-	w.Close()
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -202,7 +185,7 @@ func getStdout(t *testing.T, f func()) []byte {
 	config.Stdout = w
 
 	f()
-	w.Close()
+	w.Close() //nolint
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
