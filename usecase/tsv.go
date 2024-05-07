@@ -20,8 +20,8 @@ func NewTSVInteractor(r repository.TSVRepository) *TSVInteractor {
 // List get TSV data.
 // The sqly command does not open many TSV files. Therefore, the file is
 // opened and closed in the usecase layer without worrying about processing speed.
-func (ti *TSVInteractor) List(TSVFilePath string) (*model.TSV, error) {
-	f, err := os.Open(TSVFilePath)
+func (ti *TSVInteractor) List(tsvFilePath string) (*model.TSV, error) {
+	f, err := os.Open(tsvFilePath)
 	if err != nil {
 		return nil, err
 	}

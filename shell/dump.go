@@ -36,7 +36,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 // dumpToFile is dump table data to file.
 func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	var err error
-	switch s.argument.Output.Mode {
+	switch s.argument.Output.Mode { //nolint
 	case model.PrintModeCSV:
 		err = s.csvInteractor.Dump(filePath, table)
 	case model.PrintModeTSV:
@@ -55,8 +55,7 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 
 // dumpMode is dump mode.
 func dumpMode(m model.PrintMode) string {
-	switch m {
-	case model.PrintModeTable:
+	if m == model.PrintModeTable {
 		return "csv"
 	}
 	return m.String()

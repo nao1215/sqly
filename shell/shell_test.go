@@ -18,7 +18,7 @@ import (
 
 func TestShell_Run(t *testing.T) {
 	t.Run("print version", func(t *testing.T) {
-		config.Version = "(devel)"
+		config.Version = "(devel)" //nolint
 		defer func() {
 			config.Version = ""
 		}()
@@ -36,7 +36,7 @@ func TestShell_Run(t *testing.T) {
 	})
 
 	t.Run("print help", func(t *testing.T) {
-		config.Version = "(devel)"
+		config.Version = "(devel)" //nolint
 		defer func() {
 			config.Version = ""
 		}()
@@ -54,7 +54,7 @@ func TestShell_Run(t *testing.T) {
 	})
 
 	t.Run("SELECT * FROM actor ORDER BY actor ASC LIMIT 5", func(t *testing.T) {
-		config.Version = "(devel)"
+		config.Version = "(devel)" //nolint
 		defer func() {
 			config.Version = ""
 		}()
@@ -72,7 +72,7 @@ func TestShell_Run(t *testing.T) {
 	})
 
 	t.Run("execute sql and output result to file", func(t *testing.T) {
-		config.Version = "(devel)"
+		config.Version = "(devel)" //nolint
 		defer func() {
 			config.Version = ""
 		}()

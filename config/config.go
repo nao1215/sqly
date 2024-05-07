@@ -41,5 +41,5 @@ func (c *Config) Dir() string {
 
 // CreateDir make configuration directory.
 func (c *Config) CreateDir() error {
-	return os.MkdirAll(c.Dir(), 0744)
+	return os.MkdirAll(c.Dir(), 0750)
 }

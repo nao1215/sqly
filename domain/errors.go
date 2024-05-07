@@ -1,3 +1,4 @@
+// Package domain manage sqly domain logic.
 package domain
 
 import "errors"
