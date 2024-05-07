@@ -170,26 +170,3 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 	}
 	return buffer.Bytes()
 }
-
-func getStdout(t *testing.T, f func()) []byte {
-	t.Helper()
-	backupColorStdout := config.Stdout
-	defer func() {
-		config.Stdout = backupColorStdout
-	}()
-
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
-
-	f()
-	w.Close() //nolint
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
-	return buffer.Bytes()
-}

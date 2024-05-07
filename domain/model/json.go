@@ -16,7 +16,7 @@ type JSON struct {
 
 // ToTable convert JSON to Table.
 func (j *JSON) ToTable() *Table {
-	var keys []string
+	var keys []string //nolint
 	for _, json := range j.JSON {
 		for k := range json {
 			keys = append(keys, k)
@@ -25,7 +25,7 @@ func (j *JSON) ToTable() *Table {
 	header := sliceUnique(keys)
 	sort.Strings(header)
 
-	var records []Record
+	records := make([]Record, 0, len(j.JSON))
 	for _, json := range j.JSON {
 		r := Record{}
 		for _, h := range header {

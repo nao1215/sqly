@@ -18,8 +18,6 @@ var (
 	Stdout = colorable.NewColorableStdout()
 	// Stderr is new instance of Writer which handles escape sequence for stderr.
 	Stderr = colorable.NewColorableStderr()
-	// query is SQL statement (for --sql option)
-	query *string
 )
 
 // Output is configuration for output data to file.
@@ -101,17 +99,23 @@ func NewArg(args []string) (*Arg, error) {
 // newOutput retur *Output
 func newOutput(filePath string, of outputFlag) *Output {
 	mode := model.PrintModeTable
-	if of.csv {
+	switch {
+	case of.excel:
 		mode = model.PrintModeCSV
-	} else if of.tsv {
+	case of.csv:
+		mode = model.PrintModeCSV
+	case of.tsv:
 		mode = model.PrintModeTSV
-	} else if of.ltsv {
+	case of.ltsv:
 		mode = model.PrintModeLTSV
-	} else if of.json {
+	case of.json:
 		mode = model.PrintModeJSON
-	} else if of.markdown {
+	case of.markdown:
 		mode = model.PrintModeMarkdownTable
+	default:
+		mode = model.PrintModeTable
 	}
+
 	return &Output{
 		FilePath: filePath,
 		Mode:     mode,

@@ -13,7 +13,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
 
-		want := "not support data definition language"
+		want := "not support data definition language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -25,7 +25,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "DROP TABLE test")
 
-		want := "not support data definition language"
+		want := "not support data definition language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -37,7 +37,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "ALTER TABLE test ADD COLUMN age INTEGER")
 
-		want := "not support data definition language"
+		want := "not support data definition language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -49,7 +49,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "REINDEX test")
 
-		want := "not support data definition language"
+		want := "not support data definition language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -61,7 +61,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "BEGIN")
 
-		want := "not support transaction control language"
+		want := "not support transaction control language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -73,7 +73,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "COMMIT")
 
-		want := "not support transaction control language"
+		want := "not support transaction control language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -85,7 +85,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "ROLLBACK")
 
-		want := "not support transaction control language"
+		want := "not support transaction control language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -97,7 +97,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "SAVEPOINT test")
 
-		want := "not support transaction control language"
+		want := "not support transaction control language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}
@@ -109,7 +109,7 @@ func TestSQLite3Interactor_ExecSQL(t *testing.T) {
 		si := NewSQLite3Interactor(interactor, NewSQL())
 		_, _, got := si.ExecSQL(context.Background(), "RELEASE test")
 
-		want := "not support transaction control language"
+		want := "not support transaction control language" //nolint
 		if !strings.Contains(got.Error(), want) {
 			t.Errorf("want: %v, got: %v", want, got)
 		}

@@ -23,7 +23,7 @@ func TestConfig_CreateDir(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != "windows" { //nolint
 			want := filepath.Join(homeDir, ".config", "sqly")
 			if !file.IsDir(want) {
 				t.Errorf("failed to create config directory at %s", want)

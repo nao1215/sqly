@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -21,7 +22,7 @@ func NewCSVInteractor(r repository.CSVRepository) *CSVInteractor {
 // The sqly command does not open many CSV files. Therefore, the file is
 // opened and closed in the usecase layer without worrying about processing speed.
 func (ci *CSVInteractor) List(csvFilePath string) (*model.CSV, error) {
-	f, err := os.Open(csvFilePath)
+	f, err := os.Open(filepath.Clean(csvFilePath))
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,7 @@ func (ci *CSVInteractor) List(csvFilePath string) (*model.CSV, error) {
 
 // Dump write contents of DB table to CSV file
 func (ci *CSVInteractor) Dump(csvFilePath string, table *model.Table) error {
-	f, err := os.OpenFile(csvFilePath, os.O_RDWR|os.O_CREATE, 0664)
+	f, err := os.OpenFile(filepath.Clean(csvFilePath), os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
 		return err
 	}

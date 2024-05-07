@@ -110,8 +110,12 @@ func (s *Shell) communicate() error {
 	defer func() {
 		rawModeOff := exec.Command("/bin/stty", "-raw", "echo")
 		rawModeOff.Stdin = os.Stdin
-		_ = rawModeOff.Run()
-		rawModeOff.Wait()
+		if err := rawModeOff.Run(); err != nil {
+			fmt.Fprintf(Stderr, "failed to turn off raw mode: %v\n", err)
+		}
+		if err := rawModeOff.Wait(); err != nil {
+			fmt.Fprintf(Stderr, "failed to wait raw mode off: %v\n", err)
+		}
 	}()
 
 	for {
@@ -132,7 +136,7 @@ func (s *Shell) communicate() error {
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init() error {
 	if err := s.historyInteractor.CreateTable(s.Ctx); err != nil {
-		return fmt.Errorf("failed to create table for sqly history: %v", err)
+		return fmt.Errorf("failed to create table for sqly history: %w", err)
 	}
 	if len(s.argument.FilePaths) == 0 {
 		return nil
@@ -302,7 +306,7 @@ func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
 	}
 
 	if err := s.historyInteractor.Create(ctx, history); err != nil {
-		return fmt.Errorf("failed to store user input history: %v", err)
+		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil
 }
