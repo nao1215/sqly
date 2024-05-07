@@ -20,7 +20,7 @@ func Test_jsonRepository_List(t *testing.T) {
 
 		var tmpFile *os.File
 		var e error
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != "windows" { //nolint
 			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.json")
 		} else {
 			// See https://github.com/golang/go/issues/51442

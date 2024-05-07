@@ -17,7 +17,7 @@ type History struct {
 
 // ToTable convert History to Table.
 func (h Histories) ToTable() *Table {
-	var records []Record
+	records := make([]Record, 0, len(h))
 	for _, v := range h {
 		records = append(records, Record{
 			strconv.Itoa(v.ID), v.Request,
@@ -33,7 +33,7 @@ func (h Histories) ToTable() *Table {
 
 // ToStringList convert history to string list.
 func (h Histories) ToStringList() []string {
-	var histories []string
+	histories := make([]string, 0, len(h))
 	for _, v := range h {
 		histories = append(histories, v.Request)
 	}

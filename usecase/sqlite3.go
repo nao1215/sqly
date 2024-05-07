@@ -79,7 +79,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	case si.sql.isSelect(argv[0]) || si.sql.isExplain(argv[0]):
 		table, err := si.Query(ctx, statement)
 		if err != nil {
-			return nil, 0, fmt.Errorf("execute query error: %v: %s", err, color.CyanString(statement))
+			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}
 		return table, 0, nil
 	case si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]):
