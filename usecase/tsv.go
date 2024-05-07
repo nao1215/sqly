@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -21,7 +22,7 @@ func NewTSVInteractor(r repository.TSVRepository) *TSVInteractor {
 // The sqly command does not open many TSV files. Therefore, the file is
 // opened and closed in the usecase layer without worrying about processing speed.
 func (ti *TSVInteractor) List(tsvFilePath string) (*model.TSV, error) {
-	f, err := os.Open(tsvFilePath)
+	f, err := os.Open(filepath.Clean(tsvFilePath))
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,7 @@ func (i *JSONInteractor) List(jsonFilePath string) (*model.JSON, error) {
 
 // Dump write contents of DB table to JSON file
 func (i *JSONInteractor) Dump(jsonFilePath string, table *model.Table) error {
-	f, err := os.OpenFile(filepath.Clean(jsonFilePath), os.O_RDWR|os.O_CREATE, 0664)
+	f, err := os.OpenFile(filepath.Clean(jsonFilePath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}

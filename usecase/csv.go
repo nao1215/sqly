@@ -38,7 +38,7 @@ func (ci *CSVInteractor) List(csvFilePath string) (*model.CSV, error) {
 
 // Dump write contents of DB table to CSV file
 func (ci *CSVInteractor) Dump(csvFilePath string, table *model.Table) error {
-	f, err := os.OpenFile(filepath.Clean(csvFilePath), os.O_RDWR|os.O_CREATE, 0664)
+	f, err := os.OpenFile(filepath.Clean(csvFilePath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
