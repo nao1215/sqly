@@ -85,7 +85,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	case si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]):
 		affectedRows, err := si.Repository.Exec(ctx, statement)
 		if err != nil {
-			return nil, 0, fmt.Errorf("execute statement error: %v: %s", err, color.CyanString(statement))
+			return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
 		}
 		return nil, affectedRows, nil
 	default:

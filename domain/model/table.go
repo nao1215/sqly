@@ -164,17 +164,17 @@ func (t *Table) printMarkdownTable(out io.Writer) {
 
 // printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header, ","))
+	fmt.Fprintln(out, strings.Join(t.Header, ",")) //nolint:errcheck // ignore error
 	for _, v := range t.Records {
-		fmt.Fprintln(out, strings.Join(v, ","))
+		fmt.Fprintln(out, strings.Join(v, ",")) //nolint:errcheck // ignore error
 	}
 }
 
 // printTSV print all record with header; output format is tsv
 func (t *Table) printTSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header, "\t"))
+	fmt.Fprintln(out, strings.Join(t.Header, "\t")) //nolint:errcheck // ignore error
 	for _, v := range t.Records {
-		fmt.Fprintln(out, strings.Join(v, "\t"))
+		fmt.Fprintln(out, strings.Join(v, "\t")) //nolint:errcheck // ignore error
 	}
 }
 
@@ -185,7 +185,7 @@ func (t *Table) printLTSV(out io.Writer) {
 		for i, data := range v {
 			r = append(r, t.Header[i]+":"+data)
 		}
-		fmt.Fprintln(out, strings.Join(r, "\t"))
+		fmt.Fprintln(out, strings.Join(r, "\t")) //nolint:errcheck // ignore error
 	}
 }
 
@@ -202,10 +202,10 @@ func (t *Table) printJSON(out io.Writer) {
 	}
 	b, err := json.MarshalIndent(data, "", "   ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "json marshal error: "+err.Error())
+		fmt.Fprintf(os.Stderr, "json marshal error: "+err.Error()) //nolint:errcheck // ignore error
 		return
 	}
-	fmt.Fprintln(out, string(b))
+	fmt.Fprintln(out, string(b)) //nolint:errcheck // ignore error
 }
 
 // printExcel print all record in excel format.
