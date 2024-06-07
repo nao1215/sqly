@@ -11,7 +11,7 @@ import (
 func (c CommandList) modeCommand(s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintf(config.Stdout, "  .mode OUTPUT_MODE   ※ current mode=%s\n", s.argument.Output.Mode.String())
+		fmt.Fprintf(config.Stdout, "  .mode OUTPUT_MODE   ※ current mode=%s\n", s.argument.Output.Mode.String()) //nolint:errcheck // ignore error
 		fmt.Fprintln(config.Stdout, "[Output mode list]")
 		fmt.Fprintln(config.Stdout, "  table")
 		fmt.Fprintln(config.Stdout, "  markdown")

@@ -98,28 +98,26 @@ func NewArg(args []string) (*Arg, error) {
 
 // newOutput retur *Output
 func newOutput(filePath string, of outputFlag) *Output {
-	mode := model.PrintModeTable
+	output := &Output{
+		FilePath: filePath,
+	}
 	switch {
 	case of.excel:
-		mode = model.PrintModeCSV
+		output.Mode = model.PrintModeExcel
 	case of.csv:
-		mode = model.PrintModeCSV
+		output.Mode = model.PrintModeCSV
 	case of.tsv:
-		mode = model.PrintModeTSV
+		output.Mode = model.PrintModeTSV
 	case of.ltsv:
-		mode = model.PrintModeLTSV
+		output.Mode = model.PrintModeLTSV
 	case of.json:
-		mode = model.PrintModeJSON
+		output.Mode = model.PrintModeJSON
 	case of.markdown:
-		mode = model.PrintModeMarkdownTable
+		output.Mode = model.PrintModeMarkdownTable
 	default:
-		mode = model.PrintModeTable
+		output.Mode = model.PrintModeTable
 	}
-
-	return &Output{
-		FilePath: filePath,
-		Mode:     mode,
-	}
+	return output
 }
 
 // NeedsOutputToFile whether the data needs to be output to the file
@@ -155,7 +153,7 @@ func usage(flag pflag.FlagSet) string {
 }
 
 func version() {
-	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion())
+	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion()) //nolint:errcheck // ignore error
 }
 
 // GetVersion return sqly command version.

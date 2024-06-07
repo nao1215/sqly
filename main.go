@@ -25,7 +25,11 @@ func main() {
 func run(args []string) int {
 	shell, cleanup, err := di.NewShell(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", "failed to initialize sqly shell", err)
+		fmt.Fprintf(
+			os.Stderr,
+			"%s: %v\n",
+			"failed to initialize sqly shell",
+			err)
 		return 1
 	}
 	defer cleanup()
