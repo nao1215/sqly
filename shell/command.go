@@ -49,7 +49,7 @@ func (c CommandList) hasCmdPrefix(s string) bool {
 // sortCommandNameKey returns an array of sorted keys (command names)
 // to sort the command list map
 func (c CommandList) sortCommandNameKey() []string {
-	var keys []string
+	keys := make([]string, 0, len(c))
 	for key := range c {
 		keys = append(keys, key)
 	}

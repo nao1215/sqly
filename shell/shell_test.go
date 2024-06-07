@@ -89,7 +89,7 @@ func TestShell_Run(t *testing.T) {
 		}
 
 		// TODO:
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(filepath.Clean(file))
 		if err != nil {
 			t.Fatal(err)
 		}
