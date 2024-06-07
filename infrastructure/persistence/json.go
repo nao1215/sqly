@@ -17,7 +17,7 @@ func NewJSONRepository() repository.JSONRepository {
 }
 
 func (r *jsonRepository) List(jsonFilePath string) (*model.JSON, error) {
-	bytes, err := os.ReadFile(jsonFilePath)
+	bytes, err := os.ReadFile(filepath.Clean(jsonFilePath))
 	if err != nil {
 		return nil, err
 	}

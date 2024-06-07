@@ -28,7 +28,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
-		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.argument.Output.Mode))
+		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.argument.Output.Mode)) //nolint:errcheck // ignore error
 
 	return nil
 }
