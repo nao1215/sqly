@@ -542,7 +542,7 @@ func TestShell_exec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(filepath.Clean(file))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -569,7 +569,7 @@ func TestShell_exec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(filepath.Clean(file))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -596,7 +596,7 @@ func TestShell_exec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(filepath.Clean(file))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -623,7 +623,7 @@ func TestShell_exec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(filepath.Clean(file))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -650,7 +650,7 @@ func TestShell_exec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := os.ReadFile(file)
+		got, err := os.ReadFile(filepath.Clean(file))
 		if err != nil {
 			t.Fatal(err)
 		}
