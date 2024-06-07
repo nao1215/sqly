@@ -11,11 +11,11 @@ import (
 // dumpCommand dump specified table to csv file
 func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 	if len(argv) != 2 {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
-		fmt.Fprintln(config.Stdout, "[Note]")
-		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
-		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
+		fmt.Fprintln(config.Stdout, "[Usage]")                                                                          //nolint:errcheck // ignore error
+		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")                                                     //nolint:errcheck // ignore error
+		fmt.Fprintln(config.Stdout, "[Note]")                                                                           //nolint:errcheck // ignore error
+		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")                               //nolint:errcheck // ignore error
+		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.") //nolint:errcheck // ignore error
 		return nil
 	}
 
@@ -27,8 +27,8 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 	if err := dumpToFile(s, argv[1], table); err != nil {
 		return err
 	}
-	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
-		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.argument.Output.Mode)) //nolint:errcheck // ignore error
+	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n", //nolint:errcheck // ignore error
+		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.argument.Output.Mode))
 
 	return nil
 }
