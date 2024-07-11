@@ -16,6 +16,7 @@ jobs:
         platform: [ubuntu-latest]
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4

@@ -23,6 +23,7 @@ jobs:
           - "1.21"
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
