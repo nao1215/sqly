@@ -5,6 +5,7 @@ jobs:
   golangci-lint:
     name: golangci-lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
@@ -19,6 +20,7 @@ jobs:
   misspell:
     name: misspell
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
@@ -33,6 +35,7 @@ jobs:
 
   actionlint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: reviewdog/action-actionlint@v1
