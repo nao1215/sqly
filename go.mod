@@ -8,7 +8,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/wire v0.6.0
-	github.com/mattn/go-colorable v0.1.13
+	github.com/mattn/go-colorable v0.1.14
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/nao1215/gorky v0.2.1
 	github.com/olekukonko/tablewriter v0.0.5
@@ -39,7 +39,7 @@ require (
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
