@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/nao1215/gorky v0.2.1
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/xuri/excelize/v2 v2.9.0
 	modernc.org/sqlite v1.34.5
 )
