@@ -49,9 +49,11 @@ tools: ## Install dependency tools
 	$(GO_INSTALL) github.com/nikolaydubina/go-cover-treemap@latest
 	$(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO_INSTALL) go.uber.org/mock/mockgen@latest
+	$(GO_INSTALL) github.com/fe3dback/go-arch-lint@latest
 
 lint: ## Lint code
 	golangci-lint run --config .golangci.yml
+	go-arch-lint check
 
 .DEFAULT_GOAL := help
 help:  
