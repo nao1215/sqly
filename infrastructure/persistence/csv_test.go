@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nao1215/gorky/golden"
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/golden"
 )
 
 func TestCsvRepositoryList(t *testing.T) {

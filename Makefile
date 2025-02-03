@@ -22,7 +22,7 @@ build:  ## Build binary
 	env GO111MODULE=on CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO_BUILD) $(GO_LDFLAGS) -o $(APP) main.go
 
 clean: ## Clean project
-	-rm -rf $(APP) cover.out cover.html
+	-rm -rf $(APP) cover.*
 
 test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverpkg=./... -coverprofile=cover.out
@@ -32,7 +32,8 @@ bench: ## Start benchmark
 	env GOOS=$(GOOS) go test -bench=BenchmarkImport100000Records -benchmem
 
 coverage-tree: test ## Generate coverage tree
-	go-cover-treemap -statements -coverprofile cover.out > doc/img/cover-tree.svg
+	grep -v 'github.com/nao1215/sqly/interactor/mock' cover.out | grep -v 'github.com/nao1215/sqly/infrastructure/mock' > cover.tmp
+	go-cover-treemap -statements -percent -coverprofile cover.tmp > doc/img/cover-tree.svg
 
 changelog: ## Generate changelog
 	ghch --format markdown > CHANGELOG.md

@@ -12,4 +12,5 @@ var Set = wire.NewSet(
 	NewJSONRepository,
 	NewExcelRepository,
 	NewHistoryRepository,
+	NewFileRepository,
 )

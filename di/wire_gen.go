@@ -28,14 +28,15 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	commandList := shell.NewCommands()
+	fileRepository := persistence.NewFileRepository()
 	csvRepository := persistence.NewCSVRepository()
-	csvUsecase := interactor.NewCSVInteractor(csvRepository)
+	csvUsecase := interactor.NewCSVInteractor(fileRepository, csvRepository)
 	tsvRepository := persistence.NewTSVRepository()
-	tsvUsecase := interactor.NewTSVInteractor(tsvRepository)
+	tsvUsecase := interactor.NewTSVInteractor(fileRepository, tsvRepository)
 	ltsvRepository := persistence.NewLTSVRepository()
-	ltsvUsecase := interactor.NewLTSVInteractor(ltsvRepository)
+	ltsvUsecase := interactor.NewLTSVInteractor(fileRepository, ltsvRepository)
 	jsonRepository := persistence.NewJSONRepository()
-	jsonUsecase := interactor.NewJSONInteractor(jsonRepository)
+	jsonUsecase := interactor.NewJSONInteractor(fileRepository, jsonRepository)
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
 		return nil, nil, err
