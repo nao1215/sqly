@@ -10,6 +10,9 @@ import (
 	"github.com/nao1215/sqly/domain/repository"
 )
 
+// _ interface implementation check
+var _ repository.CSVRepository = (*csvRepository)(nil)
+
 type csvRepository struct{}
 
 // NewCSVRepository return CSVRepository

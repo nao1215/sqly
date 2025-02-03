@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fatih/color"
@@ -9,17 +10,17 @@ import (
 )
 
 // dumpCommand dump specified table to csv file
-func (c CommandList) dumpCommand(s *Shell, argv []string) error {
+func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) != 2 {
-		fmt.Fprintln(config.Stdout, "[Usage]")                                                                          //nolint:errcheck // ignore error
-		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")                                                     //nolint:errcheck // ignore error
-		fmt.Fprintln(config.Stdout, "[Note]")                                                                           //nolint:errcheck // ignore error
-		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")                               //nolint:errcheck // ignore error
-		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.") //nolint:errcheck // ignore error
+		fmt.Fprintln(config.Stdout, "[Usage]")
+		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
+		fmt.Fprintln(config.Stdout, "[Note]")
+		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
+		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
 		return nil
 	}
 
-	table, err := s.sqlite3Interactor.List(s.Ctx, argv[0])
+	table, err := s.sqlite3Interactor.List(ctx, argv[0])
 	if err != nil {
 		return err
 	}
@@ -27,7 +28,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 	if err := dumpToFile(s, argv[1], table); err != nil {
 		return err
 	}
-	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n", //nolint:errcheck // ignore error
+	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
 		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.argument.Output.Mode))
 
 	return nil
@@ -36,7 +37,7 @@ func (c CommandList) dumpCommand(s *Shell, argv []string) error {
 // dumpToFile is dump table data to file.
 func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	var err error
-	switch s.argument.Output.Mode { //nolint
+	switch s.argument.Output.Mode {
 	case model.PrintModeCSV:
 		err = s.csvInteractor.Dump(filePath, table)
 	case model.PrintModeTSV:
@@ -47,6 +48,10 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 		err = s.jsonInteractor.Dump(filePath, table)
 	case model.PrintModeExcel:
 		err = s.excelInteractor.Dump(filePath, table)
+	case model.PrintModeMarkdownTable:
+		fallthrough // TODO: support markdown table mode
+	case model.PrintModeTable:
+		fallthrough
 	default:
 		err = s.csvInteractor.Dump(filePath, table)
 	}

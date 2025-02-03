@@ -9,6 +9,9 @@ import (
 	"github.com/nao1215/sqly/domain/repository"
 )
 
+// _ interface implementation check
+var _ repository.JSONRepository = (*jsonRepository)(nil)
+
 type jsonRepository struct{}
 
 // NewJSONRepository return JSONRepository

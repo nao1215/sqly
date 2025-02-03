@@ -12,6 +12,9 @@ import (
 	"github.com/nao1215/sqly/infrastructure"
 )
 
+// _ interface implementation check
+var _ repository.LTSVRepository = (*ltsvRepository)(nil)
+
 type ltsvRepository struct{}
 
 // NewLTSVRepository return TSVRepository
