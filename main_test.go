@@ -6,10 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/nao1215/gorky/golden"
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/golden"
 )
+
+func TestMain(m *testing.M) {
+	config.InitSQLite3()
+	os.Exit(m.Run())
+}
 
 func Test_run(t *testing.T) {
 	t.Run("show version message", func(t *testing.T) {

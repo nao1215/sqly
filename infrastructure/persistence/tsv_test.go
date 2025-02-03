@@ -6,7 +6,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nao1215/gorky/golden"
+	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/golden"
 )
 
 func TestTsvRepositoryList(t *testing.T) {
@@ -25,7 +26,7 @@ func TestTsvRepositoryList(t *testing.T) {
 
 		var tmpFile *os.File
 		var e error
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != config.Windows {
 			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.tsv")
 		} else {
 			// See https://github.com/golang/go/issues/51442

@@ -6,10 +6,11 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nao1215/gorky/golden"
+	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/golden"
 )
 
-func Test_jsonRepository_List(t *testing.T) {
+func TestJsonRepositoryList(t *testing.T) {
 	t.Run("list and dump json data", func(t *testing.T) {
 		r := NewJSONRepository()
 
@@ -20,7 +21,7 @@ func Test_jsonRepository_List(t *testing.T) {
 
 		var tmpFile *os.File
 		var e error
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != config.Windows {
 			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.json")
 		} else {
 			// See https://github.com/golang/go/issues/51442
