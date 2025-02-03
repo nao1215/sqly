@@ -14,7 +14,6 @@ import (
 	"github.com/c-bata/go-prompt/completer"
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
-	"github.com/nao1215/gorky/str"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/usecase"
@@ -244,7 +243,7 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 // exec execute sqly helper command or sql query.
 func (s *Shell) exec(ctx context.Context, request string) error {
 	req := strings.TrimSpace(request)
-	argv := strings.Split(str.TrimGaps(req), " ")
+	argv := strings.Split(trimGaps(req), " ")
 	if argv[0] == "" {
 		return nil // user only input enter, space tab
 	}
@@ -312,4 +311,14 @@ func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
 		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil
+}
+
+// trimGaps Remove white space at the beginning/end of a
+// string and single out multiple white spaces between characters.
+// Whitespace includes tabs and line feed.
+// " Hello,    World  ! "         --> "Hello, World !"
+// "Hello,\tWorld ! "             --> "Hello, World !"
+// " \t\n\t Hello, \n\t World \n ! \n\t " --> "Hello, World !"
+func trimGaps(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

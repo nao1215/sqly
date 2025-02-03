@@ -2,11 +2,11 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/nao1215/gorky/file"
 )
 
 func TestConfigCreateDir(t *testing.T) {
@@ -28,8 +28,18 @@ func TestConfigCreateDir(t *testing.T) {
 		}
 
 		want := filepath.Join(homeDir, "sqly")
-		if !file.IsDir(want) {
+
+		if !isDir(t, want) {
 			t.Errorf("failed to create config directory at %s", want)
 		}
 	})
+}
+
+func isDir(t *testing.T, path string) bool {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }

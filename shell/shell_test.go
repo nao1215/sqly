@@ -9,9 +9,9 @@ import (
 
 	"github.com/c-bata/go-prompt"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/nao1215/gorky/golden"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/golden"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
@@ -766,13 +766,14 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}
 	commandList := NewCommands()
 	csvRepository := persistence.NewCSVRepository()
-	csvInteractor := interactor.NewCSVInteractor(csvRepository)
+	fileRepository := persistence.NewFileRepository()
+	csvInteractor := interactor.NewCSVInteractor(fileRepository, csvRepository)
 	tsvRepository := persistence.NewTSVRepository()
-	tsvInteractor := interactor.NewTSVInteractor(tsvRepository)
+	tsvInteractor := interactor.NewTSVInteractor(fileRepository, tsvRepository)
 	ltsvRepository := persistence.NewLTSVRepository()
-	ltsvInteractor := interactor.NewLTSVInteractor(ltsvRepository)
+	ltsvInteractor := interactor.NewLTSVInteractor(fileRepository, ltsvRepository)
 	jsonRepository := persistence.NewJSONRepository()
-	jsonInteractor := interactor.NewJSONInteractor(jsonRepository)
+	jsonInteractor := interactor.NewJSONInteractor(fileRepository, jsonRepository)
 	excelRepository := persistence.NewExcelRepository()
 	excelInteractor := interactor.NewExcelInteractor(excelRepository)
 	memoryDB, cleanup, err := config.NewInMemDB()
@@ -865,4 +866,44 @@ func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg s
 		t.Fatalf("failed to read buffer: %v", err)
 	}
 	return buffer.Bytes(), execErr
+}
+
+func TestTrimGaps(t *testing.T) {
+	type args struct {
+		s string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "Before:' Hello,    World  ! ', After:'Hello, World !'",
+			args: args{
+				" Hello,    World  ! ",
+			},
+			want: "Hello, World !",
+		},
+		{
+			name: "Before:' Hello,    World  ! ', After:'Hello, World !'",
+			args: args{
+				" Hello,    World  ! ",
+			},
+			want: "Hello, World !",
+		},
+		{
+			name: "Before:' \t\n\t Hello, \n\t World \n ! \n\t ', After:'Hello, World !'",
+			args: args{
+				" \t\n\t Hello, \n\t World \n ! \n\t ",
+			},
+			want: "Hello, World !",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := trimGaps(tt.args.s); got != tt.want {
+				t.Errorf("TrimGaps() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
