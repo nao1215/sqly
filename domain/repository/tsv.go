@@ -6,6 +6,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
+
 // TSVRepository is a repository that handles TSV file.
 type TSVRepository interface {
 	// List get tsv all data with header.

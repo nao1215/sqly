@@ -2,6 +2,9 @@
 coverage:
   if: true
   acceptable: 80%
+  exclude:
+    - "**/interactor/mock/*.go"
+    - "**/infrastructure/mock/*.go"
 diff:
   datastores:
     - artifact://${GITHUB_REPOSITORY}

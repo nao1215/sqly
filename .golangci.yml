@@ -1,45 +1,90 @@
 run:
-  go: "1.21"
+  timeout: "10m"
+  go: "1.23"
 
 issues:
+  exclude:
+    - fmt.Fprintf
+    - fmt.Fprintln
+    - fmt.Fprint
+    - fmt.Printf
+    - buf.WriteByte
+    - buf.WriteRune
+    - Close
   exclude-use-default: false
+  exclude-rules:
+    - path: ".*_test\\.go"
+      linters:
+        - goconst
+    - linters:
+      - errcheck
+      source: "defer"
+  max-same-issues: 0
 
 linters:
-  disable-all: true
-  enable:
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
+  enable: # Alphabetic order
     - asciicheck
+    - bidichk
     - bodyclose
+    - canonicalheader
+    - containedctx
+    - copyloopvar
+    - decorder
     - dogsled
     - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
     - errorlint
     - exhaustive
-    - exportloopref
+    - fatcontext
     - forcetypeassert
+    - gocheckcompilerdirectives
     - gochecknoinits
     - goconst
     - gocritic
+    - gofmt
     - goimports
-    - gosec
+    - gomoddirectives
+    - gosimple
+    - govet
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - makezero
     - misspell
+    - mirror
     - nakedret
+    - nilerr
     - noctx
+    - nolintlint
+    - nosprintfhostport
+    - perfsprint
     - prealloc
+    - predeclared
+    - reassign
+    - revive
     - rowserrcheck
+    - sloglint
     - sqlclosecheck
+    - staticcheck
     - stylecheck
     - tagliatelle
+    - tenv
     - thelper
+    - typecheck
     - unconvert
     - unparam
+    - unused
+    - usestdlibvars
     - wastedassign
     - whitespace
+
 linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    disable-default-exclusions: false
   tagliatelle:
     case:
       use-field-name: true

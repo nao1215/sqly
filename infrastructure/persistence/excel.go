@@ -9,6 +9,9 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// _ interface implementation check
+var _ repository.ExcelRepository = (*excelRepository)(nil)
+
 type excelRepository struct{}
 
 // NewExcelRepository return ExcelRepository
@@ -74,7 +77,7 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	}
 
 	for i, record := range table.Records {
-		if err := f.SetSheetRow(table.Name, fmt.Sprintf("A%d", i+2), &record); err != nil { ////nolint:gosec // false positive
+		if err := f.SetSheetRow(table.Name, fmt.Sprintf("A%d", i+2), &record); err != nil {
 			return err
 		}
 	}

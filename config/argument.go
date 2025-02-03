@@ -1,4 +1,4 @@
-// Package config manage sqly configuration
+// Package config manage sqly configuration. This file is used to parse command line arguments.
 package config
 
 import (
@@ -153,7 +153,7 @@ func usage(flag pflag.FlagSet) string {
 }
 
 func version() {
-	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion()) //nolint:errcheck // ignore error
+	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion())
 }
 
 // GetVersion return sqly command version.

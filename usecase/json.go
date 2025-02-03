@@ -1,35 +1,15 @@
 package usecase
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/domain/repository"
 )
 
-// JSONInteractor implementation of use cases related to JSON handler.
-type JSONInteractor struct {
-	Repository repository.JSONRepository
-}
+//go:generate mockgen -typed -source=$GOFILE -destination=../interactor/mock/$GOFILE -package mock
 
-// NewJSONInteractor return JSONInteractor
-func NewJSONInteractor(r repository.JSONRepository) *JSONInteractor {
-	return &JSONInteractor{Repository: r}
-}
-
-// List get JSON data.
-func (i *JSONInteractor) List(jsonFilePath string) (*model.JSON, error) {
-	return i.Repository.List(jsonFilePath)
-}
-
-// Dump write contents of DB table to JSON file
-func (i *JSONInteractor) Dump(jsonFilePath string, table *model.Table) error {
-	f, err := os.OpenFile(filepath.Clean(jsonFilePath), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close() //nolint
-
-	return i.Repository.Dump(f, table)
+// JSONUsecase handle JSON file.
+type JSONUsecase interface {
+	// List get JSON data.
+	List(jsonFilePath string) (*model.JSON, error)
+	// Dump write contents of DB table to JSON file.
+	Dump(jsonFilePath string, table *model.Table) error
 }

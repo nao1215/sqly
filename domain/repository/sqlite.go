@@ -7,6 +7,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
+
 // SQLite3Repository is a repository that handles SQLite3.
 type SQLite3Repository interface {
 	// CreateTable create a DB table with columns given as model.Table
