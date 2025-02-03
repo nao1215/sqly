@@ -27,10 +27,11 @@ go install github.com/nao1215/sqly@latest
 brew install nao1215/tap/sqly
 ```
 
-## Supported OS
+## Supported OS & go version
 - Windows
 - macOS
 - Linux
+- go1.22 or later
 
 ## How to use
 The sqly automatically imports the CSV/TSV/LTSV/JSON/Excel file into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
@@ -171,24 +172,80 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 
 
 ## Limitions (Not support)
+
 - DDL such as CREATE
 - DML such as GRANT
 - TCL such as Transactions
 
 ## Contributing
-First off, thanks for taking the time to contribute! See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.  Contributions are not only related to development. For example, GitHub Star motivates me to develop!  
+
+First off, thanks for taking the time to contribute! See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information. Contributions are not only related to development. For example, GitHub Star motivates me to develop! 
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nao1215/sqly&type=Date)](https://star-history.com/#nao1215/sqly&Date)
+
+## How to develop
+
+### Prerequisites
+
+- Go 1.22 or later
+- `make`, `git` command
+
+#### Install tools for development
+
+```shell
+$ git clone git@github.com:nao1215/sqly.git
+$ cd sqly
+
+# Install tools for development. The tools are used for linting, formatting, and testing.
+$ make install tools
+```
+
+### Build & Test
+```shell
+$ make build
+$ make test
+```
+
+### The sqly architecture
+
+The sqly project adopts the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html). We are verifying whether the implementation follows the architecture using [fe3dback/go-arch-lint](https://github.com/fe3dback/go-arch-lint).
+
+The sqly shell calls the `usecase` interface, and the `interactor` implements the `usecase`. The `interactor` uses the `domain` (business logic) to perform data operations. Specifically, it uses the `infrastructure` that implements the `domain/repository` interface.
+
+The sqly reads data from each file, converts it into a table format, and stores the converted table data in an in-memory SQLite3 database. sqly does not have its own SQL parser and relies on SQLite3 for parsing.
+
+Here is a high-level overview of the Clean Architecture for the sqly project:
+
+```text
++------------------+     +------------------+     +------------------+
+|      cmd        | --> |      shell       | --> |     usecase      | interface
++------------------+     +------------------+     +------------------+
+                                                          |
+                                                          v
+                                                 +------------------+
+                                                 |    interactor    | implement
+                                                 +------------------+
+                                                          |
+                                                          v
+                      +------------------+     +------------------+
+                      | domain/model     | --> | domain/repository | interface
+                      +------------------+     +------------------+
+                                                          |
+                                                          v
+                                                 +------------------+
+                                                 |  infrastructure  | implement
+                                                 +------------------+
+```
+
+When adding new features or fixing bugs, please write unit tests. The sqly is unit tested for all packages as the unit test tree map below shows.
+
+![treemap](./doc/img/cover-tree.svg)
+
 
 ### Contact
 If you would like to send comments such as "find a bug" or "request for additional features" to the developer, please use one of the following contacts.
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
-
-### For Developers
-When adding new features or fixing bugs, please write unit tests. The sqly is unit tested for all packages as the unit test tree map below shows.
-
-![treemap](./doc/img/cover-tree.svg)
 
 ## LICENSE
 The sqly project is licensed under the terms of [MIT LICENSE](./LICENSE).
