@@ -1,0 +1,117 @@
+version: 3
+workdir: .
+
+excludeFiles:
+  - "^.*_test\\.go$"
+  - "^.*\/test\/.*$"
+
+vendors:
+  color: { in: github.com/fatih/color } 
+  pflag: { in: github.com/spf13/pflag }
+  go-colorable: { in: github.com/mattn/go-colorable }
+  xdg: { in: github.com/adrg/xdg }
+  env: { in: github.com/caarlos0/env/v6 }
+  sqlite: { in: modernc.org/sqlite }
+  wire: { in: [github.com/google/wire, github.com/google/wire/cmd/wire] }
+  tablewriter: { in: github.com/olekukonko/tablewriter }
+  diffmatchpatch: { in: github.com/sergi/go-diff/diffmatchpatch }
+  difflib: { in: github.com/pmezard/go-difflib/difflib }
+  excelize: { in: github.com/xuri/excelize/v2 }
+  gomock: { in: go.uber.org/mock/gomock }
+  go-prompt: { in: [github.com/c-bata/go-prompt, github.com/c-bata/go-prompt/completer] }
+
+components:
+  cmd:   { in: . }
+  shell: { in: shell }
+  domain: { in: domain }
+  model: { in: domain/model }
+  repository: { in: domain/repository }
+  infrastructure: { in: [infrastructure, infrastructure/mock/**] }
+  memory-infra: { in: infrastructure/memory }
+  persistence-infra: { in: infrastructure/persistence }
+  usecase: { in: usecase }
+  interactor: { in: interactor/** }
+  config: { in: config }
+  golden: { in: golden }
+  di: { in: di }
+  mock: { in: [] }
+
+commonVendors:
+  - wire
+  - gomock
+  - color
+
+commonComponents:
+  - model
+  - golden
+  - config
+
+deps:
+  di:
+    mayDependOn:
+      - model
+      - shell
+      - usecase
+      - interactor
+      - repository
+      - config
+      - infrastructure
+      - memory-infra
+      - persistence-infra
+  golden:
+    canUse:
+      - diffmatchpatch
+      - difflib
+  config:
+    canUse:
+      - color
+      - pflag
+      - go-colorable
+      - xdg
+      - env
+      - sqlite
+      - wire
+  model:
+    canUse:
+      - tablewriter
+    mayDependOn:
+      - domain
+  cmd:
+    mayDependOn:
+      - shell
+      - di
+  shell:
+    canUse:
+      - go-prompt
+      - tablewriter
+      - go-colorable
+    mayDependOn:
+      - model
+      - usecase
+  usecase:
+    mayDependOn:
+      - model
+      - repository
+  interactor:
+    mayDependOn:
+      - model
+      - usecase
+      - repository
+  repository:
+    mayDependOn:
+      - model
+  infrastructure:
+    mayDependOn:
+      - model
+  memory-infra:
+    mayDependOn:
+      - model
+      - repository
+      - infrastructure
+  persistence-infra:
+    canUse:
+      - excelize
+    mayDependOn:
+      - model
+      - repository
+      - infrastructure
