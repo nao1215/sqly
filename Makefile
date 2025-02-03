@@ -36,7 +36,7 @@ coverage-tree: test ## Generate coverage tree
 	go-cover-treemap -statements -percent -coverprofile cover.tmp > doc/img/cover-tree.svg
 
 changelog: ## Generate changelog
-	ghch --format markdown > CHANGELOG.md
+	ghch --all --format markdown > CHANGELOG.md
 
 generate: ## Generate code from templates
 	$(GO) generate ./...
