@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/nao1215/gorky/golden"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/golden"
 )
 
 func TestNewArg(t *testing.T) {

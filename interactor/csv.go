@@ -1,9 +1,6 @@
 package interactor
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/usecase"
@@ -14,19 +11,26 @@ var _ usecase.CSVUsecase = (*csvInteractor)(nil)
 
 // csvInteractor implementation of use cases related to CSV handler.
 type csvInteractor struct {
+	f repository.FileRepository
 	r repository.CSVRepository
 }
 
 // NewCSVInteractor return CSVInteractor
-func NewCSVInteractor(r repository.CSVRepository) usecase.CSVUsecase {
-	return &csvInteractor{r: r}
+func NewCSVInteractor(
+	f repository.FileRepository,
+	r repository.CSVRepository,
+) usecase.CSVUsecase {
+	return &csvInteractor{
+		f: f,
+		r: r,
+	}
 }
 
 // List get CSV data.
 // The sqly command does not open many CSV files. Therefore, the file is
 // opened and closed in the usecase layer without worrying about processing speed.
 func (ci *csvInteractor) List(csvFilePath string) (*model.CSV, error) {
-	f, err := os.Open(filepath.Clean(csvFilePath))
+	f, err := ci.f.Open(csvFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -36,13 +40,12 @@ func (ci *csvInteractor) List(csvFilePath string) (*model.CSV, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return csv, nil
 }
 
 // Dump write contents of DB table to CSV file
 func (ci *csvInteractor) Dump(csvFilePath string, table *model.Table) error {
-	f, err := os.OpenFile(filepath.Clean(csvFilePath), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := ci.f.Create(csvFilePath)
 	if err != nil {
 		return err
 	}
