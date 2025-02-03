@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -10,14 +11,14 @@ import (
 )
 
 // headerCommand print table header.
-func (c CommandList) headerCommand(s *Shell, argv []string) error {
+func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		fmt.Fprintln(config.Stdout, "[Usage]")
 		fmt.Fprintln(config.Stdout, "  .header TABLE_NAME")
 		return nil
 	}
 
-	table, err := s.sqlite3Interactor.Header(s.Ctx, argv[0])
+	table, err := s.sqlite3Interactor.Header(ctx, argv[0])
 	if err != nil {
 		return err
 	}

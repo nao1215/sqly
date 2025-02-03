@@ -10,8 +10,8 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
+	"github.com/nao1215/sqly/interactor"
 	"github.com/nao1215/sqly/shell"
-	"github.com/nao1215/sqly/usecase"
 )
 
 // Injectors from wire.go:
@@ -29,30 +29,30 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	}
 	commandList := shell.NewCommands()
 	csvRepository := persistence.NewCSVRepository()
-	csvInteractor := usecase.NewCSVInteractor(csvRepository)
+	csvUsecase := interactor.NewCSVInteractor(csvRepository)
 	tsvRepository := persistence.NewTSVRepository()
-	tsvInteractor := usecase.NewTSVInteractor(tsvRepository)
+	tsvUsecase := interactor.NewTSVInteractor(tsvRepository)
 	ltsvRepository := persistence.NewLTSVRepository()
-	ltsvInteractor := usecase.NewLTSVInteractor(ltsvRepository)
+	ltsvUsecase := interactor.NewLTSVInteractor(ltsvRepository)
 	jsonRepository := persistence.NewJSONRepository()
-	jsonInteractor := usecase.NewJSONInteractor(jsonRepository)
+	jsonUsecase := interactor.NewJSONInteractor(jsonRepository)
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
 		return nil, nil, err
 	}
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
-	sql := usecase.NewSQL()
-	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository, sql)
+	sql := interactor.NewSQL()
+	databaseUsecase := interactor.NewSQLite3Interactor(sqLite3Repository, sql)
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
-	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
+	historyUsecase := interactor.NewHistoryInteractor(historyRepository)
 	excelRepository := persistence.NewExcelRepository()
-	excelInteractor := usecase.NewExcelInteractor(excelRepository)
-	shellShell := shell.NewShell(arg, configConfig, commandList, csvInteractor, tsvInteractor, ltsvInteractor, jsonInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
+	excelUsecase := interactor.NewExcelInteractor(excelRepository)
+	shellShell := shell.NewShell(arg, configConfig, commandList, csvUsecase, tsvUsecase, ltsvUsecase, jsonUsecase, databaseUsecase, historyUsecase, excelUsecase)
 	return shellShell, func() {
 		cleanup2()
 		cleanup()

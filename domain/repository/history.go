@@ -6,6 +6,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
+
 // HistoryRepository is a repository that handles sqly shell history.
 type HistoryRepository interface {
 	// CreateTable create a DB table for sqly shell history

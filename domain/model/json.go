@@ -16,7 +16,7 @@ type JSON struct {
 
 // ToTable convert JSON to Table.
 func (j *JSON) ToTable() *Table {
-	var keys []string //nolint
+	var keys []string
 	for _, json := range j.JSON {
 		for k := range json {
 			keys = append(keys, k)

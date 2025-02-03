@@ -9,8 +9,8 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
+	"github.com/nao1215/sqly/interactor"
 	"github.com/nao1215/sqly/shell"
-	"github.com/nao1215/sqly/usecase"
 )
 
 //go:generate wire
@@ -19,27 +19,11 @@ import (
 // The return function is the function to close the DB.
 func NewShell(args []string) (*shell.Shell, func(), error) {
 	wire.Build(
-		config.NewConfig,
-		config.NewInMemDB,
-		config.NewHistoryDB,
-		config.NewArg,
-		shell.NewShell,
-		shell.NewCommands,
-		usecase.NewCSVInteractor,
-		usecase.NewTSVInteractor,
-		usecase.NewLTSVInteractor,
-		usecase.NewJSONInteractor,
-		usecase.NewHistoryInteractor,
-		usecase.NewSQLite3Interactor,
-		usecase.NewExcelInteractor,
-		usecase.NewSQL,
-		persistence.NewCSVRepository,
-		persistence.NewTSVRepository,
-		persistence.NewLTSVRepository,
-		persistence.NewJSONRepository,
-		persistence.NewHistoryRepository,
-		persistence.NewExcelRepository,
-		memory.NewSQLite3Repository,
+		config.Set,
+		shell.Set,
+		interactor.Set,
+		persistence.Set,
+		memory.Set,
 	)
 	return nil, nil, nil
 }

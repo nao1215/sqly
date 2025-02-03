@@ -138,7 +138,7 @@ func Test_runErrPatern(t *testing.T) {
 func BenchmarkImport100000Records(b *testing.B) {
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		run([]string{
 			"sqly",
 			"--sql",
@@ -162,7 +162,7 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 	config.Stdout = w
 
 	f(list)
-	w.Close() //nolint
+	w.Close()
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

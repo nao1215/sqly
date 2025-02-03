@@ -50,7 +50,7 @@ func Test_excelRepository_Dump(t *testing.T) {
 		}
 
 		tempFilePath := filepath.Join(os.TempDir(), "dump.xlsx")
-		defer os.Remove(tempFilePath) //nolint
+		defer os.Remove(tempFilePath)
 		if err := r.Dump(tempFilePath, excel); err != nil {
 			t.Fatal(err)
 		}

@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -11,8 +12,8 @@ import (
 )
 
 // tablesCommand print all tables name in DB.
-func (c CommandList) tablesCommand(s *Shell, argv []string) error {
-	tables, err := s.sqlite3Interactor.TablesName(s.Ctx)
+func (c CommandList) tablesCommand(ctx context.Context, s *Shell, _ []string) error {
+	tables, err := s.sqlite3Interactor.TablesName(ctx)
 	if err != nil {
 		return err
 	}

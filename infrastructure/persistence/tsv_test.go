@@ -9,14 +9,14 @@ import (
 	"github.com/nao1215/gorky/golden"
 )
 
-func Test_tsvRepository_List(t *testing.T) {
+func TestTsvRepositoryList(t *testing.T) {
 	t.Run("list and dump tsv data", func(t *testing.T) {
 		r := NewTSVRepository()
 		f, err := os.Open(filepath.Join("testdata", "sample.tsv"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close() //nolint
+		defer f.Close()
 
 		tsv, err := r.List(f)
 		if err != nil {
@@ -25,7 +25,7 @@ func Test_tsvRepository_List(t *testing.T) {
 
 		var tmpFile *os.File
 		var e error
-		if runtime.GOOS != "windows" { //nolint
+		if runtime.GOOS != "windows" {
 			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.tsv")
 		} else {
 			// See https://github.com/golang/go/issues/51442
