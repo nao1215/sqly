@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
@@ -11,7 +12,7 @@ import (
 )
 
 // importCommand import csv into DB
-func (c CommandList) importCommand(s *Shell, argv []string) error {
+func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		fmt.Fprintln(config.Stdout, "[Usage]")
 		fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S) [--sheet=SHEET_NAME]")
@@ -76,10 +77,10 @@ func (c CommandList) importCommand(s *Shell, argv []string) error {
 			return errors.New("not support file format: " + path.Ext(v))
 		}
 
-		if err := s.sqlite3Interactor.CreateTable(s.Ctx, table); err != nil {
+		if err := s.sqlite3Interactor.CreateTable(ctx, table); err != nil {
 			return err
 		}
-		if err := s.sqlite3Interactor.Insert(s.Ctx, table); err != nil {
+		if err := s.sqlite3Interactor.Insert(ctx, table); err != nil {
 			return err
 		}
 	}

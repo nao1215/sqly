@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/nao1215/sqly/config"
@@ -8,10 +9,10 @@ import (
 )
 
 // modeCommand change output mode.
-func (c CommandList) modeCommand(s *Shell, argv []string) error {
+func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintf(config.Stdout, "  .mode OUTPUT_MODE   ※ current mode=%s\n", s.argument.Output.Mode.String()) //nolint:errcheck // ignore error
+		fmt.Fprintf(config.Stdout, "  .mode OUTPUT_MODE   ※ current mode=%s\n", s.argument.Output.Mode.String())
 		fmt.Fprintln(config.Stdout, "[Output mode list]")
 		fmt.Fprintln(config.Stdout, "  table")
 		fmt.Fprintln(config.Stdout, "  markdown")

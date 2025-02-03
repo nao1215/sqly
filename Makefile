@@ -11,6 +11,7 @@ GO_TEST     = $(GO) test -v
 GO_TOOL     = $(GO) tool
 GO_VET      = $(GO) vet
 GO_DEP      = $(GO) mod
+GO_INSTALL  = $(GO) install
 GOOS        = ""
 GOARCH      = ""
 GO_PKGROOT  = ./...
@@ -45,12 +46,11 @@ tools: ## Install dependency tools
 	$(GO_INSTALL) github.com/google/wire/cmd/wire@latest
 	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
 	$(GO_INSTALL) github.com/nikolaydubina/go-cover-treemap@latest
+	$(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO_INSTALL) go.uber.org/mock/mockgen@latest
 
-vet: ## Start go vet
-	$(GO_VET) $(GO_PACKAGES)
-
-fmt: ## Format go source code 
-	$(GO_FORMAT) $(GO_PKGROOT)
+lint: ## Lint code
+	golangci-lint run --config .golangci.yml
 
 .DEFAULT_GOAL := help
 help:  

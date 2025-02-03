@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"strings"
@@ -13,7 +14,7 @@ var (
 
 // command is type of sqly helper command
 type command struct {
-	execute     func(s *Shell, argv []string) error
+	execute     func(ctx context.Context, s *Shell, argv []string) error
 	name        string
 	description string
 }

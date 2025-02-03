@@ -10,6 +10,8 @@ import (
 	"github.com/nao1215/sqly/domain/repository"
 )
 
+// _ interface implementation check
+
 type tsvRepository struct{}
 
 // NewTSVRepository return TSVRepository

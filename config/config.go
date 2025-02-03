@@ -5,7 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/caarlos0/env/v6"
+)
+
+const (
+	// Windows represents the Windows operating system identifier used for OS-specific logic.
+	Windows = "windows"
 )
 
 // Config is sqly configuration.
@@ -32,11 +38,7 @@ func NewConfig() (*Config, error) {
 
 // Dir return configuration directory path.
 func (c *Config) Dir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(os.Getenv("HOME"), ".config", "sqly")
-	}
-	return filepath.Join(home, ".config", "sqly")
+	return filepath.Join(xdg.ConfigHome, "sqly")
 }
 
 // CreateDir make configuration directory.

@@ -77,7 +77,7 @@ func Test_ltsvRepository_List(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close() //nolint
+		defer f.Close()
 
 		ltsv, err := r.List(f)
 		if err != nil {
@@ -86,7 +86,7 @@ func Test_ltsvRepository_List(t *testing.T) {
 
 		var tmpFile *os.File
 		var e error
-		if runtime.GOOS != "windows" { //nolint
+		if runtime.GOOS != "windows" {
 			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.ltsv")
 		} else {
 			// See https://github.com/golang/go/issues/51442

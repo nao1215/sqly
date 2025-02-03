@@ -6,6 +6,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
+
 // LTSVRepository is a repository that handles LTSV file.
 type LTSVRepository interface {
 	// List get ltsv all data with label.

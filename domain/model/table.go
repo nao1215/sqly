@@ -101,13 +101,12 @@ func (t *Table) IsEmptyRecords() bool {
 // IsSameHeaderColumnName return whether the table has a header column with the same name
 func (t *Table) IsSameHeaderColumnName() bool {
 	encountered := map[string]bool{}
-	for i := 0; i < len(t.Header); i++ {
+	for i := range len(t.Header) {
 		if !encountered[t.Header[i]] {
 			encountered[t.Header[i]] = true
 			continue
-		} else {
-			return true
 		}
+		return true
 	}
 	return false
 }
@@ -164,17 +163,17 @@ func (t *Table) printMarkdownTable(out io.Writer) {
 
 // printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header, ",")) //nolint:errcheck // ignore error
+	fmt.Fprintln(out, strings.Join(t.Header, ","))
 	for _, v := range t.Records {
-		fmt.Fprintln(out, strings.Join(v, ",")) //nolint:errcheck // ignore error
+		fmt.Fprintln(out, strings.Join(v, ","))
 	}
 }
 
 // printTSV print all record with header; output format is tsv
 func (t *Table) printTSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header, "\t")) //nolint:errcheck // ignore error
+	fmt.Fprintln(out, strings.Join(t.Header, "\t"))
 	for _, v := range t.Records {
-		fmt.Fprintln(out, strings.Join(v, "\t")) //nolint:errcheck // ignore error
+		fmt.Fprintln(out, strings.Join(v, "\t"))
 	}
 }
 
@@ -185,7 +184,7 @@ func (t *Table) printLTSV(out io.Writer) {
 		for i, data := range v {
 			r = append(r, t.Header[i]+":"+data)
 		}
-		fmt.Fprintln(out, strings.Join(r, "\t")) //nolint:errcheck // ignore error
+		fmt.Fprintln(out, strings.Join(r, "\t"))
 	}
 }
 
@@ -202,10 +201,10 @@ func (t *Table) printJSON(out io.Writer) {
 	}
 	b, err := json.MarshalIndent(data, "", "   ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "json marshal error: "+err.Error()) //nolint:errcheck // ignore error
+		fmt.Fprintf(os.Stderr, "json marshal error: %s", err.Error())
 		return
 	}
-	fmt.Fprintln(out, string(b)) //nolint:errcheck // ignore error
+	fmt.Fprintln(out, string(b))
 }
 
 // printExcel print all record in excel format.

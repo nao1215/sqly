@@ -7,16 +7,17 @@ import (
 	"testing"
 
 	"github.com/nao1215/gorky/golden"
+	"github.com/nao1215/sqly/config"
 )
 
-func Test_csvRepository_List(t *testing.T) {
+func TestCsvRepositoryList(t *testing.T) {
 	t.Run("list and dump csv data", func(t *testing.T) {
 		cr := NewCSVRepository()
 		f, err := os.Open(filepath.Join("testdata", "sample.csv"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close() //nolint
+		defer f.Close()
 
 		csv, err := cr.List(f)
 		if err != nil {
@@ -25,7 +26,7 @@ func Test_csvRepository_List(t *testing.T) {
 
 		var tmpFile *os.File
 		var e error
-		if runtime.GOOS != "windows" { //nolint
+		if runtime.GOOS != config.Windows {
 			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.csv")
 		} else {
 			// See https://github.com/golang/go/issues/51442

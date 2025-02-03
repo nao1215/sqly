@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -34,7 +35,7 @@ func run(args []string) int {
 	}
 	defer cleanup()
 
-	if err := shell.Run(); err != nil {
+	if err := shell.Run(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}

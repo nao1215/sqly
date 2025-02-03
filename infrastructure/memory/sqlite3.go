@@ -31,7 +31,7 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint
+	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
 	if err != nil {
@@ -46,14 +46,14 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback() //nolint
+	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table'")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint
+	defer rows.Close()
 
 	tables := []*model.Table{}
 	var name string
@@ -85,7 +85,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint
+	defer tx.Rollback()
 
 	for _, v := range t.Records {
 		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name, v)); err != nil {
@@ -97,7 +97,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 
 // List get records in the specified table
 func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
-	table, err := r.Query(ctx, fmt.Sprintf("SELECT * FROM %s", infra.Quote(tableName)))
+	table, err := r.Query(ctx, "SELECT * FROM "+infra.Quote(tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -116,13 +116,13 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback() //nolint
+	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close() //nolint
+	defer rows.Close()
 
 	header, err := rows.Columns()
 	if err != nil {
@@ -174,7 +174,7 @@ func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, 
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback() //nolint
+	defer tx.Rollback()
 
 	result, err := tx.ExecContext(ctx, statement)
 	if err != nil {

@@ -2,6 +2,7 @@ package shell
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,12 +14,12 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
-	"github.com/nao1215/sqly/usecase"
+	"github.com/nao1215/sqly/interactor"
 )
 
-func TestShell_Run(t *testing.T) {
+func TestShellRun(t *testing.T) {
 	t.Run("print version", func(t *testing.T) {
-		config.Version = "(devel)" //nolint
+		config.Version = "(devel)"
 		defer func() {
 			config.Version = ""
 		}()
@@ -36,7 +37,7 @@ func TestShell_Run(t *testing.T) {
 	})
 
 	t.Run("print help", func(t *testing.T) {
-		config.Version = "(devel)" //nolint
+		config.Version = "(devel)"
 		defer func() {
 			config.Version = ""
 		}()
@@ -54,7 +55,7 @@ func TestShell_Run(t *testing.T) {
 	})
 
 	t.Run("SELECT * FROM actor ORDER BY actor ASC LIMIT 5", func(t *testing.T) {
-		config.Version = "(devel)" //nolint
+		config.Version = "(devel)"
 		defer func() {
 			config.Version = ""
 		}()
@@ -72,7 +73,7 @@ func TestShell_Run(t *testing.T) {
 	})
 
 	t.Run("execute sql and output result to file", func(t *testing.T) {
-		config.Version = "(devel)" //nolint
+		config.Version = "(devel)"
 		defer func() {
 			config.Version = ""
 		}()
@@ -84,7 +85,7 @@ func TestShell_Run(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.Run(); err != nil {
+		if err := shell.Run(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -124,15 +125,15 @@ func TestShell_completer(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
-		shell.completer(*prompt.NewDocument())
+		shell.completer(context.Background(), *prompt.NewDocument())
 	})
 }
 
-func TestShell_exec(t *testing.T) {
+func TestShellExec(t *testing.T) {
 	t.Run("execute .tables", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
@@ -140,7 +141,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := getExecStdOutput(t, shell.exec, ".tables")
@@ -177,7 +178,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := getExecStdOutput(t, shell.exec, ".header actor")
@@ -197,7 +198,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := getExecStdOutput(t, shell.exec, ".header")
@@ -532,7 +533,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -559,7 +560,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -586,7 +587,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -613,7 +614,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -640,7 +641,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -667,7 +668,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -705,7 +706,7 @@ func TestShell_exec(t *testing.T) {
 		}
 		defer cleanup()
 
-		if err := shell.commands.importCommand(shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := getExecStdOutput(t, shell.exec, "SELECT * FROM actor ORDER BY actor ASC LIMIT 5")
@@ -765,29 +766,29 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}
 	commandList := NewCommands()
 	csvRepository := persistence.NewCSVRepository()
-	csvInteractor := usecase.NewCSVInteractor(csvRepository)
+	csvInteractor := interactor.NewCSVInteractor(csvRepository)
 	tsvRepository := persistence.NewTSVRepository()
-	tsvInteractor := usecase.NewTSVInteractor(tsvRepository)
+	tsvInteractor := interactor.NewTSVInteractor(tsvRepository)
 	ltsvRepository := persistence.NewLTSVRepository()
-	ltsvInteractor := usecase.NewLTSVInteractor(ltsvRepository)
+	ltsvInteractor := interactor.NewLTSVInteractor(ltsvRepository)
 	jsonRepository := persistence.NewJSONRepository()
-	jsonInteractor := usecase.NewJSONInteractor(jsonRepository)
+	jsonInteractor := interactor.NewJSONInteractor(jsonRepository)
 	excelRepository := persistence.NewExcelRepository()
-	excelInteractor := usecase.NewExcelInteractor(excelRepository)
+	excelInteractor := interactor.NewExcelInteractor(excelRepository)
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
 		return nil, nil, err
 	}
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
-	sql := usecase.NewSQL()
-	sqLite3Interactor := usecase.NewSQLite3Interactor(sqLite3Repository, sql)
+	sql := interactor.NewSQL()
+	sqLite3Interactor := interactor.NewSQLite3Interactor(sqLite3Repository, sql)
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
-	historyInteractor := usecase.NewHistoryInteractor(historyRepository)
+	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
 	shellShell := NewShell(arg, configConfig, commandList, csvInteractor, tsvInteractor, ltsvInteractor, jsonInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
 	return shellShell, func() {
 		cleanup2()
@@ -795,7 +796,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}, nil
 }
 
-func getStdoutForRunFunc(t *testing.T, f func() error) []byte {
+func getStdoutForRunFunc(t *testing.T, f func(ctx context.Context) error) []byte {
 	t.Helper()
 	backupColorStdout := config.Stdout
 	defer func() {
@@ -808,10 +809,10 @@ func getStdoutForRunFunc(t *testing.T, f func() error) []byte {
 	}
 	config.Stdout = w
 
-	if err := f(); err != nil {
+	if err := f(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	w.Close() //nolint
+	w.Close()
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -834,7 +835,7 @@ func getStdout(t *testing.T, f func()) []byte {
 	config.Stdout = w
 
 	f()
-	w.Close() //nolint
+	w.Close()
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -843,7 +844,7 @@ func getStdout(t *testing.T, f func()) []byte {
 	return buffer.Bytes()
 }
 
-func getExecStdOutput(t *testing.T, f func(string) error, arg string) ([]byte, error) {
+func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg string) ([]byte, error) {
 	t.Helper()
 	backupColorStdout := config.Stdout
 	defer func() {
@@ -856,8 +857,8 @@ func getExecStdOutput(t *testing.T, f func(string) error, arg string) ([]byte, e
 	}
 	config.Stdout = w
 
-	execErr := f(arg)
-	w.Close() //nolint
+	execErr := f(context.Background(), arg)
+	w.Close()
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
