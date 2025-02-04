@@ -33,6 +33,7 @@ func NewCommands() CommandList {
 	c[".import"] = command{execute: c.importCommand, name: ".import", description: "import file(s)"}
 	c[".mode"] = command{execute: c.modeCommand, name: ".mode", description: "change output mode"}
 	c[".tables"] = command{execute: c.tablesCommand, name: ".tables", description: "print tables"}
+	c[".pwd"] = command{execute: c.pwdCommand, name: ".pwd", description: "print current working directory"}
 	return c
 }
 
