@@ -4,4 +4,5 @@
                .help: print help message
              .import: import file(s)
                .mode: change output mode
+                .pwd: print current working directory
              .tables: print tables
