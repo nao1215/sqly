@@ -4,6 +4,7 @@ theme: "material"
 nav:
   - Home: index.md
 docs_dir: markdown
+site_url: "https://nao1215.github.io/sqly/"
 plugins:
   - "search"
 extra_css:
