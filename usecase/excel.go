@@ -11,7 +11,7 @@ import (
 // ExcelUsecase handle Excel file.
 type ExcelUsecase interface {
 	// List get Excel data.
-	List(excelFilePath, sheetName string) (*model.Excel, error)
+	List(excelFilePath, sheetName string) (*model.Table, error)
 	// Dump write contents of DB table to Excel file.
 	Dump(excelFilePath string, table *model.Table) error
 }

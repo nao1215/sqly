@@ -12,8 +12,12 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-func Test_historyRepository_CreateTable(t *testing.T) {
+func TestHistoryRepositoryCreateTable(t *testing.T) {
+	t.Parallel()
+
 	t.Run("create history table and check history", func(t *testing.T) {
+		t.Parallel()
+
 		c, err := config.NewConfig()
 		if err != nil {
 			t.Fatal(err)
@@ -32,17 +36,12 @@ func Test_historyRepository_CreateTable(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		history := model.History{
-			ID:      1,
-			Request: "test",
-		}
-		input := model.Histories{&history}.ToTable()
-
+		input := model.Histories{model.NewHistory(1, "test")}.ToTable()
 		if err := r.Create(context.Background(), input); err != nil {
 			t.Fatal(err)
 		}
 
-		want := model.Histories{&history}
+		want := model.Histories{model.NewHistory(1, "test")}
 		got, err := r.List(context.Background())
 		if err != nil {
 			t.Fatal(err)

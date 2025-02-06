@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,9 +9,12 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/golden"
+	"github.com/nao1215/sqly/infrastructure"
 )
 
-func Test_ltsvRepository_labelAndData(t *testing.T) {
+func TestLtsvRepositoryLabelAndData(t *testing.T) {
+	t.Parallel()
+
 	type args struct {
 		s string
 	}
@@ -55,6 +59,8 @@ func Test_ltsvRepository_labelAndData(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			lr := &ltsvRepository{}
 			got, got1, err := lr.labelAndData(tt.args.s)
 			if (err != nil) != tt.wantErr {
@@ -71,8 +77,12 @@ func Test_ltsvRepository_labelAndData(t *testing.T) {
 	}
 }
 
-func Test_ltsvRepository_List(t *testing.T) {
+func TestLtsvRepositoryList(t *testing.T) {
+	t.Parallel()
+
 	t.Run("list and dump ltsv data", func(t *testing.T) {
+		t.Parallel()
+
 		r := NewLTSVRepository()
 		f, err := os.Open(filepath.Join("testdata", "sample.ltsv"))
 		if err != nil {
@@ -108,5 +118,21 @@ func Test_ltsvRepository_List(t *testing.T) {
 		g := golden.New(t,
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "sample_ltsv", got)
+	})
+
+	t.Run("failed to get label data", func(t *testing.T) {
+		t.Parallel()
+
+		r := NewLTSVRepository()
+		f, err := os.Open(filepath.Join("testdata", "sample_bad_label.ltsv"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+
+		_, err = r.List(f)
+		if !errors.Is(err, infrastructure.ErrNoLabel) {
+			t.Errorf("error is not ErrNoLabel: %v", err)
+		}
 	})
 }

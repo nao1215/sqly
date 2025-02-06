@@ -5,31 +5,29 @@ import "strings"
 
 // TSV is tsv data with header.
 type TSV struct {
-	Name    string
-	Header  Header
-	Records []Record
+	name    string
+	header  Header
+	records []Record
 }
 
-// IsHeaderEmpty return wherther header is empty or not
-func (t *TSV) IsHeaderEmpty() bool {
-	return len(t.Header) == 0
-}
-
-// SetHeader set header column.
-func (t *TSV) SetHeader(header Header) {
-	t.Header = append(t.Header, header...)
-}
-
-// SetRecord set tsv record.
-func (t *TSV) SetRecord(record Record) {
-	t.Records = append(t.Records, record)
+// NewTSV create new TSV.
+func NewTSV(
+	name string,
+	header Header,
+	records []Record,
+) *TSV {
+	return &TSV{
+		name:    name,
+		header:  header,
+		records: records,
+	}
 }
 
 // ToTable convert TSV to Table.
 func (t *TSV) ToTable() *Table {
-	return &Table{
-		Name:    strings.TrimSuffix(t.Name, ".tsv"),
-		Header:  t.Header,
-		Records: t.Records,
-	}
+	return NewTable(
+		strings.TrimSuffix(t.name, ".tsv"),
+		t.header,
+		t.records,
+	)
 }

@@ -164,13 +164,14 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
 		query := "SELECT * FROM test"
-		expectedTable := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		expectedTable := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
@@ -207,14 +208,14 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
 		query := "EXPLAIN SELECT * FROM test"
-		expectedTable := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		expectedTable := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
-
+		)
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
 		interactor := NewSQLite3Interactor(repo, NewSQL())
@@ -344,14 +345,14 @@ func TestSqlite3InteractorCreateTable(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		table := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		table := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
-
+		)
 		repo.EXPECT().CreateTable(gomock.Any(), table).Return(nil)
 
 		interactor := NewSQLite3Interactor(repo, NewSQL())
@@ -366,13 +367,14 @@ func TestSqlite3InteractorCreateTable(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		table := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		table := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 
 		someErr := errors.New("failed to create table")
 		repo.EXPECT().CreateTable(gomock.Any(), table).Return(someErr)
@@ -394,8 +396,8 @@ func TestSqlite3InteractorTablesName(t *testing.T) {
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
 		tables := []*model.Table{
-			{Name: "table1"},
-			{Name: "table2"},
+			model.NewTable("table1", model.Header{}, nil),
+			model.NewTable("table2", model.Header{}, nil),
 		}
 
 		repo.EXPECT().TablesName(gomock.Any()).Return(tables, nil)
@@ -436,13 +438,14 @@ func TestSqlite3InteractorInsert(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		table := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		table := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 
 		repo.EXPECT().Insert(gomock.Any(), table).Return(nil)
 
@@ -458,13 +461,14 @@ func TestSqlite3InteractorInsert(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		table := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		table := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 
 		someErr := errors.New("failed to insert records")
 		repo.EXPECT().Insert(gomock.Any(), table).Return(someErr)
@@ -486,13 +490,14 @@ func TestSqlite3InteractorList(t *testing.T) {
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
 		tableName := "test"
-		expectedTable := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		expectedTable := model.NewTable(
+			tableName,
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 
 		repo.EXPECT().List(gomock.Any(), tableName).Return(expectedTable, nil)
 
@@ -535,10 +540,11 @@ func TestSqlite3InteractorHeader(t *testing.T) {
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
 		tableName := "test"
-		expectedHeader := &model.Table{
-			Header: model.Header{"id", "name"},
-		}
-
+		expectedHeader := model.NewTable(
+			tableName,
+			model.Header{"id", "name"},
+			nil,
+		)
 		repo.EXPECT().Header(gomock.Any(), tableName).Return(expectedHeader, nil)
 
 		interactor := NewSQLite3Interactor(repo, NewSQL())
@@ -580,14 +586,14 @@ func TestSqlite3InteractorQuery(t *testing.T) {
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
 		query := "SELECT * FROM test"
-		expectedTable := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		expectedTable := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
-
+		)
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
 		interactor := NewSQLite3Interactor(repo, NewSQL())

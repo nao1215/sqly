@@ -29,8 +29,12 @@ func NewJSONInteractor(
 }
 
 // List get JSON data.
-func (i *jsonInteractor) List(jsonFilePath string) (*model.JSON, error) {
-	return i.r.List(jsonFilePath)
+func (i *jsonInteractor) List(jsonFilePath string) (*model.Table, error) {
+	json, err := i.r.List(jsonFilePath)
+	if err != nil {
+		return nil, err
+	}
+	return json.ToTable(), nil
 }
 
 // Dump write contents of DB table to JSON file

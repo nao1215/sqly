@@ -11,7 +11,11 @@ import (
 )
 
 func TestTsvRepositoryList(t *testing.T) {
+	t.Parallel()
+
 	t.Run("list and dump tsv data", func(t *testing.T) {
+		t.Parallel()
+
 		r := NewTSVRepository()
 		f, err := os.Open(filepath.Join("testdata", "sample.tsv"))
 		if err != nil {
