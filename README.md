@@ -112,11 +112,33 @@ Mary,2,Jenkins,jenkins46
 ```
 
 ### Run sqly shell
-![sqly-shell](./doc/img/sqly-shell.png)  
+The sqly shell starts when you run the sqly command without the --sql option. When you execute sqly command with file path, the sqly-shell starts after importing the file into the SQLite3 in-memory database.  
 
-The sqly-shell starts when you run the sqly command without the --sql option. When you execute sqly command with file path, the sqly-shell starts after importing the file into the SQLite3 in-memory database.  
+```shell
+$ sqly 
+sqly v0.10.0
+
+enter "SQL query" or "sqly command that begins with a dot".
+.help print usage, .exit exit sqly.
+
+sqly (mode: table) >
+```
   
-The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` command or `mysql` command). The sqly-shell has helper commands that begin with a dot. The sqly-shell also supports command history, and input completion.  
+The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` command or `mysql` command). The sqly shell has helper commands that begin with a dot. The sqly-shell also supports command history, and input completion.  
+
+The sqly-shell has the following helper commands:
+
+```shell
+sqly (mode: table) > .help
+      .dump: dump db table to file in a format according to output mode (default: csv)
+      .exit: exit sqly
+    .header: print table header
+      .help: print help message
+    .import: import file(s)
+      .mode: change output mode
+       .pwd: print current working directory
+    .tables: print tables
+```
 
 ### Output sql result to file
 #### For linux user 
