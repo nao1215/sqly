@@ -1,0 +1,18 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'doc/pages/markdown/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install mkdocs-material
+      - run: mkdocs gh-deploy --force --config-file doc/pages/mkdocs.yml
