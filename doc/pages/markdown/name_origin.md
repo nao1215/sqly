@@ -1,0 +1,1 @@
+The origin of the name sqly is that it was named with the intention of creating a tool that surpasses the famous jmoiron/sqlx (x is followed by y). Just kidding. The real origin is that it was named with the nuance of "SQL on CSV? (Is this guy serious?)" like the slang "literally".

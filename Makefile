@@ -43,7 +43,6 @@ generate: ## Generate code from templates
 
 tools: ## Install dependency tools 
 	$(GO_INSTALL) github.com/Songmu/ghch/cmd/ghch@latest
-	$(GO_INSTALL) github.com/nao1215/hottest@latest
 	$(GO_INSTALL) github.com/google/wire/cmd/wire@latest
 	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
 	$(GO_INSTALL) github.com/nikolaydubina/go-cover-treemap@latest
