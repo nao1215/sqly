@@ -57,8 +57,8 @@ func (h *historyRepository) Create(ctx context.Context, t *model.Table) error {
 	}
 	defer tx.Rollback()
 
-	for _, v := range t.Records {
-		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name, v)); err != nil {
+	for _, v := range t.Records() {
+		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
 			return err
 		}
 	}
@@ -87,10 +87,7 @@ func (h *historyRepository) List(ctx context.Context) (model.Histories, error) {
 		if err := rows.Scan(&id, &request); err != nil {
 			return nil, err
 		}
-		histories = append(histories, &model.History{
-			ID:      id,
-			Request: request,
-		})
+		histories = append(histories, model.NewHistory(id, request))
 	}
 
 	err = rows.Err()

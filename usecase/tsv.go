@@ -9,7 +9,7 @@ import (
 // TSVUsecase handle TSV file.
 type TSVUsecase interface {
 	// List get TSV data.
-	List(tsvFilePath string) (*model.TSV, error)
+	List(tsvFilePath string) (*model.Table, error)
 	// Dump write contents of DB table to TSV file.
 	Dump(tsvFilePath string, table *model.Table) error
 }

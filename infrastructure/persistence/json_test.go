@@ -11,9 +11,11 @@ import (
 )
 
 func TestJsonRepositoryList(t *testing.T) {
+	t.Parallel()
 	t.Run("list and dump json data", func(t *testing.T) {
-		r := NewJSONRepository()
+		t.Parallel()
 
+		r := NewJSONRepository()
 		csv, err := r.List(filepath.Join("testdata", "sample.json"))
 		if err != nil {
 			t.Fatal(err)

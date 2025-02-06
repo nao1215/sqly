@@ -30,26 +30,21 @@ func (r *excelRepository) List(excelFilePath string, sheetName string) (excel *m
 			err = errors.Join(err, e)
 		}
 	}()
-
-	excel = &model.Excel{
-		Name:    sheetName,
-		Header:  model.Header{},
-		Records: []model.Record{},
-	}
-
 	rows, err := f.GetRows(sheetName)
 	if err != nil {
 		return nil, err
 	}
 
+	header := model.Header{}
+	records := []model.Record{}
 	for i, row := range rows {
 		if i == 0 {
-			excel.Header = row
+			header = row
 			continue
 		}
-		excel.Records = append(excel.Records, row)
+		records = append(records, row)
 	}
-	return excel, nil
+	return model.NewExcel(sheetName, model.NewHeader(header), records), nil
 }
 
 // Dump write contents of DB table to XLSX file
@@ -61,7 +56,7 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 		}
 	}()
 
-	_, err = f.NewSheet(table.Name)
+	_, err = f.NewSheet(table.Name())
 	if err != nil {
 		return err
 	}
@@ -72,12 +67,13 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	}
 
 	f.SetActiveSheet(0)
-	if err := f.SetSheetRow(table.Name, "A1", &table.Header); err != nil {
+	header := table.Header()
+	if err := f.SetSheetRow(table.Name(), "A1", &header); err != nil {
 		return err
 	}
 
-	for i, record := range table.Records {
-		if err := f.SetSheetRow(table.Name, fmt.Sprintf("A%d", i+2), &record); err != nil {
+	for i, record := range table.Records() {
+		if err := f.SetSheetRow(table.Name(), fmt.Sprintf("A%d", i+2), &record); err != nil {
 			return err
 		}
 	}

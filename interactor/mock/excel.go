@@ -79,10 +79,10 @@ func (c *MockExcelUsecaseDumpCall) DoAndReturn(f func(string, *model.Table) erro
 }
 
 // List mocks base method.
-func (m *MockExcelUsecase) List(excelFilePath, sheetName string) (*model.Excel, error) {
+func (m *MockExcelUsecase) List(excelFilePath, sheetName string) (*model.Table, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", excelFilePath, sheetName)
-	ret0, _ := ret[0].(*model.Excel)
+	ret0, _ := ret[0].(*model.Table)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -100,19 +100,19 @@ type MockExcelUsecaseListCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockExcelUsecaseListCall) Return(arg0 *model.Excel, arg1 error) *MockExcelUsecaseListCall {
+func (c *MockExcelUsecaseListCall) Return(arg0 *model.Table, arg1 error) *MockExcelUsecaseListCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockExcelUsecaseListCall) Do(f func(string, string) (*model.Excel, error)) *MockExcelUsecaseListCall {
+func (c *MockExcelUsecaseListCall) Do(f func(string, string) (*model.Table, error)) *MockExcelUsecaseListCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockExcelUsecaseListCall) DoAndReturn(f func(string, string) (*model.Excel, error)) *MockExcelUsecaseListCall {
+func (c *MockExcelUsecaseListCall) DoAndReturn(f func(string, string) (*model.Table, error)) *MockExcelUsecaseListCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

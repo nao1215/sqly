@@ -29,14 +29,18 @@ func NewLTSVInteractor(
 }
 
 // List get LTSV data.
-func (li *LTSVInteractor) List(ltsvFilePath string) (*model.LTSV, error) {
+func (li *LTSVInteractor) List(ltsvFilePath string) (*model.Table, error) {
 	f, err := li.f.Open(filepath.Clean(ltsvFilePath))
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	return li.r.List(f)
+	ltsv, err := li.r.List(f)
+	if err != nil {
+		return nil, err
+	}
+	return ltsv.ToTable(), nil
 }
 
 // Dump write contents of DB table to LTSV file

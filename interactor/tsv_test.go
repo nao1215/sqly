@@ -25,20 +25,25 @@ func TestTsvInteractorList(t *testing.T) {
 		dummyOsFile := &os.File{}
 		fileRepo.EXPECT().Open(filepath.Join("testdata", "sample.tsv")).Return(dummyOsFile, nil)
 
-		want := &model.TSV{
-			Name: "sample.tsv",
-			Records: []model.Record{
+		tsvRepo.EXPECT().List(dummyOsFile).Return(model.NewTSV(
+			"sample",
+			[]string{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
-		tsvRepo.EXPECT().List(dummyOsFile).Return(want, nil)
+		), nil)
 
 		tsvInteractor := NewTSVInteractor(fileRepo, tsvRepo)
 		got, err := tsvInteractor.List(filepath.Join("testdata", "sample.tsv"))
 		if err != nil {
 			t.Fatal(err)
 		}
+		want := model.NewTable(
+			"sample",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}},
+		)
 		if diff := cmp.Diff(got, want); diff != "" {
 			t.Errorf("mismatch: (-got +want)\n%s", diff)
 		}
@@ -74,10 +79,11 @@ func TestTsvInteractorDump(t *testing.T) {
 		dummyOsFile := &os.File{}
 		fileRepo.EXPECT().Create(filepath.Join("testdata", "sample.tsv")).Return(dummyOsFile, nil)
 
-		table := &model.Table{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}},
-		}
+		table := model.NewTable(
+			"sample",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}},
+		)
 		tsvRepo.EXPECT().Dump(dummyOsFile, table).Return(nil)
 
 		tsvInteractor := NewTSVInteractor(fileRepo, tsvRepo)

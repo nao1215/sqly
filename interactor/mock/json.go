@@ -79,10 +79,10 @@ func (c *MockJSONUsecaseDumpCall) DoAndReturn(f func(string, *model.Table) error
 }
 
 // List mocks base method.
-func (m *MockJSONUsecase) List(jsonFilePath string) (*model.JSON, error) {
+func (m *MockJSONUsecase) List(jsonFilePath string) (*model.Table, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", jsonFilePath)
-	ret0, _ := ret[0].(*model.JSON)
+	ret0, _ := ret[0].(*model.Table)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -100,19 +100,19 @@ type MockJSONUsecaseListCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockJSONUsecaseListCall) Return(arg0 *model.JSON, arg1 error) *MockJSONUsecaseListCall {
+func (c *MockJSONUsecaseListCall) Return(arg0 *model.Table, arg1 error) *MockJSONUsecaseListCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJSONUsecaseListCall) Do(f func(string) (*model.JSON, error)) *MockJSONUsecaseListCall {
+func (c *MockJSONUsecaseListCall) Do(f func(string) (*model.Table, error)) *MockJSONUsecaseListCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJSONUsecaseListCall) DoAndReturn(f func(string) (*model.JSON, error)) *MockJSONUsecaseListCall {
+func (c *MockJSONUsecaseListCall) DoAndReturn(f func(string) (*model.Table, error)) *MockJSONUsecaseListCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

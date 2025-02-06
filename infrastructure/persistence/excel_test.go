@@ -9,7 +9,7 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-func Test_excelRepository_List(t *testing.T) {
+func TestExcelRepositoryList(t *testing.T) {
 	t.Run("list excel data", func(t *testing.T) {
 		r := NewExcelRepository()
 
@@ -18,37 +18,34 @@ func Test_excelRepository_List(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := &model.Excel{
-			Name:   "test_sheet",
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		want := model.NewExcel(
+			"test_sheet",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 				{"3", "Vika"},
 			},
-		}
-
+		)
 		if diff := cmp.Diff(excel, want); diff != "" {
 			t.Fatalf("differs: (-got +want)\n%s", diff)
 		}
 	})
 }
 
-func Test_excelRepository_Dump(t *testing.T) {
+func TestExcelRepositoryDump(t *testing.T) {
 	t.Run("dump excel data", func(t *testing.T) {
 		r := NewExcelRepository()
 
-		excel := &model.Table{
-			Name:   "test_sheet",
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		excel := model.NewTable(
+			"test_sheet",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 				{"3", "Vika"},
-				{"4", "Hartlova"},
 			},
-		}
-
+		)
 		tempFilePath := filepath.Join(os.TempDir(), "dump.xlsx")
 		defer os.Remove(tempFilePath)
 		if err := r.Dump(tempFilePath, excel); err != nil {
@@ -59,17 +56,15 @@ func Test_excelRepository_Dump(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := &model.Excel{
-			Name:   "test_sheet",
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		want := model.NewExcel(
+			"test_sheet",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 				{"3", "Vika"},
-				{"4", "Hartlova"},
 			},
-		}
-
+		)
 		if diff := cmp.Diff(got, want); diff != "" {
 			t.Fatalf("differs: (-got +want)\n%s", diff)
 		}

@@ -26,9 +26,8 @@ func NewCSVRepository() repository.CSVRepository {
 func (cr *csvRepository) List(f *os.File) (*model.CSV, error) {
 	r := csv.NewReader(f)
 
-	c := model.CSV{
-		Name: filepath.Base(f.Name()),
-	}
+	header := model.Header{}
+	records := []model.Record{}
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -36,14 +35,13 @@ func (cr *csvRepository) List(f *os.File) (*model.CSV, error) {
 		} else if err != nil {
 			return nil, err
 		}
-
-		if c.IsHeaderEmpty() {
-			c.SetHeader(row)
+		if len(header) == 0 {
+			header = row
 			continue
 		}
-		c.SetRecord(row)
+		records = append(records, model.NewRecord(row))
 	}
-	return &c, nil
+	return model.NewCSV(filepath.Base(f.Name()), model.NewHeader(header), records), nil
 }
 
 // Dump write contents of DB table to CSV file
@@ -51,9 +49,9 @@ func (cr *csvRepository) Dump(f *os.File, table *model.Table) error {
 	w := csv.NewWriter(f)
 
 	records := [][]string{
-		table.Header,
+		table.Header(),
 	}
-	for _, v := range table.Records {
+	for _, v := range table.Records() {
 		records = append(records, v)
 	}
 	return w.WriteAll(records)

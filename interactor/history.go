@@ -28,7 +28,7 @@ func (hi *historyInteractor) CreateTable(ctx context.Context) error {
 
 // Create create history record.
 func (hi *historyInteractor) Create(ctx context.Context, history model.History) error {
-	h := model.Histories{&history}
+	h := model.Histories{history}
 	return hi.r.Create(ctx, h.ToTable())
 }
 

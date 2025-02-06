@@ -25,24 +25,21 @@ func (r *jsonRepository) List(jsonFilePath string) (*model.JSON, error) {
 		return nil, err
 	}
 
-	j := model.JSON{
-		Name: filepath.Base(jsonFilePath),
-		JSON: make([]map[string]interface{}, 0),
-	}
-	if err = json.Unmarshal(bytes, &j.JSON); err != nil {
+	data := make([]map[string]interface{}, 0)
+	if err = json.Unmarshal(bytes, &data); err != nil {
 		return nil, err
 	}
-	return &j, nil
+	return model.NewJSON(filepath.Base(jsonFilePath), data), nil
 }
 
 // Dump write contents of DB table to JSON file
 func (r *jsonRepository) Dump(f *os.File, table *model.Table) error {
 	data := make([]map[string]interface{}, 0)
 
-	for _, v := range table.Records {
+	for _, v := range table.Records() {
 		d := make(map[string]interface{}, 0)
 		for i, r := range v {
-			d[table.Header[i]] = r
+			d[table.Header()[i]] = r
 		}
 		data = append(data, d)
 	}

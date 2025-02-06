@@ -20,8 +20,12 @@ func NewExcelInteractor(r repository.ExcelRepository) usecase.ExcelUsecase {
 }
 
 // List get Excel data.
-func (e *excelInteractor) List(excelFilePath, sheetName string) (*model.Excel, error) {
-	return e.r.List(excelFilePath, sheetName)
+func (e *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, error) {
+	excel, err := e.r.List(excelFilePath, sheetName)
+	if err != nil {
+		return nil, err
+	}
+	return excel.ToTable(), nil
 }
 
 // Dump write contents of DB table to JSON file

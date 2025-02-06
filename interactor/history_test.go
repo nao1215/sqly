@@ -52,11 +52,8 @@ func TestHistoryInteractorCreate(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
-		history := model.History{
-			ID:      1,
-			Request: "create table",
-		}
-		historyRepo.EXPECT().Create(context.Background(), model.Histories{&history}.ToTable()).Return(nil)
+		history := model.NewHistory(1, "create table")
+		historyRepo.EXPECT().Create(context.Background(), model.Histories{history}.ToTable()).Return(nil)
 
 		historyInteractor := NewHistoryInteractor(historyRepo)
 		err := historyInteractor.Create(context.Background(), history)
@@ -70,12 +67,9 @@ func TestHistoryInteractorCreate(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
-		history := model.History{
-			ID:      1,
-			Request: "create table",
-		}
+		history := model.NewHistory(1, "create table")
 		someErr := errors.New("failed to create history record")
-		historyRepo.EXPECT().Create(context.Background(), model.Histories{&history}.ToTable()).Return(someErr)
+		historyRepo.EXPECT().Create(context.Background(), model.Histories{history}.ToTable()).Return(someErr)
 
 		historyInteractor := NewHistoryInteractor(historyRepo)
 		err := historyInteractor.Create(context.Background(), history)
@@ -94,8 +88,8 @@ func TestHistoryInteractorList(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
 		histories := model.Histories{
-			{ID: 1, Request: "create table"},
-			{ID: 2, Request: "drop table"},
+			model.NewHistory(1, "create table"),
+			model.NewHistory(2, "drop table"),
 		}
 		historyRepo.EXPECT().List(context.Background()).Return(histories, nil)
 

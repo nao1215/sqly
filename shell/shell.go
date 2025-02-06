@@ -216,24 +216,24 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 		})
 	}
 
-	tableNames, err := s.sqlite3Interactor.TablesName(ctx)
+	tables, err := s.sqlite3Interactor.TablesName(ctx)
 	if err != nil {
 		return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 	}
-	for _, v := range tableNames {
+	for _, v := range tables {
 		suggest = append(suggest, prompt.Suggest{
-			Text:        v.Name,
-			Description: "table: " + v.Name,
+			Text:        v.Name(),
+			Description: "table: " + v.Name(),
 		})
 
-		table, err := s.sqlite3Interactor.Header(ctx, v.Name)
+		table, err := s.sqlite3Interactor.Header(ctx, v.Name())
 		if err != nil {
 			return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 		}
-		for _, h := range table.Header {
+		for _, h := range table.Header() {
 			suggest = append(suggest, prompt.Suggest{
 				Text:        h,
-				Description: "header: " + h + " column in " + v.Name + " table",
+				Description: "header: " + h + " column in " + v.Name() + " table",
 			})
 		}
 	}
@@ -301,13 +301,7 @@ func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
 	if err != nil {
 		return err
 	}
-
-	history := model.History{
-		ID:      len(histories) + 1,
-		Request: request,
-	}
-
-	if err := s.historyInteractor.Create(ctx, history); err != nil {
+	if err := s.historyInteractor.Create(ctx, model.NewHistory(len(histories)+1, request)); err != nil {
 		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil
