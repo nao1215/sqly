@@ -79,10 +79,10 @@ func (c *MockTSVUsecaseDumpCall) DoAndReturn(f func(string, *model.Table) error)
 }
 
 // List mocks base method.
-func (m *MockTSVUsecase) List(tsvFilePath string) (*model.TSV, error) {
+func (m *MockTSVUsecase) List(tsvFilePath string) (*model.Table, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", tsvFilePath)
-	ret0, _ := ret[0].(*model.TSV)
+	ret0, _ := ret[0].(*model.Table)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -100,19 +100,19 @@ type MockTSVUsecaseListCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockTSVUsecaseListCall) Return(arg0 *model.TSV, arg1 error) *MockTSVUsecaseListCall {
+func (c *MockTSVUsecaseListCall) Return(arg0 *model.Table, arg1 error) *MockTSVUsecaseListCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTSVUsecaseListCall) Do(f func(string) (*model.TSV, error)) *MockTSVUsecaseListCall {
+func (c *MockTSVUsecaseListCall) Do(f func(string) (*model.Table, error)) *MockTSVUsecaseListCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTSVUsecaseListCall) DoAndReturn(f func(string) (*model.TSV, error)) *MockTSVUsecaseListCall {
+func (c *MockTSVUsecaseListCall) DoAndReturn(f func(string) (*model.Table, error)) *MockTSVUsecaseListCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

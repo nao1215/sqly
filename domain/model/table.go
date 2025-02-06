@@ -55,11 +55,58 @@ func (p PrintMode) String() string {
 // Table is DB table.
 type Table struct {
 	// Name is table name.
-	Name string
+	name string
 	// Header is table header.
-	Header Header
+	header Header
 	// Records is table records.
-	Records []Record
+	records []Record
+}
+
+// NewTable create new Table.
+func NewTable(
+	name string,
+	header Header,
+	records []Record,
+) *Table {
+	return &Table{
+		name:    name,
+		header:  header,
+		records: records,
+	}
+}
+
+// Name return table name.
+func (t *Table) Name() string {
+	return t.name
+}
+
+// Header return table header.
+func (t *Table) Header() Header {
+	return t.header
+}
+
+// Records return table records.
+func (t *Table) Records() []Record {
+	return t.records
+}
+
+// Equal compare Table.
+func (t *Table) Equal(t2 *Table) bool {
+	if t.Name() != t2.Name() {
+		return false
+	}
+	if !t.header.Equal(t2.header) {
+		return false
+	}
+	if len(t.Records()) != len(t2.Records()) {
+		return false
+	}
+	for i, record := range t.Records() {
+		if !record.Equal(t2.Records()[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Valid check the contents of a Table.
@@ -85,25 +132,25 @@ func (t *Table) Valid() error {
 
 // IsEmptyName return wherther table name is empty or not
 func (t *Table) IsEmptyName() bool {
-	return t.Name == ""
+	return t.name == ""
 }
 
 // IsEmptyHeader return wherther table header is empty or not
 func (t *Table) IsEmptyHeader() bool {
-	return len(t.Header) == 0
+	return len(t.header) == 0
 }
 
 // IsEmptyRecords return wherther table records is empty or not
 func (t *Table) IsEmptyRecords() bool {
-	return len(t.Records) == 0
+	return len(t.records) == 0
 }
 
 // IsSameHeaderColumnName return whether the table has a header column with the same name
 func (t *Table) IsSameHeaderColumnName() bool {
 	encountered := map[string]bool{}
-	for i := range len(t.Header) {
-		if !encountered[t.Header[i]] {
-			encountered[t.Header[i]] = true
+	for i := range t.header {
+		if !encountered[t.Header()[i]] {
+			encountered[t.Header()[i]] = true
 			continue
 		}
 		return true
@@ -136,11 +183,11 @@ func (t *Table) Print(out io.Writer, mode PrintMode) {
 // printTables print all record with header; output format is table
 func (t *Table) printTable(out io.Writer) {
 	table := tablewriter.NewWriter(out)
-	table.SetHeader(t.Header)
+	table.SetHeader(t.Header())
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
 
-	for _, v := range t.Records {
+	for _, v := range t.Records() {
 		table.Append(v)
 	}
 	table.Render()
@@ -149,13 +196,13 @@ func (t *Table) printTable(out io.Writer) {
 // printMarkdownTable print all record with header; output format is markdown
 func (t *Table) printMarkdownTable(out io.Writer) {
 	table := tablewriter.NewWriter(out)
-	table.SetHeader(t.Header)
+	table.SetHeader(t.Header())
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	table.SetCenterSeparator("|")
 
-	for _, v := range t.Records {
+	for _, v := range t.Records() {
 		table.Append(v)
 	}
 	table.Render()
@@ -163,26 +210,26 @@ func (t *Table) printMarkdownTable(out io.Writer) {
 
 // printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header, ","))
-	for _, v := range t.Records {
+	fmt.Fprintln(out, strings.Join(t.Header(), ","))
+	for _, v := range t.Records() {
 		fmt.Fprintln(out, strings.Join(v, ","))
 	}
 }
 
 // printTSV print all record with header; output format is tsv
 func (t *Table) printTSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header, "\t"))
-	for _, v := range t.Records {
+	fmt.Fprintln(out, strings.Join(t.Header(), "\t"))
+	for _, v := range t.Records() {
 		fmt.Fprintln(out, strings.Join(v, "\t"))
 	}
 }
 
 // Print print all record with header; output format is ltsv
 func (t *Table) printLTSV(out io.Writer) {
-	for _, v := range t.Records {
+	for _, v := range t.Records() {
 		r := Record{}
 		for i, data := range v {
-			r = append(r, t.Header[i]+":"+data)
+			r = append(r, t.Header()[i]+":"+data)
 		}
 		fmt.Fprintln(out, strings.Join(r, "\t"))
 	}
@@ -192,10 +239,10 @@ func (t *Table) printLTSV(out io.Writer) {
 func (t *Table) printJSON(out io.Writer) {
 	data := make([]map[string]interface{}, 0)
 
-	for _, v := range t.Records {
+	for _, v := range t.Records() {
 		d := make(map[string]interface{}, 0)
 		for i, r := range v {
-			d[t.Header[i]] = r
+			d[t.Header()[i]] = r
 		}
 		data = append(data, d)
 	}

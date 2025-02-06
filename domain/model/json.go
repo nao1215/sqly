@@ -8,16 +8,24 @@ import (
 
 // JSON is json data with indefinite keys
 type JSON struct {
-	// Name is json file name
-	Name string
-	// JSON is key and value
-	JSON []map[string]interface{}
+	// name is json file name
+	name string
+	// json is key and value
+	json []map[string]interface{}
+}
+
+// NewJSON create new JSON.
+func NewJSON(name string, json []map[string]interface{}) *JSON {
+	return &JSON{
+		name: name,
+		json: json,
+	}
 }
 
 // ToTable convert JSON to Table.
 func (j *JSON) ToTable() *Table {
 	var keys []string
-	for _, json := range j.JSON {
+	for _, json := range j.json {
 		for k := range json {
 			keys = append(keys, k)
 		}
@@ -25,8 +33,8 @@ func (j *JSON) ToTable() *Table {
 	header := sliceUnique(keys)
 	sort.Strings(header)
 
-	records := make([]Record, 0, len(j.JSON))
-	for _, json := range j.JSON {
+	records := make([]Record, 0, len(j.json))
+	for _, json := range j.json {
 		r := Record{}
 		for _, h := range header {
 			if val, ok := json[h]; ok {
@@ -48,11 +56,7 @@ func (j *JSON) ToTable() *Table {
 		records = append(records, r)
 	}
 
-	return &Table{
-		Name:    strings.TrimSuffix(j.Name, ".json"),
-		Header:  header,
-		Records: records,
-	}
+	return NewTable(strings.TrimSuffix(j.name, ".json"), header, records)
 }
 
 func sliceUnique(target []string) (unique []string) {

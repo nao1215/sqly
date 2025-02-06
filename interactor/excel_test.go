@@ -20,10 +20,11 @@ func TestExcelInteractorList(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		excelRepo := infrastructure.NewMockExcelRepository(ctrl)
 		excelRepo.EXPECT().List(filepath.Join("testdata", "sample.xlsx"), "Sheet1").Return(
-			&model.Excel{
-				Header:  model.Header{"id", "name"},
-				Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-			}, nil,
+			model.NewExcel(
+				"sample",
+				model.Header{"id", "name"},
+				[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+			), nil,
 		)
 
 		excelInteractor := NewExcelInteractor(excelRepo)
@@ -32,10 +33,11 @@ func TestExcelInteractorList(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := &model.Excel{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
+		want := model.NewTable(
+			"sample",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 		if diff := cmp.Diff(got, want); diff != "" {
 			t.Fatalf("differs: (-got +want)\n%s", diff)
 		}
@@ -65,10 +67,11 @@ func TestExcelInteractorDump(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		excelRepo := infrastructure.NewMockExcelRepository(ctrl)
-		table := &model.Table{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
+		table := model.NewTable(
+			"dump",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 		excelRepo.EXPECT().Dump(filepath.Join("testdata", "dump.xlsx"), table).Return(nil)
 
 		excelInteractor := NewExcelInteractor(excelRepo)
@@ -83,10 +86,11 @@ func TestExcelInteractorDump(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		excelRepo := infrastructure.NewMockExcelRepository(ctrl)
-		table := &model.Table{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
+		table := model.NewTable(
+			"dump",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 		someErr := errors.New("failed to dump")
 		excelRepo.EXPECT().Dump(filepath.Join("testdata", "dump.xlsx"), table).Return(someErr)
 

@@ -5,7 +5,7 @@ import (
 )
 
 // Histories is sqly history all record.
-type Histories []*History
+type Histories []History
 
 // History is sqly history record.
 type History struct {
@@ -13,6 +13,14 @@ type History struct {
 	ID int
 	// Request is sqly history record that is user input from sqly prompt
 	Request string
+}
+
+// NewHistory create new History.
+func NewHistory(id int, request string) History {
+	return History{
+		ID:      id,
+		Request: request,
+	}
 }
 
 // ToTable convert History to Table.
@@ -23,12 +31,7 @@ func (h Histories) ToTable() *Table {
 			strconv.Itoa(v.ID), v.Request,
 		})
 	}
-
-	return &Table{
-		Name:    "history",
-		Header:  []string{"id", "request"},
-		Records: records,
-	}
+	return NewTable("history", []string{"id", "request"}, records)
 }
 
 // ToStringList convert history to string list.

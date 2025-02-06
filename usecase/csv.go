@@ -10,7 +10,7 @@ type (
 	// CSVUsecase handle CSV file.
 	CSVUsecase interface {
 		// List get CSV data.
-		List(csvFilePath string) (*model.CSV, error)
+		List(csvFilePath string) (*model.Table, error)
 		// Dump write contents of DB table to CSV file.
 		Dump(csvFilePath string, table *model.Table) error
 	}

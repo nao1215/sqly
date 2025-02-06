@@ -9,7 +9,7 @@ import (
 // LTSVUsecase handle LTSV file.
 type LTSVUsecase interface {
 	// List get LTSV data.
-	List(ltsvFilePath string) (*model.LTSV, error)
+	List(ltsvFilePath string) (*model.Table, error)
 	// Dump write contents of DB table to LTSV file.
 	Dump(ltsvFilePath string, table *model.Table) error
 }

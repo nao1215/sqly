@@ -45,12 +45,12 @@ func SingleQuote(s string) string {
 // GenerateCreateTableStatement returns create table statement.
 // e.g. CREATE TABLE `table_name` (`column1` INTEGER, `column2` TEXT, ...);
 func GenerateCreateTableStatement(t *model.Table) string {
-	indexTypeMap := make(map[int]string, len(t.Header))
+	indexTypeMap := make(map[int]string, len(t.Header()))
 	semaphore := make(chan int, runtime.NumCPU())
 	wg := &sync.WaitGroup{}
 
 	var mu sync.RWMutex
-	for i := range t.Header {
+	for i := range t.Header() {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -69,10 +69,10 @@ func GenerateCreateTableStatement(t *model.Table) string {
 	}
 	wg.Wait()
 
-	ddl := "CREATE TABLE " + Quote(t.Name) + "("
-	for i, v := range t.Header {
+	ddl := "CREATE TABLE " + Quote(t.Name()) + "("
+	for i, v := range t.Header() {
 		ddl += fmt.Sprintf("%s %s", Quote(v), indexTypeMap[i])
-		if i != len(t.Header)-1 {
+		if i != len(t.Header())-1 {
 			ddl += ", "
 		} else {
 			ddl += ");"
@@ -83,11 +83,11 @@ func GenerateCreateTableStatement(t *model.Table) string {
 
 // isNumeric returns true if all records are numeric.
 func isNumeric(t *model.Table, index int) bool {
-	if len(t.Records) == 0 {
+	if len(t.Records()) == 0 {
 		return false
 	}
 
-	for _, record := range t.Records {
+	for _, record := range t.Records() {
 		_, err := strconv.ParseFloat(record[index], 64)
 		if err != nil {
 			return false

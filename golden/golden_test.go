@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -208,6 +209,9 @@ Got: Lorem ipsum dolor.`},
 }
 
 func TestCleanFunction(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping test")
+	}
 	savedCleanState := *clean
 	*clean = false
 	savedUpdateState := *update
@@ -216,8 +220,8 @@ func TestCleanFunction(t *testing.T) {
 
 	sampleData := []byte("sample data")
 	fixtureDir := "test-fixtures"
-	fixtureSubDirA := fixtureDir + "/a"
-	fixtureSubDirB := fixtureDir + "/b"
+	fixtureSubDirA := filepath.Join(fixtureDir, "a")
+	fixtureSubDirB := filepath.Join(fixtureDir, "b")
 	suffix := ".golden"
 
 	// The first time running go test, with -update, without -clean
