@@ -13,6 +13,8 @@
 
 The sqly has **sqly-shell**. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
+Official documentation for users & developers: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
+
 > [!WARNING]
 > The support for JSON is limited. There is a possibility of discontinuing JSON support in the future.
 
@@ -37,27 +39,6 @@ brew install nao1215/tap/sqly
 The sqly automatically imports the CSV/TSV/LTSV/JSON/Excel file into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
 The sqly automatically determines the file format from the file extension.
-
-### Syntax and Options
-```shell
-[Usage]
-  sqly [OPTIONS] [FILE_PATH]
-
-[OPTIONS]
-  -c, --csv             change output format to csv (default: table)
-  -e, --excel           change output format to excel (default: table)
-  -j, --json            change output format to json (default: table)
-  -l, --ltsv            change output format to ltsv (default: table)
-  -m, --markdown        change output format to markdown table (default: table)
-  -t, --tsv             change output format to tsv (default: table)
-  -S, --sheet string    excel sheet name you want to import
-  -s, --sql string      sql query you want to execute
-  -o, --output string   destination path for SQL results specified in --sql option
-  -h, --help            print help message
-  -v, --version         print sqly version
-```
-
-※ The sqly option must be specified before the file to be imported.
 
 ### Execute sql in terminal: --sql option
 --sql option takes an SQL statement as an optional argument.
@@ -207,57 +188,7 @@ First off, thanks for taking the time to contribute! See [CONTRIBUTING.md](./CON
 
 ## How to develop
 
-### Prerequisites
-
-- Go 1.22 or later
-- `make`, `git` command
-
-#### Install tools for development
-
-```shell
-$ git clone git@github.com:nao1215/sqly.git
-$ cd sqly
-
-# Install tools for development. The tools are used for linting, formatting, and testing.
-$ make install tools
-```
-
-### Build & Test
-```shell
-$ make build
-$ make test
-```
-
-### The sqly architecture
-
-The sqly project adopts the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html). We are verifying whether the implementation follows the architecture using [fe3dback/go-arch-lint](https://github.com/fe3dback/go-arch-lint).
-
-The sqly shell calls the `usecase` interface, and the `interactor` implements the `usecase`. The `interactor` uses the `domain` (business logic) to perform data operations. Specifically, it uses the `infrastructure` that implements the `domain/repository` interface.
-
-The sqly reads data from each file, converts it into a table format, and stores the converted table data in an in-memory SQLite3 database. sqly does not have its own SQL parser and relies on SQLite3 for parsing.
-
-Here is a high-level overview of the Clean Architecture for the sqly project:
-
-```text
-+------------------+     +------------------+     +------------------+
-|      cmd        | --> |      shell       | --> |     usecase      | interface
-+------------------+     +------------------+     +------------------+
-                                                          |
-                                                          v
-                                                 +------------------+
-                                                 |    interactor    | implement
-                                                 +------------------+
-                                                          |
-                                                          v
-                      +------------------+     +------------------+
-                      | domain/model     | --> | domain/repository | interface
-                      +------------------+     +------------------+
-                                                          |
-                                                          v
-                                                 +------------------+
-                                                 |  infrastructure  | implement
-                                                 +------------------+
-```
+Please see the [document](https://nao1215.github.io/sqly/), section "Document for developers".
 
 When adding new features or fixing bugs, please write unit tests. The sqly is unit tested for all packages as the unit test tree map below shows.
 
