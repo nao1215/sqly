@@ -31,7 +31,6 @@ var (
 // Shell is main class of the sqly command.
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
-	promptPrefix      string
 	argument          *config.Arg
 	config            *config.Config
 	commands          CommandList
@@ -58,7 +57,6 @@ func NewShell(
 	excel usecase.ExcelUsecase,
 ) *Shell {
 	return &Shell{
-		promptPrefix:      "sqly> ",
 		argument:          arg,
 		config:            cfg,
 		commands:          cmds,
@@ -157,7 +155,10 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return prompt.Input(s.promptPrefix,
+	return prompt.Input(
+		func() string {
+			return fmt.Sprintf("sqly (mode: %s) > ", s.argument.Output.Mode)
+		}(),
 		func(d prompt.Document) []prompt.Suggest {
 			return s.completer(ctx, d)
 		},
