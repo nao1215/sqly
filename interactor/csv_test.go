@@ -26,10 +26,11 @@ func TestCsvInteractorList(t *testing.T) {
 		fileRepo.EXPECT().Open(filepath.Join("testdata", "sample.csv")).Return(dummyOsFile, nil)
 
 		mockCSVRepo.EXPECT().List(dummyOsFile).Return(
-			&model.CSV{
-				Header:  model.Header{"id", "name"},
-				Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-			}, nil,
+			model.NewCSV(
+				"sample",
+				model.Header{"id", "name"},
+				[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+			), nil,
 		)
 
 		csvInteractor := NewCSVInteractor(fileRepo, mockCSVRepo)
@@ -37,11 +38,11 @@ func TestCsvInteractorList(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		want := &model.CSV{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
+		want := model.NewTable(
+			"sample",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 		if diff := cmp.Diff(got, want); diff != "" {
 			t.Fatalf("differs: (-got +want)\n%s", diff)
 		}
@@ -98,10 +99,11 @@ func TestCsvInteractorDump(t *testing.T) {
 		osFile := &os.File{}
 		fileRepo.EXPECT().Create(filepath.Join("testdata", "dummy.csv")).Return(osFile, nil)
 
-		mockTable := &model.Table{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
+		mockTable := model.NewTable(
+			"dummy",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 		mockCSVRepo.EXPECT().Dump(osFile, mockTable).Return(nil)
 
 		csvInteractor := NewCSVInteractor(fileRepo, mockCSVRepo)
@@ -121,10 +123,11 @@ func TestCsvInteractorDump(t *testing.T) {
 		someErr := errors.New("failed to create file")
 		fileRepo.EXPECT().Create(filepath.Join("testdata", "dummy.csv")).Return(nil, someErr)
 
-		mockTable := &model.Table{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
+		mockTable := model.NewTable(
+			"dummy",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 
 		csvInteractor := NewCSVInteractor(fileRepo, mockCSVRepo)
 		err := csvInteractor.Dump(filepath.Join("testdata", "dummy.csv"), mockTable)
@@ -143,11 +146,11 @@ func TestCsvInteractorDump(t *testing.T) {
 		osFile := &os.File{}
 		fileRepo.EXPECT().Create(filepath.Join("testdata", "dummy.csv")).Return(osFile, nil)
 
-		mockTable := &model.Table{
-			Header:  model.Header{"id", "name"},
-			Records: []model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
-		}
-
+		mockTable := model.NewTable(
+			"dummy",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}, {"3", "Vika"}},
+		)
 		someErr := errors.New("failed to dump csv")
 		mockCSVRepo.EXPECT().Dump(osFile, mockTable).Return(someErr)
 

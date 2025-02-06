@@ -29,7 +29,7 @@ func NewCSVInteractor(
 // List get CSV data.
 // The sqly command does not open many CSV files. Therefore, the file is
 // opened and closed in the usecase layer without worrying about processing speed.
-func (ci *csvInteractor) List(csvFilePath string) (*model.CSV, error) {
+func (ci *csvInteractor) List(csvFilePath string) (*model.Table, error) {
 	f, err := ci.f.Open(csvFilePath)
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (ci *csvInteractor) List(csvFilePath string) (*model.CSV, error) {
 	if err != nil {
 		return nil, err
 	}
-	return csv, nil
+	return csv.ToTable(), nil
 }
 
 // Dump write contents of DB table to CSV file

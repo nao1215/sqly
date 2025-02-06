@@ -5,31 +5,29 @@ import "strings"
 
 // CSV is csv data with header.
 type CSV struct {
-	Name    string
-	Header  Header
-	Records []Record
+	name    string
+	header  Header
+	records []Record
 }
 
-// IsHeaderEmpty return wherther header is empty or not
-func (c *CSV) IsHeaderEmpty() bool {
-	return len(c.Header) == 0
-}
-
-// SetHeader set header column.
-func (c *CSV) SetHeader(header Header) {
-	c.Header = append(c.Header, header...)
-}
-
-// SetRecord set csv record.
-func (c *CSV) SetRecord(record Record) {
-	c.Records = append(c.Records, record)
+// NewCSV create new CSV.
+func NewCSV(
+	name string,
+	header Header,
+	records []Record,
+) *CSV {
+	return &CSV{
+		name:    name,
+		header:  header,
+		records: records,
+	}
 }
 
 // ToTable convert CSV to Table.
 func (c *CSV) ToTable() *Table {
-	return &Table{
-		Name:    strings.TrimSuffix(c.Name, ".csv"),
-		Header:  c.Header,
-		Records: c.Records,
-	}
+	return NewTable(
+		strings.TrimSuffix(c.name, ".csv"),
+		c.header,
+		c.records,
+	)
 }

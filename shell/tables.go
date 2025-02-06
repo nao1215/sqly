@@ -32,7 +32,7 @@ func printTables(out io.Writer, t []*model.Table) {
 
 	tableData := [][]string{}
 	for _, v := range t {
-		tableData = append(tableData, []string{v.Name})
+		tableData = append(tableData, []string{v.Name()})
 	}
 
 	table := tablewriter.NewWriter(out)

@@ -25,21 +25,26 @@ func TestLTSVInteractorList(t *testing.T) {
 		dummyOsFile := &os.File{}
 		fileRepo.EXPECT().Open(filepath.Join("testdata", "sample.ltsv")).Return(dummyOsFile, nil)
 
-		want := &model.LTSV{
-			Name:  "sample.ltsv",
-			Label: []string{"id", "name"},
-			Records: []model.Record{
-				{"1", "Gina"},
-				{"2", "Yulia"},
-			},
-		}
-		ltsvRepo.EXPECT().List(dummyOsFile).Return(want, nil)
+		ltsvRepo.EXPECT().List(dummyOsFile).Return(
+			model.NewLTSV(
+				"sample",
+				model.Label{"id", "name"},
+				[]model.Record{
+					{"1", "Gina"},
+					{"2", "Yulia"},
+				},
+			), nil)
 
 		ltsvInteractor := NewLTSVInteractor(fileRepo, ltsvRepo)
 		got, err := ltsvInteractor.List(filepath.Join("testdata", "sample.ltsv"))
 		if err != nil {
 			t.Fatal(err)
 		}
+		want := model.NewTable(
+			"sample",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}, {"2", "Yulia"}},
+		)
 		if diff := cmp.Diff(got, want); diff != "" {
 			t.Errorf("mismatch: (-got +want)\n%s", diff)
 		}
@@ -75,13 +80,14 @@ func TestLTSVInteractorDump(t *testing.T) {
 
 		dummyOsFile := &os.File{}
 		fileRepo.EXPECT().Create(filepath.Join("testdata", "dump.ltsv")).Return(dummyOsFile, nil)
-		table := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		table := model.NewTable(
+			"dump",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 		ltsvRepo.EXPECT().Dump(dummyOsFile, table).Return(nil)
 
 		ltsvInteractor := NewLTSVInteractor(fileRepo, ltsvRepo)
@@ -118,13 +124,14 @@ func TestLTSVInteractorDump(t *testing.T) {
 		dummyOsFile := &os.File{}
 		fileRepo.EXPECT().Create(filepath.Join("testdata", "dump.ltsv")).Return(dummyOsFile, nil)
 		someErr := errors.New("failed to dump")
-		table := &model.Table{
-			Header: model.Header{"id", "name"},
-			Records: []model.Record{
+		table := model.NewTable(
+			"dump",
+			model.Header{"id", "name"},
+			[]model.Record{
 				{"1", "Gina"},
 				{"2", "Yulia"},
 			},
-		}
+		)
 		ltsvRepo.EXPECT().Dump(dummyOsFile, table).Return(someErr)
 
 		ltsvInteractor := NewLTSVInteractor(fileRepo, ltsvRepo)

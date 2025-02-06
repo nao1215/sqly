@@ -27,9 +27,8 @@ func (lr *ltsvRepository) List(f *os.File) (*model.LTSV, error) {
 	r := csv.NewReader(f)
 	r.Comma = '\t'
 
-	t := model.LTSV{
-		Name: filepath.Base(f.Name()),
-	}
+	label := model.Label{}
+	records := []model.Record{}
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -38,8 +37,7 @@ func (lr *ltsvRepository) List(f *os.File) (*model.LTSV, error) {
 			return nil, err
 		}
 
-		if t.IsLabelEmpty() {
-			label := model.Label{}
+		if len(label) == 0 {
 			for _, v := range row {
 				l, _, err := lr.labelAndData(v)
 				if err != nil {
@@ -47,20 +45,16 @@ func (lr *ltsvRepository) List(f *os.File) (*model.LTSV, error) {
 				}
 				label = append(label, l)
 			}
-			t.Label = label
 		}
 
 		r := model.Record{}
 		for _, v := range row {
-			_, data, err := lr.labelAndData(v)
-			if err != nil {
-				return nil, err
-			}
+			_, data, _ := lr.labelAndData(v) //nolint:errcheck // error is already checked.
 			r = append(r, data)
 		}
-		t.SetRecord(r)
+		records = append(records, r)
 	}
-	return &t, nil
+	return model.NewLTSV(filepath.Base(f.Name()), label, records), nil
 }
 
 // Dump write contents of DB table to LTSV file
@@ -69,16 +63,17 @@ func (lr *ltsvRepository) Dump(f *os.File, table *model.Table) error {
 	w.Comma = '\t'
 
 	records := [][]string{}
-	for _, v := range table.Records {
+	for _, v := range table.Records() {
 		r := model.Record{}
 		for i, data := range v {
-			r = append(r, table.Header[i]+":"+data)
+			r = append(r, table.Header()[i]+":"+data)
 		}
 		records = append(records, r)
 	}
 	return w.WriteAll(records)
 }
 
+// labelAndData split label and data.
 func (lr *ltsvRepository) labelAndData(s string) (string, string, error) {
 	idx := strings.Index(s, ":")
 	if idx == -1 || idx == 0 {

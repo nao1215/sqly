@@ -79,10 +79,10 @@ func (c *MockLTSVUsecaseDumpCall) DoAndReturn(f func(string, *model.Table) error
 }
 
 // List mocks base method.
-func (m *MockLTSVUsecase) List(ltsvFilePath string) (*model.LTSV, error) {
+func (m *MockLTSVUsecase) List(ltsvFilePath string) (*model.Table, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ltsvFilePath)
-	ret0, _ := ret[0].(*model.LTSV)
+	ret0, _ := ret[0].(*model.Table)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -100,19 +100,19 @@ type MockLTSVUsecaseListCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockLTSVUsecaseListCall) Return(arg0 *model.LTSV, arg1 error) *MockLTSVUsecaseListCall {
+func (c *MockLTSVUsecaseListCall) Return(arg0 *model.Table, arg1 error) *MockLTSVUsecaseListCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockLTSVUsecaseListCall) Do(f func(string) (*model.LTSV, error)) *MockLTSVUsecaseListCall {
+func (c *MockLTSVUsecaseListCall) Do(f func(string) (*model.Table, error)) *MockLTSVUsecaseListCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockLTSVUsecaseListCall) DoAndReturn(f func(string) (*model.LTSV, error)) *MockLTSVUsecaseListCall {
+func (c *MockLTSVUsecaseListCall) DoAndReturn(f func(string) (*model.Table, error)) *MockLTSVUsecaseListCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

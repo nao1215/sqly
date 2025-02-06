@@ -6,7 +6,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestJSON_ToTable(t *testing.T) {
+func TestJSONToTable(t *testing.T) {
+	t.Parallel()
+
 	type fields struct {
 		Name string
 		JSON []map[string]interface{}
@@ -38,23 +40,22 @@ func TestJSON_ToTable(t *testing.T) {
 					},
 				},
 			},
-			want: &Table{
-				Name:   "test",
-				Header: []string{"data", "date", "id"},
-				Records: []Record{
+			want: NewTable(
+				"test",
+				Header{"data", "date", "id"},
+				[]Record{
 					{"test-data1", "2022-11-23", "1"},
 					{"test-data2", "2022-11-24", "2"},
 					{"test-data3", "2022-11-25", "3"},
 				},
-			},
+			),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j := &JSON{
-				Name: tt.fields.Name,
-				JSON: tt.fields.JSON,
-			}
+			t.Parallel()
+
+			j := NewJSON(tt.fields.Name, tt.fields.JSON)
 			got := j.ToTable()
 			if diff := cmp.Diff(got, tt.want); diff != "" {
 				t.Errorf("value is mismatch (-got +want):\n%s", diff)

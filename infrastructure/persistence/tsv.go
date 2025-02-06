@@ -24,9 +24,8 @@ func (tr *tsvRepository) List(f *os.File) (*model.TSV, error) {
 	r := csv.NewReader(f)
 	r.Comma = '\t'
 
-	t := model.TSV{
-		Name: filepath.Base(f.Name()),
-	}
+	header := model.Header{}
+	records := []model.Record{}
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -35,13 +34,13 @@ func (tr *tsvRepository) List(f *os.File) (*model.TSV, error) {
 			return nil, err
 		}
 
-		if t.IsHeaderEmpty() {
-			t.SetHeader(row)
+		if len(header) == 0 {
+			header = row
 			continue
 		}
-		t.SetRecord(row)
+		records = append(records, row)
 	}
-	return &t, nil
+	return model.NewTSV(filepath.Base(f.Name()), header, records), nil
 }
 
 // Dump write contents of DB table to TSV file
@@ -50,9 +49,9 @@ func (tr *tsvRepository) Dump(f *os.File, table *model.Table) error {
 	w.Comma = '\t'
 
 	records := [][]string{
-		table.Header,
+		table.Header(),
 	}
-	for _, v := range table.Records {
+	for _, v := range table.Records() {
 		records = append(records, v)
 	}
 	return w.WriteAll(records)
