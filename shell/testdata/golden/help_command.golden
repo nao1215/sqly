@@ -1,8 +1,10 @@
+                 .cd: change directory
                .dump: dump db table to file in a format according to output mode (default: csv)
                .exit: exit sqly
              .header: print table header
                .help: print help message
              .import: import file(s)
+                 .ls: print directory contents
                .mode: change output mode
                 .pwd: print current working directory
              .tables: print tables
