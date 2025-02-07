@@ -4,21 +4,31 @@ The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` comma
 The sqly-shell has the following helper commands:
 
 ```shell
-sqly (mode: table) > .help
+sqly:~/github/github.com/nao1215/sqly(table)$ .help
+        .cd: change directory
       .dump: dump db table to file in a format according to output mode (default: csv)
       .exit: exit sqly
     .header: print table header
       .help: print help message
     .import: import file(s)
+        .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory
     .tables: print tables
 ```
 
+### cd command
+
+```shell
+sqly:~/github/github.com/nao1215/sqly(table)$ .cd
+sqly:~(table)$ .cd Desktop
+sqly:Desktop(table)$ 
+```
+
 ### dump command
 
 ```shell
-sqly (mode: table) > .dump
+sqly:~/github/github.com/nao1215/sqly(table)$ .dump
 [Usage]
   .dump TABLE_NAME FILE_PATH
 [Note]
@@ -29,7 +39,7 @@ sqly (mode: table) > .dump
 ### exit command
 
 ```shell
-sqly (mode: table) > .exit
+sqly:~/github/github.com/nao1215/sqly(table)$.exit
 
 # the sqly shell is closed
 ```
@@ -37,7 +47,7 @@ sqly (mode: table) > .exit
 ### header command
 
 ```shell
-sqly (mode: table) > .header
+sqly:~/github/github.com/nao1215/sqly(table)$ .header
 [Usage]
   .header TABLE_NAME
 ```
@@ -45,7 +55,7 @@ sqly (mode: table) > .header
 ### import command
 
 ```shell
-sqly (mode: table) > .import
+sqly:~/github/github.com/nao1215/sqly(table)$ .import
 [Usage]
   .import FILE_PATH(S) [--sheet=SHEET_NAME]
 
@@ -55,10 +65,21 @@ sqly (mode: table) > .import
   - If import an Excel file, specify the sheet name with --sheet
 ```
 
+### ls command
+
+ls command call the `ls` command or `dir` command in the shell.
+
+```shell
+sqly:~/github/github.com/nao1215/sqly/di(table)$ .ls
+合計 8
+-rw-rw-r-- 1 nao nao  661  2月  3 13:09 wire.go
+-rw-rw-r-- 1 nao nao 2292  2月  7 10:40 wire_gen.go
+```
+
 ### mode command
 
 ```shell
-sqly (mode: table) > .mode
+sqly:~/github/github.com/nao1215/sqly(table)$ .mode
 [Usage]
   .mode OUTPUT_MODE   ※ current mode=table
 [Output mode list]
@@ -74,13 +95,23 @@ sqly (mode: table) > .mode
 ### pwd command
 
 ```shell
-sqly (mode: table) > .pwd
+sqly:~/github/github.com/nao1215/sqly(table)$ .pwd
 /home/nao
 ```
 
 ### tables command
 
 ```shell
-sqly (mode: table) > .tables
+sqly:~/github/github.com/nao1215/sqly(table)$ .tables
 there is no table. use .import for importing file
+
+sqly:~/github/github.com/nao1215/sqly(table)$  .import actor.csv
+sqly:~/github/github.com/nao1215/sqly(table)$  .import numeric.csv
+sqly:~/github/github.com/nao1215/sqly(table)$  .tables
++------------+
+| TABLE NAME |
++------------+
+| actor      |
+| numeric    |
++------------+
 ```

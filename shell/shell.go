@@ -34,6 +34,34 @@ type Shell struct {
 	config   *config.Config
 	commands CommandList
 	usecases Usecases
+	state    *state
+}
+
+// state is shell state.
+type state struct {
+	// cwd is current working directory.
+	cwd string
+}
+
+// newState return *state.
+func newState() (*state, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	return &state{
+		cwd: dir,
+	}, nil
+}
+
+// shortCWD return short current working directory.
+// If current working directory is home directory, return "~".
+func (s *state) shortCWD() string {
+	home := os.Getenv("HOME")
+	if s.cwd == home {
+		return "~"
+	}
+	return strings.Replace(s.cwd, home, "~", 1)
 }
 
 // NewShell return *Shell.
@@ -42,13 +70,18 @@ func NewShell(
 	cfg *config.Config,
 	cmds CommandList,
 	usecases Usecases,
-) *Shell {
+) (*Shell, error) {
+	state, err := newState()
+	if err != nil {
+		return nil, err
+	}
 	return &Shell{
 		argument: arg,
 		config:   cfg,
 		commands: cmds,
 		usecases: usecases,
-	}
+		state:    state,
+	}, nil
 }
 
 // Run start sqly shell.
@@ -138,7 +171,7 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 
 	return prompt.Input(
 		func() string {
-			return fmt.Sprintf("sqly (mode: %s) > ", s.argument.Output.Mode)
+			return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.argument.Output.Mode)
 		}(),
 		func(d prompt.Document) []prompt.Suggest {
 			return s.completer(ctx, d)
@@ -190,6 +223,7 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 		{Text: "tsv", Description: "sqly command argument: tsv output format"},
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
 		{Text: "json", Description: "sqly command argument: json output format"},
+		{Text: "excel", Description: "sqly command argument: excel output format"},
 	}
 
 	for _, v := range s.commands {
