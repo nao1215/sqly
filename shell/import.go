@@ -25,22 +25,22 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 		switch {
 		case isCSV(v):
-			table, err = s.csvInteractor.List(v)
+			table, err = s.usecases.csv.List(v)
 			if err != nil {
 				return err
 			}
 		case isTSV(v):
-			table, err = s.tsvInteractor.List(v)
+			table, err = s.usecases.tsv.List(v)
 			if err != nil {
 				return err
 			}
 		case isLTSV(v):
-			table, err = s.ltsvInteractor.List(v)
+			table, err = s.usecases.ltsv.List(v)
 			if err != nil {
 				return err
 			}
 		case isJSON(v):
-			table, err = s.jsonInteractor.List(v)
+			table, err = s.usecases.json.List(v)
 			if err != nil {
 				return err
 			}
@@ -56,7 +56,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 					return errors.New("sheet name is required")
 				}
 			}
-			table, err = s.excelInteractor.List(v, sheetName)
+			table, err = s.usecases.excel.List(v, sheetName)
 			if err != nil {
 				return err
 			}
@@ -66,10 +66,10 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			return errors.New("not support file format: " + path.Ext(v))
 		}
 
-		if err := s.sqlite3Interactor.CreateTable(ctx, table); err != nil {
+		if err := s.usecases.sqlite3.CreateTable(ctx, table); err != nil {
 			return err
 		}
-		if err := s.sqlite3Interactor.Insert(ctx, table); err != nil {
+		if err := s.usecases.sqlite3.Insert(ctx, table); err != nil {
 			return err
 		}
 	}

@@ -17,6 +17,7 @@ One of the unique strengths of `sqly` is that it allows you to interactively bui
 ## Document for developers
 
 - [How to build & test](./build_and_test.md)
+- [Auto-generate files](./auto_generate_files.md)
 - [Architecture](./architecture.md)
 - [Design Overview](./design_overview.md)
 

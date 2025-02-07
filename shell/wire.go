@@ -6,4 +6,5 @@ import "github.com/google/wire"
 var Set = wire.NewSet(
 	NewShell,
 	NewCommands,
+	NewUsecases,
 )

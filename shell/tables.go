@@ -13,7 +13,7 @@ import (
 
 // tablesCommand print all tables name in DB.
 func (c CommandList) tablesCommand(ctx context.Context, s *Shell, _ []string) error {
-	tables, err := s.sqlite3Interactor.TablesName(ctx)
+	tables, err := s.usecases.sqlite3.TablesName(ctx)
 	if err != nil {
 		return err
 	}
