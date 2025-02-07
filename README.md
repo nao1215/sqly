@@ -102,7 +102,7 @@ sqly v0.10.0
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
 
-sqly (mode: table) >
+sqly:~/github/github.com/nao1215/sqly(table)$ 
 ```
   
 The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` command or `mysql` command). The sqly shell has helper commands that begin with a dot. The sqly-shell also supports command history, and input completion.  
@@ -110,12 +110,14 @@ The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` comma
 The sqly-shell has the following helper commands:
 
 ```shell
-sqly (mode: table) > .help
+sqly:~/github/github.com/nao1215/sqly(table)$ .help
+        .cd: change directory
       .dump: dump db table to file in a format according to output mode (default: csv)
       .exit: exit sqly
     .header: print table header
       .help: print help message
     .import: import file(s)
+        .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory
     .tables: print tables
@@ -151,6 +153,9 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |Ctrl + K	|Cut the line after the cursor to the clipboard|
 |Ctrl + U	|Cut the line before the cursor to the clipboard|
 |Ctrl + L	|Clear the screen|  
+|TAB        |Completion|
+|↑          |Previous command|
+|↓          |Next command|
 
 ## Benchmark
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  

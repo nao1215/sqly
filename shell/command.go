@@ -26,11 +26,13 @@ type CommandList map[string]command
 // NewCommands return *CommandList that set sqly helper commands.
 func NewCommands() CommandList {
 	c := CommandList{}
+	c[".cd"] = command{execute: c.cdCommand, name: ".cd", description: "change directory"}
 	c[".dump"] = command{execute: c.dumpCommand, name: ".dump", description: "dump db table to file in a format according to output mode (default: csv)"}
 	c[".exit"] = command{execute: c.exitCommand, name: ".exit", description: "exit sqly"}
 	c[".header"] = command{execute: c.headerCommand, name: ".header", description: "print table header"}
 	c[".help"] = command{execute: c.helpCommand, name: ".help", description: "print help message"}
 	c[".import"] = command{execute: c.importCommand, name: ".import", description: "import file(s)"}
+	c[".ls"] = command{execute: c.lsCommand, name: ".ls", description: "print directory contents"}
 	c[".mode"] = command{execute: c.modeCommand, name: ".mode", description: "change output mode"}
 	c[".tables"] = command{execute: c.tablesCommand, name: ".tables", description: "print tables"}
 	c[".pwd"] = command{execute: c.pwdCommand, name: ".pwd", description: "print current working directory"}
