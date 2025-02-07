@@ -5,14 +5,14 @@ The sqly-shell also supports command history, and input completion.
 
 ```shell
 $ sqly 
-sqly v0.10.0
+sqly v0.11.0
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
 
-sqly (mode: table) > .import actor.csv
-sqly (mode: table) > .import numeric.csv
-sqly (mode: table) > .tables
+sqly:~/github/github.com/nao1215/sqly(table)$  .import actor.csv
+sqly:~/github/github.com/nao1215/sqly(table)$  .import numeric.csv
+sqly:~/github/github.com/nao1215/sqly(table)$  .tables
 +------------+
 | TABLE NAME |
 +------------+
@@ -20,7 +20,7 @@ sqly (mode: table) > .tables
 | numeric    |
 +------------+
 
-sqly (mode: table) > SELECT actor, best_movie FROM actor LIMIT 3
+sqly:~/github/github.com/nao1215/sqly(table)$  SELECT actor, best_movie FROM actor LIMIT 3
 +-------------------+------------------------------+
 |       actor       |          best_movie          |
 +-------------------+------------------------------+
@@ -29,10 +29,10 @@ sqly (mode: table) > SELECT actor, best_movie FROM actor LIMIT 3
 | Morgan Freeman    | The Dark Knight              |
 +-------------------+------------------------------+
 
-sqly (mode: table) > .mode ltsv
+sqly:~/github/github.com/nao1215/sqly(table)$  .mode ltsv
 Change output mode from table to ltsv
 
-sqly (mode: ltsv) > SELECT actor, best_movie FROM actor LIMIT 3
+sqly:~/github/github.com/nao1215/sqly(ltsv)$  SELECT actor, best_movie FROM actor LIMIT 3
 actor:Harrison Ford     best_movie:Star Wars: The Force Awakens
 actor:Samuel L. Jackson best_movie:The Avengers
 actor:Morgan Freeman    best_movie:The Dark Knight

@@ -791,7 +791,12 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
 	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, jsonInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
-	shellShell := NewShell(arg, configConfig, commandList, usecases)
+	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	return shellShell, func() {
 		cleanup2()
 		cleanup()
