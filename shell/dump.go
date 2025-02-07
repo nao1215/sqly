@@ -20,7 +20,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return nil
 	}
 
-	table, err := s.sqlite3Interactor.List(ctx, argv[0])
+	table, err := s.usecases.sqlite3.List(ctx, argv[0])
 	if err != nil {
 		return err
 	}
@@ -39,21 +39,21 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	var err error
 	switch s.argument.Output.Mode {
 	case model.PrintModeCSV:
-		err = s.csvInteractor.Dump(filePath, table)
+		err = s.usecases.csv.Dump(filePath, table)
 	case model.PrintModeTSV:
-		err = s.tsvInteractor.Dump(filePath, table)
+		err = s.usecases.tsv.Dump(filePath, table)
 	case model.PrintModeLTSV:
-		err = s.ltsvInteractor.Dump(filePath, table)
+		err = s.usecases.ltsv.Dump(filePath, table)
 	case model.PrintModeJSON:
-		err = s.jsonInteractor.Dump(filePath, table)
+		err = s.usecases.json.Dump(filePath, table)
 	case model.PrintModeExcel:
-		err = s.excelInteractor.Dump(filePath, table)
+		err = s.usecases.excel.Dump(filePath, table)
 	case model.PrintModeMarkdownTable:
 		fallthrough // TODO: support markdown table mode
 	case model.PrintModeTable:
 		fallthrough
 	default:
-		err = s.csvInteractor.Dump(filePath, table)
+		err = s.usecases.csv.Dump(filePath, table)
 	}
 	return err
 }

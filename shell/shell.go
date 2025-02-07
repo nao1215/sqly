@@ -16,7 +16,6 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/usecase"
 )
 
 var (
@@ -31,16 +30,10 @@ var (
 // Shell is main class of the sqly command.
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
-	argument          *config.Arg
-	config            *config.Config
-	commands          CommandList
-	csvInteractor     usecase.CSVUsecase
-	tsvInteractor     usecase.TSVUsecase
-	ltsvInteractor    usecase.LTSVUsecase
-	jsonInteractor    usecase.JSONUsecase
-	sqlite3Interactor usecase.DatabaseUsecase
-	historyInteractor usecase.HistoryUsecase
-	excelInteractor   usecase.ExcelUsecase
+	argument *config.Arg
+	config   *config.Config
+	commands CommandList
+	usecases Usecases
 }
 
 // NewShell return *Shell.
@@ -48,25 +41,13 @@ func NewShell(
 	arg *config.Arg,
 	cfg *config.Config,
 	cmds CommandList,
-	csv usecase.CSVUsecase,
-	tsv usecase.TSVUsecase,
-	ltsv usecase.LTSVUsecase,
-	json usecase.JSONUsecase,
-	sqlite3 usecase.DatabaseUsecase,
-	history usecase.HistoryUsecase,
-	excel usecase.ExcelUsecase,
+	usecases Usecases,
 ) *Shell {
 	return &Shell{
-		argument:          arg,
-		config:            cfg,
-		commands:          cmds,
-		csvInteractor:     csv,
-		tsvInteractor:     tsv,
-		ltsvInteractor:    ltsv,
-		jsonInteractor:    json,
-		sqlite3Interactor: sqlite3,
-		historyInteractor: history,
-		excelInteractor:   excel,
+		argument: arg,
+		config:   cfg,
+		commands: cmds,
+		usecases: usecases,
 	}
 }
 
@@ -130,7 +111,7 @@ func (s *Shell) communicate(ctx context.Context) error {
 
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init(ctx context.Context) error {
-	if err := s.historyInteractor.CreateTable(ctx); err != nil {
+	if err := s.usecases.history.CreateTable(ctx); err != nil {
 		return fmt.Errorf("failed to create table for sqly history: %w", err)
 	}
 	if len(s.argument.FilePaths) == 0 {
@@ -150,7 +131,7 @@ func (s *Shell) printWelcomeMessage() {
 
 // printPrompt print "sqly>" prompt and getting user input
 func (s *Shell) prompt(ctx context.Context) (string, error) {
-	histories, err := s.historyInteractor.List(ctx)
+	histories, err := s.usecases.history.List(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -175,6 +156,7 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 		prompt.OptionHistory(histories.ToStringList())), nil
 }
 
+// completer return prompt.Suggest for auto-completion.
 func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Suggest {
 	suggest := []prompt.Suggest{
 		{Text: "SELECT", Description: "SQL: get records from table"},
@@ -217,7 +199,7 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 		})
 	}
 
-	tables, err := s.sqlite3Interactor.TablesName(ctx)
+	tables, err := s.usecases.sqlite3.TablesName(ctx)
 	if err != nil {
 		return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 	}
@@ -227,7 +209,7 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 			Description: "table: " + v.Name(),
 		})
 
-		table, err := s.sqlite3Interactor.Header(ctx, v.Name())
+		table, err := s.usecases.sqlite3.Header(ctx, v.Name())
 		if err != nil {
 			return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
 		}
@@ -269,7 +251,7 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 
 func (s *Shell) execSQL(ctx context.Context, req string) error {
 	req = strings.TrimRight(req, ";")
-	table, affectedRows, err := s.sqlite3Interactor.ExecSQL(ctx, req)
+	table, affectedRows, err := s.usecases.sqlite3.ExecSQL(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -298,11 +280,11 @@ func (s *Shell) outputToFile(table *model.Table) error {
 
 // recordUserRequest record user request in DB.
 func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
-	histories, err := s.historyInteractor.List(ctx)
+	histories, err := s.usecases.history.List(ctx)
 	if err != nil {
 		return err
 	}
-	if err := s.historyInteractor.Create(ctx, model.NewHistory(len(histories)+1, request)); err != nil {
+	if err := s.usecases.history.Create(ctx, model.NewHistory(len(histories)+1, request)); err != nil {
 		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil
