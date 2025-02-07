@@ -125,6 +125,7 @@ func (a *Arg) NeedsOutputToFile() bool {
 	return a.Output.FilePath != "" && a.Query != ""
 }
 
+// usage return usage message.
 func usage(flag pflag.FlagSet) string {
 	s := fmt.Sprintf("%s - execute SQL against CSV/TSV/LTSV/JSON with shell (%s)\n", color.GreenString("sqly"), GetVersion())
 	s += "\n"
@@ -152,6 +153,7 @@ func usage(flag pflag.FlagSet) string {
 	return s
 }
 
+// version print version message.
 func version() {
 	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion())
 }
