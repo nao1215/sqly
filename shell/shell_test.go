@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/c-bata/go-prompt"
@@ -227,8 +228,8 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "mode_csv_to_table", got)
 
-		if shell.argument.Output.Mode != model.PrintModeTable {
-			t.Errorf("mismatch got=%s, want=%s", shell.argument.Output.Mode.String(), model.PrintModeTable.String())
+		if shell.state.mode.PrintMode != model.PrintModeTable {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeTable.String())
 		}
 	})
 
@@ -248,8 +249,8 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "mode_table_to_csv", got)
 
-		if shell.argument.Output.Mode != model.PrintModeCSV {
-			t.Errorf("mismatch got=%s, want=%s", shell.argument.Output.Mode.String(), model.PrintModeCSV.String())
+		if shell.state.mode.PrintMode != model.PrintModeCSV {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeCSV.String())
 		}
 	})
 
@@ -269,8 +270,8 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "mode_table_to_markdown", got)
 
-		if shell.argument.Output.Mode != model.PrintModeMarkdownTable {
-			t.Errorf("mismatch got=%s, want=%s", shell.argument.Output.Mode.String(), model.PrintModeMarkdownTable.String())
+		if shell.state.mode.PrintMode != model.PrintModeMarkdownTable {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeMarkdownTable.String())
 		}
 	})
 
@@ -290,8 +291,8 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "mode_table_to_tsv", got)
 
-		if shell.argument.Output.Mode != model.PrintModeTSV {
-			t.Errorf("mismatch got=%s, want=%s", shell.argument.Output.Mode.String(), model.PrintModeTSV.String())
+		if shell.state.mode.PrintMode != model.PrintModeTSV {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeTSV.String())
 		}
 	})
 
@@ -311,8 +312,8 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "mode_table_to_ltsv", got)
 
-		if shell.argument.Output.Mode != model.PrintModeLTSV {
-			t.Errorf("mismatch got=%s, want=%s", shell.argument.Output.Mode.String(), model.PrintModeLTSV.String())
+		if shell.state.mode.PrintMode != model.PrintModeLTSV {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeLTSV.String())
 		}
 	})
 
@@ -332,8 +333,8 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "mode_table_to_json", got)
 
-		if shell.argument.Output.Mode != model.PrintModeJSON {
-			t.Errorf("mismatch got=%s, want=%s", shell.argument.Output.Mode.String(), model.PrintModeJSON.String())
+		if shell.state.mode.PrintMode != model.PrintModeJSON {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeJSON.String())
 		}
 	})
 
@@ -344,14 +345,10 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode table")
-		if err != nil {
+		_, err = getExecStdOutput(t, shell.exec, ".mode table")
+		if !strings.Contains(err.Error(), "already table mode") {
 			t.Fatal(err)
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_same_mode", got)
 	})
 
 	t.Run("execute .mode: table to invalid mode", func(t *testing.T) {
@@ -361,14 +358,10 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode not_exist_mode")
-		if err != nil {
+		_, err = getExecStdOutput(t, shell.exec, ".mode not_exist_mode")
+		if !strings.Contains(err.Error(), "invalid output mode: not_exist_mode") {
 			t.Fatal(err)
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_not_exist_mode", got)
 	})
 
 	t.Run("execute .mode: if not specify mode name", func(t *testing.T) {

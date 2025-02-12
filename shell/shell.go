@@ -37,33 +37,6 @@ type Shell struct {
 	state    *state
 }
 
-// state is shell state.
-type state struct {
-	// cwd is current working directory.
-	cwd string
-}
-
-// newState return *state.
-func newState() (*state, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	return &state{
-		cwd: dir,
-	}, nil
-}
-
-// shortCWD return short current working directory.
-// If current working directory is home directory, return "~".
-func (s *state) shortCWD() string {
-	home := os.Getenv("HOME")
-	if s.cwd == home {
-		return "~"
-	}
-	return strings.Replace(s.cwd, home, "~", 1)
-}
-
 // NewShell return *Shell.
 func NewShell(
 	arg *config.Arg,
@@ -71,7 +44,7 @@ func NewShell(
 	cmds CommandList,
 	usecases Usecases,
 ) (*Shell, error) {
-	state, err := newState()
+	state, err := newState(arg)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +144,7 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 
 	return prompt.Input(
 		func() string {
-			return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.argument.Output.Mode)
+			return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String())
 		}(),
 		func(d prompt.Document) []prompt.Suggest {
 			return s.completer(ctx, d)
@@ -283,6 +256,7 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 	return nil
 }
 
+// execSQL execute SQL query.
 func (s *Shell) execSQL(ctx context.Context, req string) error {
 	req = strings.TrimRight(req, ";")
 	table, affectedRows, err := s.usecases.sqlite3.ExecSQL(ctx, req)
@@ -298,7 +272,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if s.argument.NeedsOutputToFile() {
 		return s.outputToFile(table)
 	}
-	table.Print(config.Stdout, s.argument.Output.Mode)
+	table.Print(config.Stdout, s.state.mode.PrintMode)
 	return nil
 }
 
@@ -308,7 +282,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
-		color.HiCyanString(s.argument.Output.FilePath), dumpMode(s.argument.Output.Mode))
+		color.HiCyanString(s.argument.Output.FilePath), dumpMode(s.state.mode.PrintMode))
 	return nil
 }
 
