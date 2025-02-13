@@ -145,7 +145,7 @@ func TestGetVersion(t *testing.T) {
 		{
 			name:    "not set version",
 			version: "",
-			want:    "",
+			want:    "(devel)",
 		},
 	}
 	for _, tt := range tests {
