@@ -161,11 +161,13 @@ func version() {
 // GetVersion return sqly command version.
 // Version global variable is set by ldflags.
 func GetVersion() string {
-	version := "unknown"
 	if Version != "" {
-		version = Version
-	} else if buildInfo, ok := debug.ReadBuildInfo(); ok {
-		version = buildInfo.Main.Version
+		return Version
 	}
-	return version
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		if buildInfo.Main.Version != "" {
+			return buildInfo.Main.Version
+		}
+	}
+	return "(devel)"
 }
