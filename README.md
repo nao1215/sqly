@@ -34,7 +34,7 @@ brew install nao1215/tap/sqly
 - Windows
 - macOS
 - Linux
-- go1.22 or later
+- go1.24.0 or later
 
 ## How to use
 The sqly automatically imports the CSV/TSV/LTSV/JSON/Excel file into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
