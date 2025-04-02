@@ -1,7 +1,6 @@
 module github.com/nao1215/sqly
 
 go 1.24.0
-
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/c-bata/go-prompt v0.2.6
@@ -10,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.6.0
 	github.com/mattn/go-colorable v0.1.14
-	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/mattn/go-sqlite3 v1.14.27
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/sergi/go-diff v1.3.1
