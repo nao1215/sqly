@@ -11,7 +11,7 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/mattn/go-colorable v0.1.14
 	github.com/mattn/go-sqlite3 v1.14.28
-	github.com/olekukonko/tablewriter v0.0.5
+	github.com/olekukonko/tablewriter v1.0.5
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/pflag v1.0.6
@@ -27,14 +27,17 @@ require (
 	github.com/google/subcommands v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-tty v0.0.4 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/olekukonko/errors v0.0.0-20250405072817-4e6d85265da6 // indirect
+	github.com/olekukonko/ll v0.0.7 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/xuri/efp v0.0.0-20240408161823-9ad904a10d6d // indirect
 	github.com/xuri/nfp v0.0.0-20240318013403-ab9948c2c4a7 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
