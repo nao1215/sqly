@@ -9,6 +9,8 @@
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
 ![demo](./doc/img/demo.gif)  
 
+[日本語](./doc/ja/README.md) | [Русский](./doc/ru/README.md) | [中文](./doc/zh-cn/README.md) | [한국어](./doc/ko/README.md) | [Español](./doc/es/README.md) | [Français](./doc/fr/README.md)
+
 **sqly** is a powerful command-line tool that can execute SQL against CSV, TSV, LTSV, JSON, and even Microsoft Excel™ files. The sqly import those files into [SQLite3](https://www.sqlite.org/index.html) in-memory database.  
 
 The sqly has **sqly-shell**. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
