@@ -10,7 +10,7 @@ vendors:
   pflag: { in: github.com/spf13/pflag }
   go-colorable: { in: github.com/mattn/go-colorable }
   xdg: { in: github.com/adrg/xdg }
-  env: { in: github.com/caarlos0/env/v6 }
+  env: { in: github.com/caarlos0/env/v11 }
   sqlite: { in: modernc.org/sqlite }
   wire: { in: [github.com/google/wire, github.com/google/wire/cmd/wire] }
   tablewriter: { in: github.com/olekukonko/tablewriter }

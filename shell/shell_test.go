@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/c-bata/go-prompt"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
