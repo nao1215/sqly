@@ -60,7 +60,11 @@ func (ti *tsvInteractor) Dump(tsvFilePath string, table *model.Table) error {
 	if err != nil {
 		return fmt.Errorf("failed to create TSV file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close TSV file: %w", cerr)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	writer.Comma = '\t' // Use tab separator for TSV
