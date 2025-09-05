@@ -10,7 +10,6 @@ var Set = wire.NewSet(
 	NewCSVInteractor,
 	NewTSVInteractor,
 	NewLTSVInteractor,
-	NewJSONInteractor,
 	NewSQLite3Interactor,
 	NewHistoryInteractor,
 	NewExcelInteractor,

@@ -11,15 +11,54 @@
 
 [English](../../README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-**sqly** は、CSV、TSV、LTSV、JSON、さらにはMicrosoft Excel™ファイルに対してSQLを実行できる強力なコマンドラインツールです。sqlyはこれらのファイルを[SQLite3](https://www.sqlite.org/index.html)のインメモリデータベースにインポートします。
+**sqly** は、CSV、TSV、LTSV、さらにはMicrosoft Excel™ファイルに対してSQLを実行できる強力なコマンドラインツールです。sqlyはこれらのファイルを[SQLite3](https://www.sqlite.org/index.html)のインメモリデータベースにインポートします。
 
 sqlyには **sqly-shell** があります。SQLの補完とコマンド履歴を使って、対話的にSQLを実行できます。もちろん、sqly-shellを実行せずにSQLを実行することも可能です。
+
+## 🚀 filesqlによる強化
+
+**sqly** は[filesql](https://github.com/nao1215/filesql)ライブラリを使用してパフォーマンスと機能を向上させました。filesqlパッケージは、様々なファイル形式に対する標準化されたSQLインターフェースを提供するために作成され、開発者が同様のツールを構築しやすくしています。
+
+**filesql統合の主な利点:**
+- **パフォーマンス向上**: トランザクションバッチングによる最適化されたバルクインサート操作
+- **自動型検出**: 数値は適切にソートされ、数値型として処理されます
+- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`ファイルの組み込みサポート
+- **標準化されたインターフェース**: 馴染みのある`sql.DB`インターフェースを使用
+
+### 独自のファイルSQLツールの構築
+
+[filesql](https://github.com/nao1215/filesql)を使用して、独自のSQLベースのファイル処理ツールを作成できます：
+
+```go
+import "github.com/nao1215/filesql"
+
+// SQLインターフェースでファイルを直接開く
+db, err := filesql.Open("data.csv", "users.tsv")
+if err != nil {
+    panic(err)
+}
+defer db.Close()
+
+// ファイルに対してSQLクエリを実行
+rows, err := db.Query("SELECT name, age FROM data WHERE age > 25 ORDER BY name")
+```
 
 - ユーザー・開発者向け公式ドキュメント: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - 同じ開発者が作成した代替ツール: [DBMS・ローカルCSV/TSV/LTSV用のシンプルなターミナルUI](https://github.com/nao1215/sqluv)
 
-> [!WARNING]
-> JSONサポートには制限があります。将来的にJSONサポートを中止する可能性があります。
+## ✨ 新機能: 圧縮ファイルサポート
+
+**sqly** は圧縮ファイルをサポートしています！以下のファイルを直接処理できます：
+- **Gzip** 圧縮ファイル (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
+- **Bzip2** 圧縮ファイル (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
+- **XZ** 圧縮ファイル (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
+- **Zstandard** 圧縮ファイル (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
+
+```shell
+# 圧縮ファイルでも動作！
+sqly --sql "SELECT * FROM data" data.csv.gz
+sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
+```
 
 ## インストール方法
 ### "go install"を使用
@@ -39,9 +78,9 @@ brew install nao1215/tap/sqly
 - go1.24.0以降
 
 ## 使用方法
-sqlyは、ファイルパスを引数として渡すと、CSV/TSV/LTSV/JSON/Excelファイルを自動的にDBにインポートします。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
+sqlyは、ファイルパスを引数として渡すと、CSV/TSV/LTSV/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
 
-sqlyはファイル拡張子からファイル形式を自動判定します。
+sqlyは圧縮ファイルを含むファイル拡張子からファイル形式を自動判定します。
 
 ### ターミナルでのSQL実行: --sqlオプション
 --sqlオプションは、SQL文をオプション引数として受け取ります。
@@ -63,7 +102,6 @@ sqlyは、SQLクエリの結果を以下の形式で出力します：
 - CSV形式（--csvオプション）
 - TSV形式（--tsvオプション）
 - LTSV形式（--ltsvオプション）
-- JSON形式（--jsonオプション）
 
 ```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -71,28 +109,6 @@ user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
 
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv 
-[
-   {
-      "first_name": "Rachel",
-      "identifier": "1",
-      "last_name": "Booker",
-      "user_name": "booker12"
-   },
-   {
-      "first_name": "Mary",
-      "identifier": "2",
-      "last_name": "Jenkins",
-      "user_name": "jenkins46"
-   }
-]
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv > user.json
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --csv user.json 
-first_name,identifier,last_name,user_name
-Rachel,1,Booker,booker12
-Mary,2,Jenkins,jenkins46
 ```
 
 ### sqlyシェルの実行
@@ -160,6 +176,24 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |TAB        |補完|
 |↑          |前のコマンド|
 |↓          |次のコマンド|
+
+## 📋 最近の変更
+
+### 追加された機能
+- **filesql統合**: [filesql](https://github.com/nao1215/filesql)ライブラリによるパフォーマンスと機能の向上
+- **パフォーマンス向上**: より高速なファイル処理のためのトランザクションバッチングによるバルクインサート操作
+- **型処理の向上**: 自動型検出により適切な数値ソートと計算を保証
+- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`圧縮ファイルのネイティブサポート
+
+### 削除された機能
+- **JSONサポート**: 構造化データ形式（CSV、TSV、LTSV、Excel）に焦点を当てるため、JSONファイル形式のサポートが削除されました
+  - JSONデータをsqlyで処理する必要がある場合は、JSONツールからのCSVエクスポートを使用してください
+  - この削除により、コアファイル形式のより良い最適化が可能になります
+
+### 破壊的変更
+- `--json`フラグが削除されました
+- JSONファイル（`.json`）は入力としてサポートされなくなりました
+- 改善された型検出により、出力の数値フォーマットが若干異なる場合があります
 
 ## ベンチマーク
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  

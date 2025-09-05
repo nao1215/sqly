@@ -1,10 +1,8 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/nao1215/sqly/domain"
@@ -25,8 +23,6 @@ const (
 	PrintModeTSV
 	// PrintModeLTSV print data in ltsv format
 	PrintModeLTSV
-	// PrintModeJSON print data in json format
-	PrintModeJSON
 	// PrintModeExcel print data in excel format
 	PrintModeExcel
 )
@@ -44,8 +40,6 @@ func (p PrintMode) String() string {
 		return "tsv"
 	case PrintModeLTSV:
 		return "ltsv"
-	case PrintModeJSON:
-		return "json"
 	case PrintModeExcel:
 		return "excel"
 	}
@@ -171,8 +165,6 @@ func (t *Table) Print(out io.Writer, mode PrintMode) {
 		t.printTSV(out)
 	case PrintModeLTSV:
 		t.printLTSV(out)
-	case PrintModeJSON:
-		t.printJSON(out)
 	case PrintModeExcel:
 		t.printExcel(out)
 	default:
@@ -233,25 +225,6 @@ func (t *Table) printLTSV(out io.Writer) {
 		}
 		fmt.Fprintln(out, strings.Join(r, "\t"))
 	}
-}
-
-// printJSON print all record in json format
-func (t *Table) printJSON(out io.Writer) {
-	data := make([]map[string]interface{}, 0)
-
-	for _, v := range t.Records() {
-		d := make(map[string]interface{}, 0)
-		for i, r := range v {
-			d[t.Header()[i]] = r
-		}
-		data = append(data, d)
-	}
-	b, err := json.MarshalIndent(data, "", "   ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "json marshal error: %s", err.Error())
-		return
-	}
-	fmt.Fprintln(out, string(b))
 }
 
 // printExcel print all record in excel format.

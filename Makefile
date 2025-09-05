@@ -46,7 +46,7 @@ tools: ## Install dependency tools
 	$(GO_INSTALL) github.com/google/wire/cmd/wire@latest
 	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
 	$(GO_INSTALL) github.com/nikolaydubina/go-cover-treemap@latest
-	$(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	$(GO_INSTALL) go.uber.org/mock/mockgen@latest
 	$(GO_INSTALL) github.com/fe3dback/go-arch-lint@latest
 

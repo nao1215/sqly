@@ -44,8 +44,6 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 		err = s.usecases.tsv.Dump(filePath, table)
 	case model.PrintModeLTSV:
 		err = s.usecases.ltsv.Dump(filePath, table)
-	case model.PrintModeJSON:
-		err = s.usecases.json.Dump(filePath, table)
 	case model.PrintModeExcel:
 		err = s.usecases.excel.Dump(filePath, table)
 	case model.PrintModeMarkdownTable:

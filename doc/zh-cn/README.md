@@ -12,15 +12,54 @@
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
 
-**sqly** 是一个强大的命令行工具，可以对CSV、TSV、LTSV、JSON，甚至Microsoft Excel™文件执行SQL查询。sqly将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。
+**sqly** 是一个强大的命令行工具，可以对CSV、TSV、LTSV，甚至Microsoft Excel™文件执行SQL查询。sqly将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。
 
 sqly拥有 **sqly-shell**。您可以通过SQL自动完成和命令历史记录交互式执行SQL。当然，您也可以在不运行sqly-shell的情况下执行SQL。
+
+## 🚀 由 filesql 提供支持
+
+**sqly** 现在使用 [filesql](https://github.com/nao1215/filesql) 库来提高性能和功能。filesql 包是为提供标准化SQL接口来处理各种文件格式而创建的，使开发者能够更容易构建类似的工具。
+
+**filesql 集成的主要优势：**
+- **更好的性能**：通过事务批处理优化的批量插入操作
+- **自动类型检测**：数字能够正确排序并作为数值类型处理
+- **压缩文件支持**：内置支持 `.gz`、`.bz2`、`.xz`、`.zst` 文件
+- **标准化接口**：使用熟悉的 `sql.DB` 接口
+
+### 构建您自己的文件SQL工具
+
+您可以使用 [filesql](https://github.com/nao1215/filesql) 来创建您自己的基于SQL的文件处理工具：
+
+```go
+import "github.com/nao1215/filesql"
+
+// 直接通过SQL接口打开文件
+db, err := filesql.Open("data.csv", "users.tsv")
+if err != nil {
+    panic(err)
+}
+defer db.Close()
+
+// 对您的文件执行SQL查询
+rows, err := db.Query("SELECT name, age FROM data WHERE age > 25 ORDER BY name")
+```
 
 - 用户和开发者官方文档：[https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - 同一开发者创建的替代工具：[DBMS和本地CSV/TSV/LTSV的简单终端UI](https://github.com/nao1215/sqluv)
 
-> [!WARNING]
-> JSON支持有限。将来可能会停止对JSON的支持。
+## ✨ 新功能：压缩文件支持
+
+**sqly** 现在支持压缩文件！您可以直接处理：
+- **Gzip** 压缩文件 (`.csv.gz`、`.tsv.gz`、`.ltsv.gz`、`.xlsx.gz`)
+- **Bzip2** 压缩文件 (`.csv.bz2`、`.tsv.bz2`、`.ltsv.bz2`、`.xlsx.bz2`)
+- **XZ** 压缩文件 (`.csv.xz`、`.tsv.xz`、`.ltsv.xz`、`.xlsx.xz`)
+- **Zstandard** 压缩文件 (`.csv.zst`、`.tsv.zst`、`.ltsv.zst`、`.xlsx.zst`)
+
+```shell
+# 对压缩文件也能工作！
+sqly --sql "SELECT * FROM data" data.csv.gz
+sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
+```
 
 ## 如何安装
 ### 使用"go install"
@@ -40,9 +79,9 @@ brew install nao1215/tap/sqly
 - go1.24.0或更高版本
 
 ## 使用方法
-当您将文件路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/Excel文件导入数据库。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
+当您将文件路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/Excel文件（包括压缩版本）导入数据库。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
 
-sqly根据文件扩展名自动确定文件格式。
+sqly根据文件扩展名自动确定文件格式，包括压缩文件。
 
 ### 在终端中执行SQL：--sql选项
 --sql选项接受SQL语句作为可选参数。
@@ -64,7 +103,6 @@ sqly以以下格式输出SQL查询结果：
 - CSV格式（--csv选项）
 - TSV格式（--tsv选项）
 - LTSV格式（--ltsv选项）
-- JSON格式（--json选项）
 
 ```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -72,28 +110,6 @@ user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
 
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv 
-[
-   {
-      "first_name": "Rachel",
-      "identifier": "1",
-      "last_name": "Booker",
-      "user_name": "booker12"
-   },
-   {
-      "first_name": "Mary",
-      "identifier": "2",
-      "last_name": "Jenkins",
-      "user_name": "jenkins46"
-   }
-]
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv > user.json
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --csv user.json 
-first_name,identifier,last_name,user_name
-Rachel,1,Booker,booker12
-Mary,2,Jenkins,jenkins46
 ```
 
 ### 运行sqly shell
@@ -161,6 +177,24 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |TAB        |自动完成|
 |↑          |上一个命令|
 |↓          |下一个命令|
+
+## 📋 最近的变更
+
+### 新增功能
+- **filesql 集成**：使用 [filesql](https://github.com/nao1215/filesql) 库提高性能和功能
+- **性能改进**：通过事务批处理进行批量插入操作，以实现更快的文件处理
+- **更好的类型处理**：自动类型检测确保正确的数值排序和计算
+- **压缩文件支持**：原生支持 `.gz`、`.bz2`、`.xz` 和 `.zst` 压缩文件
+
+### 移除功能
+- **JSON 支持**：为了专注于结构化数据格式（CSV、TSV、LTSV、Excel），JSON 文件格式支持已被移除
+  - 如果您需要使用 sqly 处理 JSON 数据，请使用 JSON 工具的 CSV 导出功能
+  - 此移除允许对核心文件格式进行更好的优化
+
+### 破坏性变更
+- `--json` 标志已被移除
+- JSON 文件（`.json`）不再作为输入支持
+- 由于改进了类型检测，输出中的数值格式可能会略有不同
 
 ## 基准测试
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  

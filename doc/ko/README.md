@@ -11,15 +11,54 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-**sqly**는 CSV, TSV, LTSV, JSON, 심지어 Microsoft Excel™ 파일에 대해 SQL을 실행할 수 있는 강력한 명령줄 도구입니다. sqly는 이러한 파일들을 [SQLite3](https://www.sqlite.org/index.html) 인메모리 데이터베이스로 가져옵니다.
+**sqly**는 CSV, TSV, LTSV, 심지어 Microsoft Excel™ 파일에 대해 SQL을 실행할 수 있는 강력한 명령줄 도구입니다. sqly는 이러한 파일들을 [SQLite3](https://www.sqlite.org/index.html) 인메모리 데이터베이스로 가져옵니다.
 
 sqly에는 **sqly-shell**이 있습니다. SQL 자동완성과 명령 기록을 통해 대화식으로 SQL을 실행할 수 있습니다. 물론 sqly-shell을 실행하지 않고도 SQL을 실행할 수 있습니다.
+
+## 🚀 filesql로 강화됨
+
+**sqly**는 이제 향상된 성능과 기능을 위해 [filesql](https://github.com/nao1215/filesql) 라이브러리를 사용합니다. filesql 패키지는 다양한 파일 형식에 작업하기 위한 표준화된 SQL 인터페이스를 제공하여 개발자가 비슷한 도구를 쉽게 구축할 수 있도록 만들어졌습니다.
+
+**filesql 통합의 주요 이점:**
+- **더 나은 성능**: 트랜잭션 일괄처리로 최적화된 대량 삽입 작업
+- **자동 타입 검지**: 숫자가 올바르게 정렬되고 숫자 타입으로 처리됩니다
+- **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst` 파일에 대한 내장 지원
+- **표준화된 인터페이스**: 친숙한 `sql.DB` 인터페이스 사용
+
+### 나만의 파일 SQL 도구 만들기
+
+[filesql](https://github.com/nao1215/filesql)을 사용하여 나만의 SQL 기반 파일 처리 도구를 만들 수 있습니다:
+
+```go
+import "github.com/nao1215/filesql"
+
+// SQL 인터페이스로 파일 직접 열기
+db, err := filesql.Open("data.csv", "users.tsv")
+if err != nil {
+    panic(err)
+}
+defer db.Close()
+
+// 파일에 대해 SQL 쿼리 실행
+rows, err := db.Query("SELECT name, age FROM data WHERE age > 25 ORDER BY name")
+```
 
 - 사용자 및 개발자를 위한 공식 문서: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - 같은 개발자가 만든 대체 도구: [DBMS 및 로컬 CSV/TSV/LTSV를 위한 간단한 터미널 UI](https://github.com/nao1215/sqluv)
 
-> [!WARNING]
-> JSON 지원은 제한적입니다. 향후 JSON 지원을 중단할 가능성이 있습니다.
+## ✨ 신기능: 압축 파일 지원
+
+**sqly**는 이제 압축 파일을 지원합니다! 다음을 직접 처리할 수 있습니다:
+- **Gzip** 압축 파일 (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
+- **Bzip2** 압축 파일 (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
+- **XZ** 압축 파일 (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
+- **Zstandard** 압축 파일 (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
+
+```shell
+# 압축 파일에서도 작동합니다!
+sqly --sql "SELECT * FROM data" data.csv.gz
+sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
+```
 
 ## 설치 방법
 ### "go install" 사용
@@ -39,9 +78,9 @@ brew install nao1215/tap/sqly
 - go1.24.0 이상
 
 ## 사용 방법
-sqly는 파일 경로를 인수로 전달하면 CSV/TSV/LTSV/JSON/Excel 파일을 자동으로 DB로 가져옵니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
+sqly는 파일 경로를 인수로 전달하면 CSV/TSV/LTSV/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
 
-sqly는 파일 확장자에서 파일 형식을 자동으로 결정합니다.
+sqly는 압축 파일을 포함하여 파일 확장자에서 파일 형식을 자동으로 결정합니다.
 
 ### 터미널에서 SQL 실행: --sql 옵션
 --sql 옵션은 SQL 문을 선택적 인수로 받습니다.
@@ -63,7 +102,6 @@ sqly는 SQL 쿼리 결과를 다음 형식으로 출력합니다:
 - CSV 형식 (--csv 옵션)
 - TSV 형식 (--tsv 옵션)
 - LTSV 형식 (--ltsv 옵션)
-- JSON 형식 (--json 옵션)
 
 ```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -71,28 +109,6 @@ user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
 
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv 
-[
-   {
-      "first_name": "Rachel",
-      "identifier": "1",
-      "last_name": "Booker",
-      "user_name": "booker12"
-   },
-   {
-      "first_name": "Mary",
-      "identifier": "2",
-      "last_name": "Jenkins",
-      "user_name": "jenkins46"
-   }
-]
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv > user.json
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --csv user.json 
-first_name,identifier,last_name,user_name
-Rachel,1,Booker,booker12
-Mary,2,Jenkins,jenkins46
 ```
 
 ### sqly shell 실행
@@ -160,6 +176,24 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |TAB        |자동완성|
 |↑          |이전 명령|
 |↓          |다음 명령|
+
+## 📋 최근 변경 사항
+
+### 추가된 기능
+- **filesql 통합**: [filesql](https://github.com/nao1215/filesql) 라이브러리를 사용한 향상된 성능과 기능
+- **향상된 성능**: 더 빠른 파일 처리를 위한 트랜잭션 일괄처리로 대량 삽입 작업
+- **향상된 타입 처리**: 자동 타입 검지가 적절한 숫자 정렬과 계산을 보장
+- **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst` 압축 파일에 대한 네이티브 지원
+
+### 제거된 기능
+- **JSON 지원**: 구조화된 데이터 형식(CSV, TSV, LTSV, Excel)에 집중하기 위해 JSON 파일 형식 지원이 제거되었습니다
+  - sqly로 JSON 데이터를 처리해야 하는 경우 JSON 도구에서 CSV 내보내기를 사용하십시오
+  - 제거를 통해 핵심 파일 형식의 더 나은 최적화가 가능합니다
+
+### 호환성을 깨는 변경
+- `--json` 플래그가 제거되었습니다
+- JSON 파일(`.json`)이 더 이상 입력으로 지원되지 않습니다
+- 향상된 타입 검지로 인해 출력의 숫자 형식이 약간 다를 수 있습니다
 
 ## 벤치마크
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
