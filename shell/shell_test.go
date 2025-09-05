@@ -3,6 +3,7 @@ package shell
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
-	"github.com/nao1215/sqly/infrastructure/memory"
+	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
 )
@@ -60,7 +61,7 @@ func TestShellRun(t *testing.T) {
 		defer func() {
 			config.Version = ""
 		}()
-		shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT * FROM actor ORDER BY actor ASC LIMIT 5", filepath.Join("testdata", "actor.csv")})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT actor, printf('%.2f', total_gross) as total_gross, number_of_movies, printf('%.2f', average_per_movie) as average_per_movie, best_movie, printf('%.2f', gross) as gross FROM actor ORDER BY actor ASC LIMIT 5", filepath.Join("testdata", "actor.csv")})
 		if err != nil {
 			t.Error(err)
 		}
@@ -317,24 +318,24 @@ func TestShellExec(t *testing.T) {
 		}
 	})
 
-	t.Run("execute .mode: table to json", func(t *testing.T) {
+	t.Run("execute .mode: table to excel", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Error(err)
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode json")
+		got, err := getExecStdOutput(t, shell.exec, ".mode excel")
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		g := golden.New(t,
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_json", got)
+		g.Assert(t, "mode_table_to_excel", got)
 
-		if shell.state.mode.PrintMode != model.PrintModeJSON {
-			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeJSON.String())
+		if shell.state.mode.PrintMode != model.PrintModeExcel {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeExcel.String())
 		}
 	})
 
@@ -420,28 +421,6 @@ func TestShellExec(t *testing.T) {
 		g.Assert(t, "import_csv", got)
 	})
 
-	t.Run("execute .import json", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Error(err)
-		}
-		defer cleanup()
-
-		_, err = getExecStdOutput(t, shell.exec, ".import "+filepath.Join("testdata", "sample.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := getExecStdOutput(t, shell.exec, "SELECT * FROM sample")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "import_json", got)
-	})
-
 	t.Run("execute .import tsv", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
@@ -476,7 +455,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := getExecStdOutput(t, shell.exec, "SELECT * FROM sample")
+		got, err := getExecStdOutput(t, shell.exec, "SELECT id, first_name, last_name, phone_number, email, url, age, birth_day, password FROM sample")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -571,33 +550,6 @@ func TestShellExec(t *testing.T) {
 		g := golden.New(t,
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "dump_csv", got)
-	})
-
-	t.Run("execute .dump json (print json mode)", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--json"})
-		if err != nil {
-			t.Error(err)
-		}
-		defer cleanup()
-
-		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
-			t.Fatal(err)
-		}
-
-		file := filepath.Join(t.TempDir(), "dump.json")
-		_, err = getExecStdOutput(t, shell.exec, ".dump sample "+file)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := os.ReadFile(filepath.Clean(file))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_json", got)
 	})
 
 	t.Run("execute .dump tsv (print tsv mode)", func(t *testing.T) {
@@ -702,7 +654,7 @@ func TestShellExec(t *testing.T) {
 		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := getExecStdOutput(t, shell.exec, "SELECT * FROM actor ORDER BY actor ASC LIMIT 5")
+		got, err := getExecStdOutput(t, shell.exec, "SELECT actor, printf('%.2f', total_gross) as total_gross, number_of_movies, printf('%.2f', average_per_movie) as average_per_movie, best_movie, printf('%.2f', gross) as gross FROM actor ORDER BY actor ASC LIMIT 5")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -758,24 +710,22 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 		return nil, nil, err
 	}
 	commandList := NewCommands()
-	csvRepository := persistence.NewCSVRepository()
-	fileRepository := persistence.NewFileRepository()
-	csvInteractor := interactor.NewCSVInteractor(fileRepository, csvRepository)
-	tsvRepository := persistence.NewTSVRepository()
-	tsvInteractor := interactor.NewTSVInteractor(fileRepository, tsvRepository)
-	ltsvRepository := persistence.NewLTSVRepository()
-	ltsvInteractor := interactor.NewLTSVInteractor(fileRepository, ltsvRepository)
-	jsonRepository := persistence.NewJSONRepository()
-	jsonInteractor := interactor.NewJSONInteractor(fileRepository, jsonRepository)
-	excelRepository := persistence.NewExcelRepository()
-	excelInteractor := interactor.NewExcelInteractor(excelRepository)
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
 		return nil, nil, err
 	}
-	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
+	// Create filesql adapter for tests
+	filesqlAdapter := filesql.NewFileSQLAdapter((*sql.DB)(memoryDB))
+	csvInteractor := interactor.NewCSVInteractor(filesqlAdapter)
+	tsvInteractor := interactor.NewTSVInteractor(filesqlAdapter)
+	ltsvInteractor := interactor.NewLTSVInteractor(filesqlAdapter)
+	excelInteractor := interactor.NewExcelInteractor(filesqlAdapter)
+
+	// Use filesql-based sqlite3 repository and interactor for consistency
+	sqlite3Repository := filesql.NewSQLite3Repository(filesqlAdapter)
 	sql := interactor.NewSQL()
-	sqLite3Interactor := interactor.NewSQLite3Interactor(sqLite3Repository, sql)
+	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sql)
+
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
 		cleanup()
@@ -783,7 +733,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
-	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, jsonInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
+	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()
@@ -812,7 +762,7 @@ func getStdoutForRunFunc(t *testing.T, f func(ctx context.Context) error) []byte
 	if err := f(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	w.Close()
+	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -835,7 +785,7 @@ func getStdout(t *testing.T, f func()) []byte {
 	config.Stdout = w
 
 	f()
-	w.Close()
+	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {
@@ -858,7 +808,7 @@ func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg s
 	config.Stdout = w
 
 	execErr := f(context.Background(), arg)
-	w.Close()
+	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

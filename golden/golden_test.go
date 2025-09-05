@@ -106,7 +106,7 @@ func TestEnsureDir(t *testing.T) {
 				err := os.MkdirAll(filepath.Dir(target), g.dirPerms)
 				assert.Nil(t, err)
 
-				f, err := os.Create(target)
+				f, err := os.Create(target) //nolint:gosec // Test file creation with controlled path
 				require.NoError(t, err)
 				err = f.Close()
 				assert.Nil(t, err)

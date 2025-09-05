@@ -7,7 +7,9 @@
 package di
 
 import (
+	"database/sql"
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
@@ -28,19 +30,14 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	commandList := shell.NewCommands()
-	fileRepository := persistence.NewFileRepository()
-	csvRepository := persistence.NewCSVRepository()
-	csvUsecase := interactor.NewCSVInteractor(fileRepository, csvRepository)
-	tsvRepository := persistence.NewTSVRepository()
-	tsvUsecase := interactor.NewTSVInteractor(fileRepository, tsvRepository)
-	ltsvRepository := persistence.NewLTSVRepository()
-	ltsvUsecase := interactor.NewLTSVInteractor(fileRepository, ltsvRepository)
-	jsonRepository := persistence.NewJSONRepository()
-	jsonUsecase := interactor.NewJSONInteractor(fileRepository, jsonRepository)
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
 		return nil, nil, err
 	}
+	fileSQLAdapter := provideFileSQLAdapter(memoryDB)
+	csvUsecase := interactor.NewCSVInteractor(fileSQLAdapter)
+	tsvUsecase := interactor.NewTSVInteractor(fileSQLAdapter)
+	ltsvUsecase := interactor.NewLTSVInteractor(fileSQLAdapter)
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sql := interactor.NewSQL()
 	databaseUsecase := interactor.NewSQLite3Interactor(sqLite3Repository, sql)
@@ -51,9 +48,8 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyUsecase := interactor.NewHistoryInteractor(historyRepository)
-	excelRepository := persistence.NewExcelRepository()
-	excelUsecase := interactor.NewExcelInteractor(excelRepository)
-	usecases := shell.NewUsecases(csvUsecase, tsvUsecase, ltsvUsecase, jsonUsecase, databaseUsecase, historyUsecase, excelUsecase)
+	excelUsecase := interactor.NewExcelInteractor(fileSQLAdapter)
+	usecases := shell.NewUsecases(csvUsecase, tsvUsecase, ltsvUsecase, databaseUsecase, historyUsecase, excelUsecase)
 	shellShell, err := shell.NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()
@@ -64,4 +60,11 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		cleanup2()
 		cleanup()
 	}, nil
+}
+
+// wire.go:
+
+// provideFileSQLAdapter creates a FileSQLAdapter with the shared database
+func provideFileSQLAdapter(db config.MemoryDB) *filesql.FileSQLAdapter {
+	return filesql.NewFileSQLAdapter((*sql.DB)(db))
 }

@@ -11,15 +11,37 @@
 
 [日本語](./doc/ja/README.md) | [Русский](./doc/ru/README.md) | [中文](./doc/zh-cn/README.md) | [한국어](./doc/ko/README.md) | [Español](./doc/es/README.md) | [Français](./doc/fr/README.md)
 
-**sqly** is a powerful command-line tool that can execute SQL against CSV, TSV, LTSV, JSON, and even Microsoft Excel™ files. The sqly import those files into [SQLite3](https://www.sqlite.org/index.html) in-memory database.  
+**sqly** is a powerful command-line tool that can execute SQL against CSV, TSV, LTSV, and Microsoft Excel™ files. The sqly import those files into [SQLite3](https://www.sqlite.org/index.html) in-memory database.  
 
 The sqly has **sqly-shell**. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
+
+## 🚀 Powered by filesql
+
+**sqly** now uses [filesql](https://github.com/nao1215/filesql) library for enhanced performance and functionality. The filesql package was created to provide a standardized SQL interface for working with various file formats, making it easier for developers to build similar tools.
+
+**Key advantages of filesql integration:**
+- **Better Performance**: Optimized bulk insert operations with transaction batching
+- **Automatic Type Detection**: Numbers are properly sorted and handled as numeric types
+- **Compressed File Support**: Built-in support for `.gz`, `.bz2`, `.xz`, `.zst` files
+- **Standardized Interface**: Uses familiar `sql.DB` interface.
+
 
 - Official documentation for users & developers: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - Alternative tool created by the same developer: [simple terminal UI for DBMS & local CSV/TSV/LTSV](https://github.com/nao1215/sqluv)
 
-> [!WARNING]
-> The support for JSON is limited. There is a possibility of discontinuing JSON support in the future.
+## ✨ New: Compressed File Support
+
+**sqly** now supports compressed files! You can directly process:
+- **Gzip** compressed files (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
+- **Bzip2** compressed files (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
+- **XZ** compressed files (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
+- **Zstandard** compressed files (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
+
+```shell
+# Works with compressed files!
+sqly --sql "SELECT * FROM data" data.csv.gz
+sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
+```
 
 ## How to install
 ### Use "go install"
@@ -39,9 +61,9 @@ brew install nao1215/tap/sqly
 - go1.24.0 or later
 
 ## How to use
-The sqly automatically imports the CSV/TSV/LTSV/JSON/Excel file into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
+The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed versions) into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
-The sqly automatically determines the file format from the file extension.
+The sqly automatically determines the file format from the file extension, including compressed files.
 
 ### Execute sql in terminal: --sql option
 --sql option takes an SQL statement as an optional argument.
@@ -63,7 +85,6 @@ The sqly output sql query results in following formats:
 - CSV format (--csv option)
 - TSV format (--tsv option)
 - LTSV format (--ltsv option)
-- JSON format (--json option)
 
 ```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -159,6 +180,24 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |TAB        |Completion|
 |↑          |Previous command|
 |↓          |Next command|
+
+## 📋 Recent Changes
+
+### Added Features
+- **filesql Integration**: Enhanced performance and functionality using the [filesql](https://github.com/nao1215/filesql) library
+- **Improved Performance**: Bulk insert operations with transaction batching for faster file processing
+- **Better Type Handling**: Automatic type detection ensures proper numeric sorting and calculations
+- **Compressed File Support**: Native support for `.gz`, `.bz2`, `.xz`, and `.zst` compressed files
+
+### Removed Features
+- **JSON Support**: JSON file format support has been removed in favor of focusing on structured data formats (CSV, TSV, LTSV, Excel)
+  - Use CSV export from JSON tools if you need to process JSON data with sqly
+  - The removal allows for better optimization of the core file formats
+
+### Breaking Changes
+- The `--json` flag has been removed
+- JSON files (`.json`) are no longer supported as input
+- Numeric formatting in output may differ slightly due to improved type detection
 
 ## Benchmark
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  

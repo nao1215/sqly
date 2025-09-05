@@ -41,14 +41,14 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --json option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--json"})
+	t.Run("user set --excel option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--excel"})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if arg.Output.Mode != model.PrintModeJSON {
-			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeJSON)
+		if arg.Output.Mode != model.PrintModeExcel {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeExcel)
 		}
 	})
 
@@ -184,7 +184,7 @@ func getStdout(t *testing.T, f func()) string {
 	Stdout = w
 
 	f()
-	w.Close()
+	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

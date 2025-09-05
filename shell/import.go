@@ -39,11 +39,6 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			if err != nil {
 				return err
 			}
-		case isJSON(v):
-			table, err = s.usecases.json.List(v)
-			if err != nil {
-				return err
-			}
 		case isXLAM(v) || isXLSM(v) || isXLSX(v) || isXLTM(v) || isXLTX(v):
 			sheetName = s.argument.SheetName
 			if sheetName == "" {
@@ -81,7 +76,8 @@ func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
 	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S) [--sheet=SHEET_NAME]")
 	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, xlam, xlsm, xlsx, xltm, xltx")
+	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, xlam, xlsm, xlsx, xltm, xltx")
+	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst (automatically detected)")
 	fmt.Fprintln(config.Stdout, "  - If import multiple files, separate them with spaces")
 	fmt.Fprintln(config.Stdout, "  - Does not support importing multiple excel sheets at once")
 	fmt.Fprintln(config.Stdout, "  - If import an Excel file, specify the sheet name with --sheet")
