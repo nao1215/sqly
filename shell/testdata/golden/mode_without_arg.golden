@@ -6,5 +6,4 @@
   csv
   tsv
   ltsv
-  json
   excel ※ active only when executing .dump, otherwise same as csv mode

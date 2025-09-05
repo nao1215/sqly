@@ -7,7 +7,6 @@ type Usecases struct {
 	csv     usecase.CSVUsecase
 	tsv     usecase.TSVUsecase
 	ltsv    usecase.LTSVUsecase
-	json    usecase.JSONUsecase
 	sqlite3 usecase.DatabaseUsecase
 	history usecase.HistoryUsecase
 	excel   usecase.ExcelUsecase
@@ -18,7 +17,6 @@ func NewUsecases(
 	csv usecase.CSVUsecase,
 	tsv usecase.TSVUsecase,
 	ltsv usecase.LTSVUsecase,
-	json usecase.JSONUsecase,
 	sqlite3 usecase.DatabaseUsecase,
 	history usecase.HistoryUsecase,
 	excel usecase.ExcelUsecase,
@@ -27,7 +25,6 @@ func NewUsecases(
 		csv:     csv,
 		tsv:     tsv,
 		ltsv:    ltsv,
-		json:    json,
 		sqlite3: sqlite3,
 		history: history,
 		excel:   excel,

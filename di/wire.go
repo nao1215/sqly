@@ -5,13 +5,21 @@
 package di
 
 import (
+	"database/sql"
+
 	"github.com/google/wire"
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
 	"github.com/nao1215/sqly/shell"
 )
+
+// provideFileSQLAdapter creates a FileSQLAdapter with the shared database
+func provideFileSQLAdapter(db config.MemoryDB) *filesql.FileSQLAdapter {
+	return filesql.NewFileSQLAdapter((*sql.DB)(db))
+}
 
 //go:generate wire
 
@@ -22,8 +30,10 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		config.Set,
 		shell.Set,
 		interactor.Set,
-		persistence.Set,
 		memory.Set,
+		persistence.HistorySet, // Only History-related persistence
+		// Add filesql adapter for filesql-only approach
+		provideFileSQLAdapter,
 	)
 	return nil, nil, nil
 }

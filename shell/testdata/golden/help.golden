@@ -1,4 +1,4 @@
-sqly - execute SQL against CSV/TSV/LTSV/JSON with shell ((devel))
+sqly - execute SQL against CSV/TSV/LTSV/Excel with shell ((devel))
 
 [Usage]
   sqly [OPTIONS] [FILE_PATH]
@@ -12,7 +12,6 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON with shell ((devel))
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
   -e, --excel           change output format to excel (default: table)
-  -j, --json            change output format to json (default: table)
   -l, --ltsv            change output format to ltsv (default: table)
   -m, --markdown        change output format to markdown table (default: table)
   -t, --tsv             change output format to tsv (default: table)
