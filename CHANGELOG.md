@@ -1,4 +1,67 @@
-## [v0.9.0](https://github.com/nao1215/sqly/compare/v0.8.1...) (2025-02-03)
+# CHANGELOG
+
+## [v0.12.0](https://github.com/nao1215/sqly/compare/v0.9.0...v0.12.0) (2025-01-09)
+
+### Major Changes
+* **BREAKING**: Remove JSON file format support in favor of filesql integration ([d5649f9](https://github.com/nao1215/sqly/commit/d5649f9))
+* **Integration**: Migrate to filesql library for enhanced performance and compressed file support ([d5649f9](https://github.com/nao1215/sqly/commit/d5649f9))
+* **Performance**: Implement bulk insert operations with transaction batching for faster file processing
+* **Compression**: Add native support for compressed files (.gz, .bz2, .xz, .zst) ([d5649f9](https://github.com/nao1215/sqly/commit/d5649f9))
+* **Dependencies**: Remove mattn/go-sqlite3 (CGO) in favor of pure Go modernc.org/sqlite ([d5649f9](https://github.com/nao1215/sqly/commit/d5649f9))
+
+### New Features
+* **Shell Commands**: Add .cd helper command for directory navigation ([d49e5a7](https://github.com/nao1215/sqly/commit/d49e5a7))
+* **Shell Commands**: Add .ls helper command to list directory contents ([d49e5a7](https://github.com/nao1215/sqly/commit/d49e5a7))
+* **Shell Commands**: Add .pwd helper command to show current working directory ([8812122](https://github.com/nao1215/sqly/commit/8812122))
+* **Interactive**: Display current output mode in shell prompt ([a0f7047](https://github.com/nao1215/sqly/commit/a0f7047))
+* **Type Detection**: Automatic column data type detection ensures proper numeric sorting
+* **Go Version**: Add support for Go 1.24 ([a4c7512](https://github.com/nao1215/sqly/commit/a4c7512))
+
+### Architecture Improvements
+* **Clean Architecture**: Refactor codebase to follow Clean Architecture principles more strictly ([5a4bb96](https://github.com/nao1215/sqly/commit/5a4bb96))
+* **Architecture Linting**: Add go-arch-lint for architectural boundary enforcement ([35c7e8f](https://github.com/nao1215/sqly/commit/35c7e8f))
+* **Domain Model**: Convert parts of domain model to Value Objects for better encapsulation ([5c8ec2d](https://github.com/nao1215/sqly/commit/5c8ec2d))
+* **Dependency Injection**: Improve usecase interfaces and add mock code for testing ([ee92763](https://github.com/nao1215/sqly/commit/ee92763))
+* **Package Structure**: Refactor shell package for better organization ([101163f](https://github.com/nao1215/sqly/commit/101163f))
+
+### Documentation & Developer Experience
+* **LLM Integration**: Add Claude Code, Cursor, and GitHub Copilot configuration files ([2ceefa0](https://github.com/nao1215/sqly/commit/2ceefa0))
+* **Documentation**: Create comprehensive developer documentation ([c368778](https://github.com/nao1215/sqly/commit/c368778))
+* **GitHub Pages**: Set up documentation site at https://nao1215.github.io/sqly/ ([a061c49](https://github.com/nao1215/sqly/commit/a061c49))
+* **Internationalization**: Add README translations for multiple languages ([b676409](https://github.com/nao1215/sqly/commit/b676409)):
+  - Spanish (es)
+  - French (fr) 
+  - Japanese (ja)
+  - Korean (ko)
+  - Russian (ru)
+  - Chinese Simplified (zh-cn)
+
+### GitHub Actions & Automation
+* **AI Assistance**: Add Claude Code Review workflow ([0a86dd2](https://github.com/nao1215/sqly/commit/0a86dd2))
+* **AI Assistance**: Add Claude PR Assistant workflow ([5b8be74](https://github.com/nao1215/sqly/commit/5b8be74))
+
+### Dependencies
+* Bump github.com/sergi/go-diff from 1.3.1 to 1.4.0 ([dd44965](https://github.com/nao1215/sqly/commit/dd44965))
+* Bump github.com/spf13/pflag from 1.0.6 to 1.0.10 ([0763386](https://github.com/nao1215/sqly/commit/0763386))
+* Bump github.com/stretchr/testify from 1.10.0 to 1.11.1 ([f9fe0e5](https://github.com/nao1215/sqly/commit/f9fe0e5))
+* Bump github.com/xuri/excelize/v2 from 2.9.0 to 2.9.1 ([9cbb0ff](https://github.com/nao1215/sqly/commit/9cbb0ff))
+* Bump go.uber.org/mock from 0.5.1 to 0.5.2 ([c50a81f](https://github.com/nao1215/sqly/commit/c50a81f))
+* Bump golang.org/x/net from 0.33.0 to 0.36.0 ([3ff5306](https://github.com/nao1215/sqly/commit/3ff5306))
+* Bump modernc.org/sqlite from 1.34.5 to 1.36.1 ([b03c0d2](https://github.com/nao1215/sqly/commit/b03c0d2))
+* Bump github.com/google/go-cmp from 0.6.0 to 0.7.0 ([38d711c](https://github.com/nao1215/sqly/commit/38d711c))
+
+### Breaking Changes
+- **JSON Support Removed**: JSON files (`.json`) are no longer supported as input format
+- **CLI Flag Removed**: The `--json` output flag has been removed
+- **Output Format**: Numeric formatting may differ slightly due to improved type detection
+- **Dependencies**: Removed CGO dependency (mattn/go-sqlite3) in favor of pure Go implementation
+
+### Migration Guide
+- **For JSON users**: Export JSON data to CSV format before processing with sqly
+- **For developers**: Update any code that relied on JSON-specific functionality
+- **Benefits**: Enjoy improved performance, compressed file support, and better type handling
+
+## [v0.9.0](https://github.com/nao1215/sqly/compare/v0.8.1...v0.9.0) (2025-02-03)
 
 * Add architecture linter [#87](https://github.com/nao1215/sqly/pull/87) ([nao1215](https://github.com/nao1215))
 * Reduce dependency and add unit tests for interactor [#86](https://github.com/nao1215/sqly/pull/86) ([nao1215](https://github.com/nao1215))
@@ -45,7 +108,6 @@
 * Support Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX) [#53](https://github.com/nao1215/sqly/pull/53) ([nao1215](https://github.com/nao1215))
 
 ## [v0.6.5](https://github.com/nao1215/sqly/compare/v0.6.4...v0.6.5) (2024-04-29)
-
 
 ## [v0.6.4](https://github.com/nao1215/sqly/compare/v0.5.2...v0.6.4) (2024-04-29)
 
@@ -129,13 +191,11 @@
 
 ## [v0.0.9](https://github.com/nao1215/sqly/compare/v0.0.7...v0.0.9) (2022-11-06)
 
-
 ## [v0.0.7](https://github.com/nao1215/sqly/compare/v0.0.6...v0.0.7) (2022-11-06)
 
 * Improve execute query [#6](https://github.com/nao1215/sqly/pull/6) ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.6](https://github.com/nao1215/sqly/compare/v0.0.5...v0.0.6) (2022-11-05)
-
 
 ## [v0.0.5](https://github.com/nao1215/sqly/compare/v0.0.4...v0.0.5) (2022-11-05)
 
@@ -143,7 +203,6 @@
 * Add function that execute select query [#4](https://github.com/nao1215/sqly/pull/4) ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.4](https://github.com/nao1215/sqly/compare/v0.0.3...v0.0.4) (2022-11-05)
-
 
 ## [v0.0.3](https://github.com/nao1215/sqly/compare/v0.0.2...v0.0.3) (2022-11-05)
 
@@ -155,4 +214,3 @@
 * Add .exit/.help command and history manager [#1](https://github.com/nao1215/sqly/pull/1) ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.1](https://github.com/nao1215/sqly/compare/dbf99896449e...v0.0.1) (2022-11-03)
-
