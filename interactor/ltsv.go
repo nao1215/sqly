@@ -14,24 +14,24 @@ import (
 )
 
 // _ interface implementation check
-var _ usecase.LTSVUsecase = (*LTSVInteractor)(nil)
+var _ usecase.LTSVUsecase = (*ltsvInteractor)(nil)
 
-// LTSVInteractor implementation of use cases related to LTSV handler.
-type LTSVInteractor struct {
-	filesqlAdapter *filesql.FileSQLAdapter // filesql for improved performance and compression support
+// ltsvInteractor implementation of use cases related to LTSV handler.
+type ltsvInteractor struct {
+	filesqlAdapter *filesql.FileSQLAdapter
 }
 
-// NewLTSVInteractor return LTSVInteractor
+// NewLTSVInteractor return ltsvInteractor
 func NewLTSVInteractor(
 	filesqlAdapter *filesql.FileSQLAdapter,
 ) usecase.LTSVUsecase {
-	return &LTSVInteractor{
+	return &ltsvInteractor{
 		filesqlAdapter: filesqlAdapter,
 	}
 }
 
 // List get LTSV data using filesql for improved performance and compression support.
-func (li *LTSVInteractor) List(ltsvFilePath string) (*model.Table, error) {
+func (li *ltsvInteractor) List(ltsvFilePath string) (*model.Table, error) {
 	ctx := context.Background()
 
 	// Use filesql for improved performance and compression support
@@ -55,18 +55,23 @@ func (li *LTSVInteractor) List(ltsvFilePath string) (*model.Table, error) {
 }
 
 // Dump write contents of DB table to LTSV file
-func (li *LTSVInteractor) Dump(ltsvFilePath string, table *model.Table) error {
+func (li *ltsvInteractor) Dump(ltsvFilePath string, table *model.Table) error {
 	file, err := os.Create(filepath.Clean(ltsvFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to create LTSV file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close LTSV file: %w", cerr)
+		}
+	}()
 
 	// Write LTSV format: key1:value1<tab>key2:value2<newline>
 	headers := table.Header()
 
 	for _, record := range table.Records() {
-		var ltsvLine []string
+		// Pre-allocate slice with appropriate capacity for better memory usage
+		ltsvLine := make([]string, 0, len(headers))
 		for i, value := range record {
 			if i < len(headers) {
 				ltsvLine = append(ltsvLine, headers[i]+":"+value)
