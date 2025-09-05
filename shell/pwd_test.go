@@ -3,7 +3,6 @@ package shell
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,9 +26,7 @@ func TestCommandList_pwdCommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("filepath.Abs failed: %v", err)
 		}
-		if err := os.Chdir(want); err != nil {
-			t.Fatal(err)
-		}
+		t.Chdir(want)
 
 		err = c.pwdCommand(context.Background(), nil, []string{})
 		if err != nil {

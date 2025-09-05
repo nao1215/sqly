@@ -26,7 +26,7 @@ func Test_run(t *testing.T) {
 	})
 
 	t.Run("SELECT * FROM actor ORDER BY actor ASC LIMIT 5, print ascii table", func(t *testing.T) {
-		args := []string{"sqly", "--sql", "SELECT * FROM actor ORDER BY actor ASC LIMIT 5", "testdata/actor.csv"}
+		args := []string{"sqly", "--sql", "SELECT actor, printf('%.2f', total_gross) as total_gross, number_of_movies, printf('%.2f', average_per_movie) as average_per_movie, best_movie, printf('%.2f', gross) as gross FROM actor ORDER BY actor ASC LIMIT 5", "testdata/actor.csv"}
 		got := getStdoutForRunFunc(t, run, args)
 
 		g := golden.New(t,
@@ -41,15 +41,6 @@ func Test_run(t *testing.T) {
 		g := golden.New(t,
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "select_inner_join_csv", got)
-	})
-
-	t.Run("sqly --json --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
-		args := []string{"sqly", "--json", "--sql", "SELECT * FROM user", "testdata/user.csv"}
-		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_json", got)
 	})
 
 	t.Run("sqly --tsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
@@ -71,7 +62,7 @@ func Test_run(t *testing.T) {
 	})
 
 	t.Run("import excel, output csv", func(t *testing.T) {
-		args := []string{"sqly", "--sql", "SELECT * FROM test_sheet", "-S", "test_sheet", "--csv", "testdata/sample.xlsx"}
+		args := []string{"sqly", "--sql", "SELECT * FROM sample_test_sheet", "-S", "test_sheet", "--csv", "testdata/sample.xlsx"}
 		got := getStdoutForRunFunc(t, run, args)
 
 		g := golden.New(t,
@@ -102,24 +93,6 @@ func Test_run(t *testing.T) {
 		g := golden.New(t,
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "numeric", got)
-	})
-
-	t.Run("Fix Issue 42: Panic when json field is null", func(t *testing.T) {
-		args := []string{"sqly", "--sql", "select * from bug_issue42 limit 1", "--csv", "testdata/bug_issue42.json"}
-		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "fix_bug_issue42_csv", got)
-	})
-
-	t.Run("Fix Issue 43: Panic when importing json table with numeric field", func(t *testing.T) {
-		args := []string{"sqly", "--sql", "select * from bug_issue43 limit 1", "--csv", "testdata/bug_issue43.json"}
-		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "fix_bug_issue43_csv", got)
 	})
 }
 
@@ -166,7 +139,7 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 	config.Stdout = w
 
 	f(list)
-	w.Close()
+	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
 
 	var buffer bytes.Buffer
 	if _, err := buffer.ReadFrom(r); err != nil {

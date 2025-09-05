@@ -90,7 +90,7 @@ func (s *Shell) communicate(ctx context.Context) error {
 	// workaround
 	// bug :https://github.com/c-bata/go-prompt/issues/228
 	defer func() {
-		rawModeOff := exec.Command("/bin/stty", "-raw", "echo")
+		rawModeOff := exec.CommandContext(context.Background(), "/bin/stty", "-raw", "echo")
 		rawModeOff.Stdin = os.Stdin
 		if err := rawModeOff.Run(); err != nil {
 			fmt.Fprintf(Stderr, "failed to turn off raw mode: %v\n", err)
@@ -195,7 +195,6 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 		{Text: "csv", Description: "sqly command argument: csv output format"},
 		{Text: "tsv", Description: "sqly command argument: tsv output format"},
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
-		{Text: "json", Description: "sqly command argument: json output format"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 	}
 

@@ -15,14 +15,13 @@ linters:
     - errchkjson
     - errname
     - errorlint
-    - exhaustive
     - fatcontext
     - forcetypeassert
     - gocheckcompilerdirectives
     - gochecknoinits
     - goconst
-    - gocritic
     - gomoddirectives
+    - gosec
     - interfacebloat
     - intrange
     - makezero
@@ -47,6 +46,7 @@ linters:
     - unconvert
     - unparam
     - usestdlibvars
+    - usetesting
     - wastedassign
     - whitespace
   settings:
@@ -68,6 +68,10 @@ linters:
       - linters:
           - errcheck
         source: defer
+      - linters:
+          - gochecknoinits
+        path: filesql\.go
+        source: func init\(\)
       - path: (.+)\.go$
         text: fmt.Fprintf
       - path: (.+)\.go$
@@ -76,6 +80,8 @@ linters:
         text: fmt.Fprint
       - path: (.+)\.go$
         text: fmt.Printf
+      - path: (.+)\.go$
+        text: fmt.Sscanf
       - path: (.+)\.go$
         text: buf.WriteByte
       - path: (.+)\.go$

@@ -1,0 +1,1 @@
+Change output mode from table to excel (active only when executing .dump, otherwise same as csv mode)

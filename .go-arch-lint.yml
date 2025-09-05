@@ -19,6 +19,7 @@ vendors:
   excelize: { in: github.com/xuri/excelize/v2 }
   gomock: { in: go.uber.org/mock/gomock }
   go-prompt: { in: [github.com/c-bata/go-prompt, github.com/c-bata/go-prompt/completer] }
+  filesql: { in: github.com/nao1215/filesql }
 
 components:
   cmd:   { in: . }
@@ -27,7 +28,7 @@ components:
   model: { in: domain/model }
   repository: { in: domain/repository }
   infrastructure: { in: [infrastructure, infrastructure/mock/**] }
-  memory-infra: { in: infrastructure/memory }
+  memory-infra: { in: [infrastructure/memory, infrastructure/filesql] }
   persistence-infra: { in: infrastructure/persistence }
   usecase: { in: usecase }
   interactor: { in: interactor/** }
@@ -97,6 +98,7 @@ deps:
       - model
       - usecase
       - repository
+      - memory-infra
   repository:
     mayDependOn:
       - model
@@ -104,10 +106,13 @@ deps:
     mayDependOn:
       - model
   memory-infra:
+    canUse:
+      - filesql
     mayDependOn:
       - model
       - repository
       - infrastructure
+      - usecase
   persistence-infra:
     canUse:
       - excelize

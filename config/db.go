@@ -23,7 +23,7 @@ func NewInMemDB() (MemoryDB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return MemoryDB(db), func() { db.Close() }, nil
+	return MemoryDB(db), func() { db.Close() }, nil //nolint:gosec // Cleanup function, error not critical
 }
 
 // NewHistoryDB create *sql.DB for history.
@@ -33,7 +33,7 @@ func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return HistoryDB(db), func() { db.Close() }, nil
+	return HistoryDB(db), func() { db.Close() }, nil //nolint:gosec // Cleanup function, error not critical
 }
 
 // InitSQLite3 registers the sqlite3 driver.

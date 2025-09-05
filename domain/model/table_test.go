@@ -96,9 +96,9 @@ func TestPrintModeString(t *testing.T) {
 			want: "ltsv",
 		},
 		{
-			name: "json mode",
-			p:    PrintModeJSON,
-			want: "json",
+			name: "excel mode",
+			p:    PrintModeExcel,
+			want: "excel",
 		},
 		{
 			name: "unknown mode",
@@ -311,7 +311,7 @@ aaa:777	bbb:888	ccc:999
 `,
 		},
 		{
-			name: "print json",
+			name: "print excel (same as csv)",
 			fields: fields{
 				Name:   "valid_table",
 				Header: Header{"aaa", "bbb", "ccc"},
@@ -321,24 +321,11 @@ aaa:777	bbb:888	ccc:999
 					{"777", "888", "999"},
 				},
 			},
-			args: args{PrintModeJSON},
-			wantOut: `[
-   {
-      "aaa": "111",
-      "bbb": "222",
-      "ccc": "333"
-   },
-   {
-      "aaa": "444",
-      "bbb": "555",
-      "ccc": "666"
-   },
-   {
-      "aaa": "777",
-      "bbb": "888",
-      "ccc": "999"
-   }
-]
+			args: args{PrintModeExcel},
+			wantOut: `aaa,bbb,ccc
+111,222,333
+444,555,666
+777,888,999
 `,
 		},
 		{

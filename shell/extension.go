@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-// isJSON checks if the file is JSON.
-func isJSON(filePath string) bool {
-	return ext(filePath) == ".json"
-}
-
 // isCSV checks if the file is CSV.
 func isCSV(filePath string) bool {
 	return ext(filePath) == ".csv"
