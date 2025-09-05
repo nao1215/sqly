@@ -12,48 +12,9 @@
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
 
-**sqly** 是一个强大的命令行工具，可以对CSV、TSV、LTSV，甚至Microsoft Excel™文件执行SQL查询。sqly将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。
+**sqly** 是一个强大的命令行工具，可以对CSV、TSV、LTSV和Microsoft Excel™文件执行SQL查询。sqly将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。
 
 sqly拥有 **sqly-shell**。您可以通过SQL自动完成和命令历史记录交互式执行SQL。当然，您也可以在不运行sqly-shell的情况下执行SQL。
-
-## 🚀 由 filesql 提供支持
-
-**sqly** 现在使用 [filesql](https://github.com/nao1215/filesql) 库来提高性能和功能。filesql 包是为提供标准化SQL接口来处理各种文件格式而创建的，使开发者能够更容易构建类似的工具。
-
-**filesql 集成的主要优势：**
-- **更好的性能**：通过事务批处理优化的批量插入操作
-- **自动类型检测**：数字能够正确排序并作为数值类型处理
-- **压缩文件支持**：内置支持 `.gz`、`.bz2`、`.xz`、`.zst` 文件
-- **标准化接口**：使用熟悉的 `sql.DB` 接口
-
-### 构建您自己的文件SQL工具
-
-您可以使用 [filesql](https://github.com/nao1215/filesql) 来创建您自己的基于SQL的文件处理工具：
-
-```go
-import "github.com/nao1215/filesql"
-
-// 直接通过SQL接口打开文件
-db, err := filesql.Open("data.csv", "users.tsv")
-if err != nil {
-    panic(err)
-}
-defer db.Close()
-
-// 对您的文件执行SQL查询
-rows, err := db.Query("SELECT name, age FROM data WHERE age > 25 ORDER BY name")
-```
-
-- 用户和开发者官方文档：[https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- 同一开发者创建的替代工具：[DBMS和本地CSV/TSV/LTSV的简单终端UI](https://github.com/nao1215/sqluv)
-
-## ✨ 新功能：压缩文件支持
-
-**sqly** 现在支持压缩文件！您可以直接处理：
-- **Gzip** 压缩文件 (`.csv.gz`、`.tsv.gz`、`.ltsv.gz`、`.xlsx.gz`)
-- **Bzip2** 压缩文件 (`.csv.bz2`、`.tsv.bz2`、`.ltsv.bz2`、`.xlsx.bz2`)
-- **XZ** 压缩文件 (`.csv.xz`、`.tsv.xz`、`.ltsv.xz`、`.xlsx.xz`)
-- **Zstandard** 压缩文件 (`.csv.zst`、`.tsv.zst`、`.ltsv.zst`、`.xlsx.zst`)
 
 ```shell
 # 对压缩文件也能工作！
@@ -109,7 +70,6 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
-
 ```
 
 ### 运行sqly shell
@@ -179,6 +139,30 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↓          |下一个命令|
 
 ## 📋 最近的变更
+
+
+## 由 filesql 提供支持
+
+**sqly** 现在使用 [filesql](https://github.com/nao1215/filesql) 库来提高性能和功能。filesql 包是为提供标准化SQL接口来处理各种文件格式而创建的，使开发者能够更容易构建类似的工具。
+
+**filesql 集成的主要优势：**
+- **更好的性能**：通过事务批处理优化的批量插入操作
+- **自动类型检测**：数字能够正确排序并作为数值类型处理
+- **压缩文件支持**：内置支持 `.gz`、`.bz2`、`.xz`、`.zst` 文件
+- **标准化接口**：使用熟悉的 `sql.DB` 接口。
+
+
+- 用户和开发者官方文档：[https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
+- 同一开发者创建的替代工具：[DBMS和本地CSV/TSV/LTSV的简单终端UI](https://github.com/nao1215/sqluv)
+
+### 新功能：压缩文件支持
+
+**sqly** 现在支持压缩文件！您可以直接处理：
+- **Gzip** 压缩文件 (`.csv.gz`、`.tsv.gz`、`.ltsv.gz`、`.xlsx.gz`)
+- **Bzip2** 压缩文件 (`.csv.bz2`、`.tsv.bz2`、`.ltsv.bz2`、`.xlsx.bz2`)
+- **XZ** 压缩文件 (`.csv.xz`、`.tsv.xz`、`.ltsv.xz`、`.xlsx.xz`)
+- **Zstandard** 压缩文件 (`.csv.zst`、`.tsv.zst`、`.ltsv.zst`、`.xlsx.zst`)
+
 
 ### 新增功能
 - **filesql 集成**：使用 [filesql](https://github.com/nao1215/filesql) 库提高性能和功能

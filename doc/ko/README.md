@@ -11,48 +11,9 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-**sqly**는 CSV, TSV, LTSV, 심지어 Microsoft Excel™ 파일에 대해 SQL을 실행할 수 있는 강력한 명령줄 도구입니다. sqly는 이러한 파일들을 [SQLite3](https://www.sqlite.org/index.html) 인메모리 데이터베이스로 가져옵니다.
+**sqly**는 CSV, TSV, LTSV, Microsoft Excel™ 파일에 대해 SQL을 실행할 수 있는 강력한 명령줄 도구입니다. sqly는 이러한 파일들을 [SQLite3](https://www.sqlite.org/index.html) 인메모리 데이터베이스로 가져옵니다.
 
 sqly에는 **sqly-shell**이 있습니다. SQL 자동완성과 명령 기록을 통해 대화식으로 SQL을 실행할 수 있습니다. 물론 sqly-shell을 실행하지 않고도 SQL을 실행할 수 있습니다.
-
-## 🚀 filesql로 강화됨
-
-**sqly**는 이제 향상된 성능과 기능을 위해 [filesql](https://github.com/nao1215/filesql) 라이브러리를 사용합니다. filesql 패키지는 다양한 파일 형식에 작업하기 위한 표준화된 SQL 인터페이스를 제공하여 개발자가 비슷한 도구를 쉽게 구축할 수 있도록 만들어졌습니다.
-
-**filesql 통합의 주요 이점:**
-- **더 나은 성능**: 트랜잭션 일괄처리로 최적화된 대량 삽입 작업
-- **자동 타입 검지**: 숫자가 올바르게 정렬되고 숫자 타입으로 처리됩니다
-- **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst` 파일에 대한 내장 지원
-- **표준화된 인터페이스**: 친숙한 `sql.DB` 인터페이스 사용
-
-### 나만의 파일 SQL 도구 만들기
-
-[filesql](https://github.com/nao1215/filesql)을 사용하여 나만의 SQL 기반 파일 처리 도구를 만들 수 있습니다:
-
-```go
-import "github.com/nao1215/filesql"
-
-// SQL 인터페이스로 파일 직접 열기
-db, err := filesql.Open("data.csv", "users.tsv")
-if err != nil {
-    panic(err)
-}
-defer db.Close()
-
-// 파일에 대해 SQL 쿼리 실행
-rows, err := db.Query("SELECT name, age FROM data WHERE age > 25 ORDER BY name")
-```
-
-- 사용자 및 개발자를 위한 공식 문서: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- 같은 개발자가 만든 대체 도구: [DBMS 및 로컬 CSV/TSV/LTSV를 위한 간단한 터미널 UI](https://github.com/nao1215/sqluv)
-
-## ✨ 신기능: 압축 파일 지원
-
-**sqly**는 이제 압축 파일을 지원합니다! 다음을 직접 처리할 수 있습니다:
-- **Gzip** 압축 파일 (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- **Bzip2** 압축 파일 (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- **XZ** 압축 파일 (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- **Zstandard** 압축 파일 (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
 
 ```shell
 # 압축 파일에서도 작동합니다!
@@ -108,7 +69,6 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
-
 ```
 
 ### sqly shell 실행
@@ -178,6 +138,30 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↓          |다음 명령|
 
 ## 📋 최근 변경 사항
+
+
+## filesql로 강화됨
+
+**sqly**는 이제 향상된 성능과 기능을 위해 [filesql](https://github.com/nao1215/filesql) 라이브러리를 사용합니다. filesql 패키지는 다양한 파일 형식에 작업하기 위한 표준화된 SQL 인터페이스를 제공하여 개발자가 비슷한 도구를 쉽게 구축할 수 있도록 만들어졌습니다.
+
+**filesql 통합의 주요 이점:**
+- **더 나은 성능**: 트랜잭션 일괄처리로 최적화된 대량 삽입 작업
+- **자동 타입 검지**: 숫자가 올바르게 정렬되고 숫자 타입으로 처리됩니다
+- **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst` 파일에 대한 내장 지원
+- **표준화된 인터페이스**: 친숙한 `sql.DB` 인터페이스 사용
+
+
+- 사용자 및 개발자를 위한 공식 문서: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
+- 같은 개발자가 만든 대체 도구: [DBMS 및 로컬 CSV/TSV/LTSV를 위한 간단한 터미널 UI](https://github.com/nao1215/sqluv)
+
+### 신기능: 압축 파일 지원
+
+**sqly**는 이제 압축 파일을 지원합니다! 다음을 직접 처리할 수 있습니다:
+- **Gzip** 압축 파일 (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
+- **Bzip2** 압축 파일 (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
+- **XZ** 압축 파일 (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
+- **Zstandard** 압축 파일 (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
+
 
 ### 추가된 기능
 - **filesql 통합**: [filesql](https://github.com/nao1215/filesql) 라이브러리를 사용한 향상된 성능과 기능
