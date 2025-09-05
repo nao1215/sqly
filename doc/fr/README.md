@@ -11,48 +11,9 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md)
 
-**sqly** est un puissant outil en ligne de commande qui peut exécuter du SQL sur des fichiers CSV, TSV, LTSV et même Microsoft Excel™. sqly importe ces fichiers dans une base de données en mémoire [SQLite3](https://www.sqlite.org/index.html).
+**sqly** est un puissant outil en ligne de commande qui peut exécuter du SQL sur des fichiers CSV, TSV, LTSV et Microsoft Excel™. sqly importe ces fichiers dans une base de données en mémoire [SQLite3](https://www.sqlite.org/index.html).
 
 sqly a **sqly-shell**. Vous pouvez exécuter SQL de manière interactive avec l'autocomplétion SQL et l'historique des commandes. Bien sûr, vous pouvez également exécuter SQL sans exécuter sqly-shell.
-
-## 🚀 Alimenté par filesql
-
-**sqly** utilise maintenant la bibliothèque [filesql](https://github.com/nao1215/filesql) pour améliorer les performances et les fonctionnalités. Le package filesql a été créé pour fournir une interface SQL standardisée pour travailler avec différents formats de fichiers, facilitant la construction d'outils similaires pour les développeurs.
-
-**Avantages clés de l'intégration filesql :**
-- **Meilleures performances** : Opérations d'insertion en bloc optimisées avec traitement par lots des transactions
-- **Détection automatique des types** : Les nombres sont correctement triés et gérés comme types numériques
-- **Support des fichiers compressés** : Support intégré pour les fichiers `.gz`, `.bz2`, `.xz`, `.zst`
-- **Interface standardisée** : Utilise l'interface familière `sql.DB`
-
-### Construisez votre propre outil SQL pour fichiers
-
-Vous pouvez utiliser [filesql](https://github.com/nao1215/filesql) pour créer vos propres outils de traitement de fichiers basés sur SQL :
-
-```go
-import "github.com/nao1215/filesql"
-
-// Ouvrir les fichiers directement avec l'interface SQL
-db, err := filesql.Open("data.csv", "users.tsv")
-if err != nil {
-    panic(err)
-}
-defer db.Close()
-
-// Exécuter des requêtes SQL sur vos fichiers
-rows, err := db.Query("SELECT name, age FROM data WHERE age > 25 ORDER BY name")
-```
-
-- Documentation officielle pour les utilisateurs et développeurs : [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- Outil alternatif créé par le même développeur : [interface terminale simple pour SGBD et CSV/TSV/LTSV local](https://github.com/nao1215/sqluv)
-
-## ✨ Nouveau : Support des fichiers compressés
-
-**sqly** supporte maintenant les fichiers compressés ! Vous pouvez traiter directement :
-- Fichiers compressés **Gzip** (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- Fichiers compressés **Bzip2** (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- Fichiers compressés **XZ** (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- Fichiers compressés **Zstandard** (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
 
 ```shell
 # Fonctionne avec les fichiers compressés !
@@ -78,9 +39,9 @@ brew install nao1215/tap/sqly
 - go1.24.0 ou ultérieur
 
 ## Comment utiliser
-sqly importe automatiquement les fichiers CSV/TSV/LTSV/Excel (y compris les versions compressées) dans la base de données lorsque vous passez le chemin du fichier comme argument. Le nom de la table de la base de données est identique au nom du fichier ou de la feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
+sqly importe automatiquement les fichiers CSV/TSV/LTSV/Excel (y compris les versions compressées) dans la base de données lorsque vous passez le chemin du fichier comme argument. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
 
-sqly détermine automatiquement le format du fichier à partir de l'extension, y compris les fichiers compressés.
+sqly détermine automatiquement le format du fichier à partir de l'extension, y compris les fichiers comprimés.
 
 ### Exécuter SQL dans le terminal : option --sql
 L'option --sql prend une instruction SQL comme argument optionnel.
@@ -108,7 +69,6 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
-
 ```
 
 ### Exécuter sqly shell
@@ -178,6 +138,30 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↓          |Commande suivante|
 
 ## 📋 Changements récents
+
+
+## Alimenté par filesql
+
+**sqly** utilise maintenant la bibliothèque [filesql](https://github.com/nao1215/filesql) pour améliorer les performances et les fonctionnalités. Le package filesql a été créé pour fournir une interface SQL standardisée pour travailler avec différents formats de fichiers, facilitant la construction d'outils similaires pour les développeurs.
+
+**Avantages clés de l'intégration filesql :**
+- **Meilleures performances** : Opérations d'insertion en bloc optimisées avec traitement par lots des transactions
+- **Détection automatique des types** : Les nombres sont correctement triés et gérés comme types numériques
+- **Support des fichiers compressés** : Support intégré pour les fichiers `.gz`, `.bz2`, `.xz`, `.zst`
+- **Interface standardisée** : Utilise l'interface familière `sql.DB`.
+
+
+- Documentation officielle pour les utilisateurs et développeurs : [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
+- Outil alternatif créé par le même développeur : [interface terminale simple pour SGBD et CSV/TSV/LTSV local](https://github.com/nao1215/sqluv)
+
+### Nouveau : Support des fichiers compressés
+
+**sqly** supporte maintenant les fichiers compressés ! Vous pouvez traiter directement :
+- Fichiers compressés **Gzip** (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
+- Fichiers compressés **Bzip2** (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
+- Fichiers compressés **XZ** (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
+- Fichiers compressés **Zstandard** (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
+
 
 ### Fonctionnalités ajoutées
 - **Intégration filesql** : Performance et fonctionnalité améliorées utilisant la bibliothèque [filesql](https://github.com/nao1215/filesql)

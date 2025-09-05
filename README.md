@@ -15,28 +15,6 @@
 
 The sqly has **sqly-shell**. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
 
-## 🚀 Powered by filesql
-
-**sqly** now uses [filesql](https://github.com/nao1215/filesql) library for enhanced performance and functionality. The filesql package was created to provide a standardized SQL interface for working with various file formats, making it easier for developers to build similar tools.
-
-**Key advantages of filesql integration:**
-- **Better Performance**: Optimized bulk insert operations with transaction batching
-- **Automatic Type Detection**: Numbers are properly sorted and handled as numeric types
-- **Compressed File Support**: Built-in support for `.gz`, `.bz2`, `.xz`, `.zst` files
-- **Standardized Interface**: Uses familiar `sql.DB` interface.
-
-
-- Official documentation for users & developers: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- Alternative tool created by the same developer: [simple terminal UI for DBMS & local CSV/TSV/LTSV](https://github.com/nao1215/sqluv)
-
-## ✨ New: Compressed File Support
-
-**sqly** now supports compressed files! You can directly process:
-- **Gzip** compressed files (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- **Bzip2** compressed files (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- **XZ** compressed files (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- **Zstandard** compressed files (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
-
 ```shell
 # Works with compressed files!
 sqly --sql "SELECT * FROM data" data.csv.gz
@@ -91,29 +69,6 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv 
-[
-   {
-      "first_name": "Rachel",
-      "identifier": "1",
-      "last_name": "Booker",
-      "user_name": "booker12"
-   },
-   {
-      "first_name": "Mary",
-      "identifier": "2",
-      "last_name": "Jenkins",
-      "user_name": "jenkins46"
-   }
-]
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --json testdata/user.csv > user.json
-
-$ sqly --sql "SELECT * FROM user LIMIT 2" --csv user.json 
-first_name,identifier,last_name,user_name
-Rachel,1,Booker,booker12
-Mary,2,Jenkins,jenkins46
 ```
 
 ### Run sqly shell
@@ -182,6 +137,30 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↓          |Next command|
 
 ## 📋 Recent Changes
+
+
+## Powered by filesql
+
+**sqly** now uses [filesql](https://github.com/nao1215/filesql) library for enhanced performance and functionality. The filesql package was created to provide a standardized SQL interface for working with various file formats, making it easier for developers to build similar tools.
+
+**Key advantages of filesql integration:**
+- **Better Performance**: Optimized bulk insert operations with transaction batching
+- **Automatic Type Detection**: Numbers are properly sorted and handled as numeric types
+- **Compressed File Support**: Built-in support for `.gz`, `.bz2`, `.xz`, `.zst` files
+- **Standardized Interface**: Uses familiar `sql.DB` interface.
+
+
+- Official documentation for users & developers: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
+- Alternative tool created by the same developer: [simple terminal UI for DBMS & local CSV/TSV/LTSV](https://github.com/nao1215/sqluv)
+
+### New: Compressed File Support
+
+**sqly** now supports compressed files! You can directly process:
+- **Gzip** compressed files (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
+- **Bzip2** compressed files (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
+- **XZ** compressed files (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
+- **Zstandard** compressed files (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
+
 
 ### Added Features
 - **filesql Integration**: Enhanced performance and functionality using the [filesql](https://github.com/nao1215/filesql) library
