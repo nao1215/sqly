@@ -1,0 +1,75 @@
+# sqly - SQL Query Tool for File Formats
+
+You are working on sqly, a command-line tool that executes SQL against CSV, TSV, LTSV, and Excel files using SQLite3 in-memory database.
+
+## Architecture Overview
+
+sqly follows Clean Architecture principles:
+- **Domain**: Business models and repository interfaces (`domain/`)
+- **Interactor**: Use cases and application logic (`interactor/`)
+- **Infrastructure**: External dependencies - filesql, SQLite3, file system (`infrastructure/`)
+- **Shell**: Interactive shell interface with go-prompt (`shell/`)
+- **Config**: Configuration and argument parsing (`config/`)
+
+## Key Technologies
+
+- **filesql integration**: Uses [github.com/nao1215/filesql](https://github.com/nao1215/filesql) for file processing
+- **Dependency Injection**: Google Wire (`di/wire.go`) - run `wire` after DI changes
+- **SQLite**: modernc.org/sqlite (pure Go, no CGO)
+- **Interactive Shell**: github.com/c-bata/go-prompt with SQL completion
+- **Testing**: Golden file testing with custom test utilities
+
+## Development Commands
+
+- `make test` - Run tests with coverage
+- `make lint` - Run golangci-lint and go-arch-lint  
+- `make build` - Build sqly binary
+- `make generate` - Generate code (Wire DI)
+
+## Development Rules
+
+- **Test-Driven Development**: Write tests first, maintain test pyramid
+- **Working code**: Ensure `make test` and `make lint` pass
+- **Clean Architecture**: Respect architectural boundaries (enforced by go-arch-lint)
+- **No global variables**: Use dependency injection instead
+- **Error handling**: Use `errors.Is` and `errors.As`, never ignore errors
+- **Comments**: Write in English for international contributors
+
+## Coding Guidelines
+
+- Follow [Effective Go](https://go.dev/doc/effective_go) guidelines
+- Package comments mandatory in `doc.go`
+- Public APIs require documentation comments
+- Remove duplicate code after completion
+- Use `t.Parallel()` in tests when possible
+- Store test data in `testdata/` directory
+
+## Key Features
+
+- **File Formats**: CSV, TSV, LTSV, Excel (.xlsx) + compressed (.gz, .bz2, .xz, .zst)
+- **Output Formats**: ASCII table (default), CSV, TSV, LTSV
+- **Interactive Shell**: Commands start with dots (`.help`, `.tables`, `.import`)
+- **Automatic type detection**: Numbers properly sorted and handled
+- **Golden file testing**: Use `golden` package for output validation
+
+## Recent Major Changes
+
+- **filesql integration**: Migrated from traditional file processing for better performance
+- **JSON support removed**: Focus on structured data formats only
+- **Compressed file support**: Native support for compressed files
+- **SQLite driver change**: Pure Go implementation (modernc.org/sqlite)
+
+## Architecture Enforcement
+
+The project uses go-arch-lint to enforce:
+- Layered architecture with clear boundaries
+- Dependencies flow inward toward domain
+- Vendor isolation within specific layers
+- No circular dependencies
+
+When making changes:
+1. Respect the Clean Architecture boundaries
+2. Update Wire DI if adding new dependencies
+3. Maintain test coverage above 80%
+4. Update golden files if output format changes
+5. Run architecture linting to verify compliance
