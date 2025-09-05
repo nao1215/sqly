@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )

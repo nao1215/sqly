@@ -9,6 +9,11 @@ import (
 	"github.com/adrg/xdg"
 )
 
+func TestMain(m *testing.M) {
+	InitSQLite3()
+	os.Exit(m.Run())
+}
+
 func TestConfigCreateDir(t *testing.T) {
 	t.Run("Create sqly config directory", func(t *testing.T) {
 		homeDir := t.TempDir()

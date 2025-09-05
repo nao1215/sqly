@@ -1,1 +1,1 @@
-filesql query: no such table: not_exist_table
+filesql query: SQL logic error: no such table: not_exist_table (1)
