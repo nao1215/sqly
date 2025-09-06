@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,12 +175,16 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Suggest {
 	text := d.Text
 	currentWord := d.GetWordBeforeCursor()
-	// Check if we're dealing with a file path (contains / or starts with common path patterns)
+	// Check if we're dealing with a file path (contains / or \ or starts with common path patterns)
 	isFilePath := strings.Contains(currentWord, "/") ||
+		strings.Contains(currentWord, `\`) || // Windows path separator support
 		strings.HasPrefix(currentWord, "./") ||
 		strings.HasPrefix(currentWord, "../") ||
 		strings.HasPrefix(currentWord, "~/") ||
 		strings.HasPrefix(currentWord, "/") ||
+		strings.HasPrefix(currentWord, `.\`) || // Windows relative path
+		strings.HasPrefix(currentWord, `..\`) || // Windows relative path
+		strings.HasPrefix(currentWord, `C:\`) || // Windows absolute path (common drive)
 		// Also check if the word looks like a filename with supported extensions
 		(strings.Contains(currentWord, ".") &&
 			(strings.Contains(currentWord, ".csv") ||
@@ -190,15 +195,15 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 				strings.Contains(currentWord, ".bz2") ||
 				strings.Contains(currentWord, ".xz") ||
 				strings.Contains(currentWord, ".zst")))
-	// Check if we're at the end of a path with /
-	atEndOfPath := strings.HasSuffix(text, "/") && len(strings.TrimSpace(text)) > 0
+	// Check if we're at the end of a path with / or \
+	atEndOfPath := (strings.HasSuffix(text, "/") || strings.HasSuffix(text, `\`)) && len(strings.TrimSpace(text)) > 0
 	// If it looks like a file path OR we're at end of path, provide file completions
 	if isFilePath || atEndOfPath {
-		fileCompletions := s.getFilePathCompletions(text)
+		fileCompletions := s.getFilePathCompletions(currentWord)
 		if len(fileCompletions) > 0 {
 			// For file path completions, we need to handle filtering differently
-			// because GetWordBeforeCursor() returns empty for paths ending with /
-			if atEndOfPath || strings.HasSuffix(currentWord, "/") {
+			// because GetWordBeforeCursor() returns empty for paths ending with / or \
+			if atEndOfPath || strings.HasSuffix(currentWord, "/") || strings.HasSuffix(currentWord, `\`) {
 				// When we're at the end of a path, return completions as-is
 				return fileCompletions
 			}
@@ -213,25 +218,11 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 	if len(words) > 0 {
 		// If the line starts with .import, always provide file completions for the last argument
 		if len(words) >= 1 && words[0] == importCommand {
-			fileCompletions := s.getFilePathCompletions(text)
+			fileCompletions := s.getFilePathCompletions(currentWord)
 
-			// Extract the correct file path prefix for filtering
-			var filePathPrefix string
-			hasTrailingSpace := strings.HasSuffix(text, " ")
-
-			if len(words) == 1 && hasTrailingSpace {
-				// ".import " - no prefix filtering needed
-				filePathPrefix = ""
-			} else if len(words) >= 2 {
-				// ".import something" - use the last word as the prefix
-				filePathPrefix = words[len(words)-1]
-			} else {
-				// ".import" without space - no filtering needed
-				filePathPrefix = ""
-			}
-
-			// Apply filtering based on the file path prefix instead of currentWord
-			return prompt.FilterHasPrefix(fileCompletions, filePathPrefix, true)
+			// For new full-path completion behavior, return all files without filtering
+			// This ensures users see all importable files regardless of input
+			return fileCompletions
 		}
 
 		// If we have a SQL query and the current word might be a filename
@@ -240,7 +231,7 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 			// Check if current word looks like it could be a file path
 			if len(currentWord) > 0 && !strings.ContainsAny(currentWord, " \t") {
 				// Try file completion as a fallback
-				fileCompletions := s.getFilePathCompletions(text)
+				fileCompletions := s.getFilePathCompletions(currentWord)
 				if len(fileCompletions) > 0 {
 					// Mix with regular completions
 					regularCompletions := s.getRegularCompletions(ctx, d)
@@ -437,136 +428,38 @@ func isValidFileForCompletion(filename string) bool {
 	return false
 }
 
-// getFilePathCompletions returns file path completions based on current input
-func (s *Shell) getFilePathCompletions(fullText string) []prompt.Suggest {
+// getFilePathCompletions returns file path completions for importable files (recursive)
+func (s *Shell) getFilePathCompletions(_ string) []prompt.Suggest {
 	var suggestions []prompt.Suggest
 
-	// Extract the directory path from the full text
-	// We need to find the last path segment that the user is working on
-	trimmedText := strings.TrimSpace(fullText)
-	if trimmedText == "" {
-		// Root level completion
-		entries, err := os.ReadDir(".")
+	// Walk the current directory tree to find all importable files
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return suggestions
+			return err // Return error to stop walking
 		}
 
-		for _, entry := range entries {
-			name := entry.Name()
-			// Skip hidden files
-			if strings.HasPrefix(name, ".") {
-				continue
+		// Skip hidden directories and files (unless explicitly requested)
+		// But don't skip the current directory "."
+		if strings.HasPrefix(d.Name(), ".") && d.Name() != "." {
+			if d.IsDir() {
+				return filepath.SkipDir
 			}
-
-			if entry.IsDir() {
-				suggestions = append(suggestions, prompt.Suggest{
-					Text:        name + "/",
-					Description: "directory: " + name,
-				})
-			} else if isValidFileForCompletion(name) {
-				suggestions = append(suggestions, prompt.Suggest{
-					Text:        name,
-					Description: "file: " + name,
-				})
-			}
+			return nil
 		}
-		return suggestions
-	}
 
-	// Determine directory and what we're completing
-	var dir, prefix string
-
-	// Find the last word in the text (could be partial path)
-	words := strings.Fields(trimmedText)
-
-	// Check if there's trailing space (indicating user wants to complete new argument)
-	hasTrailingSpace := strings.HasSuffix(fullText, " ")
-
-	// Special handling for .import commands
-	if len(words) >= 1 && words[0] == importCommand {
-		if len(words) == 1 && hasTrailingSpace {
-			// ".import " with space after command, treat as root completion
-			dir = "."
-			prefix = ""
-		} else if len(words) >= 2 {
-			// ".import something" - use the file argument
-			lastWord := words[len(words)-1]
-			if strings.HasSuffix(lastWord, "/") {
-				// User completed a directory, now completing files within it
-				dir = strings.TrimSuffix(lastWord, "/")
-				prefix = "" // No prefix, show all files in directory
-			} else if strings.Contains(lastWord, "/") {
-				// Partial path
-				dir = filepath.Dir(lastWord)
-				prefix = filepath.Base(lastWord)
-			} else {
-				// Just a filename/prefix in current directory
-				dir = "."
-				prefix = lastWord
-			}
-		} else {
-			// ".import" without space, no completion
-			return suggestions
+		// For files, check if they are importable
+		if !d.IsDir() && isValidFileForCompletion(d.Name()) {
+			suggestions = append(suggestions, prompt.Suggest{
+				Text:        filepath.ToSlash(path),
+				Description: "Importable file",
+			})
 		}
-	} else if len(words) == 0 {
-		dir = "."
-		prefix = ""
-	} else {
-		// General case for other commands
-		lastWord := words[len(words)-1]
-		if strings.HasSuffix(lastWord, "/") {
-			// User completed a directory, now completing files within it
-			dir = strings.TrimSuffix(lastWord, "/")
-			prefix = "" // No prefix, show all files in directory
-		} else if strings.Contains(lastWord, "/") {
-			// Partial path
-			dir = filepath.Dir(lastWord)
-			prefix = filepath.Base(lastWord)
-		} else {
-			// Just a filename/prefix in current directory
-			dir = "."
-			prefix = lastWord
-		}
-	}
 
-	// Ensure directory exists
-	if dir == "" {
-		dir = "."
-	}
+		return nil
+	})
 
-	// Read directory contents
-	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return suggestions
+		return nil
 	}
-
-	for _, entry := range entries {
-		name := entry.Name()
-
-		// Skip hidden files unless explicitly requested
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
-			continue
-		}
-
-		// Check if it matches the prefix
-		if prefix != "" && !strings.HasPrefix(name, prefix) {
-			continue
-		}
-
-		// For file completions, we only return the filename part
-		// go-prompt will handle combining it with the current input
-		if entry.IsDir() {
-			suggestions = append(suggestions, prompt.Suggest{
-				Text:        name + "/",
-				Description: "directory: " + name,
-			})
-		} else if isValidFileForCompletion(name) {
-			suggestions = append(suggestions, prompt.Suggest{
-				Text:        name,
-				Description: "file: " + name,
-			})
-		}
-	}
-
 	return suggestions
 }

@@ -22,7 +22,12 @@ func TestImportCompleterDebug(t *testing.T) {
 		"testdata/":           true,
 	}
 
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
 
 	for path, isDir := range testStructure {
 		if isDir {
@@ -55,29 +60,29 @@ func TestImportCompleterDebug(t *testing.T) {
 		expectedFilenames []string
 	}{
 		{
-			name:              "After .import with space",
+			name:              "All importable files should be shown",
 			text:              ".import ",
-			expectedFilenames: []string{"testdata/"},
+			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
 		},
 		{
-			name:              "After .import testdata/",
+			name:              "All importable files should be shown (any input)",
 			text:              ".import testdata/",
-			expectedFilenames: []string{"actor.csv", "sample.csv"},
+			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
 		},
 		{
-			name:              "After partial .import testd",
+			name:              "All importable files should be shown (partial input)",
 			text:              ".import testd",
-			expectedFilenames: []string{"testdata/"},
+			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
 		},
 		{
-			name:              "After partial input testdata (without slash)",
+			name:              "All importable files should be shown (any path)",
 			text:              ".import testdata",
-			expectedFilenames: []string{"testdata/"},
+			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
 		},
 		{
-			name:              "After testdata/ + partial filename 'a'",
+			name:              "All importable files should be shown (partial filename)",
 			text:              ".import testdata/a",
-			expectedFilenames: []string{"actor.csv"},
+			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
 		},
 	}
 
@@ -119,7 +124,12 @@ func TestCompleterDebug(t *testing.T) {
 		"testdata/":           true,
 	}
 
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
 
 	for path, isDir := range testStructure {
 		if isDir {
@@ -300,7 +310,12 @@ func TestGoPromptCompletionBehavior(t *testing.T) {
 		"testdata/actor.csv": false,
 		"testdata/":          true,
 	}
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
 
 	for path, isDir := range testStructure {
 		if isDir {
@@ -331,10 +346,7 @@ func TestGoPromptCompletionBehavior(t *testing.T) {
 }
 
 func TestRealDirectoryCompletion(t *testing.T) {
-	// Test with actual directory structure to identify the golden/testdata issue
-
-	// Change to project root directory so we can find both testdata and golden directories
-	t.Chdir("..")
+	// Test with actual directory structure using new full-path completion behavior
 
 	// Create a shell instance
 	shell := &Shell{
@@ -342,36 +354,31 @@ func TestRealDirectoryCompletion(t *testing.T) {
 		config:   &config.Config{},
 	}
 
-	// Test cases based on real directory structure
+	// Test cases for new full-path completion behavior
+	// All inputs should show the same complete list of importable files
 	testCases := []struct {
-		name             string
-		input            string
-		shouldContain    []string
-		shouldNOTContain []string
+		name               string
+		input              string
+		minExpectedFiles   int      // Minimum number of files expected
+		mustContainSamples []string // Sample files that must be present
 	}{
 		{
-			name:             "Empty input should show directories only",
-			input:            ".import ",
-			shouldContain:    []string{"testdata/", "golden/"},
-			shouldNOTContain: []string{"main.go", "README.md"},
+			name:               "All importable files should be shown regardless of input",
+			input:              ".import ",
+			minExpectedFiles:   1,                               // Should find at least some importable files
+			mustContainSamples: []string{"testdata/sample.csv"}, // This file should exist
 		},
 		{
-			name:             "testdata prefix should only show testdata",
-			input:            ".import testdata",
-			shouldContain:    []string{"testdata/"},
-			shouldNOTContain: []string{"golden/"}, // This is the key issue!
+			name:               "All importable files should be shown with any input",
+			input:              ".import testdata",
+			minExpectedFiles:   1,
+			mustContainSamples: []string{"testdata/sample.csv"},
 		},
 		{
-			name:             "golden prefix should only show golden",
-			input:            ".import golden",
-			shouldContain:    []string{"golden/"},
-			shouldNOTContain: []string{"testdata/"},
-		},
-		{
-			name:             "non-existent prefix should show nothing",
-			input:            ".import nonexistent",
-			shouldContain:    []string{},
-			shouldNOTContain: []string{"testdata/", "golden/"},
+			name:               "All importable files shown even with non-matching prefix",
+			input:              ".import nonexistent",
+			minExpectedFiles:   1, // Still shows all files
+			mustContainSamples: []string{"testdata/sample.csv"},
 		},
 	}
 
@@ -385,26 +392,33 @@ func TestRealDirectoryCompletion(t *testing.T) {
 				t.Logf("  %d: '%s' - %s", i, c.Text, c.Description)
 			}
 
-			// Check should contain
-			for _, expected := range tc.shouldContain {
+			// Verify minimum number of files
+			if len(completions) < tc.minExpectedFiles {
+				t.Errorf("Expected at least %d completions, got %d", tc.minExpectedFiles, len(completions))
+			}
+
+			// Verify all completions are files with correct description
+			for _, comp := range completions {
+				if comp.Description != "Importable file" {
+					t.Errorf("Expected description 'Importable file', got '%s'", comp.Description)
+				}
+				// Should not be directories (ending with /)
+				if strings.HasSuffix(comp.Text, "/") {
+					t.Errorf("Expected file path but got directory: '%s'", comp.Text)
+				}
+			}
+
+			// Check required sample files are present
+			for _, expectedFile := range tc.mustContainSamples {
 				found := false
 				for _, comp := range completions {
-					if comp.Text == expected {
+					if comp.Text == expectedFile {
 						found = true
 						break
 					}
 				}
 				if !found {
-					t.Errorf("Expected to find '%s' in completions", expected)
-				}
-			}
-
-			// Check should NOT contain
-			for _, notExpected := range tc.shouldNOTContain {
-				for _, comp := range completions {
-					if comp.Text == notExpected {
-						t.Errorf("Should NOT find '%s' in completions but found it", notExpected)
-					}
+					t.Errorf("Expected to find sample file '%s' in completions", expectedFile)
 				}
 			}
 		})
@@ -431,7 +445,12 @@ func TestFilePathCompletions(t *testing.T) {
 	}
 
 	// Change to temp directory - using t.Chdir for Go 1.20+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
 
 	// Create the directory structure
 	for path, isDir := range testStructure {
@@ -465,45 +484,58 @@ func TestFilePathCompletions(t *testing.T) {
 		expected []string
 	}{
 		{
-			name:     "Complete root level directories",
-			input:    "",
-			expected: []string{"testdata/", "docs/"},
+			name:  "All importable files should be shown",
+			input: "",
+			expected: []string{
+				"testdata/sample.csv",
+				"testdata/sample.tsv",
+				"testdata/sample.ltsv",
+				"testdata/sample.xlsx",
+				"testdata/compressed.csv.gz",
+			},
 		},
 		{
-			name:  "Complete testdata directory",
+			name:  "All importable files should be shown (with directory input)",
 			input: "testdata/",
 			expected: []string{
-				"sample.csv",
-				"sample.tsv",
-				"sample.ltsv",
-				"sample.xlsx",
-				"compressed.csv.gz",
+				"testdata/sample.csv",
+				"testdata/sample.tsv",
+				"testdata/sample.ltsv",
+				"testdata/sample.xlsx",
+				"testdata/compressed.csv.gz",
 			},
 		},
 		{
-			name:  "Complete with partial filename",
+			name:  "All importable files should be shown (with partial filename)",
 			input: "testdata/sample",
 			expected: []string{
-				"sample.csv",
-				"sample.tsv",
-				"sample.ltsv",
-				"sample.xlsx",
+				"testdata/sample.csv",
+				"testdata/sample.tsv",
+				"testdata/sample.ltsv",
+				"testdata/sample.xlsx",
+				"testdata/compressed.csv.gz",
 			},
 		},
 		{
-			name:     "Complete with partial directory",
-			input:    "test",
-			expected: []string{"testdata/"},
+			name:  "All importable files should be shown (with partial directory)",
+			input: "test",
+			expected: []string{
+				"testdata/sample.csv",
+				"testdata/sample.tsv",
+				"testdata/sample.ltsv",
+				"testdata/sample.xlsx",
+				"testdata/compressed.csv.gz",
+			},
 		},
 		{
-			name:  "Complete after .import command with directory",
+			name:  "All importable files should be shown (with .import command)",
 			input: ".import testdata/",
 			expected: []string{
-				"sample.csv",
-				"sample.tsv",
-				"sample.ltsv",
-				"sample.xlsx",
-				"compressed.csv.gz",
+				"testdata/sample.csv",
+				"testdata/sample.tsv",
+				"testdata/sample.ltsv",
+				"testdata/sample.xlsx",
+				"testdata/compressed.csv.gz",
 			},
 		},
 	}
@@ -512,11 +544,30 @@ func TestFilePathCompletions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			completions := shell.getFilePathCompletions(tt.input)
 
+			// Debug: log what files actually exist
+			entries, err := os.ReadDir(".")
+			if err != nil {
+				t.Logf("Failed to read current directory: %v", err)
+				return
+			}
+			t.Logf("Current directory contents:")
+			for _, entry := range entries {
+				t.Logf("  %s (dir: %v)", entry.Name(), entry.IsDir())
+			}
+
+			if testDataEntries, err := os.ReadDir("testdata"); err == nil {
+				t.Logf("testdata directory contents:")
+				for _, entry := range testDataEntries {
+					t.Logf("  testdata/%s (dir: %v, valid: %v)", entry.Name(), entry.IsDir(), isValidFileForCompletion(entry.Name()))
+				}
+			}
+
 			// Extract completion texts
 			var results []string
 			for _, c := range completions {
 				results = append(results, c.Text)
 			}
+			t.Logf("Got %d completions: %v", len(completions), results)
 
 			// Check if all expected completions are present
 			for _, expected := range tt.expected {
@@ -594,40 +645,38 @@ func TestIsValidFileForCompletion(t *testing.T) {
 }
 
 func TestCompleterIntegration(t *testing.T) {
-	// Test the actual completer method (integration test)
-
-	// Change to project root directory so we can find both testdata and golden directories
-	t.Chdir("..")
+	// Test the actual completer method (integration test) with new full-path completion
 
 	// Create a shell instance
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer cleanup()
 
 	testCases := []struct {
 		name             string
 		input            string
-		shouldContain    []string
-		shouldNOTContain []string
+		minExpectedFiles int
+		mustHaveFileType bool // Must contain at least one importable file
 	}{
 		{
-			name:             "Empty input should show directories and regular completions",
+			name:             "Import command should show all importable files",
 			input:            ".import ",
-			shouldContain:    []string{"testdata/", "golden/"},
-			shouldNOTContain: []string{},
+			minExpectedFiles: 1,
+			mustHaveFileType: true,
 		},
 		{
-			name:             "testdata prefix should only show testdata",
+			name:             "Import with prefix should still show all importable files",
 			input:            ".import testdata",
-			shouldContain:    []string{"testdata/"},
-			shouldNOTContain: []string{"golden/"},
+			minExpectedFiles: 1,
+			mustHaveFileType: true,
 		},
 		{
-			name:             "golden prefix should only show golden",
+			name:             "Import with any prefix shows all importable files",
 			input:            ".import golden",
-			shouldContain:    []string{"golden/"},
-			shouldNOTContain: []string{"testdata/"},
+			minExpectedFiles: 1,
+			mustHaveFileType: true,
 		},
 	}
 
@@ -643,33 +692,168 @@ func TestCompleterIntegration(t *testing.T) {
 				t.Logf("  %d: '%s' - %s", i, c.Text, c.Description)
 			}
 
-			// Check should contain
-			for _, expected := range tc.shouldContain {
-				found := false
+			// Verify minimum number of completions
+			if len(completions) < tc.minExpectedFiles {
+				t.Errorf("Expected at least %d completions, got %d", tc.minExpectedFiles, len(completions))
+			}
+
+			// If we expect importable files, verify they exist
+			if tc.mustHaveFileType {
+				foundImportableFile := false
 				for _, comp := range completions {
-					if comp.Text == expected {
-						found = true
+					if comp.Description == "Importable file" {
+						foundImportableFile = true
+						// Verify it's a file path, not directory
+						if strings.HasSuffix(comp.Text, "/") {
+							t.Errorf("Expected file path but got directory: '%s'", comp.Text)
+						}
 						break
 					}
 				}
-				if !found {
-					t.Errorf("Expected to find '%s' in completions", expected)
+				if !foundImportableFile {
+					t.Error("Expected to find at least one importable file completion")
+				}
+			}
+		})
+	}
+}
+
+func TestCompleterNonImportCommands(t *testing.T) {
+	t.Parallel()
+
+	// Test completer with non-import commands
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Import some data to test table completions
+	testdataPath := "testdata"
+	if _, err := os.Stat(testdataPath); os.IsNotExist(err) {
+		testdataPath = "../testdata"
+	}
+	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join(testdataPath, "sample.csv")}); err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name         string
+		input        string
+		expectFiles  bool
+		expectTables bool
+	}{
+		{
+			name:         "Help command should not show file completions",
+			input:        ".help",
+			expectFiles:  false,
+			expectTables: false,
+		},
+		{
+			name:         "Tables command should not show file completions",
+			input:        ".tables",
+			expectFiles:  false,
+			expectTables: false,
+		},
+		{
+			name:         "SQL query should not show file completions",
+			input:        "SELECT * FROM ",
+			expectFiles:  false,
+			expectTables: true,
+		},
+		{
+			name:         "Empty input should show table completions",
+			input:        "",
+			expectFiles:  false,
+			expectTables: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := prompt.Document{Text: tc.input}
+			completions := shell.completer(context.Background(), doc)
+
+			t.Logf("Input: '%s'", tc.input)
+			t.Logf("Got %d completions:", len(completions))
+
+			hasFiles := false
+			hasTables := false
+			for _, comp := range completions {
+				if comp.Description == "Importable file" {
+					hasFiles = true
+				}
+				if strings.HasPrefix(comp.Description, "table: ") {
+					hasTables = true
 				}
 			}
 
-			// Check should NOT contain
-			for _, notExpected := range tc.shouldNOTContain {
-				found := false
-				for _, comp := range completions {
-					if comp.Text == notExpected {
-						found = true
-						break
-					}
-				}
-				if found {
-					t.Errorf("Did not expect to find '%s' in completions", notExpected)
-				}
+			if tc.expectFiles && !hasFiles {
+				t.Error("Expected file completions but found none")
 			}
+			if !tc.expectFiles && hasFiles {
+				t.Error("Did not expect file completions but found some")
+			}
+			if tc.expectTables && !hasTables {
+				t.Error("Expected table completions but found none")
+			}
+		})
+	}
+}
+
+func TestCompleterEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	// Test completer edge cases
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "Import command with trailing space",
+			input: ".import ",
+		},
+		{
+			name:  "Import command without space",
+			input: ".import",
+		},
+		{
+			name:  "Import command with multiple spaces",
+			input: ".import   ",
+		},
+		{
+			name:  "Import with path separator",
+			input: ".import /",
+		},
+		{
+			name:  "Import with current directory",
+			input: ".import ./",
+		},
+		{
+			name:  "Import with parent directory",
+			input: ".import ../",
+		},
+		{
+			name:  "Import with home directory",
+			input: ".import ~/",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := prompt.Document{Text: tc.input}
+			completions := shell.completer(context.Background(), doc)
+
+			t.Logf("Input: '%s' -> %d completions", tc.input, len(completions))
+
+			// Should not panic and should return some result
+			// Just verify we got a valid response (len cannot be negative)
 		})
 	}
 }

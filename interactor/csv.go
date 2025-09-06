@@ -2,13 +2,12 @@ package interactor
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
 )
@@ -19,14 +18,20 @@ var _ usecase.CSVUsecase = (*csvInteractor)(nil)
 // csvInteractor implementation of use cases related to CSV handler.
 type csvInteractor struct {
 	filesqlAdapter *filesql.FileSQLAdapter // filesql for improved performance and compression support
+	r              repository.CSVRepository
+	f              repository.FileRepository
 }
 
 // NewCSVInteractor return CSVInteractor
 func NewCSVInteractor(
 	filesqlAdapter *filesql.FileSQLAdapter,
+	r repository.CSVRepository,
+	f repository.FileRepository,
 ) usecase.CSVUsecase {
 	return &csvInteractor{
 		filesqlAdapter: filesqlAdapter,
+		r:              r,
+		f:              f,
 	}
 }
 
@@ -56,30 +61,11 @@ func (ci *csvInteractor) List(csvFilePath string) (*model.Table, error) {
 
 // Dump write contents of DB table to CSV file
 func (ci *csvInteractor) Dump(csvFilePath string, table *model.Table) error {
-	file, err := os.Create(filepath.Clean(csvFilePath))
+	f, err := ci.f.Create(filepath.Clean(csvFilePath))
 	if err != nil {
-		return fmt.Errorf("failed to create CSV file: %w", err)
+		return err
 	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("failed to close CSV file: %w", cerr)
-		}
-	}()
+	defer f.Close()
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// Write header
-	if err := writer.Write(table.Header()); err != nil {
-		return fmt.Errorf("failed to write CSV header: %w", err)
-	}
-
-	// Write records
-	for _, record := range table.Records() {
-		if err := writer.Write(record); err != nil {
-			return fmt.Errorf("failed to write CSV record: %w", err)
-		}
-	}
-
-	return nil
+	return ci.r.Dump(f, table)
 }

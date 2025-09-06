@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
 )
@@ -19,14 +18,20 @@ var _ usecase.LTSVUsecase = (*ltsvInteractor)(nil)
 // ltsvInteractor implementation of use cases related to LTSV handler.
 type ltsvInteractor struct {
 	filesqlAdapter *filesql.FileSQLAdapter
+	r              repository.LTSVRepository
+	f              repository.FileRepository
 }
 
 // NewLTSVInteractor return ltsvInteractor
 func NewLTSVInteractor(
 	filesqlAdapter *filesql.FileSQLAdapter,
+	r repository.LTSVRepository,
+	f repository.FileRepository,
 ) usecase.LTSVUsecase {
 	return &ltsvInteractor{
 		filesqlAdapter: filesqlAdapter,
+		r:              r,
+		f:              f,
 	}
 }
 
@@ -56,32 +61,11 @@ func (li *ltsvInteractor) List(ltsvFilePath string) (*model.Table, error) {
 
 // Dump write contents of DB table to LTSV file
 func (li *ltsvInteractor) Dump(ltsvFilePath string, table *model.Table) error {
-	file, err := os.Create(filepath.Clean(ltsvFilePath))
+	f, err := li.f.Create(filepath.Clean(ltsvFilePath))
 	if err != nil {
-		return fmt.Errorf("failed to create LTSV file: %w", err)
+		return err
 	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("failed to close LTSV file: %w", cerr)
-		}
-	}()
+	defer f.Close()
 
-	// Write LTSV format: key1:value1<tab>key2:value2<newline>
-	headers := table.Header()
-
-	for _, record := range table.Records() {
-		// Pre-allocate slice with appropriate capacity for better memory usage
-		ltsvLine := make([]string, 0, len(headers))
-		for i, value := range record {
-			if i < len(headers) {
-				ltsvLine = append(ltsvLine, headers[i]+":"+value)
-			}
-		}
-		_, err := file.WriteString(strings.Join(ltsvLine, "\t") + "\n")
-		if err != nil {
-			return fmt.Errorf("failed to write LTSV record: %w", err)
-		}
-	}
-
-	return nil
+	return li.r.Dump(f, table)
 }

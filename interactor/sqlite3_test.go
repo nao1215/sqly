@@ -163,7 +163,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		query := "SELECT * FROM test"
+		query := "SELECT * FROM test ORDER BY id"
 		expectedTable := model.NewTable(
 			"test",
 			model.Header{"id", "name"},
@@ -190,7 +190,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		query := "SELECT * FROM test"
+		query := "SELECT * FROM test ORDER BY id"
 		someErr := errors.New("failed to execute query")
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
@@ -585,7 +585,7 @@ func TestSqlite3InteractorQuery(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		query := "SELECT * FROM test"
+		query := "SELECT * FROM test ORDER BY id"
 		expectedTable := model.NewTable(
 			"test",
 			model.Header{"id", "name"},
@@ -612,7 +612,7 @@ func TestSqlite3InteractorQuery(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := infrastructure.NewMockSQLite3Repository(ctrl)
 
-		query := "SELECT * FROM test"
+		query := "SELECT * FROM test ORDER BY id"
 		someErr := errors.New("failed to execute query")
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
