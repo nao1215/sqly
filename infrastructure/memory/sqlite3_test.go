@@ -102,7 +102,7 @@ func TestSqlite3RepositoryInsert(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := r.Query(context.Background(), "SELECT * FROM sample")
+		got, err := r.Query(context.Background(), "SELECT * FROM sample ORDER BY aaa")
 		if err != nil {
 			t.Fatal(err)
 		}

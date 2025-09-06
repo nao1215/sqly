@@ -2,14 +2,13 @@ package interactor
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
 )
@@ -20,12 +19,17 @@ var _ usecase.ExcelUsecase = (*excelInteractor)(nil)
 // excelInteractor implementation of use cases related to Excel handler.
 type excelInteractor struct {
 	filesqlAdapter *filesql.FileSQLAdapter // filesql for improved performance and compression support
+	r              repository.ExcelRepository
 }
 
 // NewExcelInteractor return ExcelInteractor
-func NewExcelInteractor(filesqlAdapter *filesql.FileSQLAdapter) usecase.ExcelUsecase {
+func NewExcelInteractor(
+	filesqlAdapter *filesql.FileSQLAdapter,
+	r repository.ExcelRepository,
+) usecase.ExcelUsecase {
 	return &excelInteractor{
 		filesqlAdapter: filesqlAdapter,
+		r:              r,
 	}
 }
 
@@ -86,30 +90,7 @@ func (ei *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, 
 	return table, nil
 }
 
-// Dump write contents of DB table to JSON file
+// Dump write contents of DB table to Excel file
 func (ei *excelInteractor) Dump(excelFilePath string, table *model.Table) error {
-	// Excel output is complex, so we'll use a simple CSV fallback for now
-	// This could be enhanced later with proper Excel library support
-	file, err := os.Create(filepath.Clean(excelFilePath))
-	if err != nil {
-		return fmt.Errorf("failed to create Excel file: %w", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// Write header
-	if err := writer.Write(table.Header()); err != nil {
-		return fmt.Errorf("failed to write Excel header: %w", err)
-	}
-
-	// Write records
-	for _, record := range table.Records() {
-		if err := writer.Write(record); err != nil {
-			return fmt.Errorf("failed to write Excel record: %w", err)
-		}
-	}
-
-	return nil
+	return ei.r.Dump(filepath.Clean(excelFilePath), table)
 }

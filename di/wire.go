@@ -31,7 +31,7 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		shell.Set,
 		interactor.Set,
 		memory.Set,
-		persistence.HistorySet, // Only History-related persistence
+		persistence.Set, // Full persistence set for repositories
 		// Add filesql adapter for filesql-only approach
 		provideFileSQLAdapter,
 	)
