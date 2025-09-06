@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## [v0.12.1](https://github.com/nao1215/sqly/compare/v0.12.0...v0.12.1) (2025-09-06)
+
+### Bug Fixes
+* **Completion**: Fix shell completion functionality that was preventing file discovery ([066ea6a](https://github.com/nao1215/sqly/commit/066ea6a))
+  - Fixed hidden directory skipping issue in file path completion
+  - Completion now properly discovers all importable files recursively
+  - Improved completion performance with efficient directory traversal
+* **Windows**: Fix Windows compatibility issues in tests ([cc11ab6](https://github.com/nao1215/sqly/commit/cc11ab6))
+  - Fixed directory cleanup issues in Windows test environments
+  - Added proper directory restoration patterns for cross-platform compatibility
+* **Testing**: Add ORDER BY clauses to SQL queries for deterministic test results ([e0fe515](https://github.com/nao1215/sqly/commit/e0fe515))
+  - Ensures consistent test results across different platforms and SQLite versions
+
+### Enhancements
+* **Shell**: Add Windows path separator support in completion system ([066ea6a](https://github.com/nao1215/sqly/commit/066ea6a))
+  - Support for backslash (`\`) path separators on Windows
+  - Enhanced path pattern recognition for Windows-style paths (`.\`, `..\`, `C:\`)
+* **Code Quality**: Improve error handling and remove unused parameters ([066ea6a](https://github.com/nao1215/sqly/commit/066ea6a))
+  - All lint issues resolved
+  - Better error propagation in file system operations
+
+### Technical Improvements
+* **Completion System**: Optimize file completion algorithm
+  - Recursive directory walking with proper hidden file handling  
+  - Cross-platform path normalization with `filepath.ToSlash()`
+  - Efficient filtering of importable file types
+* **Test Coverage**: Maintain high test coverage (36.2% for shell package)
+  - All existing tests pass on both Unix and Windows platforms
+  - Enhanced test stability with deterministic SQL query ordering
+
 ## [v0.12.0](https://github.com/nao1215/sqly/compare/v0.9.0...v0.12.0) (2025-01-09)
 
 ### Major Changes
