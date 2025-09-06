@@ -86,7 +86,7 @@ func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
 func (f *FileSQLAdapter) copyTableToSharedDB(sourceDB *sql.DB, tableName string) error {
 	// Drop existing table if it exists to avoid conflicts
-	dropSQL := "DROP TABLE IF EXISTS " + tableName
+	dropSQL := "DROP TABLE IF EXISTS " + quoteIdentifier(tableName)
 	if _, err := f.sharedDB.ExecContext(context.Background(), dropSQL); err != nil {
 		return fmt.Errorf("failed to drop existing table %s: %w", tableName, err)
 	}
@@ -110,7 +110,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 	}
 
 	// Get column names for data copying
-	rows, err := sourceDB.QueryContext(context.Background(), "PRAGMA table_info("+tableName+")")
+	rows, err := sourceDB.QueryContext(context.Background(), "PRAGMA table_info("+quoteIdentifier(tableName)+")")
 	if err != nil {
 		return err
 	}
@@ -126,6 +126,10 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
 			return err
 		}
+		// Validate column name is not empty or whitespace-only
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("table %s contains empty or whitespace-only column name at position %d", tableName, cid)
+		}
 		columns = append(columns, name)
 	}
 
@@ -137,6 +141,13 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 		return fmt.Errorf("table %s has no columns", tableName)
 	}
 
+	// Quote column names to handle reserved keywords and special characters
+	quotedColumns := make([]string, len(columns))
+	for i, col := range columns {
+		quotedColumns[i] = quoteIdentifier(col)
+	}
+	quotedTableName := quoteIdentifier(tableName)
+
 	// Begin transaction for bulk insert optimization
 	tx, err := f.sharedDB.BeginTx(context.Background(), nil)
 	if err != nil {
@@ -145,7 +156,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 	defer tx.Rollback() // Will be no-op if tx.Commit() succeeds
 
 	// Copy data from source to shared database
-	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(columns, ", "), tableName) //nolint:gosec // Table name is controlled by filesql, columns are validated
+	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(quotedColumns, ", "), quotedTableName) //nolint:gosec // Table name is controlled by filesql, columns are validated
 	sourceRows, err := sourceDB.QueryContext(context.Background(), selectSQL)
 	if err != nil {
 		return err
@@ -158,7 +169,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 		placeholders[i] = "?"
 	}
 	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", //nolint:gosec // Table and column names are controlled by filesql, placeholders are safe
-		tableName, strings.Join(columns, ", "), strings.Join(placeholders, ", "))
+		quotedTableName, strings.Join(quotedColumns, ", "), strings.Join(placeholders, ", "))
 	stmt, err := tx.PrepareContext(context.Background(), insertSQL)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert statement: %w", err)
@@ -348,7 +359,7 @@ func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (
 	}
 
 	// Get column info using PRAGMA
-	query := "PRAGMA table_info(" + tableName + ")"
+	query := "PRAGMA table_info(" + quoteIdentifier(tableName) + ")"
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, &FileSQLError{Op: "get_header", Err: err.Error()}
@@ -407,6 +418,14 @@ func GetTableNameFromFilePath(filePath string) string {
 	}
 
 	return filename
+}
+
+// quoteIdentifier safely quotes SQL identifiers by escaping embedded double quotes
+func quoteIdentifier(identifier string) string {
+	// Escape any existing double quotes by doubling them
+	escaped := strings.ReplaceAll(identifier, `"`, `""`)
+	// Wrap with double quotes
+	return `"` + escaped + `"`
 }
 
 // FileSQLError represents an error from filesql operations

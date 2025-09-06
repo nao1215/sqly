@@ -35,9 +35,13 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 		return nil, nil, err
 	}
 	fileSQLAdapter := provideFileSQLAdapter(memoryDB)
-	csvUsecase := interactor.NewCSVInteractor(fileSQLAdapter)
-	tsvUsecase := interactor.NewTSVInteractor(fileSQLAdapter)
-	ltsvUsecase := interactor.NewLTSVInteractor(fileSQLAdapter)
+	csvRepository := persistence.NewCSVRepository()
+	fileRepository := persistence.NewFileRepository()
+	csvUsecase := interactor.NewCSVInteractor(fileSQLAdapter, csvRepository, fileRepository)
+	tsvRepository := persistence.NewTSVRepository()
+	tsvUsecase := interactor.NewTSVInteractor(fileSQLAdapter, tsvRepository, fileRepository)
+	ltsvRepository := persistence.NewLTSVRepository()
+	ltsvUsecase := interactor.NewLTSVInteractor(fileSQLAdapter, ltsvRepository, fileRepository)
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sql := interactor.NewSQL()
 	databaseUsecase := interactor.NewSQLite3Interactor(sqLite3Repository, sql)
@@ -48,7 +52,8 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyUsecase := interactor.NewHistoryInteractor(historyRepository)
-	excelUsecase := interactor.NewExcelInteractor(fileSQLAdapter)
+	excelRepository := persistence.NewExcelRepository()
+	excelUsecase := interactor.NewExcelInteractor(fileSQLAdapter, excelRepository)
 	usecases := shell.NewUsecases(csvUsecase, tsvUsecase, ltsvUsecase, databaseUsecase, historyUsecase, excelUsecase)
 	shellShell, err := shell.NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
