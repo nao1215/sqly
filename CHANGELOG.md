@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v0.12.2](https://github.com/nao1215/sqly/compare/v0.12.1...v0.12.2) (2025-09-17)
+
+### Bug Fixes
+* **Table Names**: Fix SQL syntax errors caused by special characters in filenames ([#153](https://github.com/nao1215/sqly/pull/153))
+  - Automatically sanitize table names by replacing problematic characters (hyphens, dots, special chars) with underscores
+  - Example: `bug-syntax-error.csv` now creates table `bug_syntax_error` instead of failing with syntax error
+  - Added comprehensive test coverage for filename sanitization edge cases
+
+### Documentation
+* **README**: Update all localized README files with table name sanitization information
+  - Added explanations in English, Japanese, Korean, Russian, Chinese, Spanish, and French
+  - Clarified that special characters in filenames are automatically replaced with underscores
+  - Provided clear examples of filename → table name conversion
+
+### Technical Improvements
+* **Testing**: Enhanced test suite for filename edge cases
+  - Added tests for files with hyphens, dots, and special characters
+  - Verified cross-platform compatibility of table name generation
+  - Ensured deterministic table naming behavior
+
 ## [v0.12.1](https://github.com/nao1215/sqly/compare/v0.12.0...v0.12.1) (2025-09-06)
 
 ### Bug Fixes
