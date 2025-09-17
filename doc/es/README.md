@@ -41,6 +41,8 @@ brew install nao1215/tap/sqly
 ## Cómo usar
 sqly importa automáticamente archivos CSV/TSV/LTSV/Excel (incluyendo versiones comprimidas) a la base de datos cuando pasa la ruta del archivo como argumento. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
 
+**Nota**: Si el nombre del archivo contiene caracteres que podrían causar errores de sintaxis SQL (como guiones `-`, puntos `.` u otros caracteres especiales), se reemplazan automáticamente con guiones bajos `_`. Por ejemplo, `bug-syntax-error.csv` se convierte en la tabla `bug_syntax_error`.
+
 sqly determina automáticamente el formato del archivo a partir de la extensión, incluyendo archivos comprimidos.
 
 ### Ejecutar SQL en terminal: opción --sql

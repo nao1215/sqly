@@ -417,7 +417,19 @@ func GetTableNameFromFilePath(filePath string) string {
 		filename = strings.TrimSuffix(filename, ext)
 	}
 
-	return filename
+	// Sanitize filename to be SQL-safe
+	// Replace characters that can cause SQL syntax errors with underscores
+	// This includes: hyphen (-), dot (.), and other non-alphanumeric characters except underscore
+	result := make([]rune, 0, len(filename))
+	for _, r := range filename {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			result = append(result, r)
+		} else {
+			result = append(result, '_')
+		}
+	}
+
+	return string(result)
 }
 
 // quoteIdentifier safely quotes SQL identifiers by escaping embedded double quotes
