@@ -41,6 +41,8 @@ brew install nao1215/tap/sqly
 ## How to use
 The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed versions) into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
+**Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`.
+
 The sqly automatically determines the file format from the file extension, including compressed files.
 
 ### Execute sql in terminal: --sql option
