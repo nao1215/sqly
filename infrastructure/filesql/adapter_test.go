@@ -390,7 +390,27 @@ func TestGetTableNameFromFilePath(t *testing.T) {
 		{
 			name:     "complex path with multiple dots",
 			filePath: "/path/to/my.data.file.csv.gz",
-			expected: "my.data.file",
+			expected: "my_data_file",
+		},
+		{
+			name:     "filename with hyphen (syntax error case)",
+			filePath: "/path/to/bug-syntax-error.csv",
+			expected: "bug_syntax_error",
+		},
+		{
+			name:     "filename with dots and hyphens",
+			filePath: "/path/to/my-data.file-test.csv",
+			expected: "my_data_file_test",
+		},
+		{
+			name:     "filename starting with number",
+			filePath: "/path/to/2023-data.csv",
+			expected: "2023_data",
+		},
+		{
+			name:     "filename with special characters",
+			filePath: "/path/to/data@file#test$.csv",
+			expected: "data_file_test_",
 		},
 	}
 
