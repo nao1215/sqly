@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [v0.13.0](https://github.com/nao1215/sqly/compare/v0.12.2...v0.13.0) (2025-01-XX)
+## [v0.13.0](https://github.com/nao1215/sqly/compare/v0.12.2...v0.13.0) (2025-09-19)
 
 ### Breaking Changes
 * **Dependencies**: Migrate from `c-bata/go-prompt` to `github.com/nao1215/prompt`
