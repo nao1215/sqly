@@ -1,5 +1,50 @@
 # CHANGELOG
 
+## [v0.13.0](https://github.com/nao1215/sqly/compare/v0.12.2...v0.13.0) (2025-01-XX)
+
+### Breaking Changes
+* **Dependencies**: Migrate from `c-bata/go-prompt` to `github.com/nao1215/prompt`
+  - Replace unmaintained `c-bata/go-prompt` library with modern `nao1215/prompt`
+  - Addresses critical stability issues including divide-by-zero panics and memory leaks
+  - Improved cross-platform compatibility and better terminal handling
+
+### Enhancements
+* **Interactive Shell**: Enhanced prompt functionality and user experience
+  - Maintained full compatibility with existing shell features (completion, history, commands)
+  - Improved terminal input handling with better cursor control
+  - Support for multiline input with enhanced editing capabilities
+  - Fixed display issues with extra newlines after user input
+  - Updated color themes and visual consistency
+
+### Technical Improvements
+* **Architecture**: Updated dependency management and architecture constraints
+  - Updated `.go-arch-lint.yml` to reflect new prompt library dependency
+  - Maintained clean architecture boundaries and dependency injection patterns
+  - All existing tests pass with new prompt implementation
+* **Code Quality**: Improved error handling and input processing
+  - Enhanced input sanitization with `strings.TrimSpace()` for reliable parsing
+  - Added terminal control sequences for optimal display behavior
+  - Removed legacy workarounds for `c-bata/go-prompt` bugs
+* **Testing**: Comprehensive test coverage maintained
+  - All shell functionality tests updated and passing
+  - Completion system tests adapted to new prompt library API
+  - Cross-platform compatibility verified
+
+### Bug Fixes
+* **Shell Display**: Fix unwanted newlines appearing after user input
+  - Resolved extra blank lines that appeared between input and output
+  - Improved terminal cursor positioning with ANSI escape sequences
+  - Maintains clean, professional shell appearance
+
+### Migration Notes
+* **For Users**: No changes to command-line interface or functionality
+  - All existing commands, features, and workflows remain identical
+  - No configuration changes required
+* **For Developers**: Updated prompt library dependency
+  - New dependency: `github.com/nao1215/prompt v0.0.1`
+  - Removed dependency: `github.com/c-bata/go-prompt`
+  - Internal API changes are fully abstracted from public interfaces
+
 ## [v0.12.2](https://github.com/nao1215/sqly/compare/v0.12.1...v0.12.2) (2025-09-17)
 
 ### Bug Fixes
