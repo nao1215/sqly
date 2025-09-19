@@ -7,15 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/c-bata/go-prompt"
-	"github.com/c-bata/go-prompt/completer"
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
+	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -94,19 +91,6 @@ func (s *Shell) Run(ctx context.Context) error {
 // This function receive user input (it's SQL query or helper command) and
 // request the usecase layer to process it.
 func (s *Shell) communicate(ctx context.Context) error {
-	// workaround
-	// bug :https://github.com/c-bata/go-prompt/issues/228
-	defer func() {
-		rawModeOff := exec.CommandContext(context.Background(), "/bin/stty", "-raw", "echo")
-		rawModeOff.Stdin = os.Stdin
-		if err := rawModeOff.Run(); err != nil {
-			fmt.Fprintf(Stderr, "failed to turn off raw mode: %v\n", err)
-		}
-		if err := rawModeOff.Wait(); err != nil {
-			fmt.Fprintf(Stderr, "failed to wait raw mode off: %v\n", err)
-		}
-	}()
-
 	for {
 		input, err := s.prompt(ctx)
 		if err != nil {
@@ -149,32 +133,71 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return prompt.Input(
-		func() string {
-			return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String())
-		}(),
-		func(d prompt.Document) []prompt.Suggest {
-			return s.completer(ctx, d)
-		},
-		prompt.OptionTitle("sqly"),
-		prompt.OptionPrefixTextColor(prompt.Cyan),
-		prompt.OptionSuggestionBGColor(prompt.DarkBlue),
-		prompt.OptionSuggestionTextColor(prompt.Black),
-		prompt.OptionDescriptionBGColor(prompt.DarkGray),
-		prompt.OptionSelectedSuggestionBGColor(prompt.Blue),
-		prompt.OptionSelectedDescriptionBGColor(prompt.Cyan),
-		prompt.OptionSelectedSuggestionTextColor(prompt.DarkRed),
-		prompt.OptionSelectedDescriptionTextColor(prompt.DarkRed),
-		prompt.OptionCompletionWordSeparator(completer.FilePathCompletionSeparator),
-		// Enable down arrow for completion to improve TAB behavior
-		prompt.OptionCompletionOnDown(),
-		prompt.OptionHistory(histories.ToStringList())), nil
+	p, err := prompt.New(
+		fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String()),
+		prompt.WithCompleter(func(d prompt.Document) []prompt.Suggestion {
+			return s.completerNew(ctx, d.Text)
+		}),
+		prompt.WithMemoryHistory(100),
+		prompt.WithTheme(prompt.ThemeNightOwl),
+		prompt.WithMultiline(true),
+	)
+	if err != nil {
+		return "", err
+	}
+	defer p.Close()
+
+	// Add existing history entries to the prompt
+	for _, h := range histories.ToStringList() {
+		p.AddHistory(h)
+	}
+
+	result, err := p.Run()
+	if err != nil {
+		return "", err
+	}
+
+	// The new prompt library seems to output an extra newline after input.
+	// We need to move the cursor up one line to eliminate this extra space.
+	fmt.Print("\033[1A") // Move cursor up one line
+
+	// Trim any trailing newlines or whitespace that might be added by the prompt library
+	return strings.TrimSpace(result), nil
 }
 
-// completer return prompt.Suggest for auto-completion.
-func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Suggest {
-	text := d.Text
-	currentWord := d.GetWordBeforeCursor()
+// Suggest is a local struct to maintain compatibility with old code structure
+type Suggest struct {
+	Text        string
+	Description string
+}
+
+// completerNew returns completions for the new prompt library
+func (s *Shell) completerNew(ctx context.Context, input string) []prompt.Suggestion {
+	oldSuggestions := s.getCompletions(ctx, input)
+	completions := make([]prompt.Suggestion, 0, len(oldSuggestions))
+
+	// Convert old suggestions to new format
+	for _, suggest := range oldSuggestions {
+		completions = append(completions, prompt.Suggestion{
+			Text:        suggest.Text,
+			Description: suggest.Description,
+		})
+	}
+
+	return completions
+}
+
+// getCompletions returns suggestions for auto-completion.
+func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
+	text := input
+	// Get current word by finding last space and taking everything after
+	lastSpace := strings.LastIndex(text, " ")
+	var currentWord string
+	if lastSpace >= 0 {
+		currentWord = text[lastSpace+1:]
+	} else {
+		currentWord = text
+	}
 	// Check if we're dealing with a file path (contains / or \ or starts with common path patterns)
 	isFilePath := strings.Contains(currentWord, "/") ||
 		strings.Contains(currentWord, `\`) || // Windows path separator support
@@ -207,8 +230,8 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 				// When we're at the end of a path, return completions as-is
 				return fileCompletions
 			}
-			// Otherwise, let go-prompt filter based on the current word
-			return prompt.FilterHasPrefix(fileCompletions, currentWord, true)
+			// Otherwise, filter based on the current word
+			return filterHasPrefix(fileCompletions, currentWord, true)
 		}
 	}
 
@@ -234,21 +257,34 @@ func (s *Shell) completer(ctx context.Context, d prompt.Document) []prompt.Sugge
 				fileCompletions := s.getFilePathCompletions(currentWord)
 				if len(fileCompletions) > 0 {
 					// Mix with regular completions
-					regularCompletions := s.getRegularCompletions(ctx, d)
+					regularCompletions := s.getRegularCompletions(ctx, input)
 					allCompletions := append(regularCompletions, fileCompletions...)
-					return prompt.FilterHasPrefix(allCompletions, currentWord, true)
+					return filterHasPrefix(allCompletions, currentWord, true)
 				}
 			}
 		}
 	}
 
 	// Default to regular completions
-	return s.getRegularCompletions(ctx, d)
+	return s.getRegularCompletions(ctx, input)
+}
+
+// filterHasPrefix filters suggestions that have the given prefix (case-insensitive)
+func filterHasPrefix(suggestions []Suggest, prefix string, _ bool) []Suggest {
+	// ignoreCase parameter kept for compatibility but always treated as true
+	var filtered []Suggest
+	lowerPrefix := strings.ToLower(prefix)
+	for _, s := range suggestions {
+		if strings.HasPrefix(strings.ToLower(s.Text), lowerPrefix) {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
 
 // getRegularCompletions returns the original completion logic
-func (s *Shell) getRegularCompletions(ctx context.Context, d prompt.Document) []prompt.Suggest {
-	suggest := []prompt.Suggest{
+func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Suggest {
+	suggest := []Suggest{
 		{Text: "SELECT", Description: "SQL: get records from table"},
 		{Text: "INSERT INTO", Description: "SQL: creates one or more new records in an existing table"},
 		{Text: "UPDATE", Description: "SQL: update one or more records"},
@@ -283,7 +319,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, d prompt.Document) []
 	}
 
 	for _, v := range s.commands {
-		suggest = append(suggest, prompt.Suggest{
+		suggest = append(suggest, Suggest{
 			Text:        v.name,
 			Description: "sqly command: " + v.description,
 		})
@@ -291,26 +327,50 @@ func (s *Shell) getRegularCompletions(ctx context.Context, d prompt.Document) []
 
 	tables, err := s.usecases.sqlite3.TablesName(ctx)
 	if err != nil {
-		return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
+		// Get current word for filtering
+		lastSpace := strings.LastIndex(input, " ")
+		var currentWord string
+		if lastSpace >= 0 {
+			currentWord = input[lastSpace+1:]
+		} else {
+			currentWord = input
+		}
+		return filterHasPrefix(suggest, currentWord, true)
 	}
 	for _, v := range tables {
-		suggest = append(suggest, prompt.Suggest{
+		suggest = append(suggest, Suggest{
 			Text:        v.Name(),
 			Description: "table: " + v.Name(),
 		})
 
 		table, err := s.usecases.sqlite3.Header(ctx, v.Name())
 		if err != nil {
-			return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
+			// Get current word for filtering
+			lastSpace := strings.LastIndex(input, " ")
+			var currentWord string
+			if lastSpace >= 0 {
+				currentWord = input[lastSpace+1:]
+			} else {
+				currentWord = input
+			}
+			return filterHasPrefix(suggest, currentWord, true)
 		}
 		for _, h := range table.Header() {
-			suggest = append(suggest, prompt.Suggest{
+			suggest = append(suggest, Suggest{
 				Text:        h,
 				Description: "header: " + h + " column in " + v.Name() + " table",
 			})
 		}
 	}
-	return prompt.FilterHasPrefix(suggest, d.GetWordBeforeCursor(), true)
+	// Get current word for filtering
+	lastSpace := strings.LastIndex(input, " ")
+	var currentWord string
+	if lastSpace >= 0 {
+		currentWord = input[lastSpace+1:]
+	} else {
+		currentWord = input
+	}
+	return filterHasPrefix(suggest, currentWord, true)
 }
 
 // exec execute sqly helper command or sql query.
@@ -429,8 +489,8 @@ func isValidFileForCompletion(filename string) bool {
 }
 
 // getFilePathCompletions returns file path completions for importable files (recursive)
-func (s *Shell) getFilePathCompletions(_ string) []prompt.Suggest {
-	var suggestions []prompt.Suggest
+func (s *Shell) getFilePathCompletions(_ string) []Suggest {
+	var suggestions []Suggest
 
 	// Walk the current directory tree to find all importable files
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
@@ -449,7 +509,7 @@ func (s *Shell) getFilePathCompletions(_ string) []prompt.Suggest {
 
 		// For files, check if they are importable
 		if !d.IsDir() && isValidFileForCompletion(d.Name()) {
-			suggestions = append(suggestions, prompt.Suggest{
+			suggestions = append(suggestions, Suggest{
 				Text:        filepath.ToSlash(path),
 				Description: "Importable file",
 			})
