@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/c-bata/go-prompt"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
@@ -130,7 +129,7 @@ func TestShell_completer(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		shell.completer(context.Background(), *prompt.NewDocument())
+		shell.getCompletions(context.Background(), "")
 	})
 }
 
@@ -896,9 +895,8 @@ func TestShell_getRegularCompletions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a mock document for testing
-	doc := *prompt.NewDocument()
-	completions := shell.getRegularCompletions(context.Background(), doc)
+	// Test with empty input
+	completions := shell.getRegularCompletions(context.Background(), "")
 
 	// Should include SQL keywords
 	hasSelect := false

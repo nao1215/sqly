@@ -18,7 +18,7 @@ vendors:
   difflib: { in: github.com/pmezard/go-difflib/difflib }
   excelize: { in: github.com/xuri/excelize/v2 }
   gomock: { in: go.uber.org/mock/gomock }
-  go-prompt: { in: [github.com/c-bata/go-prompt, github.com/c-bata/go-prompt/completer] }
+  prompt: { in: github.com/nao1215/prompt }
   filesql: { in: github.com/nao1215/filesql }
 
 components:
@@ -83,7 +83,7 @@ deps:
       - di
   shell:
     canUse:
-      - go-prompt
+      - prompt
       - tablewriter
       - go-colorable
     mayDependOn:
