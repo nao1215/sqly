@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/c-bata/go-prompt"
 	"github.com/nao1215/sqly/config"
 )
 
@@ -210,34 +209,34 @@ func TestCompleterDebug(t *testing.T) {
 		t.Logf("") // Separator
 	}
 
-	// Test FilterHasPrefix behavior
-	suggestions := []prompt.Suggest{
+	// Test filterHasPrefix behavior
+	suggestions := []Suggest{
 		{Text: "testdata/", Description: "directory: testdata"},
 	}
 
-	filtered := prompt.FilterHasPrefix(suggestions, "testdata", true)
-	t.Logf("FilterHasPrefix results with 'testdata': %d", len(filtered))
+	filtered := filterHasPrefix(suggestions, "testdata", true)
+	t.Logf("filterHasPrefix results with 'testdata': %d", len(filtered))
 	for i, f := range filtered {
 		t.Logf("  %d: Text='%s'", i, f.Text)
 	}
 
-	filtered2 := prompt.FilterHasPrefix(suggestions, "testd", true)
-	t.Logf("FilterHasPrefix results with 'testd': %d", len(filtered2))
+	filtered2 := filterHasPrefix(suggestions, "testd", true)
+	t.Logf("filterHasPrefix results with 'testd': %d", len(filtered2))
 	for i, f := range filtered2 {
 		t.Logf("  %d: Text='%s'", i, f.Text)
 	}
 
-	// Test FilterHasPrefix with empty string
-	actors := []prompt.Suggest{
+	// Test filterHasPrefix with empty string
+	actors := []Suggest{
 		{Text: "actor.csv", Description: "file: actor.csv"},
 		{Text: "sample.csv", Description: "file: sample.csv"},
 	}
 
-	filteredEmpty := prompt.FilterHasPrefix(actors, "", true)
-	t.Logf("FilterHasPrefix with empty string: %d", len(filteredEmpty))
+	filteredEmpty := filterHasPrefix(actors, "", true)
+	t.Logf("filterHasPrefix with empty string: %d", len(filteredEmpty))
 
-	filteredA := prompt.FilterHasPrefix(actors, "a", true)
-	t.Logf("FilterHasPrefix with 'a': %d", len(filteredA))
+	filteredA := filterHasPrefix(actors, "a", true)
+	t.Logf("filterHasPrefix with 'a': %d", len(filteredA))
 	for i, f := range filteredA {
 		t.Logf("  %d: Text='%s'", i, f.Text)
 	}
@@ -282,12 +281,12 @@ func TestGoPromptCompletionBehavior(t *testing.T) {
 		t.Logf("  SuggestionText: %s", tc.suggestionText)
 		t.Logf("  Expectation: %s", tc.expectation)
 
-		// Test FilterHasPrefix behavior with different Text formats
-		suggestions := []prompt.Suggest{
+		// Test filterHasPrefix behavior with different Text formats
+		suggestions := []Suggest{
 			{Text: tc.suggestionText, Description: "test completion"},
 		}
 
-		filtered := prompt.FilterHasPrefix(suggestions, tc.currentWord, true)
+		filtered := filterHasPrefix(suggestions, tc.currentWord, true)
 		t.Logf("  FilterHasPrefix result: %d matches", len(filtered))
 		if len(filtered) > 0 {
 			t.Logf("    -> Text: '%s'", filtered[0].Text)
@@ -682,9 +681,8 @@ func TestCompleterIntegration(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create document for the completer
-			doc := prompt.Document{Text: tc.input}
-			completions := shell.completer(context.Background(), doc)
+			// Use the new getCompletions method
+			completions := shell.getCompletions(context.Background(), tc.input)
 
 			t.Logf("Input: '%s'", tc.input)
 			t.Logf("Got %d completions:", len(completions))
@@ -771,8 +769,7 @@ func TestCompleterNonImportCommands(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := prompt.Document{Text: tc.input}
-			completions := shell.completer(context.Background(), doc)
+			completions := shell.getCompletions(context.Background(), tc.input)
 
 			t.Logf("Input: '%s'", tc.input)
 			t.Logf("Got %d completions:", len(completions))
@@ -847,8 +844,7 @@ func TestCompleterEdgeCases(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := prompt.Document{Text: tc.input}
-			completions := shell.completer(context.Background(), doc)
+			completions := shell.getCompletions(context.Background(), tc.input)
 
 			t.Logf("Input: '%s' -> %d completions", tc.input, len(completions))
 
