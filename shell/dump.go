@@ -3,6 +3,8 @@ package shell
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/nao1215/sqly/config"
@@ -35,8 +37,28 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 }
 
 // dumpToFile is dump table data to file.
+// normalizeDumpExt normalizes the output file extension based on the current print mode
+func normalizeDumpExt(path string, m model.PrintMode) string {
+	ext := map[model.PrintMode]string{
+		model.PrintModeCSV:           ".csv",
+		model.PrintModeTSV:           ".tsv",
+		model.PrintModeLTSV:          ".ltsv",
+		model.PrintModeExcel:         ".xlsx",
+		model.PrintModeMarkdownTable: ".md",
+		model.PrintModeTable:         ".csv",
+	}[m]
+	if ext == "" {
+		return path
+	}
+	if filepath.Ext(path) == ext {
+		return path
+	}
+	return strings.TrimSuffix(path, filepath.Ext(path)) + ext
+}
+
 func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	var err error
+	filePath = normalizeDumpExt(filePath, s.state.mode.PrintMode)
 	switch s.state.mode.PrintMode {
 	case model.PrintModeCSV:
 		err = s.usecases.csv.Dump(filePath, table)
@@ -47,7 +69,7 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	case model.PrintModeExcel:
 		err = s.usecases.excel.Dump(filePath, table)
 	case model.PrintModeMarkdownTable:
-		fallthrough // TODO: support markdown table mode
+		err = s.usecases.csv.Dump(filePath, table)
 	case model.PrintModeTable:
 		fallthrough
 	default:
