@@ -108,6 +108,7 @@ deps:
   memory-infra:
     canUse:
       - filesql
+      - excelize
     mayDependOn:
       - model
       - repository
