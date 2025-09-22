@@ -2,6 +2,7 @@ package interactor
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -140,7 +141,9 @@ func TestCSVInteractor_ListWithNilAdapter(t *testing.T) {
 	t.Parallel()
 
 	// Create interactor with nil adapter
-	interactor := &csvInteractor{filesqlAdapter: nil}
+	interactor := &csvInteractor{
+		baseFileInteractor: &baseFileInteractor{filesqlAdapter: nil},
+	}
 
 	// Test List with nil adapter
 	_, err := interactor.List("test.csv")
@@ -148,8 +151,8 @@ func TestCSVInteractor_ListWithNilAdapter(t *testing.T) {
 		t.Fatal("Expected error with nil adapter, got nil")
 	}
 
-	if err.Error() != "filesql adapter not initialized" {
-		t.Errorf("Expected 'filesql adapter not initialized' error, got: %v", err)
+	if !errors.Is(err, ErrFilesqlAdapterNotInitialized) {
+		t.Errorf("Expected ErrFilesqlAdapterNotInitialized, got: %v", err)
 	}
 }
 

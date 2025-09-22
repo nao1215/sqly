@@ -3,6 +3,7 @@ package interactor
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,8 +50,8 @@ func TestExcelInteractor_ListNilAdapter(t *testing.T) {
 		t.Fatal("Expected error when adapter is nil")
 	}
 
-	if !strings.Contains(err.Error(), "filesql adapter not initialized") {
-		t.Errorf("Expected 'filesql adapter not initialized' error, got: %v", err)
+	if !errors.Is(err, ErrFilesqlAdapterNotInitialized) {
+		t.Errorf("Expected ErrFilesqlAdapterNotInitialized, got: %v", err)
 	}
 }
 
