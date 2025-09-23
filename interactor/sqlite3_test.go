@@ -245,6 +245,50 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		}
 	})
 
+	t.Run("execute WITH (CTE) statement succeeded", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+
+		query := "WITH test_cte AS (SELECT * FROM test WHERE id > 1) SELECT * FROM test_cte"
+		expectedTable := model.NewTable(
+			"test",
+			model.Header{"id", "name"},
+			[]model.Record{
+				{"2", "Yulia"},
+				{"3", "Bob"},
+			},
+		)
+
+		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
+
+		interactor := NewSQLite3Interactor(repo, NewSQL())
+		got, _, err := interactor.ExecSQL(context.Background(), query)
+		if err != nil {
+			t.Errorf("want: nil, got: %v", err)
+		}
+		if !reflect.DeepEqual(got, expectedTable) {
+			t.Errorf("want: %v, got: %v", expectedTable, got)
+		}
+	})
+
+	t.Run("execute WITH (CTE) statement failed", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+
+		query := "WITH test_cte AS (SELECT * FROM test WHERE id > 1) SELECT * FROM test_cte"
+		someErr := errors.New("failed to execute CTE query")
+
+		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
+
+		interactor := NewSQLite3Interactor(repo, NewSQL())
+		_, _, err := interactor.ExecSQL(context.Background(), query)
+		if !errors.Is(err, someErr) {
+			t.Errorf("want: %v, got: %v", someErr, err)
+		}
+	})
+
 	t.Run("execute INSERT statement succeeded", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)

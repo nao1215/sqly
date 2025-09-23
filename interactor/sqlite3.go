@@ -84,7 +84,7 @@ func (si *sqlite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		return nil, 0, errors.New("not support data control language: " + strings.Join(si.sql.dcl, ", "))
 	case !si.sql.isDML(argv[0]):
 		return nil, 0, errors.New("this input is not sql query or sqly helper command: " + color.CyanString(statement))
-	case si.sql.isSelect(argv[0]) || si.sql.isExplain(argv[0]):
+	case si.sql.isSelect(argv[0]) || si.sql.isExplain(argv[0]) || si.sql.isWithCTE(argv[0]):
 		table, err := si.Query(ctx, statement)
 		if err != nil {
 			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
