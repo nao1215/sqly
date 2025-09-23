@@ -447,3 +447,115 @@ func TestSQLIsDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestSQLIsWithCTE(t *testing.T) {
+	t.Parallel()
+
+	sql := NewSQL()
+
+	tests := []struct {
+		name string
+		arg  string
+		want bool
+	}{
+		{
+			name: "is WITH - uppercase",
+			arg:  "WITH",
+			want: true,
+		},
+		{
+			name: "is WITH - lowercase",
+			arg:  "with",
+			want: true,
+		},
+		{
+			name: "is WITH - mixedcase",
+			arg:  "With",
+			want: true,
+		},
+		{
+			name: "is not WITH - SELECT",
+			arg:  "SELECT",
+			want: false,
+		},
+		{
+			name: "is not WITH - INSERT",
+			arg:  "INSERT",
+			want: false,
+		},
+		{
+			name: "is not WITH - WITHIN",
+			arg:  "WITHIN",
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := sql.isWithCTE(tt.arg); got != tt.want {
+				t.Errorf("isWithCTE() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSQLWITHIsDML(t *testing.T) {
+	t.Parallel()
+
+	sql := NewSQL()
+
+	tests := []struct {
+		name string
+		arg  string
+		want bool
+	}{
+		{
+			name: "WITH is DML - uppercase",
+			arg:  "WITH",
+			want: true,
+		},
+		{
+			name: "WITH is DML - lowercase",
+			arg:  "with",
+			want: true,
+		},
+		{
+			name: "SELECT is DML",
+			arg:  "SELECT",
+			want: true,
+		},
+		{
+			name: "INSERT is DML",
+			arg:  "INSERT",
+			want: true,
+		},
+		{
+			name: "UPDATE is DML",
+			arg:  "UPDATE",
+			want: true,
+		},
+		{
+			name: "DELETE is DML",
+			arg:  "DELETE",
+			want: true,
+		},
+		{
+			name: "EXPLAIN is DML",
+			arg:  "EXPLAIN",
+			want: true,
+		},
+		{
+			name: "CREATE is not DML",
+			arg:  "CREATE",
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := sql.isDML(tt.arg); got != tt.want {
+				t.Errorf("isDML(%q) = %v, want %v", tt.arg, got, tt.want)
+			}
+		})
+	}
+}
