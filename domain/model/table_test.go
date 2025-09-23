@@ -358,7 +358,10 @@ aaa:777	bbb:888	ccc:999
 				tt.fields.Records,
 			)
 			out := &bytes.Buffer{}
-			tr.Print(out, tt.args.mode)
+			if err := tr.Print(out, tt.args.mode); err != nil {
+				t.Errorf("Print() error = %v", err)
+				return
+			}
 			gotOut := out.String()
 			if diff := cmp.Diff(gotOut, tt.wantOut); diff != "" {
 				t.Errorf("value is mismatch (-got +want):\n%s", diff)
@@ -517,6 +520,136 @@ func TestTableEqual(t *testing.T) {
 			)
 			if got := tr.Equal(tt.args.t2); got != tt.want {
 				t.Errorf("Table.Equal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetColumnData(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		records     []Record
+		columnIndex int
+		want        []string
+	}{
+		{
+			name: "extract first column data",
+			records: []Record{
+				{"a", "b", "c"},
+				{"d", "e", "f"},
+				{"g", "h", "i"},
+			},
+			columnIndex: 0,
+			want:        []string{"a", "d", "g"},
+		},
+		{
+			name: "extract second column data",
+			records: []Record{
+				{"a", "b", "c"},
+				{"d", "e", "f"},
+				{"g", "h", "i"},
+			},
+			columnIndex: 1,
+			want:        []string{"b", "e", "h"},
+		},
+		{
+			name: "column index out of bounds",
+			records: []Record{
+				{"a", "b"},
+				{"d", "e", "f"},
+			},
+			columnIndex: 2,
+			want:        []string{"f"},
+		},
+		{
+			name:        "empty records",
+			records:     []Record{},
+			columnIndex: 0,
+			want:        nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := getColumnData(tt.records, tt.columnIndex)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("getColumnData() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsAllNumeric(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		values []string
+		want   bool
+	}{
+		{
+			name:   "all integers",
+			values: []string{"1", "2", "3", "100"},
+			want:   true,
+		},
+		{
+			name:   "all floats",
+			values: []string{"1.5", "2.0", "3.14", "100.99"},
+			want:   true,
+		},
+		{
+			name:   "numbers with commas",
+			values: []string{"1,000", "2,500.50", "3,000"},
+			want:   true,
+		},
+		{
+			name:   "negative numbers",
+			values: []string{"-1", "-2.5", "-100"},
+			want:   true,
+		},
+		{
+			name:   "mixed numeric and text",
+			values: []string{"1", "abc", "3"},
+			want:   false,
+		},
+		{
+			name:   "all text",
+			values: []string{"abc", "def", "ghi"},
+			want:   false,
+		},
+		{
+			name:   "empty values only",
+			values: []string{"", "  ", ""},
+			want:   true,
+		},
+		{
+			name:   "empty slice",
+			values: []string{},
+			want:   false,
+		},
+		{
+			name:   "numbers with spaces",
+			values: []string{" 123 ", "  456.78  ", " -789 "},
+			want:   true,
+		},
+		{
+			name:   "invalid number format",
+			values: []string{"1.2.3", "abc123", "12abc"},
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := isAllNumeric(tt.values)
+			if got != tt.want {
+				t.Errorf("isAllNumeric() = %v, want %v", got, tt.want)
 			}
 		})
 	}
