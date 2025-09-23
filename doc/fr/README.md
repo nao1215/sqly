@@ -142,17 +142,6 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 ## 📋 Changements récents
 
 
-## Alimenté par filesql
-
-**sqly** utilise maintenant la bibliothèque [filesql](https://github.com/nao1215/filesql) pour améliorer les performances et les fonctionnalités. Le package filesql a été créé pour fournir une interface SQL standardisée pour travailler avec différents formats de fichiers, facilitant la construction d'outils similaires pour les développeurs.
-
-**Avantages clés de l'intégration filesql :**
-- **Meilleures performances** : Opérations d'insertion en bloc optimisées avec traitement par lots des transactions
-- **Détection automatique des types** : Les nombres sont correctement triés et gérés comme types numériques
-- **Support des fichiers compressés** : Support intégré pour les fichiers `.gz`, `.bz2`, `.xz`, `.zst`
-- **Interface standardisée** : Utilise l'interface familière `sql.DB`.
-
-
 - Documentation officielle pour les utilisateurs et développeurs : [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - Outil alternatif créé par le même développeur : [interface terminale simple pour SGBD et CSV/TSV/LTSV local](https://github.com/nao1215/sqluv)
 
@@ -166,6 +155,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 
 ### Fonctionnalités ajoutées
+- **Support CTE (Expressions de Table Communes)** : Supporte maintenant les clauses WITH pour les requêtes complexes et les opérations récursives
 - **Intégration filesql** : Performance et fonctionnalité améliorées utilisant la bibliothèque [filesql](https://github.com/nao1215/filesql)
 - **Performance améliorée** : Opérations d'insertion en bloc avec traitement par lots des transactions pour un traitement plus rapide des fichiers
 - **Meilleure gestion des types** : La détection automatique des types assure un tri numérique et des calculs appropriés
@@ -228,6 +218,12 @@ Lors de l'ajout de nouvelles fonctionnalités ou de la correction de bugs, veuil
 Si vous souhaitez envoyer des commentaires tels que "trouver un bug" ou "demande de fonctionnalités supplémentaires" au développeur, veuillez utiliser l'un des contacts suivants.
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
+
+## Bibliothèques utilisées
+
+**sqly** exploite de puissantes bibliothèques Go pour fournir ses fonctionnalités :
+- [filesql](https://github.com/nao1215/filesql) - Fournit une interface de base de données SQL pour les fichiers CSV/TSV/LTSV/Excel avec détection automatique des types et support des fichiers compressés
+- [prompt](https://github.com/nao1215/prompt) - Alimente le shell interactif avec des fonctionnalités d'autocomplétion SQL et d'historique des commandes
 
 ## LICENCE
 Le projet sqly est sous licence selon les termes de [MIT LICENSE](../../LICENSE).
