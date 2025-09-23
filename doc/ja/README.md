@@ -142,17 +142,6 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 ## 📋 最近の変更
 
 
-## filesqlによる強化
-
-**sqly** は[filesql](https://github.com/nao1215/filesql)ライブラリを使用してパフォーマンスと機能を向上させました。filesqlパッケージは、様々なファイル形式に対する標準化されたSQLインターフェースを提供するために作成され、開発者が同様のツールを構築しやすくしています。
-
-**filesql統合の主な利点:**
-- **パフォーマンス向上**: トランザクションバッチングによる最適化されたバルクインサート操作
-- **自動型検出**: 数値は適切にソートされ、数値型として処理されます
-- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`ファイルの組み込みサポート
-- **標準化されたインターフェース**: 馴染みのある`sql.DB`インターフェースを使用
-
-
 - ユーザー・開発者向け公式ドキュメント: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - 同じ開発者が作成した代替ツール: [DBMS・ローカルCSV/TSV/LTSV用のシンプルなターミナルUI](https://github.com/nao1215/sqluv)
 
@@ -166,6 +155,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 
 ### 追加された機能
+- **CTE（共通テーブル式）サポート**: WITH句による複雑なクエリと再帰操作に対応
 - **filesql統合**: [filesql](https://github.com/nao1215/filesql)ライブラリによるパフォーマンスと機能の向上
 - **パフォーマンス向上**: より高速なファイル処理のためのトランザクションバッチングによるバルクインサート操作
 - **型処理の向上**: 自動型検出により適切な数値ソートと計算を保証
@@ -228,6 +218,12 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 「バグを見つけた」や「追加機能のリクエスト」などのコメントを開発者に送りたい場合は、以下の連絡先のいずれかを使用してください。
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
+
+## 使用ライブラリ
+
+**sqly**は以下の強力なGoライブラリを活用して機能を提供しています：
+- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/Excelファイルに対するSQLデータベースインターフェースを提供し、自動型検出と圧縮ファイルサポートを実現
+- [prompt](https://github.com/nao1215/prompt) - SQL補完とコマンド履歴機能を備えたインタラクティブシェルを実現
 
 ## ライセンス
 sqlyプロジェクトは[MIT LICENSE](../../LICENSE)の条項の下でライセンスされています。
