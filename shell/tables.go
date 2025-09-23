@@ -9,6 +9,7 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 )
 
 // tablesCommand print all tables name in DB.
@@ -17,17 +18,19 @@ func (c CommandList) tablesCommand(ctx context.Context, s *Shell, _ []string) er
 	if err != nil {
 		return err
 	}
-	printTables(config.Stdout, tables)
+	if err := printTables(config.Stdout, tables); err != nil {
+		return fmt.Errorf("failed to print tables: %w", err)
+	}
 	return nil
 }
 
 // printTables print table name
-func printTables(out io.Writer, t []*model.Table) {
+func printTables(out io.Writer, t []*model.Table) error {
 	if len(t) == 0 {
-		fmt.Fprintf(config.Stdout,
+		fmt.Fprintf(out,
 			"there is no table. use %s for importing file\n",
 			color.CyanString(".import"))
-		return
+		return nil
 	}
 
 	tableData := [][]string{}
@@ -35,12 +38,25 @@ func printTables(out io.Writer, t []*model.Table) {
 		tableData = append(tableData, []string{v.Name()})
 	}
 
-	table := tablewriter.NewWriter(out)
-	table.SetHeader([]string{"table_name"})
-	table.SetAutoWrapText(false)
+	table := tablewriter.NewTable(out,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithHeaderAlignmentConfig(tw.CellAlignment{Global: tw.AlignCenter}),
+	)
+	table.Header("TABLE NAME")
 
 	for _, v := range tableData {
-		table.Append(v)
+		// Convert []string to []any for the new API
+		row := make([]any, len(v))
+		for i, cell := range v {
+			row[i] = cell
+		}
+		if err := table.Append(row); err != nil {
+			return fmt.Errorf("failed to append table row: %w", err)
+		}
 	}
-	table.Render()
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("failed to render tables list: %w", err)
+	}
+	return nil
 }

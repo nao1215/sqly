@@ -13,7 +13,7 @@ vendors:
   env: { in: github.com/caarlos0/env/v11 }
   sqlite: { in: modernc.org/sqlite }
   wire: { in: [github.com/google/wire, github.com/google/wire/cmd/wire] }
-  tablewriter: { in: github.com/olekukonko/tablewriter }
+  tablewriter: { in: [github.com/olekukonko/tablewriter, github.com/olekukonko/tablewriter/tw] }
   diffmatchpatch: { in: github.com/sergi/go-diff/diffmatchpatch }
   difflib: { in: github.com/pmezard/go-difflib/difflib }
   excelize: { in: github.com/xuri/excelize/v2 }
