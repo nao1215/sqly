@@ -70,7 +70,7 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 
 	// Copy tables from temporary filesql database to shared database
 	for _, tableName := range tableNames {
-		if err := f.copyTableToSharedDB(tmpDB, tableName); err != nil {
+		if err := f.copyTableToSharedDB(ctx, tmpDB, tableName); err != nil {
 			return fmt.Errorf("failed to copy table %s: %w", tableName, err)
 		}
 	}
@@ -84,33 +84,33 @@ func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 }
 
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
-func (f *FileSQLAdapter) copyTableToSharedDB(sourceDB *sql.DB, tableName string) error {
+func (f *FileSQLAdapter) copyTableToSharedDB(ctx context.Context, sourceDB *sql.DB, tableName string) error {
 	// Drop existing table if it exists to avoid conflicts
 	dropSQL := "DROP TABLE IF EXISTS " + quoteIdentifier(tableName)
-	if _, err := f.sharedDB.ExecContext(context.Background(), dropSQL); err != nil {
+	if _, err := f.sharedDB.ExecContext(ctx, dropSQL); err != nil {
 		return fmt.Errorf("failed to drop existing table %s: %w", tableName, err)
 	}
 
 	// Use manual approach to preserve filesql's automatic type detection
-	return f.copyTableManually(sourceDB, tableName)
+	return f.copyTableManually(ctx, sourceDB, tableName)
 }
 
 // copyTableManually performs manual table copy with proper type preservation
-func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) error {
+func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB, tableName string) error {
 	// Get the original CREATE TABLE statement from filesql database
 	var createTableSQL string
-	err := sourceDB.QueryRowContext(context.Background(), "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&createTableSQL)
+	err := sourceDB.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&createTableSQL)
 	if err != nil {
 		return fmt.Errorf("failed to get table schema for %s: %w", tableName, err)
 	}
 
 	// Create table with same schema in shared database (preserves filesql's type detection)
-	if _, err := f.sharedDB.ExecContext(context.Background(), createTableSQL); err != nil {
+	if _, err := f.sharedDB.ExecContext(ctx, createTableSQL); err != nil {
 		return fmt.Errorf("failed to create table %s: %w", tableName, err)
 	}
 
 	// Get column names for data copying
-	rows, err := sourceDB.QueryContext(context.Background(), "PRAGMA table_info("+quoteIdentifier(tableName)+")")
+	rows, err := sourceDB.QueryContext(ctx, "PRAGMA table_info("+quoteIdentifier(tableName)+")")
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 	quotedTableName := quoteIdentifier(tableName)
 
 	// Begin transaction for bulk insert optimization
-	tx, err := f.sharedDB.BeginTx(context.Background(), nil)
+	tx, err := f.sharedDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -157,7 +157,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 
 	// Copy data from source to shared database
 	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(quotedColumns, ", "), quotedTableName) //nolint:gosec // Table name is controlled by filesql, columns are validated
-	sourceRows, err := sourceDB.QueryContext(context.Background(), selectSQL)
+	sourceRows, err := sourceDB.QueryContext(ctx, selectSQL)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 	}
 	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", //nolint:gosec // Table and column names are controlled by filesql, placeholders are safe
 		quotedTableName, strings.Join(quotedColumns, ", "), strings.Join(placeholders, ", "))
-	stmt, err := tx.PrepareContext(context.Background(), insertSQL)
+	stmt, err := tx.PrepareContext(ctx, insertSQL)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert statement: %w", err)
 	}
@@ -191,7 +191,7 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 			return fmt.Errorf("failed to scan row %d: %w", rowCount+1, err)
 		}
 
-		if _, err := stmt.ExecContext(context.Background(), values...); err != nil {
+		if _, err := stmt.ExecContext(ctx, values...); err != nil {
 			return fmt.Errorf("failed to insert row %d: %w", rowCount+1, err)
 		}
 
@@ -204,13 +204,13 @@ func (f *FileSQLAdapter) copyTableManually(sourceDB *sql.DB, tableName string) e
 			}
 
 			// Begin new transaction for next batch
-			if tx, err = f.sharedDB.BeginTx(context.Background(), nil); err != nil {
+			if tx, err = f.sharedDB.BeginTx(ctx, nil); err != nil {
 				return fmt.Errorf("failed to begin new transaction at row %d: %w", rowCount, err)
 			}
 			defer tx.Rollback()
 
 			// Re-prepare statement for new transaction
-			if stmt, err = tx.PrepareContext(context.Background(), insertSQL); err != nil {
+			if stmt, err = tx.PrepareContext(ctx, insertSQL); err != nil {
 				return fmt.Errorf("failed to re-prepare statement at row %d: %w", rowCount, err)
 			}
 			defer stmt.Close()

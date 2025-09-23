@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.24.0 이상
 
 ## 사용 방법
-sqly는 파일 경로를 인수로 전달하면 CSV/TSV/LTSV/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
+sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
 
 **참고**: 파일명에 SQL 구문 오류를 일으킬 수 있는 문자(하이픈 `-`, 점 `.`, 기타 특수 문자 등)가 포함되어 있으면 자동으로 밑줄 `_`로 대체됩니다. 예를 들어, `bug-syntax-error.csv`는 `bug_syntax_error` 테이블이 됩니다.
 
@@ -49,7 +49,7 @@ sqly는 압축 파일을 포함하여 파일 확장자에서 파일 형식을 �
 --sql 옵션은 SQL 문을 선택적 인수로 받습니다.
 
 ```shell
-$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv 
+$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv
 +-----------+-----------+
 | user_name | position  |
 +-----------+-----------+
@@ -57,6 +57,36 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 | jenkins46 | manager   |
 | smith79   | neet      |
 +-----------+-----------+
+```
+
+### 디렉토리 가져오기
+지원되는 파일이 포함된 전체 디렉토리를 가져올 수 있습니다. sqly는 디렉토리에서 모든 CSV, TSV, LTSV, Excel 파일(압축 버전 포함)을 자동으로 감지하고 가져옵니다:
+
+```shell
+# 디렉토리에서 모든 파일 가져오기
+$ sqly ./data_directory
+
+# 파일과 디렉토리 혼합
+$ sqly file1.csv ./data_directory file2.tsv
+
+# --sql 옵션과 함께 사용
+$ sqly ./data_directory --sql "SELECT * FROM users"
+```
+
+### 대화형 셸: .import 명령어
+sqly 셸에서 `.import` 명령어를 사용하여 파일이나 디렉토리를 가져올 수 있습니다:
+
+```shell
+sqly:~/data$ .import ./csv_files
+Successfully imported 3 tables from directory ./csv_files: [users products orders]
+
+sqly:~/data$ .import file1.csv ./directory file2.tsv
+# file1.csv, 디렉토리의 모든 파일, file2.tsv 가져오기
+
+sqly:~/data$ .tables
+orders
+products
+users
 ```
 
 ### 출력 형식 변경
@@ -97,7 +127,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
       .exit: sqly 종료
     .header: 테이블 헤더 출력
       .help: 도움말 메시지 출력
-    .import: 파일 가져오기
+    .import: 파일 및/또는 디렉토리 가져오기
         .ls: 디렉토리 내용 출력
       .mode: 출력 모드 변경
        .pwd: 현재 작업 디렉토리 출력

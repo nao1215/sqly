@@ -54,7 +54,8 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	historyUsecase := interactor.NewHistoryInteractor(historyRepository)
 	excelRepository := persistence.NewExcelRepository()
 	excelUsecase := interactor.NewExcelInteractor(fileSQLAdapter, excelRepository)
-	usecases := shell.NewUsecases(csvUsecase, tsvUsecase, ltsvUsecase, databaseUsecase, historyUsecase, excelUsecase)
+	fileSQLUsecase := interactor.NewFileSQLInteractor(fileSQLAdapter)
+	usecases := shell.NewUsecases(csvUsecase, tsvUsecase, ltsvUsecase, databaseUsecase, historyUsecase, excelUsecase, fileSQLUsecase)
 	shellShell, err := shell.NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()

@@ -1,13 +1,17 @@
-sqly - execute SQL against CSV/TSV/LTSV/JSON with shell (test-version)
+sqly - execute SQL against CSV/TSV/LTSV/Excel with shell (test-version)
 
 [Usage]
-  sqly [OPTIONS] [FILE_PATH]
+  sqly [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]
 
 [Example]
   - run sqly shell
     sqly
   - Execute query for csv file
     sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv
+  - Import directory with all supported files
+    sqly ./path/to/data/directory
+  - Mix files and directories
+    sqly file1.csv ./data_dir file2.tsv
 
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
