@@ -3,11 +3,45 @@ package model
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/nao1215/sqly/domain"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 )
+
+// getColumnData extracts data from a specific column index
+func getColumnData(records []Record, columnIndex int) []string {
+	var columnData []string
+	for _, record := range records {
+		if columnIndex < len(record) {
+			columnData = append(columnData, record[columnIndex])
+		}
+	}
+	return columnData
+}
+
+// isAllNumeric checks if all values in a column look like numbers
+func isAllNumeric(values []string) bool {
+	if len(values) == 0 {
+		return false
+	}
+
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		// Remove commas for number parsing (e.g., "1,000" -> "1000")
+		v = strings.ReplaceAll(v, ",", "")
+		// Try to parse as float
+		if _, err := strconv.ParseFloat(v, 64); err != nil {
+			return false
+		}
+	}
+	return true
+}
 
 // PrintMode is enum to specify output method
 type PrintMode uint
@@ -153,51 +187,118 @@ func (t *Table) IsSameHeaderColumnName() bool {
 }
 
 // Print print all record with header
-func (t *Table) Print(out io.Writer, mode PrintMode) {
+func (t *Table) Print(out io.Writer, mode PrintMode) error {
 	switch mode {
 	case PrintModeTable:
-		t.printTable(out)
+		return t.printTable(out)
 	case PrintModeMarkdownTable:
 		t.printMarkdownTable(out)
+		return nil
 	case PrintModeCSV:
 		t.printCSV(out)
+		return nil
 	case PrintModeTSV:
 		t.printTSV(out)
+		return nil
 	case PrintModeLTSV:
 		t.printLTSV(out)
+		return nil
 	case PrintModeExcel:
 		t.printExcel(out)
+		return nil
 	default:
-		t.printTable(out)
+		return t.printTable(out)
 	}
 }
 
-// printTables print all record with header; output format is table
-func (t *Table) printTable(out io.Writer) {
-	table := tablewriter.NewWriter(out)
-	table.SetHeader(t.Header())
-	table.SetAutoFormatHeaders(false)
-	table.SetAutoWrapText(false)
+// printTable print all record with header; output format is table
+func (t *Table) printTable(out io.Writer) error {
+	// Create alignment configuration - detect numeric columns and align them right
+	alignment := make(tw.Alignment, len(t.Header()))
+	for i, h := range t.Header() {
+		// Check if header suggests numeric data or if we should align right
+		headerName := strings.ToLower(h)
+		// Check for common numeric column patterns
+		isNumeric := strings.Contains(headerName, "gross") ||
+			strings.Contains(headerName, "number") ||
+			strings.Contains(headerName, "average") ||
+			strings.Contains(headerName, "total") ||
+			strings.Contains(headerName, "count") ||
+			strings.Contains(headerName, "price") ||
+			strings.Contains(headerName, "amount") ||
+			headerName == "id" ||
+			strings.Contains(headerName, "age") ||
+			strings.Contains(headerName, "年齢") ||
+			// Check if all data looks numeric (simple heuristic)
+			(len(t.Records()) > 0 && isAllNumeric(getColumnData(t.Records(), i)))
+
+		if isNumeric {
+			alignment[i] = tw.AlignRight
+		} else {
+			alignment[i] = tw.AlignLeft
+		}
+	}
+
+	// Create header alignment configuration - center all headers
+	headerAlignment := make(tw.Alignment, len(t.Header()))
+	for i := range t.Header() {
+		headerAlignment[i] = tw.AlignCenter
+	}
+
+	table := tablewriter.NewTable(out,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithAlignment(alignment),
+		tablewriter.WithHeaderAlignmentConfig(tw.CellAlignment{Global: tw.AlignCenter}),
+	)
+
+	// Convert Header ([]string) to []any for the new API
+	headers := make([]any, len(t.Header()))
+	for i, h := range t.Header() {
+		headers[i] = h
+	}
+	table.Header(headers...)
 
 	for _, v := range t.Records() {
-		table.Append(v)
+		// Convert Record ([]string) to []any for the new API
+		row := make([]any, len(v))
+		for i, cell := range v {
+			row[i] = cell
+		}
+		if err := table.Append(row); err != nil {
+			return fmt.Errorf("failed to append table row: %w", err)
+		}
 	}
-	table.Render()
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("failed to render table: %w", err)
+	}
+	return nil
 }
 
 // printMarkdownTable print all record with header; output format is markdown
 func (t *Table) printMarkdownTable(out io.Writer) {
-	table := tablewriter.NewWriter(out)
-	table.SetHeader(t.Header())
-	table.SetAutoFormatHeaders(false)
-	table.SetAutoWrapText(false)
-	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-	table.SetCenterSeparator("|")
-
-	for _, v := range t.Records() {
-		table.Append(v)
+	// Print header row
+	fmt.Fprint(out, "|")
+	for _, h := range t.Header() {
+		fmt.Fprintf(out, " %s |", strings.ReplaceAll(h, "|", "\\|"))
 	}
-	table.Render()
+	fmt.Fprintln(out)
+
+	// Print separator row
+	fmt.Fprint(out, "|")
+	for range t.Header() {
+		fmt.Fprint(out, "-----|")
+	}
+	fmt.Fprintln(out)
+
+	// Print data rows
+	for _, record := range t.Records() {
+		fmt.Fprint(out, "|")
+		for _, cell := range record {
+			fmt.Fprintf(out, " %s |", strings.ReplaceAll(cell, "|", "\\|"))
+		}
+		fmt.Fprintln(out)
+	}
 }
 
 // printCSV print all record with header; output format is csv

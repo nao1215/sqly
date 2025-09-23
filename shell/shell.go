@@ -415,7 +415,9 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if s.argument.NeedsOutputToFile() {
 		return s.outputToFile(table)
 	}
-	table.Print(config.Stdout, s.state.mode.PrintMode)
+	if err := table.Print(config.Stdout, s.state.mode.PrintMode); err != nil {
+		return fmt.Errorf("failed to print table: %w", err)
+	}
 	return nil
 }
 
