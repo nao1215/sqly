@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.24.0 or later
 
 ## How to use
-The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed versions) into the DB when you pass file path as an argument. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
+The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed versions) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
 **Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`.
 
@@ -49,7 +49,7 @@ The sqly automatically determines the file format from the file extension, inclu
 --sql option takes an SQL statement as an optional argument.
 
 ```shell
-$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv 
+$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv
 +-----------+-----------+
 | user_name | position  |
 +-----------+-----------+
@@ -57,6 +57,36 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 | jenkins46 | manager   |
 | smith79   | neet      |
 +-----------+-----------+
+```
+
+### Directory import
+You can import entire directories containing supported files. The sqly automatically detects all CSV, TSV, LTSV, and Excel files (including compressed versions) in the directory and imports them:
+
+```shell
+# Import all files from a directory
+$ sqly ./data_directory
+
+# Mix files and directories
+$ sqly file1.csv ./data_directory file2.tsv
+
+# Use with --sql option
+$ sqly ./data_directory --sql "SELECT * FROM users"
+```
+
+### Interactive shell: .import command
+In the sqly shell, you can use the `.import` command to import files or directories:
+
+```shell
+sqly:~/data$ .import ./csv_files
+Successfully imported 3 tables from directory ./csv_files: [users products orders]
+
+sqly:~/data$ .import file1.csv ./directory file2.tsv
+# Imports file1.csv, all files from directory, and file2.tsv
+
+sqly:~/data$ .tables
+orders
+products
+users
 ```
 
 ### Change output format
@@ -97,7 +127,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
       .exit: exit sqly
     .header: print table header
       .help: print help message
-    .import: import file(s)
+    .import: import file(s) and/or directory(ies)
         .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory

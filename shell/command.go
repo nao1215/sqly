@@ -31,7 +31,7 @@ func NewCommands() CommandList {
 	c[".exit"] = command{execute: c.exitCommand, name: ".exit", description: "exit sqly"}
 	c[".header"] = command{execute: c.headerCommand, name: ".header", description: "print table header"}
 	c[".help"] = command{execute: c.helpCommand, name: ".help", description: "print help message"}
-	c[".import"] = command{execute: c.importCommand, name: ".import", description: "import file(s)"}
+	c[".import"] = command{execute: c.importCommand, name: ".import", description: "import file(s) and/or directory(ies)"}
 	c[".ls"] = command{execute: c.lsCommand, name: ".ls", description: "print directory contents"}
 	c[".mode"] = command{execute: c.modeCommand, name: ".mode", description: "change output mode"}
 	c[".tables"] = command{execute: c.tablesCommand, name: ".tables", description: "print tables"}

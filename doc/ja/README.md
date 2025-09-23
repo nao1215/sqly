@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.24.0以降
 
 ## 使用方法
-sqlyは、ファイルパスを引数として渡すと、CSV/TSV/LTSV/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
+sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
 
 **注意**: ファイル名にSQL構文エラーの原因となる文字（ハイフン `-`、ドット `.`、その他の特殊文字など）が含まれている場合、それらは自動的にアンダースコア `_` に置き換えられます。例えば、`bug-syntax-error.csv`は`bug_syntax_error`テーブルになります。
 
@@ -49,7 +49,7 @@ sqlyは圧縮ファイルを含むファイル拡張子からファイル形式�
 --sqlオプションは、SQL文をオプション引数として受け取ります。
 
 ```shell
-$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv 
+$ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv
 +-----------+-----------+
 | user_name | position  |
 +-----------+-----------+
@@ -57,6 +57,36 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 | jenkins46 | manager   |
 | smith79   | neet      |
 +-----------+-----------+
+```
+
+### ディレクトリインポート
+対応ファイルを含むディレクトリ全体をインポートできます。sqlyはディレクトリ内のすべてのCSV、TSV、LTSV、Excelファイル（圧縮版を含む）を自動検出してインポートします：
+
+```shell
+# ディレクトリからすべてのファイルをインポート
+$ sqly ./data_directory
+
+# ファイルとディレクトリを混在
+$ sqly file1.csv ./data_directory file2.tsv
+
+# --sqlオプションと組み合わせ
+$ sqly ./data_directory --sql "SELECT * FROM users"
+```
+
+### インタラクティブシェル: .importコマンド
+sqlyシェルでは、`.import`コマンドを使用してファイルやディレクトリをインポートできます：
+
+```shell
+sqly:~/data$ .import ./csv_files
+Successfully imported 3 tables from directory ./csv_files: [users products orders]
+
+sqly:~/data$ .import file1.csv ./directory file2.tsv
+# file1.csv、ディレクトリ内のすべてのファイル、file2.tsvをインポート
+
+sqly:~/data$ .tables
+orders
+products
+users
 ```
 
 ### 出力形式の変更
@@ -97,7 +127,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
       .exit: sqly終了
     .header: テーブルヘッダー印刷
       .help: ヘルプメッセージ印刷
-    .import: ファイルインポート
+    .import: ファイル・ディレクトリインポート
         .ls: ディレクトリ内容印刷
       .mode: 出力モード変更
        .pwd: 現在の作業ディレクトリ印刷

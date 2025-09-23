@@ -10,6 +10,7 @@ type Usecases struct {
 	sqlite3 usecase.DatabaseUsecase
 	history usecase.HistoryUsecase
 	excel   usecase.ExcelUsecase
+	filesql usecase.FileSQLUsecase
 }
 
 // NewUsecases return *usecases that is assigned the result of parsing os.Args.
@@ -20,6 +21,7 @@ func NewUsecases(
 	sqlite3 usecase.DatabaseUsecase,
 	history usecase.HistoryUsecase,
 	excel usecase.ExcelUsecase,
+	filesql usecase.FileSQLUsecase,
 ) Usecases {
 	return Usecases{
 		csv:     csv,
@@ -28,5 +30,6 @@ func NewUsecases(
 		sqlite3: sqlite3,
 		history: history,
 		excel:   excel,
+		filesql: filesql,
 	}
 }
