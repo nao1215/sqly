@@ -13,5 +13,6 @@ var Set = wire.NewSet(
 	NewSQLite3Interactor,
 	NewHistoryInteractor,
 	NewExcelInteractor,
+	NewFileSQLInteractor,
 	NewSQL,
 )

@@ -3,7 +3,7 @@
                .exit: exit sqly
              .header: print table header
                .help: print help message
-             .import: import file(s)
+             .import: import file(s) and/or directory(ies)
                  .ls: print directory contents
                .mode: change output mode
                 .pwd: print current working directory

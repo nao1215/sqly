@@ -114,6 +114,7 @@ func (s *Shell) init(ctx context.Context) error {
 	if len(s.argument.FilePaths) == 0 {
 		return nil
 	}
+
 	return s.commands.importCommand(ctx, s, s.argument.FilePaths)
 }
 

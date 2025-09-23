@@ -1,5 +1,50 @@
 # CHANGELOG
 
+## [v0.14.1](https://github.com/nao1215/sqly/compare/v0.14.0...v0.14.1) (2025-09-23)
+
+### New Features
+* **Directory Import**: Add support for importing entire directories containing supported files ([021feb8](https://github.com/nao1215/sqly/commit/021feb8))
+  - Automatically detect and import all CSV, TSV, LTSV, and Excel files (including compressed versions) from directories
+  - Support for mixing files and directories in the same command (e.g., `sqly file1.csv ./data_dir file2.tsv`)
+  - Enhanced `.import` command in interactive shell to accept both files and directories
+  - Batch import functionality for efficient processing of multiple files
+
+### Enhancements
+* **CLI Interface**: Expanded command-line argument parsing to accept directory paths
+  - Updated usage examples and help text to demonstrate directory import functionality
+  - Improved file discovery and processing for directory-based imports
+* **Interactive Shell**: Enhanced `.import` command with directory support
+  - Displays summary of successfully imported tables from directories
+  - Maintains backward compatibility with single file imports
+* **File Processing**: Improved bulk import operations
+  - Enhanced error handling for directory traversal and file processing
+  - Better feedback for batch import operations
+
+### Documentation
+* **README Updates**: Comprehensive documentation updates across all languages
+  - Added directory import examples and usage patterns
+  - Updated help command descriptions and CLI usage information
+  - Enhanced documentation in 7 languages (EN, JA, ES, FR, KO, RU, ZH-CN)
+
+### Technical Improvements
+* **Architecture**: Enhanced filesql adapter and interactor layers
+  - New `DirectoryImporter` functionality in `interactor/filesql.go`
+  - Comprehensive test coverage for directory import features
+  - Updated dependency injection configuration for new functionality
+* **Testing**: Added extensive test suite for directory import functionality
+  - New test cases in `interactor/filesql_test.go` covering various directory scenarios
+  - Enhanced shell extension tests for mixed file/directory imports
+  - Updated golden file tests to reflect new functionality
+
+### Migration Notes
+* **For Users**: No breaking changes - all existing functionality remains identical
+  - Directory import is purely additive functionality
+  - All existing file-based commands continue to work as before
+  - Enhanced functionality available immediately without configuration
+* **For Developers**: New directory import APIs available
+  - Extended `FileSQLAdapter` interface with directory import methods
+  - New use case layer functionality for batch file processing
+
 ## [v0.14.0](https://github.com/nao1215/sqly/compare/v0.13.0...v0.14.0) (2025-09-23)
 
 ### New Features
