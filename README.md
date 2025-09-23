@@ -141,17 +141,6 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 ## 📋 Recent Changes
 
 
-## Powered by filesql
-
-**sqly** now uses [filesql](https://github.com/nao1215/filesql) library for enhanced performance and functionality. The filesql package was created to provide a standardized SQL interface for working with various file formats, making it easier for developers to build similar tools.
-
-**Key advantages of filesql integration:**
-- **Better Performance**: Optimized bulk insert operations with transaction batching
-- **Automatic Type Detection**: Numbers are properly sorted and handled as numeric types
-- **Compressed File Support**: Built-in support for `.gz`, `.bz2`, `.xz`, `.zst` files
-- **Standardized Interface**: Uses familiar `sql.DB` interface.
-
-
 - Official documentation for users & developers: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - Alternative tool created by the same developer: [simple terminal UI for DBMS & local CSV/TSV/LTSV](https://github.com/nao1215/sqluv)
 
@@ -165,6 +154,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 
 ### Added Features
+- **CTE (Common Table Expressions) Support**: Now supports WITH clauses for complex queries and recursive operations
 - **filesql Integration**: Enhanced performance and functionality using the [filesql](https://github.com/nao1215/filesql) library
 - **Improved Performance**: Bulk insert operations with transaction batching for faster file processing
 - **Better Type Handling**: Automatic type detection ensures proper numeric sorting and calculations
@@ -227,6 +217,12 @@ When adding new features or fixing bugs, please write unit tests. The sqly is un
 If you would like to send comments such as "find a bug" or "request for additional features" to the developer, please use one of the following contacts.
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
+
+## Libraries Used
+
+**sqly** leverages powerful Go libraries to provide its functionality:
+- [filesql](https://github.com/nao1215/filesql) - Provides SQL database interface for CSV/TSV/LTSV/Excel files with automatic type detection and compressed file support
+- [prompt](https://github.com/nao1215/prompt) - Powers the interactive shell with SQL completion and command history features
 
 ## LICENSE
 The sqly project is licensed under the terms of [MIT LICENSE](./LICENSE).

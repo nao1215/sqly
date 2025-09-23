@@ -1,5 +1,60 @@
 # CHANGELOG
 
+## [v0.14.0](https://github.com/nao1215/sqly/compare/v0.13.0...v0.14.0) (2025-09-23)
+
+### New Features
+* **CTE Support**: Add support for Common Table Expressions (WITH clauses)
+  - Enable complex queries and recursive operations using CTE syntax
+  - Full SQLite CTE functionality available for all supported file formats
+  - Enhanced SQL capabilities for advanced data analysis workflows
+
+### Breaking Changes
+* **Dependencies**: Upgrade `github.com/olekukonko/tablewriter` from v0.0.5 to v1.1.0
+  - Migrate to new functional options API pattern
+  - Update all table rendering components to use new API
+  - Maintain exact backward compatibility in output formatting
+
+### Enhancements
+* **Table Rendering**: Improved table output quality and performance
+  - Enhanced numeric column detection for better right-alignment
+  - Improved ASCII table formatting with consistent borders
+  - Fixed markdown table cell escaping for proper rendering of `|` characters
+  - Better error handling with proper error propagation instead of silent failures
+* **Code Quality**: Comprehensive error handling improvements
+  - All table operations now return proper errors instead of logging silently
+  - Enhanced error messages with context using `fmt.Errorf` wrapping
+  - Removed unnecessary logging dependencies in favor of error propagation
+
+### Technical Improvements
+* **Architecture**: Updated dependency constraints and module management
+  - Added support for new tablewriter sub-packages in `.go-arch-lint.yml`
+  - Updated `go.mod` with new tablewriter v1.1.0 and dependencies
+  - Maintained clean architecture boundaries with proper error handling
+* **Testing**: Enhanced test coverage for new functionality
+  - Added comprehensive unit tests for `getColumnData()` and `isAllNumeric()` helper functions
+  - Updated existing tests to handle new error return patterns
+  - All tests passing with new tablewriter API
+* **Documentation**: Updated README files across all languages
+  - Added CTE support information to feature lists
+  - Replaced "Powered by filesql" section with concise "Libraries Used" section
+  - Updated documentation in 7 languages (EN, JA, ES, FR, KO, RU, ZH-CN)
+
+### Bug Fixes
+* **Numeric Detection**: Improved column type detection accuracy
+  - Removed redundant pattern matching that caused false positives
+  - Enhanced `isAllNumeric()` function using `strconv.ParseFloat()` for robust validation
+  - Fixed over-broad string matching that misclassified columns like "paid_at" as numeric
+
+### Migration Notes
+* **For Users**: No changes to command-line interface or functionality
+  - All existing commands, features, and workflows remain identical
+  - CTE support is automatically available - no configuration required
+  - Table output formatting maintains exact compatibility
+* **For Developers**: Updated tablewriter dependency and error handling
+  - New dependency: `github.com/olekukonko/tablewriter v1.1.0`
+  - Table printing methods now return errors that should be handled
+  - Enhanced error propagation patterns throughout codebase
+
 ## [v0.13.0](https://github.com/nao1215/sqly/compare/v0.12.2...v0.13.0) (2025-09-19)
 
 ### Breaking Changes

@@ -143,17 +143,6 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 ## 📋 最近的变更
 
 
-## 由 filesql 提供支持
-
-**sqly** 现在使用 [filesql](https://github.com/nao1215/filesql) 库来提高性能和功能。filesql 包是为提供标准化SQL接口来处理各种文件格式而创建的，使开发者能够更容易构建类似的工具。
-
-**filesql 集成的主要优势：**
-- **更好的性能**：通过事务批处理优化的批量插入操作
-- **自动类型检测**：数字能够正确排序并作为数值类型处理
-- **压缩文件支持**：内置支持 `.gz`、`.bz2`、`.xz`、`.zst` 文件
-- **标准化接口**：使用熟悉的 `sql.DB` 接口。
-
-
 - 用户和开发者官方文档：[https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
 - 同一开发者创建的替代工具：[DBMS和本地CSV/TSV/LTSV的简单终端UI](https://github.com/nao1215/sqluv)
 
@@ -167,6 +156,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 
 ### 新增功能
+- **CTE（公用表表达式）支持**：现在支持 WITH 子句进行复杂查询和递归操作
 - **filesql 集成**：使用 [filesql](https://github.com/nao1215/filesql) 库提高性能和功能
 - **性能改进**：通过事务批处理进行批量插入操作，以实现更快的文件处理
 - **更好的类型处理**：自动类型检测确保正确的数值排序和计算
@@ -229,6 +219,12 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 如果您想向开发者发送"发现错误"或"请求附加功能"等评论，请使用以下联系方式之一。
 
 - [GitHub Issue](https://github.com/nao1215/sqly/issues)
+
+## 使用的库
+
+**sqly** 利用强大的 Go 库来提供其功能：
+- [filesql](https://github.com/nao1215/filesql) - 为 CSV/TSV/LTSV/Excel 文件提供 SQL 数据库接口，具有自动类型检测和压缩文件支持
+- [prompt](https://github.com/nao1215/prompt) - 为交互式 shell 提供 SQL 自动完成和命令历史功能
 
 ## 许可证
 sqly项目根据[MIT LICENSE](../../LICENSE)条款许可。
