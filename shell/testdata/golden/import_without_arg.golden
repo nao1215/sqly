@@ -1,8 +1,10 @@
 [Usage]
-  .import FILE_PATH(S) [--sheet=SHEET_NAME]
+  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]
 
   - Supported file format: csv, tsv, ltsv, xlam, xlsm, xlsx, xltm, xltx
   - Compression: .gz, .bz2, .xz, .zst (automatically detected)
-  - If import multiple files, separate them with spaces
+  - Files and directories can be mixed in arguments
+  - Directories are automatically detected and all supported files are imported
+  - If import multiple files/directories, separate them with spaces
   - Does not support importing multiple excel sheets at once
   - If import an Excel file, specify the sheet name with --sheet

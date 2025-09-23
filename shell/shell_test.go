@@ -736,7 +736,8 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
-	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, sqLite3Interactor, historyInteractor, excelInteractor)
+	fileSQLUsecase := interactor.NewFileSQLInteractor(filesqlAdapter)
+	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, sqLite3Interactor, historyInteractor, excelInteractor, fileSQLUsecase)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()

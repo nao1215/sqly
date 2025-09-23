@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.24.0 o posterior
 
 ## Cómo usar
-sqly importa automáticamente archivos CSV/TSV/LTSV/Excel (incluyendo versiones comprimidas) a la base de datos cuando pasa la ruta del archivo como argumento. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
+sqly importa automáticamente archivos CSV/TSV/LTSV/Excel (incluyendo versiones comprimidas) a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
 
 **Nota**: Si el nombre del archivo contiene caracteres que podrían causar errores de sintaxis SQL (como guiones `-`, puntos `.` u otros caracteres especiales), se reemplazan automáticamente con guiones bajos `_`. Por ejemplo, `bug-syntax-error.csv` se convierte en la tabla `bug_syntax_error`.
 
@@ -59,6 +59,20 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
+### Importación de directorios
+Puede importar directorios completos que contengan archivos compatibles. sqly detecta automáticamente todos los archivos CSV, TSV, LTSV y Excel (incluyendo versiones comprimidas) en el directorio y los importa:
+
+```shell
+# Importar todos los archivos de un directorio
+$ sqly ./data_directory
+
+# Mezclar archivos y directorios
+$ sqly file1.csv ./data_directory file2.tsv
+
+# Usar con la opción --sql
+$ sqly ./data_directory --sql "SELECT * FROM users"
+```
+
 ### Cambiar formato de salida
 sqly muestra los resultados de consultas SQL en los siguientes formatos:
 - Formato de tabla ASCII (predeterminado)
@@ -71,6 +85,22 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
+```
+
+### Shell interactivo: comando .import
+En el shell de sqly, puede usar el comando `.import` para importar archivos o directorios:
+
+```shell
+sqly:~/data$ .import ./csv_files
+Importadas exitosamente 3 tablas del directorio ./csv_files: [users products orders]
+
+sqly:~/data$ .import file1.csv ./directory file2.tsv
+# Importa file1.csv, todos los archivos del directorio, y file2.tsv
+
+sqly:~/data$ .tables
+orders
+products
+users
 ```
 
 ### Ejecutar sqly shell
@@ -97,7 +127,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
       .exit: salir de sqly
     .header: imprimir encabezado de tabla
       .help: imprimir mensaje de ayuda
-    .import: importar archivo(s)
+    .import: importar archivo(s) y/o directorio(s)
         .ls: imprimir contenido del directorio
       .mode: cambiar modo de salida
        .pwd: imprimir directorio de trabajo actual

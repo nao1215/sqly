@@ -40,7 +40,7 @@ brew install nao1215/tap/sqly
 - go1.24.0或更高版本
 
 ## 使用方法
-当您将文件路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/Excel文件（包括压缩版本）导入数据库。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
+当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/Excel文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
 
 **注意**：如果文件名包含可能导致SQL语法错误的字符（如连字符 `-`、点号 `.` 或其他特殊字符），它们会自动替换为下划线 `_`。例如，`bug-syntax-error.csv` 会变成表 `bug_syntax_error`。
 
@@ -60,6 +60,20 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
+### 目录导入
+您可以导入包含支持文件的整个目录。sqly会自动检测目录中的所有CSV、TSV、LTSV和Excel文件（包括压缩版本）并导入它们：
+
+```shell
+# 从目录导入所有文件
+$ sqly ./data_directory
+
+# 混合文件和目录
+$ sqly file1.csv ./data_directory file2.tsv
+
+# 与--sql选项一起使用
+$ sqly ./data_directory --sql "SELECT * FROM users"
+```
+
 ### 更改输出格式
 sqly以以下格式输出SQL查询结果：
 - ASCII表格式（默认）
@@ -72,6 +86,22 @@ $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv
 user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
+```
+
+### 交互式shell：.import命令
+在sqly shell中，您可以使用`.import`命令导入文件或目录：
+
+```shell
+sqly:~/data$ .import ./csv_files
+成功从目录 ./csv_files 导入 3 个表：[users products orders]
+
+sqly:~/data$ .import file1.csv ./directory file2.tsv
+# 导入 file1.csv、目录中的所有文件和 file2.tsv
+
+sqly:~/data$ .tables
+orders
+products
+users
 ```
 
 ### 运行sqly shell
@@ -98,7 +128,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
       .exit: 退出sqly
     .header: 打印表头
       .help: 打印帮助消息
-    .import: 导入文件
+    .import: 导入文件和/或目录
         .ls: 打印目录内容
       .mode: 更改输出模式
        .pwd: 打印当前工作目录
