@@ -165,8 +165,9 @@ func (fi *fileInteractor) dumpLTSV(f *os.File, table *model.Table) error {
 // dumpMarkdown writes table data to file in Markdown table format
 func (fi *fileInteractor) dumpMarkdown(f *os.File, table *model.Table) error {
 	// Use the existing printMarkdownTable method from the domain model
-	// Note: table.Print doesn't return errors, it writes directly to the writer
-	table.Print(f, model.PrintModeMarkdownTable)
+	if err := table.Print(f, model.PrintModeMarkdownTable); err != nil {
+		return &FileSQLError{Op: "dump", Err: fmt.Sprintf("failed to print table to markdown: %v", err)}
+	}
 	return nil
 }
 
