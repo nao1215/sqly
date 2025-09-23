@@ -26,7 +26,7 @@ type SQL struct {
 func NewSQL() *SQL {
 	return &SQL{
 		ddl: []string{"CREATE", "DROP", "ALTER", "REINDEX"},
-		dml: []string{"SELECT", "INSERT", "UPDATE", "DELETE", "EXPLAIN"},
+		dml: []string{"SELECT", "INSERT", "UPDATE", "DELETE", "EXPLAIN", "WITH"},
 		tcl: []string{"BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE"},
 		dcl: []string{"GRANT", "REVOKE"},
 	}
@@ -75,6 +75,11 @@ func (sql *SQL) isDelete(s string) bool {
 // isExplain returns true if the given string represents an EXPLAIN statement.
 func (sql *SQL) isExplain(s string) bool {
 	return strings.ToUpper(s) == "EXPLAIN"
+}
+
+// isWithCTE checks if the statement is a WITH (CTE) query.
+func (sql *SQL) isWithCTE(s string) bool {
+	return strings.ToUpper(s) == "WITH"
 }
 
 // contains checks if a string exists in a slice of strings.
