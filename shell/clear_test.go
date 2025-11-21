@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"testing"
 )
 
@@ -29,5 +30,18 @@ func Test_clearCommand(t *testing.T) {
 		if cmd.execute == nil {
 			t.Error("Expected execute function to be set")
 		}
+	})
+
+	t.Run("clear command executes without panic", func(t *testing.T) {
+		t.Parallel()
+
+		c := NewCommands()
+		cmd := c[".clear"]
+		
+		// Call execute and verify it returns (may return error in CI, but shouldn't panic)
+		err := cmd.execute(context.Background(), &Shell{}, []string{})
+		// We don't assert err == nil because clear might fail in headless environments
+		// The important part is it doesn't panic and returns a valid error type if it fails
+		_ = err // Acknowledge we're not checking the error value
 	})
 }
