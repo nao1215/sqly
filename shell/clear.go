@@ -9,14 +9,14 @@ import (
 )
 
 // clearCommand clears the terminal screen.
-func (c CommandList) clearCommand(_ context.Context, _ *Shell, _ []string) error {
+func (c CommandList) clearCommand(ctx context.Context, _ *Shell, _ []string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "cls")
+		cmd = exec.CommandContext(ctx, "cmd", "/c", "cls")
 	default:
-		cmd = exec.Command("clear")
+		cmd = exec.CommandContext(ctx, "clear")
 	}
 
 	cmd.Stdout = os.Stdout
