@@ -20,6 +20,7 @@ func (c CommandList) clearCommand(ctx context.Context, _ *Shell, _ []string) err
 	}
 
 	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to clear screen: %w", err)
 	}
