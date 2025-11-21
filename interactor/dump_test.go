@@ -260,7 +260,7 @@ func TestExcelInteractor_DumpSuccess(t *testing.T) {
 		t.Fatalf("Failed to read Excel file header: %v", err)
 	}
 
-	if content[0] != 'P' || content[1] != 'K' {
-		t.Errorf("Expected Excel file to start with PK (zip format), got: %c%c", content[0], content[1])
+	if len(content) < 2 || content[0] != 'P' || content[1] != 'K' {
+		t.Errorf("Expected Excel file to start with PK (zip format), got: %v", content)
 	}
 }
