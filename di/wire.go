@@ -1,5 +1,4 @@
 //go:build wireinject
-// +build wireinject
 
 // Package di Inject dependence by wire command.
 package di
