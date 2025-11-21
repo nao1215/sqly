@@ -28,8 +28,8 @@ func Test_clearCommand(t *testing.T) {
 		if cmd.description != "clear terminal screen" {
 			t.Errorf("Expected description 'clear terminal screen', got %q", cmd.description)
 		}
+		if cmd.execute == nil {
+			t.Error("Expected execute function to be set")
+		}
 	})
-
-	// Skip the actual execution test in CI environments as it requires a real terminal
-	// The command works correctly in real terminal usage
 }
