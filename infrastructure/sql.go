@@ -69,16 +69,17 @@ func GenerateCreateTableStatement(t *model.Table) string {
 	}
 	wg.Wait()
 
-	ddl := "CREATE TABLE " + Quote(t.Name()) + "("
+	var builder strings.Builder
+	builder.WriteString("CREATE TABLE " + Quote(t.Name()) + "(")
 	for i, v := range t.Header() {
-		ddl += fmt.Sprintf("%s %s", Quote(v), indexTypeMap[i])
+		builder.WriteString(fmt.Sprintf("%s %s", Quote(v), indexTypeMap[i]))
 		if i != len(t.Header())-1 {
-			ddl += ", "
+			builder.WriteString(", ")
 		} else {
-			ddl += ");"
+			builder.WriteString(");")
 		}
 	}
-	return ddl
+	return builder.String()
 }
 
 // isNumeric returns true if all records are numeric.
@@ -99,14 +100,15 @@ func isNumeric(t *model.Table, index int) bool {
 // GenerateInsertStatement returns insert statement.
 // e.g. INSERT INTO `table_name` VALUES ('value1', 'value2', ...);
 func GenerateInsertStatement(name string, record model.Record) string {
-	dml := "INSERT INTO " + Quote(name) + " VALUES ("
+	var builder strings.Builder
+	builder.WriteString("INSERT INTO " + Quote(name) + " VALUES (")
 	for i, v := range record {
-		dml += SingleQuote(v)
+		builder.WriteString(SingleQuote(v))
 		if i != len(record)-1 {
-			dml += ", "
+			builder.WriteString(", ")
 		} else {
-			dml += ");"
+			builder.WriteString(");")
 		}
 	}
-	return dml
+	return builder.String()
 }
