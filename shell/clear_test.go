@@ -4,9 +4,7 @@ import (
 	"testing"
 )
 
-// Test_clearCommand tests the clearCommand function.
-// Note: This test may fail in headless CI environments where terminal commands
-// are not available. The actual functionality works in real terminal environments.
+// Test_clearCommand tests the clearCommand registration and metadata.
 func Test_clearCommand(t *testing.T) {
 	t.Parallel()
 
