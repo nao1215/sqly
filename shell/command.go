@@ -27,6 +27,7 @@ type CommandList map[string]command
 func NewCommands() CommandList {
 	c := CommandList{}
 	c[".cd"] = command{execute: c.cdCommand, name: ".cd", description: "change directory"}
+	c[".clear"] = command{execute: c.clearCommand, name: ".clear", description: "clear terminal screen"}
 	c[".dump"] = command{execute: c.dumpCommand, name: ".dump", description: "dump db table to file in a format according to output mode (default: csv)"}
 	c[".exit"] = command{execute: c.exitCommand, name: ".exit", description: "exit sqly"}
 	c[".header"] = command{execute: c.headerCommand, name: ".header", description: "print table header"}
