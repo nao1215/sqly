@@ -123,6 +123,7 @@ The sqly-shell has the following helper commands:
 ```shell
 sqly:~/github/github.com/nao1215/sqly(table)$ .help
         .cd: change directory
+     .clear: clear terminal screen
       .dump: dump db table to file in a format according to output mode (default: csv)
       .exit: exit sqly
     .header: print table header
