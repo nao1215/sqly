@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v0.14.2](https://github.com/nao1215/sqly/compare/v0.14.1...v0.14.2) (2025-12-06)
+
+### New Features
+* **Shell Command**: Add `.clear` command to clear terminal screen ([c26ddaf](https://github.com/nao1215/sqly/commit/c26ddaf))
+  - Clear the terminal display with a simple `.clear` command
+  - Uses `CommandContext` for proper context cancellation support
+  - Cross-platform support for terminal clearing
+
+### Documentation
+* **README Updates**: Updated shell functions documentation to include `.clear` command ([6a48777](https://github.com/nao1215/sqly/commit/6a48777))
+
+### Dependencies
+* Bump github.com/nao1215/filesql from 0.4.5 to 0.5.0 ([3065465](https://github.com/nao1215/sqly/commit/3065465))
+* Bump github.com/olekukonko/tablewriter from 1.1.0 to 1.1.2 ([afebb9c](https://github.com/nao1215/sqly/commit/afebb9c), [70c04c3](https://github.com/nao1215/sqly/commit/70c04c3))
+* Bump github.com/xuri/excelize/v2 from 2.9.1 to 2.10.0 ([d27bf05](https://github.com/nao1215/sqly/commit/d27bf05))
+
+### Technical Improvements
+* **Code Quality**: Fix linter issues and update libraries ([be66492](https://github.com/nao1215/sqly/commit/be66492))
+* **Testing**: Improved test coverage for clear command ([ce1b226](https://github.com/nao1215/sqly/commit/ce1b226), [d6f24e4](https://github.com/nao1215/sqly/commit/d6f24e4))
+
 ## [v0.14.1](https://github.com/nao1215/sqly/compare/v0.14.0...v0.14.1) (2025-09-23)
 
 ### New Features
