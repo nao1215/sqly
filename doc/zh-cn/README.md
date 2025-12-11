@@ -44,6 +44,21 @@ brew install nao1215/tap/sqly
 
 **注意**：如果文件名包含可能导致SQL语法错误的字符（如连字符 `-`、点号 `.` 或其他特殊字符），它们会自动替换为下划线 `_`。例如，`bug-syntax-error.csv` 会变成表 `bug_syntax_error`。
 
+### Excel工作表名称
+导入Excel文件时，表名以 `文件名_工作表名` 的格式创建。工作表名称也会为SQL兼容性进行处理：
+- 空格、连字符和点号替换为下划线
+- 非ASCII字符（如带重音的字符 `é`）会被删除
+
+例如：
+- 文件 `data.xlsx` 的工作表 `A test` → 表 `data_A_test`
+- 文件 `report.xlsx` 的工作表 `Café` → 表 `report_Caf`
+
+您可以使用 `--sheet` 选项指定原始工作表名称（处理前）：
+```shell
+$ sqly data.xlsx --sheet="A test"
+$ sqly report.xlsx --sheet="Café"
+```
+
 sqly根据文件扩展名自动确定文件格式，包括压缩文件。
 
 ### 在终端中执行SQL：--sql选项

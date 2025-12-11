@@ -43,6 +43,21 @@ sqly importa automáticamente archivos CSV/TSV/LTSV/Excel (incluyendo versiones 
 
 **Nota**: Si el nombre del archivo contiene caracteres que podrían causar errores de sintaxis SQL (como guiones `-`, puntos `.` u otros caracteres especiales), se reemplazan automáticamente con guiones bajos `_`. Por ejemplo, `bug-syntax-error.csv` se convierte en la tabla `bug_syntax_error`.
 
+### Nombres de hojas de Excel
+Al importar archivos Excel, los nombres de las tablas se crean en el formato `nombrearchivo_nombrehoja`. Los nombres de las hojas también se procesan para compatibilidad con SQL:
+- Los espacios, guiones y puntos se reemplazan con guiones bajos
+- Los caracteres no ASCII (como los caracteres acentuados `é`) se eliminan
+
+Por ejemplo:
+- Archivo `data.xlsx` con hoja `A test` → tabla `data_A_test`
+- Archivo `report.xlsx` con hoja `Café` → tabla `report_Caf`
+
+Puede especificar un nombre de hoja usando la opción `--sheet` con el nombre original (antes del procesamiento):
+```shell
+$ sqly data.xlsx --sheet="A test"
+$ sqly report.xlsx --sheet="Café"
+```
+
 sqly determina automáticamente el formato del archivo a partir de la extensión, incluyendo archivos comprimidos.
 
 ### Ejecutar SQL en terminal: opción --sql

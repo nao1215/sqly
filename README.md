@@ -43,6 +43,21 @@ The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed ve
 
 **Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`.
 
+### Excel Sheet Names
+When importing Excel files, table names are created in the format `filename_sheetname`. Sheet names are also sanitized for SQL compatibility:
+- Spaces, hyphens, and dots are replaced with underscores
+- Non-ASCII characters (such as accented characters like `é`) are removed
+
+For example:
+- File `data.xlsx` with sheet `A test` → table `data_A_test`
+- File `report.xlsx` with sheet `Café` → table `report_Caf`
+
+You can specify a sheet name using the `--sheet` option with the original name (before sanitization):
+```shell
+$ sqly data.xlsx --sheet="A test"
+$ sqly report.xlsx --sheet="Café"
+```
+
 The sqly automatically determines the file format from the file extension, including compressed files.
 
 ### Execute sql in terminal: --sql option
