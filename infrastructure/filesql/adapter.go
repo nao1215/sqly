@@ -440,6 +440,35 @@ func quoteIdentifier(identifier string) string {
 	return `"` + escaped + `"`
 }
 
+// SanitizeForSQL sanitizes a string to be SQL-safe. This function matches
+// the sanitization logic used by filesql library when creating table names
+// from file paths and sheet names.
+//
+// Transformations applied:
+//   - Replaces spaces, hyphens (-), and dots (.) with underscores
+//   - Removes any non-alphanumeric characters except underscores
+//
+// Example:
+//
+//	SanitizeForSQL("A test") returns "A_test"
+//	SanitizeForSQL("Café") returns "Caf"
+//	SanitizeForSQL("Sheet-1") returns "Sheet_1"
+func SanitizeForSQL(name string) string {
+	// First replace spaces, hyphens, and dots with underscores
+	result := strings.ReplaceAll(name, " ", "_")
+	result = strings.ReplaceAll(result, "-", "_")
+	result = strings.ReplaceAll(result, ".", "_")
+
+	// Then remove any non-alphanumeric characters except underscore
+	var sanitized strings.Builder
+	for _, r := range result {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			sanitized.WriteRune(r)
+		}
+	}
+	return sanitized.String()
+}
+
 // FileSQLError represents an error from filesql operations
 //
 //nolint:revive // Name maintained for consistency with FileSQLAdapter and clear context indication
