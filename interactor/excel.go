@@ -52,9 +52,14 @@ func (ei *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, 
 			return nil, fmt.Errorf("failed to get table names: %w", err)
 		}
 
-		// Look for a table that ends with the requested sheet name
+		// Sanitize the sheet name to match how filesql creates table names.
+		// filesql replaces spaces, accented characters, and other special characters
+		// with underscores when creating SQL-safe table names.
+		sanitizedSheetName := filesql.SanitizeForSQL(sheetName)
+
+		// Look for a table that ends with the sanitized sheet name
 		for _, table := range tables {
-			if strings.HasSuffix(table.Name(), "_"+sheetName) || table.Name() == sheetName {
+			if strings.HasSuffix(table.Name(), "_"+sanitizedSheetName) || table.Name() == sanitizedSheetName {
 				tableName = table.Name()
 				break
 			}

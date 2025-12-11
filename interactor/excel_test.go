@@ -487,3 +487,80 @@ func TestExcelInteractor_ListEmptySheetName(t *testing.T) {
 		t.Fatal("Expected table to be returned")
 	}
 }
+
+func TestExcelInteractor_ListSheetWithSpaces(t *testing.T) {
+	t.Parallel()
+
+	// Test with Excel file that has a sheet name with spaces
+	// This test validates the fix for GitHub issue where sheets with spaces fail to load
+	excelFile := "../testdata/sheet_with_spaces.xlsx"
+	if _, err := os.Stat(excelFile); os.IsNotExist(err) {
+		t.Skip("sheet_with_spaces.xlsx not found, skipping test")
+	}
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer db.Close()
+
+	adapter := filesql.NewFileSQLAdapter(db)
+	excelRepo := persistence.NewExcelRepository()
+	interactor := NewExcelInteractor(adapter, excelRepo)
+
+	// Test loading sheet with spaces in name: "A test"
+	table, err := interactor.List(excelFile, "A test")
+	if err != nil {
+		t.Fatalf("Failed to load sheet 'A test' with spaces: %v", err)
+	}
+
+	if table == nil {
+		t.Fatal("Expected table to be returned")
+	}
+
+	// Verify data was loaded correctly
+	if len(table.Header()) == 0 {
+		t.Error("Expected table to have headers")
+	}
+
+	records := table.Records()
+	if len(records) == 0 {
+		t.Error("Expected table to have records")
+	}
+}
+
+func TestExcelInteractor_ListSheetWithAccentedCharacters(t *testing.T) {
+	t.Parallel()
+
+	// Test with Excel file that has a sheet name with accented characters
+	// This test validates the fix for GitHub issue where sheets with accents fail to load
+	excelFile := "../testdata/sheet_with_accents.xlsx"
+	if _, err := os.Stat(excelFile); os.IsNotExist(err) {
+		t.Skip("sheet_with_accents.xlsx not found, skipping test")
+	}
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer db.Close()
+
+	adapter := filesql.NewFileSQLAdapter(db)
+	excelRepo := persistence.NewExcelRepository()
+	interactor := NewExcelInteractor(adapter, excelRepo)
+
+	// Test loading sheet with accented character: "Café"
+	table, err := interactor.List(excelFile, "Café")
+	if err != nil {
+		t.Fatalf("Failed to load sheet 'Café' with accented character: %v", err)
+	}
+
+	if table == nil {
+		t.Fatal("Expected table to be returned")
+	}
+
+	// Verify data was loaded correctly
+	if len(table.Header()) == 0 {
+		t.Error("Expected table to have headers")
+	}
+}
