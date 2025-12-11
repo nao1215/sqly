@@ -868,3 +868,89 @@ func TestFileSQLError_Error(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeForSQL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple name",
+			input:    "Sheet1",
+			expected: "Sheet1",
+		},
+		{
+			name:     "name with space",
+			input:    "A test",
+			expected: "A_test",
+		},
+		{
+			name:     "name with multiple spaces",
+			input:    "My Test Sheet",
+			expected: "My_Test_Sheet",
+		},
+		{
+			name:     "name with accented character e",
+			input:    "Café",
+			expected: "Caf",
+		},
+		{
+			name:     "name with accented character n",
+			input:    "Español",
+			expected: "Espaol",
+		},
+		{
+			name:     "name with hyphen",
+			input:    "Sheet-1",
+			expected: "Sheet_1",
+		},
+		{
+			name:     "name with dot",
+			input:    "Sheet.1",
+			expected: "Sheet_1",
+		},
+		{
+			name:     "name with special characters",
+			input:    "Data@2024!",
+			expected: "Data2024",
+		},
+		{
+			name:     "name with underscore preserved",
+			input:    "test_sheet",
+			expected: "test_sheet",
+		},
+		{
+			name:     "empty name",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "name with only spaces",
+			input:    "   ",
+			expected: "___",
+		},
+		{
+			name:     "unicode characters",
+			input:    "日本語シート",
+			expected: "",
+		},
+		{
+			name:     "mixed alphanumeric and special",
+			input:    "Test (2024)",
+			expected: "Test_2024",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			actual := SanitizeForSQL(tt.input)
+			if actual != tt.expected {
+				t.Errorf("SanitizeForSQL(%q) = %q, expected %q", tt.input, actual, tt.expected)
+			}
+		})
+	}
+}

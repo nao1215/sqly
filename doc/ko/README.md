@@ -43,6 +43,21 @@ sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/L
 
 **참고**: 파일명에 SQL 구문 오류를 일으킬 수 있는 문자(하이픈 `-`, 점 `.`, 기타 특수 문자 등)가 포함되어 있으면 자동으로 밑줄 `_`로 대체됩니다. 예를 들어, `bug-syntax-error.csv`는 `bug_syntax_error` 테이블이 됩니다.
 
+### Excel 시트 이름
+Excel 파일을 가져올 때 테이블 이름은 `파일명_시트명` 형식으로 생성됩니다. 시트 이름도 SQL 호환성을 위해 정제됩니다:
+- 공백, 하이픈, 점은 밑줄로 대체됩니다
+- 비ASCII 문자(`é`와 같은 악센트 문자)는 제거됩니다
+
+예:
+- 파일 `data.xlsx`의 시트 `A test` → 테이블 `data_A_test`
+- 파일 `report.xlsx`의 시트 `Café` → 테이블 `report_Caf`
+
+`--sheet` 옵션을 사용하여 원래 시트 이름(정제 전)으로 시트를 지정할 수 있습니다:
+```shell
+$ sqly data.xlsx --sheet="A test"
+$ sqly report.xlsx --sheet="Café"
+```
+
 sqly는 압축 파일을 포함하여 파일 확장자에서 파일 형식을 자동으로 결정합니다.
 
 ### 터미널에서 SQL 실행: --sql 옵션
