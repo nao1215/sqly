@@ -42,6 +42,7 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 }
 
 // TablesName return all table name.
+// Internal tables (sqlite_* and query_result_*) are excluded from the result.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -50,7 +51,7 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx,
-		"SELECT name FROM sqlite_master WHERE type = 'table'")
+		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%'")
 	if err != nil {
 		return nil, err
 	}
