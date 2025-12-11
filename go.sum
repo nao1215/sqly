@@ -63,8 +63,10 @@ github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 h1:AMFGa4R4MiIpsp
 github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8/go.mod h1:mC1jAcsrzbxHt8iiaC+zU4b1ylILSosueou12R++wfY=
 github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 h1:+n/aFZefKZp7spd8DFdX7uMikMLXX4oubIzJF4kv/wI=
 github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3/go.mod h1:RagcQ7I8IeTMnF8JTXieKnO4Z6JCsikNEzj0DwauVzE=
-github.com/nao1215/filesql v0.5.0 h1:tEwwic55aZATPm4QenyhJPQqFxcMLQBYXXuWExr47dg=
-github.com/nao1215/filesql v0.5.0/go.mod h1:GJ8rmPCf0/XWAnq+5rf+eb6efhnFR1TvqAILIz/K/Pg=
+github.com/nao1215/fileparser v0.1.0 h1:roGk+MAo5vKUrq6imk53nWx8Ol0TaNzYg0QWz8EDzs0=
+github.com/nao1215/fileparser v0.1.0/go.mod h1:KnIHCQwyrqvt9w3cQpf6EpPvHMFpokSqpYuEzgUY9Mg=
+github.com/nao1215/filesql v0.7.0 h1:b+Ar5tiBNNveuot8oLvUBbvaua4Qf/WjLnkcqbIgMq0=
+github.com/nao1215/filesql v0.7.0/go.mod h1:7uW/zX4rjwzoEc+6Zn8bV5YgMseRzGO6XMzM7rcU3rw=
 github.com/nao1215/prompt v0.0.4 h1:NnqExDcQ+oyc1OlPcGmcKiCLNsTPhMKaP/zUaJPstk8=
 github.com/nao1215/prompt v0.0.4/go.mod h1:UqCLZ1fyxwWhEBTLAVvRVIzW8Tyl74o4Du0e0gQrWN4=
 github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdhx/f4=
