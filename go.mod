@@ -9,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.14
-	github.com/nao1215/filesql v0.7.0
+	github.com/nao1215/filesql v0.8.0
 	github.com/nao1215/prompt v0.0.4
 	github.com/olekukonko/tablewriter v1.1.2
 	github.com/pmezard/go-difflib v1.0.0
@@ -44,7 +44,7 @@ require (
 	github.com/mattn/go-tty v0.0.7 // indirect
 	github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 // indirect
 	github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 // indirect
-	github.com/nao1215/fileparser v0.1.0 // indirect
+	github.com/nao1215/fileparser v0.2.0 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.1.0 // indirect
