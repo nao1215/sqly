@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	libfilesql "github.com/nao1215/filesql"
 	_ "modernc.org/sqlite"
 )
 
@@ -1390,37 +1391,9 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 	}
 }
 
-func TestIsACHTable(t *testing.T) {
-	t.Parallel()
-
-	// Without loading an ACH file, no table should be detected as ACH.
-	// This prevents false positives like "sales_entries" being blocked.
-	falsePositives := []struct {
-		name  string
-		table string
-	}{
-		{"regular table with _entries suffix", "sales_entries"},
-		{"regular table with _batches suffix", "log_batches"},
-		{"regular table with _addenda suffix", "data_addenda"},
-		{"regular table with _file_header suffix", "my_file_header"},
-		{"regular table", "users"},
-		{"empty string", ""},
-	}
-
-	for _, tt := range falsePositives {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if IsACHTable(tt.table) {
-				t.Errorf("IsACHTable(%q) = true without ACH import, want false", tt.table)
-			}
-		})
-	}
-}
-
-// TestIsACHTable_RegistryClearedAfterImport verifies that LoadFile cleans up
-// the filesql ACH registry after copying tables, so IsACHTable always returns
-// false (preventing stale registry state in long-running shells).
-func TestIsACHTable_RegistryClearedAfterImport(t *testing.T) {
+// TestLoadFile_ACHRegistryClearedAfterImport verifies that LoadFile cleans up
+// the filesql ACH registry after copying tables to prevent memory leaks.
+func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
 	t.Parallel()
 
 	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
@@ -1439,42 +1412,16 @@ func TestIsACHTable_RegistryClearedAfterImport(t *testing.T) {
 		t.Fatalf("LoadFile failed: %v", err)
 	}
 
-	baseName := GetTableNameFromFilePath(achFile)
-
-	// Registry should be cleaned up after import, so IsACHTable returns false
-	if IsACHTable(baseName + "_entries") {
-		t.Errorf("IsACHTable(%q) = true after import; registry should have been cleaned up", baseName+"_entries")
+	// Registry should be empty after import
+	infos := libfilesql.GetACHTableInfos()
+	if len(infos) != 0 {
+		t.Errorf("ACH registry should be empty after import, got %d entries", len(infos))
 	}
 }
 
-func TestIsWireTable(t *testing.T) {
-	t.Parallel()
-
-	// Without loading a Fedwire file, no table should be detected as Wire.
-	falsePositives := []struct {
-		name  string
-		table string
-	}{
-		{"regular table with _message suffix", "chat_message"},
-		{"regular table with _message suffix", "error_message"},
-		{"regular table", "users"},
-		{"empty string", ""},
-		{"only suffix", "_message"},
-	}
-
-	for _, tt := range falsePositives {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if IsWireTable(tt.table) {
-				t.Errorf("IsWireTable(%q) = true without Fedwire import, want false", tt.table)
-			}
-		})
-	}
-}
-
-// TestIsWireTable_RegistryClearedAfterImport verifies that LoadFile cleans up
+// TestLoadFile_WireRegistryClearedAfterImport verifies that LoadFile cleans up
 // the filesql Fedwire registry after copying tables.
-func TestIsWireTable_RegistryClearedAfterImport(t *testing.T) {
+func TestLoadFile_WireRegistryClearedAfterImport(t *testing.T) {
 	t.Parallel()
 
 	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
@@ -1493,11 +1440,10 @@ func TestIsWireTable_RegistryClearedAfterImport(t *testing.T) {
 		t.Fatalf("LoadFile failed: %v", err)
 	}
 
-	baseName := GetTableNameFromFilePath(fedFile)
-
-	// Registry should be cleaned up after import, so IsWireTable returns false
-	if IsWireTable(baseName + "_message") {
-		t.Errorf("IsWireTable(%q) = true after import; registry should have been cleaned up", baseName+"_message")
+	// Registry should be empty after import
+	infos := libfilesql.GetWireTableInfos()
+	if len(infos) != 0 {
+		t.Errorf("Wire registry should be empty after import, got %d entries", len(infos))
 	}
 }
 

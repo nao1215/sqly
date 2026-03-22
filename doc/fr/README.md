@@ -11,9 +11,9 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md)
 
-sqly est un outil en ligne de commande qui execute du SQL sur des fichiers CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH et Fedwire. Il importe ces fichiers dans une base de donnees en memoire [SQLite3](https://www.sqlite.org/index.html). Les fichiers compresses (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) sont egalement pris en charge. CTE (clause WITH) est disponible pour les requetes complexes.
+sqly est un outil en ligne de commande qui exécute du SQL sur des fichiers CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH et Fedwire. Il importe ces fichiers dans une base de données en mémoire [SQLite3](https://www.sqlite.org/index.html). Les fichiers compressés (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) sont également pris en charge. CTE (clause WITH) est disponible pour les requêtes complexes.
 
-sqly dispose d'un shell interactif (sqly-shell) avec l'autocompletion SQL et l'historique des commandes. Vous pouvez aussi executer SQL directement depuis la ligne de commande sans le shell.
+sqly dispose d'un shell interactif (sqly-shell) avec l'autocomplétion SQL et l'historique des commandes. Vous pouvez aussi exécuter SQL directement depuis la ligne de commande sans le shell.
 
 ```shell
 sqly --sql "SELECT * FROM data" data.csv.gz
@@ -38,9 +38,9 @@ brew install nao1215/tap/sqly
 - go1.25.0 ou ultérieur
 
 ## Comment utiliser
-sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
+sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (y compris les versions compressées) et ACH/Fedwire dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
 
-**Note** : Les noms de tables sont assainis pour la compatibilite SQL. Les espaces, traits d'union (`-`) et points (`.`) sont remplaces par des traits de soulignement (`_`). Les autres caracteres speciaux (par exemple, `@`, `#`, `$`) sont supprimes. Si le nom resultant commence par un chiffre, le prefixe `sheet_` est ajoute.
+**Note** : Les noms de tables sont assainis pour la compatibilité SQL. Les espaces, traits d'union (`-`) et points (`.`) sont remplacés par des traits de soulignement (`_`). Les autres caractères spéciaux (par exemple, `@`, `#`, `$`) sont supprimés. Si le nom résultant commence par un chiffre, le préfixe `sheet_` est ajouté.
 
 Exemples :
 - `bug-syntax-error.csv` → table `bug_syntax_error`

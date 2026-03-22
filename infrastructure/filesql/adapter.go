@@ -496,39 +496,6 @@ func SanitizeForSQL(name string) string {
 	return finalResult
 }
 
-// IsACHTable checks if a table name belongs to an ACH file that was actually
-// loaded via filesql. It verifies both the suffix pattern and that a matching
-// ACH TableSet exists in the global registry, avoiding false positives on
-// regular tables like "sales_entries" or "log_batches".
-func IsACHTable(tableName string) bool {
-	baseName, isACH := filesql.IsACHBaseTableName(tableName)
-	if !isACH {
-		return false
-	}
-	for _, info := range filesql.GetACHTableInfos() {
-		if info.BaseName == baseName {
-			return true
-		}
-	}
-	return false
-}
-
-// IsWireTable checks if a table name belongs to a Fedwire file that was
-// actually loaded via filesql. It verifies both the suffix pattern and that
-// a matching Fedwire TableSet exists in the global registry.
-func IsWireTable(tableName string) bool {
-	baseName, isWire := filesql.IsWireBaseTableName(tableName)
-	if !isWire {
-		return false
-	}
-	for _, info := range filesql.GetWireTableInfos() {
-		if info.BaseName == baseName {
-			return true
-		}
-	}
-	return false
-}
-
 // FileSQLError represents an error from filesql operations
 //
 //nolint:revive // Name maintained for consistency with FileSQLAdapter and clear context indication

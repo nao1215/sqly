@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0或更高版本
 
 ## 使用方法
-当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
+当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel文件（包括压缩版本）以及ACH/Fedwire文件导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
 
 **注意**：表名会为SQL兼容性进行清理。空格、连字符 (`-`) 和点号 (`.`) 会替换为下划线 (`_`)。其他特殊字符（如 `@`、`#`、`$`）会被删除。如果生成的名称以数字开头，会添加 `sheet_` 前缀。
 

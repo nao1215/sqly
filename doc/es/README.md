@@ -38,7 +38,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 o posterior
 
 ## Cómo usar
-sqly importa automáticamente archivos CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire (incluyendo versiones comprimidas) a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
+sqly importa automáticamente archivos CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (incluyendo versiones comprimidas) y ACH/Fedwire a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
 
 **Nota**: Los nombres de las tablas se sanitizan para compatibilidad con SQL. Los espacios, guiones (`-`) y puntos (`.`) se reemplazan con guiones bajos (`_`). Otros caracteres especiales (por ejemplo, `@`, `#`, `$`) se eliminan. Si el nombre resultante comienza con un digito, se agrega el prefijo `sheet_`.
 
