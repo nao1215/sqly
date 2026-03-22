@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## [v0.15.0](https://github.com/nao1215/sqly/compare/v0.14.2...v0.15.0) (2026-03-22)
+
+### New Features
+* **ACH/Fedwire Support**: Import and query ACH (`.ach`) and Fedwire (`.fed`) files
+  - ACH files are loaded as multiple tables (`_file_header`, `_batches`, `_entries`, `_addenda`, and IAT variants)
+  - Fedwire files are loaded as a single `_message` table
+  - Full SQL query support on imported ACH/Fedwire data
+  - `.dump` exports ACH/Fedwire tables to CSV/TSV/XLSX (round-trip to `.ach`/`.fed` format is not supported)
+
+### Bug Fixes
+* **Table Name Sanitization**: Align with filesql's `sanitizeTableName` rules ([eb78009](https://github.com/nao1215/sqly/commit/eb78009))
+  - Names starting with a digit now get a `sheet_` prefix (e.g., `2023-data.csv` → table `sheet_2023_data`)
+  - Special characters like `@`, `#`, `$` are removed (not replaced with `_`)
+  - Empty names fall back to `"sheet"`
+* **`--sheet` Filtering**: Fix recursive directory walk for sheet filtering ([7fd6230](https://github.com/nao1215/sqly/commit/7fd6230))
+  - Previously only top-level directory entries were checked; now matches filesql's recursive import
+  - Simplified to use prefix-based candidate matching for both directory and single-file imports
+* **ACH/Fedwire Registry Cleanup**: Prevent memory leaks in long-running shells ([cee5e8b](https://github.com/nao1215/sqly/commit/cee5e8b), [f05449a](https://github.com/nao1215/sqly/commit/f05449a))
+  - Clean up filesql global ACH/Fedwire registries via `defer` after import
+  - Scope cleanup to actual `.ach`/`.fed` input paths, not table name suffixes
+* **Windows CI**: Fix test timeout caused by PowerShell argument parsing ([5cab2c3](https://github.com/nao1215/sqly/commit/5cab2c3))
+  - Use `shell: bash` in CI workflow to prevent `-coverprofile=coverage.out` misinterpretation
+  - Remove `-coverpkg=./...` that caused shell test binary compilation to exceed 10-minute timeout
+
+### Breaking Changes
+* **Table Name Sanitization**: Files with digit-leading names now produce different table names
+  - `2023-data.csv` → `sheet_2023_data` (was `2023_data`)
+  - `data@file.csv` → `datafile` (was `data_file`)
+  - This aligns sqly with filesql's naming rules and fixes `--sheet` filtering on numeric filenames
+
+### Documentation
+* Add ACH and Fedwire to supported formats table, usage, help, and all localized READMEs (EN, JA, KO, RU, ZH-CN, ES, FR)
+* Update `.import` and `.dump` documentation in `sqly_helper_command.md`
+* Clarify that compression extensions apply to tabular formats only, not ACH/Fedwire
+* Fix French README diacritics
+
+### Dependencies
+* Bump github.com/nao1215/filesql from 0.8.0 to 0.12.0
+* Bump github.com/olekukonko/tablewriter from 1.1.3 to 1.1.4
+* Bump modernc.org/sqlite from 1.39.0 to 1.47.0
+
+### Technical Improvements
+* **Performance**: Use in-memory history DB in tests, reducing shell test time by ~75%
+* **Testing**: Add ACH/Fedwire import smoke tests, naming consistency regression tests, and shell command coverage tests
+* **Architecture**: Remove unused `IsACHTable`/`IsWireTable` from `DatabaseUsecase` interface
+* **Code Quality**: Deduplicate compression extension list in `GetTableNameFromFilePath`
+
 ## [v0.14.2](https://github.com/nao1215/sqly/compare/v0.14.1...v0.14.2) (2025-12-06)
 
 ### New Features
