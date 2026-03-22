@@ -33,5 +33,4 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Run tests with coverage report output
-        run: go test -cover -coverpkg=./... -coverprofile=coverage.out ./...
-
+        run: go test -v -cover -coverprofile coverage.out ./...

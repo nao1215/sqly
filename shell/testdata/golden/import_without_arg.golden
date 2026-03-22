@@ -1,8 +1,8 @@
 [Usage]
   .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]
 
-  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed
-  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)
+  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed
+  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4
   - Files and directories can be mixed in arguments
   - Directories are automatically detected and all supported files are imported
   - If import multiple files/directories, separate them with spaces

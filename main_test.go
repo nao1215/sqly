@@ -132,18 +132,9 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	f(list)
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
 	return buffer.Bytes()
 }

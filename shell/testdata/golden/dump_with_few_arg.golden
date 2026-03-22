@@ -3,3 +3,4 @@
 [Note]
   Output will be in the format specified in .mode.
   table mode is not available in .dump. If mode is table, .dump output CSV file.
+  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.

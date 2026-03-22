@@ -670,6 +670,125 @@ func TestShellExec(t *testing.T) {
 		g.Assert(t, "dump_not_exist_table", []byte(got.Error()))
 	})
 
+	t.Run("dump ACH table to CSV succeeds", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "ppd-debit.ach")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.csv")
+		_, err = getExecStdOutput(t, shell.exec, ".dump ppd_debit_entries "+file)
+		if err != nil {
+			t.Fatalf("dump ACH table to CSV should succeed, got: %v", err)
+		}
+	})
+
+	t.Run("dump ACH table to .ach format is blocked", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "ppd-debit.ach")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.ach")
+		_, got := getExecStdOutput(t, shell.exec, ".dump ppd_debit_entries "+file)
+		if got == nil {
+			t.Fatal("expected error when dumping to .ach format, got nil")
+		}
+		if !strings.Contains(got.Error(), "ACH format") {
+			t.Errorf("expected ACH format error, got: %v", got)
+		}
+	})
+
+	t.Run("dump Fedwire table to .fed format is blocked", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "customer-transfer.fed")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.fed")
+		_, got := getExecStdOutput(t, shell.exec, ".dump customer_transfer_message "+file)
+		if got == nil {
+			t.Fatal("expected error when dumping to .fed format, got nil")
+		}
+		if !strings.Contains(got.Error(), "Fedwire format") {
+			t.Errorf("expected Fedwire format error, got: %v", got)
+		}
+	})
+
+	t.Run("dump table with ACH-like suffix from CSV is allowed", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		// Create a CSV file whose table name ends with _entries (ACH-like suffix)
+		tmpDir := t.TempDir()
+		csvFile := filepath.Join(tmpDir, "sales_entries.csv")
+		if err := os.WriteFile(csvFile, []byte("id,amount\n1,100\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{csvFile}); err != nil {
+			t.Fatal(err)
+		}
+
+		outFile := filepath.Join(tmpDir, "dump.csv")
+		_, err = getExecStdOutput(t, shell.exec, ".dump sales_entries "+outFile)
+		if err != nil {
+			t.Fatalf("dump of CSV-origin table with _entries suffix should succeed, got: %v", err)
+		}
+	})
+
+	t.Run("import and query ACH file", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "ppd-debit.ach")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `SELECT * FROM "ppd_debit_entries"`)
+		if err != nil {
+			t.Fatalf("query ACH entries table failed: %v", err)
+		}
+	})
+
+	t.Run("import and query Fedwire file", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "customer-transfer.fed")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `SELECT * FROM "customer_transfer_message"`)
+		if err != nil {
+			t.Fatalf("query Fedwire message table failed: %v", err)
+		}
+	})
+
 	t.Run("execute sql", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
@@ -723,6 +842,227 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "bad_arg_with_dot_prefix", []byte(err.Error()))
 	})
+
+	t.Run("import directory with CSV files", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		tmpDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(tmpDir, "a.csv"), []byte("x,y\n1,2\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "b.csv"), []byte("p,q\n3,4\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, ".import "+tmpDir)
+		if err != nil {
+			t.Fatalf("directory import failed: %v", err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, "SELECT * FROM a")
+		if err != nil {
+			t.Fatalf("query table a failed: %v", err)
+		}
+		_, err = getExecStdOutput(t, shell.exec, "SELECT * FROM b")
+		if err != nil {
+			t.Fatalf("query table b failed: %v", err)
+		}
+	})
+
+	t.Run("import empty directory", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		tmpDir := t.TempDir()
+		_, err = getExecStdOutput(t, shell.exec, ".import "+tmpDir)
+		if err == nil {
+			t.Fatal("expected error for empty directory import")
+		}
+	})
+
+	t.Run("import nonexistent path", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		_, err = getExecStdOutput(t, shell.exec, ".import /nonexistent/path/file.csv")
+		if err == nil {
+			t.Fatal("expected error for nonexistent path")
+		}
+	})
+
+	t.Run(".tables with no tables", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		_, err = getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables with no tables should not error: %v", err)
+		}
+	})
+
+	t.Run(".tables after import", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables failed: %v", err)
+		}
+	})
+
+	t.Run(".header after import", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, ".header sample")
+		if err != nil {
+			t.Fatalf(".header failed: %v", err)
+		}
+	})
+
+	t.Run("execute INSERT and verify affected rows", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `INSERT INTO sample(id, first_name) VALUES(999, 'test')`)
+		if err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+	})
+
+	t.Run("execute UPDATE", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `UPDATE sample SET first_name='updated' WHERE id=1`)
+		if err != nil {
+			t.Fatalf("UPDATE failed: %v", err)
+		}
+	})
+
+	t.Run("execute DELETE", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `DELETE FROM sample WHERE id=1`)
+		if err != nil {
+			t.Fatalf("DELETE failed: %v", err)
+		}
+	})
+
+	t.Run("init with file path arguments", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.init(context.Background()); err != nil {
+			t.Fatalf("init with file path failed: %v", err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, "SELECT * FROM sample")
+		if err != nil {
+			t.Fatalf("query after init failed: %v", err)
+		}
+	})
+
+	t.Run("Run with --help", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--help"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --help failed: %v", err)
+		}
+	})
+
+	t.Run("Run with --version", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--version"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --version failed: %v", err)
+		}
+	})
+
+	t.Run("Run with --sql option", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT 1", filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --sql failed: %v", err)
+		}
+	})
+
+	t.Run(".mode change to csv", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		_, err = getExecStdOutput(t, shell.exec, ".mode csv")
+		if err != nil {
+			t.Fatalf(".mode csv failed: %v", err)
+		}
+	})
 }
 
 func newShell(t *testing.T, args []string) (*Shell, func(), error) {
@@ -753,7 +1093,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
-	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
+	historyDB, cleanup2, err := config.NewInMemHistoryDB()
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -764,6 +1104,13 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	usecases := NewUsecases(sqLite3Interactor, historyInteractor, exportInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	// Create history table in the in-memory DB. File-based history DB may
+	// already have the table from a previous session, but in-memory starts empty.
+	if err := historyInteractor.CreateTable(context.Background()); err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
@@ -781,20 +1128,11 @@ func getStdoutForRunFunc(t *testing.T, f func(ctx context.Context) error) []byte
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	if err := f(context.Background()); err != nil {
 		t.Fatal(err)
-	}
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -806,19 +1144,10 @@ func getStdout(t *testing.T, f func()) []byte {
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	f()
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
 	return buffer.Bytes()
 }
 
@@ -829,19 +1158,10 @@ func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg s
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	execErr := f(context.Background(), arg)
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
 	return buffer.Bytes(), execErr
 }
 

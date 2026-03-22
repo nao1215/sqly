@@ -3,7 +3,6 @@ package persistence
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -17,13 +16,7 @@ func TestHistoryRepositoryCreateTable(t *testing.T) {
 	t.Run("create history table and check history", func(t *testing.T) {
 		t.Parallel()
 
-		c, err := config.NewConfig()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c.HistoryDBPath = filepath.Join(t.TempDir(), "history.db")
-		historyDB, cleanup, err := config.NewHistoryDB(c)
+		historyDB, cleanup, err := config.NewInMemHistoryDB()
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	libfilesql "github.com/nao1215/filesql"
 	_ "modernc.org/sqlite"
 )
 
@@ -405,12 +406,12 @@ func TestGetTableNameFromFilePath(t *testing.T) {
 		{
 			name:     "filename starting with number",
 			filePath: "/path/to/2023-data.csv",
-			expected: "2023_data",
+			expected: "sheet_2023_data",
 		},
 		{
 			name:     "filename with special characters",
 			filePath: "/path/to/data@file#test$.csv",
-			expected: "data_file_test_",
+			expected: "datafiletest",
 		},
 	}
 
@@ -925,7 +926,7 @@ func TestSanitizeForSQL(t *testing.T) {
 		{
 			name:     "empty name",
 			input:    "",
-			expected: "",
+			expected: "sheet",
 		},
 		{
 			name:     "name with only spaces",
@@ -935,12 +936,27 @@ func TestSanitizeForSQL(t *testing.T) {
 		{
 			name:     "unicode characters",
 			input:    "日本語シート",
-			expected: "",
+			expected: "sheet",
 		},
 		{
 			name:     "mixed alphanumeric and special",
 			input:    "Test (2024)",
 			expected: "Test_2024",
+		},
+		{
+			name:     "numeric prefix gets sheet_ prefix",
+			input:    "2023-data",
+			expected: "sheet_2023_data",
+		},
+		{
+			name:     "numeric only",
+			input:    "123",
+			expected: "sheet_123",
+		},
+		{
+			name:     "numeric prefix with underscore",
+			input:    "1_test",
+			expected: "sheet_1_test",
 		},
 	}
 
@@ -1030,6 +1046,64 @@ func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
 
 	if len(result.Records()) != 2 {
 		t.Errorf("Expected 2 records, got %d", len(result.Records()))
+	}
+}
+
+// TestGetTableNameFromFilePath_MatchesFilesqlNaming verifies that sqly's table name
+// derivation matches what filesql actually creates in the database. This is a regression
+// test for the naming mismatch bug where --sheet filtering failed on numeric filenames.
+func TestGetTableNameFromFilePath_MatchesFilesqlNaming(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{"simple name", "data.csv"},
+		{"hyphenated name", "my-data.csv"},
+		{"numeric prefix", "2023-data.csv"},
+		{"dotted name", "my.data.csv"},
+		{"with spaces", "my data.csv"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tempDir := t.TempDir()
+			csvFile := filepath.Join(tempDir, tt.filename)
+			if err := os.WriteFile(csvFile, []byte("a,b\n1,2\n"), 0600); err != nil {
+				t.Fatalf("Failed to create file: %v", err)
+			}
+
+			sharedDB, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatalf("Failed to create database: %v", err)
+			}
+			defer sharedDB.Close()
+
+			adapter := NewFileSQLAdapter(sharedDB)
+			if err := adapter.LoadFile(context.Background(), csvFile); err != nil {
+				t.Fatalf("LoadFile failed: %v", err)
+			}
+
+			tables, err := adapter.GetTableNames(context.Background())
+			if err != nil {
+				t.Fatalf("GetTableNames failed: %v", err)
+			}
+
+			if len(tables) == 0 {
+				t.Fatal("No tables created")
+			}
+
+			actualTableName := tables[0].Name()
+			expectedPrefix := GetTableNameFromFilePath(csvFile)
+
+			if actualTableName != expectedPrefix {
+				t.Errorf("Naming mismatch: filesql created %q but GetTableNameFromFilePath returned %q",
+					actualTableName, expectedPrefix)
+			}
+		})
 	}
 }
 
@@ -1205,5 +1279,238 @@ func TestFileSQLAdapter_ReservedWordTableName(t *testing.T) {
 
 	if len(result.Records()) != 1 {
 		t.Errorf("Expected 1 record, got %d", len(result.Records()))
+	}
+}
+
+func TestFileSQLAdapter_ACHFile(t *testing.T) {
+	t.Parallel()
+
+	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
+	if _, err := os.Stat(achFile); os.IsNotExist(err) {
+		t.Skip("ACH test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, achFile); err != nil {
+		t.Fatalf("LoadFile failed for ACH file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected ACH tables to be created")
+	}
+
+	// ACH files create multiple tables (file_header, batches, entries, etc.)
+	tableNames := make(map[string]bool)
+	for _, tbl := range tables {
+		tableNames[tbl.Name()] = true
+	}
+
+	// Verify at least the entries table exists (main transaction data)
+	baseName := GetTableNameFromFilePath(achFile)
+	entriesTable := baseName + "_entries"
+	if !tableNames[entriesTable] {
+		t.Errorf("Expected entries table %q, got tables: %v", entriesTable, tableNames)
+	}
+
+	// Verify we can query the entries table
+	query := "SELECT * FROM " + QuoteIdentifier(entriesTable)
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query ACH entries failed: %v", err)
+	}
+
+	if len(result.Records()) == 0 {
+		t.Error("Expected at least one entry record in ACH file")
+	}
+}
+
+func TestFileSQLAdapter_FedWireFile(t *testing.T) {
+	t.Parallel()
+
+	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
+	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
+		t.Skip("FED test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, fedFile); err != nil {
+		t.Fatalf("LoadFile failed for Fedwire file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected Fedwire tables to be created")
+	}
+
+	// Fedwire creates a _message table
+	baseName := GetTableNameFromFilePath(fedFile)
+	messageTable := baseName + "_message"
+	tableNames := make(map[string]bool)
+	for _, tbl := range tables {
+		tableNames[tbl.Name()] = true
+	}
+
+	if !tableNames[messageTable] {
+		t.Errorf("Expected message table %q, got tables: %v", messageTable, tableNames)
+	}
+
+	// Verify we can query the message table
+	query := "SELECT * FROM " + QuoteIdentifier(messageTable)
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query Fedwire message failed: %v", err)
+	}
+
+	if len(result.Records()) == 0 {
+		t.Error("Expected at least one message record in Fedwire file")
+	}
+}
+
+// TestLoadFile_ACHRegistryClearedAfterImport verifies that LoadFile cleans up
+// the filesql ACH registry after copying tables to prevent memory leaks.
+func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
+	t.Parallel()
+
+	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
+	if _, err := os.Stat(achFile); os.IsNotExist(err) {
+		t.Skip("ACH test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	if err := adapter.LoadFile(context.Background(), achFile); err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+
+	// Registry should be empty after import
+	infos := libfilesql.GetACHTableInfos()
+	if len(infos) != 0 {
+		t.Errorf("ACH registry should be empty after import, got %d entries", len(infos))
+	}
+}
+
+// TestLoadFile_WireRegistryClearedAfterImport verifies that LoadFile cleans up
+// the filesql Fedwire registry after copying tables.
+func TestLoadFile_WireRegistryClearedAfterImport(t *testing.T) {
+	t.Parallel()
+
+	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
+	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
+		t.Skip("FED test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	if err := adapter.LoadFile(context.Background(), fedFile); err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+
+	// Registry should be empty after import
+	infos := libfilesql.GetWireTableInfos()
+	if len(infos) != 0 {
+		t.Errorf("Wire registry should be empty after import, got %d entries", len(infos))
+	}
+}
+
+func TestIsSupportedFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"csv", "data.csv", true},
+		{"tsv", "data.tsv", true},
+		{"ltsv", "data.ltsv", true},
+		{"json", "data.json", true},
+		{"jsonl", "data.jsonl", true},
+		{"parquet", "data.parquet", true},
+		{"xlsx", "data.xlsx", true},
+		{"ach", "payment.ach", true},
+		{"fed", "payment.fed", true},
+		{"csv.gz", "data.csv.gz", true},
+		{"tsv.bz2", "data.tsv.bz2", true},
+		{"xlsx.xz", "data.xlsx.xz", true},
+		{"csv.zst", "data.csv.zst", true},
+		{"csv.z", "data.csv.z", true},
+		{"csv.snappy", "data.csv.snappy", true},
+		{"csv.s2", "data.csv.s2", true},
+		{"csv.lz4", "data.csv.lz4", true},
+		{"uppercase ACH", "PAYMENT.ACH", true},
+		{"txt unsupported", "data.txt", false},
+		{"no extension", "data", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsSupportedFile(tt.path); got != tt.expected {
+				t.Errorf("IsSupportedFile(%q) = %v, want %v", tt.path, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsExcelFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"xlsx", "data.xlsx", true},
+		{"xlsx.gz", "data.xlsx.gz", true},
+		{"xlsx.bz2", "data.xlsx.bz2", true},
+		{"uppercase", "DATA.XLSX", true},
+		{"csv", "data.csv", false},
+		{"ach", "payment.ach", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsExcelFile(tt.path); got != tt.expected {
+				t.Errorf("IsExcelFile(%q) = %v, want %v", tt.path, got, tt.expected)
+			}
+		})
 	}
 }

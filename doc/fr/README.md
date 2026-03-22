@@ -11,9 +11,9 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md)
 
-sqly est un outil en ligne de commande qui execute du SQL sur des fichiers CSV, TSV, LTSV, JSON, JSONL, Parquet et Microsoft Excel. Il importe ces fichiers dans une base de donnees en memoire [SQLite3](https://www.sqlite.org/index.html). Les fichiers compresses (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) sont egalement pris en charge. CTE (clause WITH) est disponible pour les requetes complexes.
+sqly est un outil en ligne de commande qui exécute du SQL sur des fichiers CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH et Fedwire. Il importe ces fichiers dans une base de données en mémoire [SQLite3](https://www.sqlite.org/index.html). Les fichiers compressés (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) sont également pris en charge. CTE (clause WITH) est disponible pour les requêtes complexes.
 
-sqly dispose d'un shell interactif (sqly-shell) avec l'autocompletion SQL et l'historique des commandes. Vous pouvez aussi executer SQL directement depuis la ligne de commande sans le shell.
+sqly dispose d'un shell interactif (sqly-shell) avec l'autocomplétion SQL et l'historique des commandes. Vous pouvez aussi exécuter SQL directement depuis la ligne de commande sans le shell.
 
 ```shell
 sqly --sql "SELECT * FROM data" data.csv.gz
@@ -38,9 +38,14 @@ brew install nao1215/tap/sqly
 - go1.25.0 ou ultérieur
 
 ## Comment utiliser
-sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
+sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (y compris les versions compressées) et ACH/Fedwire dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
 
-**Note** : Si le nom du fichier contient des caractères qui pourraient causer des erreurs de syntaxe SQL (comme les traits d'union `-`, les points `.` ou d'autres caractères spéciaux), ils sont automatiquement remplacés par des traits de soulignement `_`. Par exemple, `bug-syntax-error.csv` devient la table `bug_syntax_error`.
+**Note** : Les noms de tables sont assainis pour la compatibilité SQL. Les espaces, traits d'union (`-`) et points (`.`) sont remplacés par des traits de soulignement (`_`). Les autres caractères spéciaux (par exemple, `@`, `#`, `$`) sont supprimés. Si le nom résultant commence par un chiffre, le préfixe `sheet_` est ajouté.
+
+Exemples :
+- `bug-syntax-error.csv` → table `bug_syntax_error`
+- `2023-data.csv` → table `sheet_2023_data`
+- `data@v2.csv` → table `datav2`
 
 ### Noms des feuilles Excel
 Lors de l'importation de fichiers Excel, les noms de tables sont créés au format `nomfichier_nomfeuille`. Les noms de feuilles sont également traités pour la compatibilité SQL :
@@ -59,6 +64,29 @@ $ sqly report.xlsx --sheet="Café"
 
 sqly détermine automatiquement le format du fichier à partir de l'extension, y compris les fichiers comprimés.
 
+### Fichiers ACH
+Les fichiers ACH (Automated Clearing House) (`.ach`) sont chargés sous forme de plusieurs tables pour faciliter les requêtes :
+- `{filename}_file_header` — en-tête au niveau du fichier (1 ligne)
+- `{filename}_batches` — informations d'en-tête de lot
+- `{filename}_entries` — enregistrements de détail d'entrée (données principales de transaction)
+- `{filename}_addenda` — enregistrements d'addenda
+
+Pour les IAT (International ACH Transactions), des tables supplémentaires sont créées : `{filename}_iat_batches`, `{filename}_iat_entries`, `{filename}_iat_addenda`.
+
+```shell
+$ sqly ppd-debit.ach
+$ sqly --sql "SELECT * FROM ppd_debit_entries WHERE amount > 10000" ppd-debit.ach
+```
+
+### Fichiers Fedwire
+Les fichiers Fedwire (`.fed`) sont chargés sous forme d'une seule table de message :
+- `{filename}_message` — table plate avec tous les champs FEDWireMessage
+
+```shell
+$ sqly customer-transfer.fed
+$ sqly --sql "SELECT * FROM customer_transfer_message" customer-transfer.fed
+```
+
 ### Exécuter SQL dans le terminal : option --sql
 L'option --sql prend une instruction SQL comme argument optionnel.
 
@@ -74,7 +102,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### Importation de répertoires
-Vous pouvez importer des répertoires entiers contenant des fichiers supportés. sqly détecte automatiquement tous les fichiers CSV, TSV, LTSV et Excel (y compris les versions compressées) dans le répertoire et les importe :
+Vous pouvez importer des répertoires entiers contenant des fichiers supportés. sqly détecte automatiquement tous les fichiers CSV, TSV, LTSV, Excel, ACH et Fedwire (y compris les versions compressées) dans le répertoire et les importe :
 
 ```shell
 # Importer tous les fichiers d'un répertoire
@@ -185,19 +213,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### Formats de fichiers pris en charge
 
-| Format | Extensions |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| Format | Extensions | Remarques |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | Stocke dans la colonne `data` ; utilisez `json_extract()` pour interroger |
+| JSONL | `.jsonl` | Stocke dans la colonne `data` ; utilisez `json_extract()` pour interroger |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | Chaque feuille devient une table separee |
+| ACH | `.ach` | Cree plusieurs tables (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | Cree une seule table _message |
 
-Les donnees JSON/JSONL sont stockees dans une seule colonne `data`. Utilisez `json_extract()` de SQLite pour interroger les champs individuels.
-
-Chaque format prend egalement en charge les extensions de compression suivantes: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel prennent egalement en charge les extensions de compression suivantes: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (par exemple: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Benchmark

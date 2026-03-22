@@ -121,30 +121,26 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 
 	// Apply --sheet filtering per-Excel-file within the directory.
-	// Walk the directory to find Excel files and filter each one individually,
-	// so that non-Excel tables (CSV, JSON, etc.) are never affected, and
-	// multiple Excel files each keep their own matching sheet.
-	// Pass the newTableNames as candidates so only freshly-imported tables
-	// are considered, preventing prefix collision with pre-existing tables.
+	// For each Excel file, filterExcelSheets builds candidates from all
+	// current tables matching the file's prefix (nil candidates mode).
+	// This correctly handles both first-import and re-import (overwrite).
 	if sheetName != "" {
-		newSet := make(map[string]struct{}, len(newTableNames))
-		for _, n := range newTableNames {
-			newSet[n] = struct{}{}
-		}
-		entries, err := os.ReadDir(cleanPath)
-		if err != nil {
-			return false, fmt.Errorf("failed to read directory %s for sheet filtering: %w", displayPath, err)
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+		err := filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			filePath := filepath.Join(cleanPath, entry.Name())
-			if s.usecases.sqlite3.IsExcelFile(filePath) {
-				if err := s.filterExcelSheets(ctx, filePath, sheetName, newSet); err != nil {
-					return false, err
+			if d.IsDir() {
+				return nil
+			}
+			if s.usecases.sqlite3.IsExcelFile(path) {
+				if err := s.filterExcelSheets(ctx, path, sheetName, nil); err != nil {
+					return err
 				}
 			}
+			return nil
+		})
+		if err != nil {
+			return false, fmt.Errorf("failed to walk directory %s for sheet filtering: %w", displayPath, err)
 		}
 	}
 
@@ -162,7 +158,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
 	if !s.usecases.sqlite3.IsSupportedFile(cleanPath) {
-		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed and compressed variants)", filepath.Base(cleanPath))
+		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
 	}
 
 	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
@@ -170,10 +166,9 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	}
 
 	// Apply --sheet filtering only to Excel files.
-	// Pass nil candidates so filterExcelSheets falls back to prefix matching
-	// over all current tables. This handles both first-import and re-import:
-	// for a single-file import there's no ambiguity about which file owns
-	// the prefix, so prefix matching is safe here.
+	// Use prefix matching over current tables. LoadFiles just created or
+	// overwrote these tables, so all prefix-matching tables belong to this file.
+	// nil candidates tells filterExcelSheets to build the set from prefix match.
 	if s.usecases.sqlite3.IsExcelFile(cleanPath) && sheetName != "" {
 		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, nil); err != nil {
 			return err
@@ -184,13 +179,10 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 }
 
 // filterExcelSheets keeps only the requested sheet from a specific Excel file,
-// operating on the given candidate set of table names. If candidates is nil,
-// we build the candidate set from all tables matching the file's prefix (used
-// for re-import where the diff is empty).
-//
-// Candidates isolate the filtering to tables owned by the current import,
-// preventing prefix collisions: e.g. "sales_" won't accidentally match
-// tables from "sales_q1.xlsx" if those tables aren't in the candidate set.
+// operating on the given candidate set of table names. Callers should provide
+// a candidates set scoped to tables owned by the current import to prevent
+// prefix collisions between files with the same sanitized name.
+// If candidates is nil, falls back to prefix matching over all current tables.
 func (s *Shell) filterExcelSheets(ctx context.Context, excelPath string, sheetName string, candidates map[string]struct{}) error {
 	exactPrefix := s.usecases.sqlite3.GetTableNameFromFilePath(excelPath) + "_"
 
@@ -332,8 +324,8 @@ func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
 	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
 	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed")
-	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)")
+	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed")
+	fmt.Fprintln(config.Stdout, "  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4")
 	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
 	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
 	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")

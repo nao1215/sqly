@@ -12,7 +12,7 @@
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
 
-sqly是一个命令行工具，可以对CSV、TSV、LTSV、JSON、JSONL、Parquet和Microsoft Excel文件执行SQL查询。它将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。支持压缩文件 (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)。CTE (WITH子句) 可用于复杂查询。
+sqly是一个命令行工具，可以对CSV、TSV、LTSV、JSON、JSONL、Parquet、Microsoft Excel、ACH和Fedwire文件执行SQL查询。它将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。支持压缩文件 (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)。CTE (WITH子句) 可用于复杂查询。
 
 sqly有一个交互式shell (sqly-shell)，支持SQL自动完成和命令历史记录。也可以不启动shell，直接从命令行执行SQL。
 
@@ -39,9 +39,14 @@ brew install nao1215/tap/sqly
 - go1.25.0或更高版本
 
 ## 使用方法
-当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
+当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel文件（包括压缩版本）以及ACH/Fedwire文件导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
 
-**注意**：如果文件名包含可能导致SQL语法错误的字符（如连字符 `-`、点号 `.` 或其他特殊字符），它们会自动替换为下划线 `_`。例如，`bug-syntax-error.csv` 会变成表 `bug_syntax_error`。
+**注意**：表名会为SQL兼容性进行清理。空格、连字符 (`-`) 和点号 (`.`) 会替换为下划线 (`_`)。其他特殊字符（如 `@`、`#`、`$`）会被删除。如果生成的名称以数字开头，会添加 `sheet_` 前缀。
+
+示例：
+- `bug-syntax-error.csv` → 表 `bug_syntax_error`
+- `2023-data.csv` → 表 `sheet_2023_data`
+- `data@v2.csv` → 表 `datav2`
 
 ### Excel工作表名称
 导入Excel文件时，表名以 `文件名_工作表名` 的格式创建。工作表名称也会为SQL兼容性进行处理：
@@ -60,6 +65,29 @@ $ sqly report.xlsx --sheet="Café"
 
 sqly根据文件扩展名自动确定文件格式，包括压缩文件。
 
+### ACH文件
+ACH (Automated Clearing House) 文件 (`.ach`) 作为多个表加载，便于查询：
+- `{filename}_file_header` — 文件级别头部（1行）
+- `{filename}_batches` — 批次头部信息
+- `{filename}_entries` — 条目详细记录（主要交易数据）
+- `{filename}_addenda` — 附加记录
+
+对于IAT (International ACH Transactions)，会创建额外的表：`{filename}_iat_batches`、`{filename}_iat_entries`、`{filename}_iat_addenda`。
+
+```shell
+$ sqly ppd-debit.ach
+$ sqly --sql "SELECT * FROM ppd_debit_entries WHERE amount > 10000" ppd-debit.ach
+```
+
+### Fedwire文件
+Fedwire文件 (`.fed`) 作为单个消息表加载：
+- `{filename}_message` — 包含所有FEDWireMessage字段的扁平表
+
+```shell
+$ sqly customer-transfer.fed
+$ sqly --sql "SELECT * FROM customer_transfer_message" customer-transfer.fed
+```
+
 ### 在终端中执行SQL：--sql选项
 --sql选项接受SQL语句作为可选参数。
 
@@ -75,7 +103,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### 目录导入
-您可以导入包含支持文件的整个目录。sqly会自动检测目录中的所有CSV、TSV、LTSV和Excel文件（包括压缩版本）并导入它们：
+您可以导入包含支持文件的整个目录。sqly会自动检测目录中的所有CSV、TSV、LTSV、Excel、ACH和Fedwire文件（包括压缩版本）并导入它们：
 
 ```shell
 # 从目录导入所有文件
@@ -186,19 +214,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### 支持的文件格式
 
-| 格式 | 扩展名 |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| 格式 | 扩展名 | 备注 |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | 存储在 `data` 列中；使用 `json_extract()` 查询 |
+| JSONL | `.jsonl` | 存储在 `data` 列中；使用 `json_extract()` 查询 |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | 每个工作表成为一个单独的表 |
+| ACH | `.ach` | 创建多个表 (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | 创建单个 _message 表 |
 
-JSON/JSONL数据存储在单个 `data` 列中。使用SQLite的 `json_extract()` 查询各个字段。
-
-各格式还支持以下压缩扩展名: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel还支持以下压缩扩展名: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (例如: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## 基准测试

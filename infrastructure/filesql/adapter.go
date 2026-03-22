@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,6 +41,11 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		return errors.New("shared database is not initialized")
 	}
 
+	// Identify ACH/Fedwire base names from input paths (not table names) so we
+	// can clean up the filesql global registry. We must do this before OpenContext
+	// and defer the cleanup so it runs even if table copying fails.
+	achBaseNames, wireBaseNames := collectRegistryBaseNames(filePaths)
+
 	// Use filesql to load files into temporary database, then copy to shared database
 	tmpDB, err := filesql.OpenContext(ctx, filePaths...)
 	if err != nil {
@@ -47,8 +53,20 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	}
 	defer tmpDB.Close()
 
+	// Clean up filesql global registries for ACH/Fedwire TableSets.
+	// filesql.OpenContext registers TableSets in global maps for DumpACH/DumpFedWire,
+	// but sqly copies data to its own shared DB and does not use round-trip export.
+	// Using defer ensures cleanup even if table copying fails partway through.
+	defer func() {
+		for _, baseName := range achBaseNames {
+			filesql.UnregisterACHTableSet(baseName)
+		}
+		for _, baseName := range wireBaseNames {
+			filesql.UnregisterWireTableSet(baseName)
+		}
+	}()
+
 	// Get actual table names from the temporary database created by filesql
-	// This handles cases where filesql creates different table names than expected (e.g., Excel sheets)
 	rows, err := tmpDB.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
 	if err != nil {
 		return fmt.Errorf("failed to get table names from filesql database: %w", err)
@@ -81,6 +99,57 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 // LoadFile loads a single file into the database
 func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 	return f.LoadFiles(ctx, filePath)
+}
+
+// collectRegistryBaseNames scans the input file paths and returns the sanitized
+// base names for any ACH (.ach) or Fedwire (.fed) files. These base names
+// correspond to the keys that filesql.OpenContext registers in its global
+// ACH/Fedwire TableSet registries. Directory paths are walked recursively to
+// find nested ACH/FED files.
+func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames []string) {
+	seen := make(map[string]bool)
+	for _, p := range filePaths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if !info.IsDir() {
+			addACHOrWireBaseName(p, seen, &achBaseNames, &wireBaseNames)
+			continue
+		}
+		// Walk directory to find nested ACH/FED files.
+		// Errors from unreadable entries are skipped.
+		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error { //nolint:errcheck // best-effort scan of directory for cleanup
+			if walkErr != nil || d.IsDir() {
+				return nil //nolint:nilerr // skip unreadable entries
+			}
+			addACHOrWireBaseName(path, seen, &achBaseNames, &wireBaseNames)
+			return nil
+		})
+	}
+	return
+}
+
+// addACHOrWireBaseName checks if path is an ACH or Fedwire file and appends
+// its sanitized base name to the appropriate slice, deduplicating per type.
+// ACH and Fedwire are tracked independently so that payment.ach and payment.fed
+// in the same import both get their respective cleanup entries.
+func addACHOrWireBaseName(path string, seen map[string]bool, achOut, wireOut *[]string) {
+	lower := strings.ToLower(path)
+	baseName := GetTableNameFromFilePath(path)
+	if strings.HasSuffix(lower, ".ach") {
+		key := baseName + "|ach"
+		if !seen[key] {
+			seen[key] = true
+			*achOut = append(*achOut, baseName)
+		}
+	} else if strings.HasSuffix(lower, ".fed") {
+		key := baseName + "|fed"
+		if !seen[key] {
+			seen[key] = true
+			*wireOut = append(*wireOut, baseName)
+		}
+	}
 }
 
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
@@ -396,44 +465,29 @@ func (f *FileSQLAdapter) Close() error {
 	return nil
 }
 
-// GetTableNameFromFilePath extracts table name from file path (compatible with sqly logic)
+// GetTableNameFromFilePath extracts table name from file path.
+// This function matches the naming logic used by filesql's sanitizeTableName(tableFromFilePath())
+// to ensure consistent table name generation between sqly and filesql.
 func GetTableNameFromFilePath(filePath string) string {
 	// Get base filename without directory
 	filename := filepath.Base(filePath)
 
-	// Remove compression extensions first (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
-	compressedExts := map[string]bool{
-		".gz": true, ".bz2": true, ".xz": true, ".zst": true,
-		".z": true, ".snappy": true, ".s2": true, ".lz4": true,
-	}
-	for {
-		ext := filepath.Ext(filename)
-		if compressedExts[ext] {
-			filename = strings.TrimSuffix(filename, ext)
-		} else {
+	// Remove compression extensions first (case-insensitive, matching filesql behavior)
+	lowerFilename := strings.ToLower(filename)
+	for _, ext := range compressionExts {
+		if strings.HasSuffix(lowerFilename, ext) {
+			filename = filename[:len(filename)-len(ext)]
 			break
 		}
 	}
 
-	// Remove file extension (.csv, .tsv, .ltsv, .xlsx, .parquet)
+	// Remove file extension
 	ext := filepath.Ext(filename)
 	if ext != "" {
 		filename = strings.TrimSuffix(filename, ext)
 	}
 
-	// Sanitize filename to be SQL-safe
-	// Replace characters that can cause SQL syntax errors with underscores
-	// This includes: hyphen (-), dot (.), and other non-alphanumeric characters except underscore
-	result := make([]rune, 0, len(filename))
-	for _, r := range filename {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
-			result = append(result, r)
-		} else {
-			result = append(result, '_')
-		}
-	}
-
-	return string(result)
+	return SanitizeForSQL(filename)
 }
 
 // QuoteIdentifier safely quotes SQL identifiers by escaping embedded double quotes.
@@ -452,18 +506,21 @@ func QuoteIdentifier(identifier string) string {
 }
 
 // SanitizeForSQL sanitizes a string to be SQL-safe. This function matches
-// the sanitization logic used by filesql library when creating table names
-// from file paths and sheet names.
+// the sanitization logic used by filesql library's sanitizeTableName() to ensure
+// consistent table name generation between sqly and filesql.
 //
 // Transformations applied:
 //   - Replaces spaces, hyphens (-), and dots (.) with underscores
 //   - Removes any non-alphanumeric characters except underscores
+//   - Adds "sheet_" prefix if the name starts with a number
+//   - Returns "sheet" as fallback for empty names
 //
 // Example:
 //
 //	SanitizeForSQL("A test") returns "A_test"
 //	SanitizeForSQL("Café") returns "Caf"
 //	SanitizeForSQL("Sheet-1") returns "Sheet_1"
+//	SanitizeForSQL("2023-data") returns "sheet_2023_data"
 func SanitizeForSQL(name string) string {
 	// First replace spaces, hyphens, and dots with underscores
 	result := strings.ReplaceAll(name, " ", "_")
@@ -477,7 +534,20 @@ func SanitizeForSQL(name string) string {
 			sanitized.WriteRune(r)
 		}
 	}
-	return sanitized.String()
+
+	finalResult := sanitized.String()
+
+	// Add "sheet_" prefix if name starts with a number (matches filesql behavior)
+	if len(finalResult) > 0 && finalResult[0] >= '0' && finalResult[0] <= '9' {
+		finalResult = "sheet_" + finalResult
+	}
+
+	// Return "sheet" as fallback for empty names (matches filesql behavior)
+	if finalResult == "" {
+		finalResult = "sheet"
+	}
+
+	return finalResult
 }
 
 // FileSQLError represents an error from filesql operations

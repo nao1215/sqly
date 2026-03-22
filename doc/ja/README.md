@@ -11,7 +11,7 @@
 
 [English](../../README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-sqlyは、CSV、TSV、LTSV、JSON、JSONL、Parquet、Microsoft Excelファイルに対してSQLを実行できるコマンドラインツールです。これらのファイルを[SQLite3](https://www.sqlite.org/index.html)のインメモリデータベースにインポートします。圧縮ファイル (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) にも対応しています。CTE (WITH句) による複雑なクエリも利用可能です。
+sqlyは、CSV、TSV、LTSV、JSON、JSONL、Parquet、Microsoft Excel、ACH、Fedwireファイルに対してSQLを実行できるコマンドラインツールです。これらのファイルを[SQLite3](https://www.sqlite.org/index.html)のインメモリデータベースにインポートします。圧縮ファイル (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) にも対応しています。CTE (WITH句) による複雑なクエリも利用可能です。
 
 sqlyにはインタラクティブシェル (sqly-shell) があり、SQL補完とコマンド履歴を使って対話的にSQLを実行できます。シェルを起動せずにコマンドラインから直接SQLを実行することも可能です。
 
@@ -38,9 +38,14 @@ brew install nao1215/tap/sqly
 - go1.25.0以降
 
 ## 使用方法
-sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
+sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelファイル（圧縮版を含む）およびACH/Fedwireファイルを自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
 
-**注意**: ファイル名にSQL構文エラーの原因となる文字（ハイフン `-`、ドット `.`、その他の特殊文字など）が含まれている場合、それらは自動的にアンダースコア `_` に置き換えられます。例えば、`bug-syntax-error.csv`は`bug_syntax_error`テーブルになります。
+**注意**: テーブル名はSQL互換性のためにサニタイズされます。スペース、ハイフン (`-`)、ドット (`.`) はアンダースコア (`_`) に置き換えられます。その他の特殊文字（例: `@`、`#`、`$`）は削除されます。結果の名前が数字で始まる場合、`sheet_` プレフィックスが付与されます。
+
+例:
+- `bug-syntax-error.csv` → テーブル `bug_syntax_error`
+- `2023-data.csv` → テーブル `sheet_2023_data`
+- `data@v2.csv` → テーブル `datav2`
 
 ### Excelシート名
 Excelファイルをインポートする際、テーブル名は `ファイル名_シート名` の形式で作成されます。シート名もSQL互換性のためにサニタイズされます：
@@ -59,6 +64,29 @@ $ sqly report.xlsx --sheet="Café"
 
 sqlyは圧縮ファイルを含むファイル拡張子からファイル形式を自動判定します。
 
+### ACHファイル
+ACH (Automated Clearing House) ファイル (`.ach`) は、クエリしやすいように複数のテーブルとしてロードされます：
+- `{filename}_file_header` — ファイルレベルのヘッダー（1行）
+- `{filename}_batches` — バッチヘッダー情報
+- `{filename}_entries` — エントリ詳細レコード（主要な取引データ）
+- `{filename}_addenda` — アデンダレコード
+
+IAT (International ACH Transactions) の場合、追加のテーブルが作成されます：`{filename}_iat_batches`、`{filename}_iat_entries`、`{filename}_iat_addenda`。
+
+```shell
+$ sqly ppd-debit.ach
+$ sqly --sql "SELECT * FROM ppd_debit_entries WHERE amount > 10000" ppd-debit.ach
+```
+
+### Fedwireファイル
+Fedwireファイル (`.fed`) は単一のメッセージテーブルとしてロードされます：
+- `{filename}_message` — すべてのFEDWireMessageフィールドを含むフラットテーブル
+
+```shell
+$ sqly customer-transfer.fed
+$ sqly --sql "SELECT * FROM customer_transfer_message" customer-transfer.fed
+```
+
 ### ターミナルでのSQL実行: --sqlオプション
 --sqlオプションは、SQL文をオプション引数として受け取ります。
 
@@ -74,7 +102,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### ディレクトリインポート
-対応ファイルを含むディレクトリ全体をインポートできます。sqlyはディレクトリ内のすべてのCSV、TSV、LTSV、Excelファイル（圧縮版を含む）を自動検出してインポートします：
+対応ファイルを含むディレクトリ全体をインポートできます。sqlyはディレクトリ内のすべてのCSV、TSV、LTSV、Excel、ACH、Fedwireファイル（圧縮版を含む）を自動検出してインポートします：
 
 ```shell
 # ディレクトリからすべてのファイルをインポート
@@ -185,19 +213,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### 対応ファイル形式
 
-| 形式 | 拡張子 |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| 形式 | 拡張子 | 備考 |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | `data` カラムに格納。`json_extract()` でクエリ |
+| JSONL | `.jsonl` | `data` カラムに格納。`json_extract()` でクエリ |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | 各シートが個別のテーブルになります |
+| ACH | `.ach` | 複数テーブルを作成 (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | 単一の _message テーブルを作成 |
 
-JSON/JSONLデータは単一の `data` カラムに格納されます。個々のフィールドを問い合わせるにはSQLiteの `json_extract()` を使用してください。
-
-各形式は以下の圧縮拡張子にも対応しています: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelは以下の圧縮拡張子にも対応しています: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (例: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## ベンチマーク

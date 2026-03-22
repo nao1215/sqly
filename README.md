@@ -11,7 +11,7 @@
 
 [日本語](./doc/ja/README.md) | [Русский](./doc/ru/README.md) | [中文](./doc/zh-cn/README.md) | [한국어](./doc/ko/README.md) | [Español](./doc/es/README.md) | [Français](./doc/fr/README.md)
 
-sqly is a command-line tool that executes SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, and Microsoft Excel files. It imports those files into an [SQLite3](https://www.sqlite.org/index.html) in-memory database. Compressed files (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) are also supported. CTE (WITH clause) is available for complex queries.
+sqly is a command-line tool that executes SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH, and Fedwire files. It imports those files into an [SQLite3](https://www.sqlite.org/index.html) in-memory database. Compressed files (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) are also supported. CTE (WITH clause) is available for complex queries.
 
 sqly has an interactive shell (sqly-shell) with SQL completion and command history. You can also execute SQL directly from the command line without the shell.
 
@@ -38,9 +38,14 @@ brew install nao1215/tap/sqly
 - go1.25.0 or later
 
 ## How to use
-The sqly automatically imports CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel files (including compressed versions) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
+The sqly automatically imports CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire files (including compressed versions for tabular formats) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
-**Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`.
+**Note**: Table names are sanitized for SQL compatibility. Spaces, hyphens (`-`), and dots (`.`) are replaced with underscores (`_`). Other special characters (e.g., `@`, `#`, `$`) are removed. If the resulting name starts with a digit, a `sheet_` prefix is added.
+
+Examples:
+- `bug-syntax-error.csv` → table `bug_syntax_error`
+- `2023-data.csv` → table `sheet_2023_data`
+- `data@v2.csv` → table `datav2`
 
 ### Excel Sheet Names
 When importing Excel files, table names are created in the format `filename_sheetname`. Sheet names are also sanitized for SQL compatibility:
@@ -59,6 +64,29 @@ $ sqly report.xlsx --sheet="Café"
 
 The sqly automatically determines the file format from the file extension, including compressed files.
 
+### ACH Files
+ACH (Automated Clearing House) files (`.ach`) are loaded as multiple tables for easy querying:
+- `{filename}_file_header` — file-level header (1 row)
+- `{filename}_batches` — batch header information
+- `{filename}_entries` — entry detail records (main transaction data)
+- `{filename}_addenda` — addenda records
+
+For IAT (International ACH Transactions), additional tables are created: `{filename}_iat_batches`, `{filename}_iat_entries`, `{filename}_iat_addenda`.
+
+```shell
+$ sqly ppd-debit.ach
+$ sqly --sql "SELECT * FROM ppd_debit_entries WHERE amount > 10000" ppd-debit.ach
+```
+
+### Fedwire Files
+Fedwire files (`.fed`) are loaded as a single message table:
+- `{filename}_message` — flat table with all FEDWireMessage fields
+
+```shell
+$ sqly customer-transfer.fed
+$ sqly --sql "SELECT * FROM customer_transfer_message" customer-transfer.fed
+```
+
 ### Execute sql in terminal: --sql option
 --sql option takes an SQL statement as an optional argument.
 
@@ -74,7 +102,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### Directory import
-You can import entire directories containing supported files. The sqly automatically detects all CSV, TSV, LTSV, and Excel files (including compressed versions) in the directory and imports them:
+You can import entire directories containing supported files. The sqly automatically detects all supported files (CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire, including compressed versions) in the directory recursively and imports them:
 
 ```shell
 # Import all files from a directory
@@ -185,19 +213,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### Supported file formats
 
-| Format | Extensions |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| Format | Extensions | Notes |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | Stored in `data` column; use `json_extract()` to query |
+| JSONL | `.jsonl` | Stored in `data` column; use `json_extract()` to query |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | Each sheet becomes a separate table |
+| ACH | `.ach` | Creates multiple tables (`_file_header`, `_batches`, `_entries`, `_addenda`) |
+| Fedwire | `.fed` | Creates a single `_message` table |
 
-JSON/JSONL data is stored in a single `data` column. Use SQLite's `json_extract()` to query individual fields.
-
-Each format also supports the following compression extensions: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel also support the following compression extensions: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (e.g. `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Benchmark
