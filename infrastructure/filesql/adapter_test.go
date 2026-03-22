@@ -942,6 +942,21 @@ func TestSanitizeForSQL(t *testing.T) {
 			input:    "Test (2024)",
 			expected: "Test_2024",
 		},
+		{
+			name:     "numeric prefix gets sheet_ prefix",
+			input:    "2023-data",
+			expected: "sheet_2023_data",
+		},
+		{
+			name:     "numeric only",
+			input:    "123",
+			expected: "sheet_123",
+		},
+		{
+			name:     "numeric prefix with underscore",
+			input:    "1_test",
+			expected: "sheet_1_test",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1030,6 +1045,64 @@ func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
 
 	if len(result.Records()) != 2 {
 		t.Errorf("Expected 2 records, got %d", len(result.Records()))
+	}
+}
+
+// TestGetTableNameFromFilePath_MatchesFilesqlNaming verifies that sqly's table name
+// derivation matches what filesql actually creates in the database. This is a regression
+// test for the naming mismatch bug where --sheet filtering failed on numeric filenames.
+func TestGetTableNameFromFilePath_MatchesFilesqlNaming(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{"simple name", "data.csv"},
+		{"hyphenated name", "my-data.csv"},
+		{"numeric prefix", "2023-data.csv"},
+		{"dotted name", "my.data.csv"},
+		{"with spaces", "my data.csv"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tempDir := t.TempDir()
+			csvFile := filepath.Join(tempDir, tt.filename)
+			if err := os.WriteFile(csvFile, []byte("a,b\n1,2\n"), 0600); err != nil {
+				t.Fatalf("Failed to create file: %v", err)
+			}
+
+			sharedDB, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatalf("Failed to create database: %v", err)
+			}
+			defer sharedDB.Close()
+
+			adapter := NewFileSQLAdapter(sharedDB)
+			if err := adapter.LoadFile(context.Background(), csvFile); err != nil {
+				t.Fatalf("LoadFile failed: %v", err)
+			}
+
+			tables, err := adapter.GetTableNames(context.Background())
+			if err != nil {
+				t.Fatalf("GetTableNames failed: %v", err)
+			}
+
+			if len(tables) == 0 {
+				t.Fatal("No tables created")
+			}
+
+			actualTableName := tables[0].Name()
+			expectedPrefix := GetTableNameFromFilePath(csvFile)
+
+			if actualTableName != expectedPrefix {
+				t.Errorf("Naming mismatch: filesql created %q but GetTableNameFromFilePath returned %q",
+					actualTableName, expectedPrefix)
+			}
+		})
 	}
 }
 
