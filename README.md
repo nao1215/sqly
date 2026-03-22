@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
@@ -11,12 +11,11 @@
 
 [日本語](./doc/ja/README.md) | [Русский](./doc/ru/README.md) | [中文](./doc/zh-cn/README.md) | [한국어](./doc/ko/README.md) | [Español](./doc/es/README.md) | [Français](./doc/fr/README.md)
 
-**sqly** is a powerful command-line tool that can execute SQL against CSV, TSV, LTSV, and Microsoft Excel™ files. The sqly import those files into [SQLite3](https://www.sqlite.org/index.html) in-memory database.  
+sqly is a command-line tool that executes SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, and Microsoft Excel files. It imports those files into an [SQLite3](https://www.sqlite.org/index.html) in-memory database. Compressed files (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) are also supported. CTE (WITH clause) is available for complex queries.
 
-The sqly has **sqly-shell**. You can interactively execute SQL with sql completion and command history. Of course, you can also execute SQL without running the sqly-shell.
+sqly has an interactive shell (sqly-shell) with SQL completion and command history. You can also execute SQL directly from the command line without the shell.
 
 ```shell
-# Works with compressed files!
 sqly --sql "SELECT * FROM data" data.csv.gz
 sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
 ```
@@ -184,36 +183,22 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↑          |Previous command|
 |↓          |Next command|
 
-## 📋 Recent Changes
+### Supported file formats
 
+| Format | Extensions |
+|:--|:--|
+| CSV | `.csv` |
+| TSV | `.tsv` |
+| LTSV | `.ltsv` |
+| JSON | `.json` |
+| JSONL | `.jsonl` |
+| Parquet | `.parquet` |
+| Excel | `.xlsx` |
 
-- Official documentation for users & developers: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- Alternative tool created by the same developer: [simple terminal UI for DBMS & local CSV/TSV/LTSV](https://github.com/nao1215/sqluv)
+JSON/JSONL data is stored in a single `data` column. Use SQLite's `json_extract()` to query individual fields.
 
-### New: Compressed File Support
-
-**sqly** now supports compressed files! You can directly process:
-- **Gzip** compressed files (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- **Bzip2** compressed files (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- **XZ** compressed files (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- **Zstandard** compressed files (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
-
-
-### Added Features
-- **CTE (Common Table Expressions) Support**: Now supports WITH clauses for complex queries and recursive operations
-- **filesql Integration**: Enhanced performance and functionality using the [filesql](https://github.com/nao1215/filesql) library
-- **Improved Performance**: Bulk insert operations with transaction batching for faster file processing
-- **Better Type Handling**: Automatic type detection ensures proper numeric sorting and calculations
-- **Compressed File Support**: Native support for `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4` compressed files
-
-### Re-added and New Input Formats
-- **JSON/JSONL Support**: JSON and JSONL (JSON Lines) file format support has been re-added as input via the filesql library
-  - JSON/JSONL data is stored in a single `data` column; use SQLite's `json_extract()` to query individual fields
-- **Parquet Support**: Parquet file format is now supported as input
-
-### Breaking Changes
-- The `--json` output flag has been removed (output formats: table, CSV, TSV, LTSV, Excel, Markdown)
-- Numeric formatting in output may differ slightly due to improved type detection
+Each format also supports the following compression extensions: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+(e.g. `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Benchmark
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
@@ -228,9 +213,10 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 |1,000,000|   9|   11414332112 ns/op |      2767580080 B/op | 39131122 allocs/op |
 
 
-## Altenative Tools
+## Alternative Tools
 |Name| Description|
 |:--|:--|
+|[nao1215/sqluv](https://github.com/nao1215/sqluv)|Simple terminal UI for DBMS and local CSV/TSV/LTSV|
 |[harelba/q](https://github.com/harelba/q)|Run SQL directly on delimited files and multi-file sqlite databases|
 |[dinedal/textql](https://github.com/dinedal/textql)|Execute SQL against structured text like CSV or TSV|
 |[noborus/trdsql](https://github.com/noborus/trdsql)|CLI tool that can execute SQL queries on CSV, LTSV, JSON, YAML and TBLN. Can output to various formats.|
@@ -283,6 +269,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://debimate.jp/"><img src="https://avatars.githubusercontent.com/u/22737008?v=4?s=75" width="75px;" alt="CHIKAMATSU Naohiro"/><br /><sub><b>CHIKAMATSU Naohiro</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Code">💻</a> <a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Wozzardman"><img src="https://avatars.githubusercontent.com/u/128730409?v=4?s=75" width="75px;" alt="Wozzardman"/><br /><sub><b>Wozzardman</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=Wozzardman" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>

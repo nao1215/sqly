@@ -19,6 +19,15 @@
         "code",
         "doc"
       ]
+    },
+    {
+      "login": "Wozzardman",
+      "name": "Wozzardman",
+      "avatar_url": "https://avatars.githubusercontent.com/u/128730409?v=4",
+      "profile": "https://github.com/Wozzardman",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
