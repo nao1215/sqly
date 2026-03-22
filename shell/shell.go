@@ -210,7 +210,7 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 		strings.HasPrefix(currentWord, `..\`) || // Windows relative path
 		strings.HasPrefix(currentWord, `C:\`) || // Windows absolute path (common drive)
 		// Also check if the word looks like a filename with supported extensions
-		(strings.Contains(currentWord, ".") && s.usecases.filesql.IsSupportedFile(currentWord))
+		(strings.Contains(currentWord, ".") && s.usecases.sqlite3.IsSupportedFile(currentWord))
 	// Check if we're at the end of a path with / or \
 	atEndOfPath := (strings.HasSuffix(text, "/") || strings.HasSuffix(text, `\`)) && len(strings.TrimSpace(text)) > 0
 	// If it looks like a file path OR we're at end of path, provide file completions
@@ -450,10 +450,7 @@ func trimGaps(s string) string {
 
 // isValidFileForCompletion checks if file has a supported extension.
 func (s *Shell) isValidFileForCompletion(filename string) bool {
-	if s.usecases.filesql == nil {
-		return false
-	}
-	return s.usecases.filesql.IsSupportedFile(filename)
+	return s.usecases.sqlite3.IsSupportedFile(filename)
 }
 
 // getFilePathCompletions returns file path completions for importable files (recursive)
