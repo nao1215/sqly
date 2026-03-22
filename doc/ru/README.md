@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
@@ -11,12 +11,11 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-**sqly** - мощный инструмент командной строки, который может выполнять SQL-запросы к CSV, TSV, LTSV и Microsoft Excel™ файлам. sqly импортирует эти файлы в базу данных [SQLite3](https://www.sqlite.org/index.html) в памяти.
+sqly - инструмент командной строки для выполнения SQL-запросов к файлам CSV, TSV, LTSV, JSON, JSONL, Parquet и Microsoft Excel. Он импортирует эти файлы в базу данных [SQLite3](https://www.sqlite.org/index.html) в памяти. Поддерживаются сжатые файлы (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4). CTE (WITH) доступен для сложных запросов.
 
-sqly имеет **sqly-shell**. Вы можете интерактивно выполнять SQL с автодополнением SQL и историей команд. Конечно, вы также можете выполнять SQL, не запуская sqly-shell.
+sqly имеет интерактивную оболочку (sqly-shell) с автодополнением SQL и историей команд. Также можно выполнять SQL напрямую из командной строки без запуска оболочки.
 
 ```shell
-# Работает со сжатыми файлами!
 sqly --sql "SELECT * FROM data" data.csv.gz
 sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
 ```
@@ -184,36 +183,22 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↑          |Предыдущая команда|
 |↓          |Следующая команда|
 
-## 📋 Последние изменения
+### Поддерживаемые форматы файлов
 
+| Формат | Расширения |
+|:--|:--|
+| CSV | `.csv` |
+| TSV | `.tsv` |
+| LTSV | `.ltsv` |
+| JSON | `.json` |
+| JSONL | `.jsonl` |
+| Parquet | `.parquet` |
+| Excel | `.xlsx` |
 
-- Официальная документация для пользователей и разработчиков: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- Альтернативный инструмент, созданный тем же разработчиком: [простой терминальный интерфейс для СУБД и локальных CSV/TSV/LTSV](https://github.com/nao1215/sqluv)
+Данные JSON/JSONL хранятся в одном столбце `data`. Используйте `json_extract()` SQLite для запроса отдельных полей.
 
-### Новое: Поддержка сжатых файлов
-
-**sqly** теперь поддерживает сжатые файлы! Вы можете напрямую обрабатывать:
-- Сжатые файлы **Gzip** (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- Сжатые файлы **Bzip2** (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- Сжатые файлы **XZ** (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- Сжатые файлы **Zstandard** (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
-
-
-### Добавленные функции
-- **Поддержка CTE (Общие табличные выражения)**: Теперь поддерживаются WITH клаузулы для сложных запросов и рекурсивных операций
-- **Интеграция с filesql**: Улучшенная производительность и функциональность с использованием библиотеки [filesql](https://github.com/nao1215/filesql)
-- **Улучшенная производительность**: Операции массовой вставки с пакетной обработкой транзакций для более быстрой обработки файлов
-- **Лучшая обработка типов**: Автоматическое определение типов обеспечивает правильную числовую сортировку и вычисления
-- **Поддержка сжатых файлов**: Нативная поддержка сжатых файлов `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2` и `.lz4`
-
-### Повторно добавленные и новые форматы ввода
-- **Поддержка JSON/JSONL**: Поддержка форматов JSON и JSONL (JSON Lines) как входных данных была повторно добавлена через библиотеку filesql
-  - Данные JSON/JSONL хранятся в одном столбце `data`; используйте `json_extract()` SQLite для запроса отдельных полей
-- **Поддержка Parquet**: Формат Parquet теперь поддерживается как входные данные
-
-### Нарушающие совместимость изменения
-- Флаг вывода `--json` был удален (форматы вывода: таблица, CSV, TSV, LTSV, Excel, Markdown)
-- Числовое форматирование в выводе может немного отличаться из-за улучшенного определения типов
+Каждый формат также поддерживает следующие расширения сжатия: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+(например: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Бенчмарк
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
@@ -231,6 +216,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## Альтернативные инструменты
 |Имя| Описание|
 |:--|:--|
+|[nao1215/sqluv](https://github.com/nao1215/sqluv)|Простой терминальный интерфейс для СУБД и локальных CSV/TSV/LTSV|
 |[harelba/q](https://github.com/harelba/q)|Запуск SQL напрямую к файлам с разделителями и многофайловым базам данных sqlite|
 |[dinedal/textql](https://github.com/dinedal/textql)|Выполнение SQL к структурированному тексту, например CSV или TSV|
 |[noborus/trdsql](https://github.com/noborus/trdsql)|CLI-инструмент, который может выполнять SQL-запросы к CSV, LTSV, JSON, YAML и TBLN. Может выводить в различных форматах.|
@@ -283,6 +269,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://debimate.jp/"><img src="https://avatars.githubusercontent.com/u/22737008?v=4?s=75" width="75px;" alt="CHIKAMATSU Naohiro"/><br /><sub><b>CHIKAMATSU Naohiro</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Code">💻</a> <a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Wozzardman"><img src="https://avatars.githubusercontent.com/u/128730409?v=4?s=75" width="75px;" alt="Wozzardman"/><br /><sub><b>Wozzardman</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=Wozzardman" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>

@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
@@ -12,12 +12,11 @@
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
 
-**sqly** 是一个强大的命令行工具，可以对CSV、TSV、LTSV和Microsoft Excel™文件执行SQL查询。sqly将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。
+sqly是一个命令行工具，可以对CSV、TSV、LTSV、JSON、JSONL、Parquet和Microsoft Excel文件执行SQL查询。它将这些文件导入[SQLite3](https://www.sqlite.org/index.html)内存数据库。支持压缩文件 (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)。CTE (WITH子句) 可用于复杂查询。
 
-sqly拥有 **sqly-shell**。您可以通过SQL自动完成和命令历史记录交互式执行SQL。当然，您也可以在不运行sqly-shell的情况下执行SQL。
+sqly有一个交互式shell (sqly-shell)，支持SQL自动完成和命令历史记录。也可以不启动shell，直接从命令行执行SQL。
 
 ```shell
-# 对压缩文件也能工作！
 sqly --sql "SELECT * FROM data" data.csv.gz
 sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
 ```
@@ -185,36 +184,22 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↑          |上一个命令|
 |↓          |下一个命令|
 
-## 📋 最近的变更
+### 支持的文件格式
 
+| 格式 | 扩展名 |
+|:--|:--|
+| CSV | `.csv` |
+| TSV | `.tsv` |
+| LTSV | `.ltsv` |
+| JSON | `.json` |
+| JSONL | `.jsonl` |
+| Parquet | `.parquet` |
+| Excel | `.xlsx` |
 
-- 用户和开发者官方文档：[https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- 同一开发者创建的替代工具：[DBMS和本地CSV/TSV/LTSV的简单终端UI](https://github.com/nao1215/sqluv)
+JSON/JSONL数据存储在单个 `data` 列中。使用SQLite的 `json_extract()` 查询各个字段。
 
-### 新功能：压缩文件支持
-
-**sqly** 现在支持压缩文件！您可以直接处理：
-- **Gzip** 压缩文件 (`.csv.gz`、`.tsv.gz`、`.ltsv.gz`、`.xlsx.gz`)
-- **Bzip2** 压缩文件 (`.csv.bz2`、`.tsv.bz2`、`.ltsv.bz2`、`.xlsx.bz2`)
-- **XZ** 压缩文件 (`.csv.xz`、`.tsv.xz`、`.ltsv.xz`、`.xlsx.xz`)
-- **Zstandard** 压缩文件 (`.csv.zst`、`.tsv.zst`、`.ltsv.zst`、`.xlsx.zst`)
-
-
-### 新增功能
-- **CTE（公用表表达式）支持**：现在支持 WITH 子句进行复杂查询和递归操作
-- **filesql 集成**：使用 [filesql](https://github.com/nao1215/filesql) 库提高性能和功能
-- **性能改进**：通过事务批处理进行批量插入操作，以实现更快的文件处理
-- **更好的类型处理**：自动类型检测确保正确的数值排序和计算
-- **压缩文件支持**：原生支持 `.gz`、`.bz2`、`.xz`、`.zst`、`.z`、`.snappy`、`.s2` 和 `.lz4` 压缩文件
-
-### 重新添加和新增输入格式
-- **JSON/JSONL 支持**：通过 filesql 库重新添加了 JSON 和 JSONL（JSON Lines）文件格式的输入支持
-  - JSON/JSONL 数据存储在单个 `data` 列中；使用 SQLite 的 `json_extract()` 查询各个字段
-- **Parquet 支持**：现在支持 Parquet 文件格式作为输入
-
-### 破坏性变更
-- `--json` 输出标志已被移除（输出格式：表格、CSV、TSV、LTSV、Excel、Markdown）
-- 由于改进了类型检测，输出中的数值格式可能会略有不同
+各格式还支持以下压缩扩展名: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+(例如: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## 基准测试
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
@@ -232,6 +217,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 替代工具
 |名称| 描述|
 |:--|:--|
+|[nao1215/sqluv](https://github.com/nao1215/sqluv)|DBMS和本地CSV/TSV/LTSV的简单终端UI|
 |[harelba/q](https://github.com/harelba/q)|直接对分隔文件和多文件sqlite数据库运行SQL|
 |[dinedal/textql](https://github.com/dinedal/textql)|对结构化文本（如CSV或TSV）执行SQL|
 |[noborus/trdsql](https://github.com/noborus/trdsql)|可以对CSV、LTSV、JSON、YAML和TBLN执行SQL查询的CLI工具。可输出到各种格式。|
@@ -284,6 +270,7 @@ sqly项目根据[MIT LICENSE](../../LICENSE)条款许可。
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://debimate.jp/"><img src="https://avatars.githubusercontent.com/u/22737008?v=4?s=75" width="75px;" alt="CHIKAMATSU Naohiro"/><br /><sub><b>CHIKAMATSU Naohiro</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Code">💻</a> <a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Wozzardman"><img src="https://avatars.githubusercontent.com/u/128730409?v=4?s=75" width="75px;" alt="Wozzardman"/><br /><sub><b>Wozzardman</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=Wozzardman" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>
