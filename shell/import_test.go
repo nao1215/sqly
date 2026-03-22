@@ -534,10 +534,10 @@ func TestValidatePath_Import(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		path      string
-		wantErr   bool
-		unixOnly  bool
+		name     string
+		path     string
+		wantErr  bool
+		unixOnly bool
 	}{
 		{"normal path", "testdata/sample.csv", false, false},
 		{"relative path", "./foo/bar.csv", false, false},

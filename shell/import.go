@@ -148,7 +148,14 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		}
 	}
 
-	fmt.Fprintf(config.Stdout, "Successfully imported %d table(s) from directory %s: %v\n", len(newTableNames), displayPath, newTableNames)
+	// Recompute remaining tables after potential sheet filtering may have dropped some.
+	tablesNow, err := s.usecases.sqlite3.GetTableNames(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get table names after sheet filtering for %s: %w", displayPath, err)
+	}
+	remainingNames := diffTableNames(tablesNow, existingTables)
+
+	fmt.Fprintf(config.Stdout, "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
 	return true, nil
 }
 
@@ -216,11 +223,6 @@ func (s *Shell) filterExcelSheets(ctx context.Context, excelPath string, sheetNa
 		}
 		sheetPart := strings.TrimPrefix(name, exactPrefix)
 		if sheetPart == sanitized {
-			keepTable = name
-			break
-		}
-		// Also handle case where table name equals the sheet name directly
-		if name == sanitized {
 			keepTable = name
 			break
 		}

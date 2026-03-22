@@ -79,6 +79,16 @@ func TestLtsvRepositoryLabelAndData(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("failed to get label data returns ErrNoLabel", func(t *testing.T) {
+		t.Parallel()
+
+		lr := &ltsvRepository{}
+		_, _, err := lr.labelAndData("")
+		if !errors.Is(err, infrastructure.ErrNoLabel) {
+			t.Errorf("expected ErrNoLabel, got: %v", err)
+		}
+	})
 }
 
 func TestLtsvRepositoryDump(t *testing.T) {
@@ -113,16 +123,6 @@ func TestLtsvRepositoryDump(t *testing.T) {
 		g := golden.New(t,
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "sample_ltsv", got)
-	})
-
-	t.Run("failed to get label data", func(t *testing.T) {
-		t.Parallel()
-
-		lr := &ltsvRepository{}
-		_, _, err := lr.labelAndData("")
-		if !errors.Is(err, infrastructure.ErrNoLabel) {
-			t.Errorf("expected ErrNoLabel, got: %v", err)
-		}
 	})
 }
 
