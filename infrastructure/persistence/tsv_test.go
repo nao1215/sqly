@@ -1,46 +1,40 @@
 package persistence
 
 import (
+	"encoding/csv"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
 )
 
-func TestTsvRepositoryList(t *testing.T) {
+func TestTsvRepositoryDump(t *testing.T) {
 	t.Parallel()
 
-	t.Run("list and dump tsv data", func(t *testing.T) {
+	t.Run("dump tsv data", func(t *testing.T) {
 		t.Parallel()
 
 		r := NewTSVRepository()
-		f, err := os.Open(filepath.Join("testdata", "sample.tsv"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
 
-		tsv, err := r.List(f)
-		if err != nil {
-			t.Fatal(err)
-		}
+		table := readTSVAsTable(t, filepath.Join("testdata", "sample.tsv"))
 
 		var tmpFile *os.File
-		var e error
+		var err error
 		if runtime.GOOS != config.Windows {
-			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.tsv")
+			tmpFile, err = os.CreateTemp(t.TempDir(), "dump.tsv")
 		} else {
-			// See https://github.com/golang/go/issues/51442
-			tmpFile, e = os.CreateTemp(os.TempDir(), "dump.tsv")
+			tmpFile, err = os.CreateTemp(os.TempDir(), "dump.tsv")
 		}
-		if e != nil {
+		if err != nil {
 			t.Fatal(err)
 		}
 
-		if err := r.Dump(tmpFile, tsv.ToTable()); err != nil {
+		if err := r.Dump(tmpFile, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -52,4 +46,35 @@ func TestTsvRepositoryList(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "sample_tsv", got)
 	})
+}
+
+// readTSVAsTable reads a TSV file and returns a model.Table for testing Dump.
+func readTSVAsTable(t *testing.T, path string) *model.Table {
+	t.Helper()
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.Comma = '\t'
+	var header model.Header
+	var records []model.Record
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header == nil {
+			header = row
+			continue
+		}
+		records = append(records, row)
+	}
+	return model.NewTable(filepath.Base(path), header, records)
 }

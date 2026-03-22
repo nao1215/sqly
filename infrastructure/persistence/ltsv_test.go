@@ -1,13 +1,16 @@
 package persistence
 
 import (
-	"errors"
+	"encoding/csv"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
 	"github.com/nao1215/sqly/infrastructure"
 )
@@ -77,37 +80,28 @@ func TestLtsvRepositoryLabelAndData(t *testing.T) {
 	}
 }
 
-func TestLtsvRepositoryList(t *testing.T) {
+func TestLtsvRepositoryDump(t *testing.T) {
 	t.Parallel()
 
-	t.Run("list and dump ltsv data", func(t *testing.T) {
+	t.Run("dump ltsv data", func(t *testing.T) {
 		t.Parallel()
 
 		r := NewLTSVRepository()
-		f, err := os.Open(filepath.Join("testdata", "sample.ltsv"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
 
-		ltsv, err := r.List(f)
-		if err != nil {
-			t.Fatal(err)
-		}
+		table := readLTSVAsTable(t, filepath.Join("testdata", "sample.ltsv"))
 
 		var tmpFile *os.File
-		var e error
+		var err error
 		if runtime.GOOS != config.Windows {
-			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.ltsv")
+			tmpFile, err = os.CreateTemp(t.TempDir(), "dump.ltsv")
 		} else {
-			// See https://github.com/golang/go/issues/51442
-			tmpFile, e = os.CreateTemp(os.TempDir(), "dump.ltsv")
+			tmpFile, err = os.CreateTemp(os.TempDir(), "dump.ltsv")
 		}
-		if e != nil {
+		if err != nil {
 			t.Fatal(err)
 		}
 
-		if err := r.Dump(tmpFile, ltsv.ToTable()); err != nil {
+		if err := r.Dump(tmpFile, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -123,16 +117,54 @@ func TestLtsvRepositoryList(t *testing.T) {
 	t.Run("failed to get label data", func(t *testing.T) {
 		t.Parallel()
 
-		r := NewLTSVRepository()
-		f, err := os.Open(filepath.Join("testdata", "sample_bad_label.ltsv"))
+		lr := &ltsvRepository{}
+		_, _, err := lr.labelAndData("")
+		if err == nil || err != infrastructure.ErrNoLabel {
+			t.Errorf("expected ErrNoLabel, got: %v", err)
+		}
+	})
+}
+
+// readLTSVAsTable reads an LTSV file and returns a model.Table for testing Dump.
+func readLTSVAsTable(t *testing.T, path string) *model.Table {
+	t.Helper()
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.Comma = '\t'
+	var header model.Header
+	var records []model.Record
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
-
-		_, err = r.List(f)
-		if !errors.Is(err, infrastructure.ErrNoLabel) {
-			t.Errorf("error is not ErrNoLabel: %v", err)
+		if header == nil {
+			for _, v := range row {
+				idx := strings.Index(v, ":")
+				if idx > 0 {
+					header = append(header, v[:idx])
+				}
+			}
 		}
-	})
+		var record model.Record
+		for _, v := range row {
+			idx := strings.Index(v, ":")
+			if idx >= 0 {
+				record = append(record, v[idx+1:])
+			} else {
+				record = append(record, v)
+			}
+		}
+		records = append(records, record)
+	}
+	return model.NewTable(filepath.Base(path), header, records)
 }

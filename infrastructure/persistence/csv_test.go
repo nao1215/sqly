@@ -1,42 +1,36 @@
 package persistence
 
 import (
+	"encoding/csv"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
 )
 
-func TestCsvRepositoryList(t *testing.T) {
-	t.Run("list and dump csv data", func(t *testing.T) {
+func TestCsvRepositoryDump(t *testing.T) {
+	t.Run("dump csv data", func(t *testing.T) {
 		cr := NewCSVRepository()
-		f, err := os.Open(filepath.Join("testdata", "sample.csv"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
 
-		csv, err := cr.List(f)
-		if err != nil {
-			t.Fatal(err)
-		}
+		table := readCSVAsTable(t, filepath.Join("testdata", "sample.csv"))
 
 		var tmpFile *os.File
-		var e error
+		var err error
 		if runtime.GOOS != config.Windows {
-			tmpFile, e = os.CreateTemp(t.TempDir(), "dump.csv")
+			tmpFile, err = os.CreateTemp(t.TempDir(), "dump.csv")
 		} else {
-			// See https://github.com/golang/go/issues/51442
-			tmpFile, e = os.CreateTemp(os.TempDir(), "dump.csv")
+			tmpFile, err = os.CreateTemp(os.TempDir(), "dump.csv")
 		}
-		if e != nil {
+		if err != nil {
 			t.Fatal(err)
 		}
 
-		if err := cr.Dump(tmpFile, csv.ToTable()); err != nil {
+		if err := cr.Dump(tmpFile, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -48,4 +42,34 @@ func TestCsvRepositoryList(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "sample_csv", got)
 	})
+}
+
+// readCSVAsTable reads a CSV file and returns a model.Table for testing Dump.
+func readCSVAsTable(t *testing.T, path string) *model.Table {
+	t.Helper()
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	var header model.Header
+	var records []model.Record
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header == nil {
+			header = row
+			continue
+		}
+		records = append(records, model.NewRecord(row))
+	}
+	return model.NewTable(filepath.Base(path), model.NewHeader(header), records)
 }
