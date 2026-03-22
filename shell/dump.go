@@ -3,6 +3,7 @@ package shell
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -69,13 +70,24 @@ func dumpToFile(s *Shell, filePath string, table *model.Table) error {
 	case model.PrintModeExcel:
 		err = s.usecases.excel.Dump(filePath, table)
 	case model.PrintModeMarkdownTable:
-		err = s.usecases.csv.Dump(filePath, table)
+		err = dumpMarkdown(filePath, table)
 	case model.PrintModeTable:
 		fallthrough
 	default:
 		err = s.usecases.csv.Dump(filePath, table)
 	}
 	return err
+}
+
+// dumpMarkdown writes table data to file in Markdown table format
+func dumpMarkdown(filePath string, table *model.Table) error {
+	f, err := os.Create(filePath) // #nosec G304 - path is validated by normalizeDumpExt
+	if err != nil {
+		return fmt.Errorf("failed to create markdown file %s: %w", filePath, err)
+	}
+	defer f.Close()
+
+	return table.Print(f, model.PrintModeMarkdownTable)
 }
 
 // dumpMode is dump mode.
