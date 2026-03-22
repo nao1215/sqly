@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 이상
 
 ## 사용 방법
-sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
+sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
 
 **참고**: 파일명에 SQL 구문 오류를 일으킬 수 있는 문자(하이픈 `-`, 점 `.`, 기타 특수 문자 등)가 포함되어 있으면 자동으로 밑줄 `_`로 대체됩니다. 예를 들어, `bug-syntax-error.csv`는 `bug_syntax_error` 테이블이 됩니다.
 
@@ -267,7 +267,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 사용된 라이브러리
 
 **sqly**는 기능을 제공하기 위해 강력한 Go 라이브러리를 활용합니다:
-- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/Excel 파일에 대한 SQL 데이터베이스 인터페이스를 제공하고 자동 타입 검지 및 압축 파일 지원을 제공합니다
+- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel 파일에 대한 SQL 데이터베이스 인터페이스를 제공하고 자동 타입 검지 및 압축 파일 지원을 제공합니다
 - [prompt](https://github.com/nao1215/prompt) - SQL 자동완성 및 명령 기록 기능으로 대화형 셸을 구현합니다
 
 ## 라이선스

@@ -34,7 +34,7 @@ sqly follows Clean Architecture principles with dependency injection via Google 
 ### Key Components
 - **Dependency Injection**: Uses Google Wire (`di/wire.go`) for dependency management
 - **Interactive Shell**: Built with go-prompt library, provides SQL completion and command history
-- **File Format Support**: Automatic detection and import of CSV/TSV/LTSV/Excel into SQLite3 in-memory database
+- **File Format Support**: Automatic detection and import of CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel into SQLite3 in-memory database
 - **Multiple Output Formats**: Results can be output as table, CSV, TSV, LTSV
 
 ### Package Structure

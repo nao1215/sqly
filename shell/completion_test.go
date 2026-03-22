@@ -588,30 +588,6 @@ func TestFilePathCompletions(t *testing.T) {
 // Skip integration test for now due to prompt.Document complexity
 // The file path completion logic is tested separately
 
-func TestSupportedFileExtensions(t *testing.T) {
-	t.Parallel()
-
-	extensions := supportedFileExtensions()
-	expected := []string{".csv", ".tsv", ".ltsv", ".xlsx"}
-
-	if len(extensions) != len(expected) {
-		t.Errorf("Expected %d extensions, got %d", len(expected), len(extensions))
-	}
-
-	for _, ext := range expected {
-		found := false
-		for _, actual := range extensions {
-			if actual == ext {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected extension '%s' not found", ext)
-		}
-	}
-}
-
 func TestIsValidFileForCompletion(t *testing.T) {
 	t.Parallel()
 
@@ -623,18 +599,25 @@ func TestIsValidFileForCompletion(t *testing.T) {
 		{"sample.tsv", true},
 		{"sample.ltsv", true},
 		{"sample.xlsx", true},
+		{"sample.json", true},
+		{"sample.jsonl", true},
+		{"sample.parquet", true},
 		{"sample.csv.gz", true},
 		{"sample.tsv.bz2", true},
 		{"sample.ltsv.xz", true},
 		{"sample.xlsx.zst", true},
+		{"sample.csv.snappy", true},
+		{"sample.csv.s2", true},
+		{"sample.csv.lz4", true},
+		{"sample.csv.z", true},
 		{"sample.txt", false},
-		{"sample.json", false},
 		{"sample", false},
 		{"README.md", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			t.Parallel()
 			result := isValidFileForCompletion(tt.filename)
 			if result != tt.expected {
 				t.Errorf("isValidFileForCompletion(%s) = %v, expected %v", tt.filename, result, tt.expected)
