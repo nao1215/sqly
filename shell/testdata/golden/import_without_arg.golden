@@ -1,10 +1,10 @@
 [Usage]
   .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]
 
-  - Supported file format: csv, tsv, ltsv, xlam, xlsm, xlsx, xltm, xltx
-  - Compression: .gz, .bz2, .xz, .zst (automatically detected)
+  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx
+  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)
   - Files and directories can be mixed in arguments
   - Directories are automatically detected and all supported files are imported
   - If import multiple files/directories, separate them with spaces
-  - Does not support importing multiple excel sheets at once
-  - If import an Excel file, specify the sheet name with --sheet
+  - For Excel files, --sheet selects a specific sheet (default: first sheet)
+  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields

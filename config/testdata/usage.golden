@@ -1,4 +1,4 @@
-sqly - execute SQL against CSV/TSV/LTSV/Excel with shell (test-version)
+sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel with shell (test-version)
 
 [Usage]
   sqly [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]

@@ -3,51 +3,25 @@ package shell
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/nao1215/fileparser"
 )
 
-// isCSV checks if the file is CSV.
-func isCSV(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".csv"
+// isSupportedFile checks if the file has a format supported by fileparser.
+// This includes CSV, TSV, LTSV, JSON, JSONL, Parquet, XLSX and all supported
+// compression variants (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4).
+func isSupportedFile(filePath string) bool {
+	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
 }
 
-// isTSV checks if the file is TSV.
-func isTSV(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".tsv"
-}
-
-// isLTSV checks if the file is LTSV.
-func isLTSV(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".ltsv"
-}
-
-// isXLAM checks if the file is XLAM.
-// XLAM: Excel Add-in
-func isXLAM(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".xlam"
-}
-
-// isXLSM checks if the file is XLSM.
-// XLSM: Excel Macro-Enabled Workbook
-func isXLSM(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".xlsm"
-}
-
-// isXLSX checks if the file is XLSX.
-// XLSX: Excel Workbook
-func isXLSX(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".xlsx"
-}
-
-// isXLTM checks if the file is XLTM.
-// XLTM: Excel Macro-Enabled Template
-func isXLTM(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".xltm"
-}
-
-// isXLTX checks if the file is XLTX.
-// XLTX: Excel Template
-func isXLTX(filePath string) bool {
-	return getFileTypeFromPath(filePath) == ".xltx"
+// isExcelFile checks if the file is an Excel format (.xlsx).
+func isExcelFile(filePath string) bool {
+	ft := fileparser.DetectFileType(filePath)
+	base := ft
+	if fileparser.IsCompressed(ft) {
+		base = fileparser.BaseFileType(ft)
+	}
+	return base == fileparser.XLSX
 }
 
 // ext extracts file extension from path.
@@ -67,7 +41,7 @@ func getFileTypeFromPath(filePath string) string {
 	name := filepath.Base(filePath)
 
 	// Handle compressed files by removing compression extensions first
-	compressedExtensions := []string{".gz", ".bz2", ".xz", ".zst"}
+	compressedExtensions := []string{".gz", ".bz2", ".xz", ".zst", ".z", ".snappy", ".s2", ".lz4"}
 	for {
 		found := false
 		for _, compExt := range compressedExtensions {

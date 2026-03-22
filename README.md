@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 or later
 
 ## How to use
-The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed versions) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
+The sqly automatically imports CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel files (including compressed versions) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
 **Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`.
 
@@ -267,7 +267,7 @@ If you would like to send comments such as "find a bug" or "request for addition
 ## Libraries Used
 
 **sqly** leverages powerful Go libraries to provide its functionality:
-- [filesql](https://github.com/nao1215/filesql) - Provides SQL database interface for CSV/TSV/LTSV/Excel files with automatic type detection and compressed file support
+- [filesql](https://github.com/nao1215/filesql) - Provides SQL database interface for CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel files with automatic type detection and compressed file support
 - [prompt](https://github.com/nao1215/prompt) - Powers the interactive shell with SQL completion and command history features
 
 ## LICENSE

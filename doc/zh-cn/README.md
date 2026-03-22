@@ -40,7 +40,7 @@ brew install nao1215/tap/sqly
 - go1.25.0或更高版本
 
 ## 使用方法
-当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/Excel文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
+当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
 
 **注意**：如果文件名包含可能导致SQL语法错误的字符（如连字符 `-`、点号 `.` 或其他特殊字符），它们会自动替换为下划线 `_`。例如，`bug-syntax-error.csv` 会变成表 `bug_syntax_error`。
 
@@ -268,7 +268,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 使用的库
 
 **sqly** 利用强大的 Go 库来提供其功能：
-- [filesql](https://github.com/nao1215/filesql) - 为 CSV/TSV/LTSV/Excel 文件提供 SQL 数据库接口，具有自动类型检测和压缩文件支持
+- [filesql](https://github.com/nao1215/filesql) - 为 CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel 文件提供 SQL 数据库接口，具有自动类型检测和压缩文件支持
 - [prompt](https://github.com/nao1215/prompt) - 为交互式 shell 提供 SQL 自动完成和命令历史功能
 
 ## 许可证

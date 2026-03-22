@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0以降
 
 ## 使用方法
-sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
+sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
 
 **注意**: ファイル名にSQL構文エラーの原因となる文字（ハイフン `-`、ドット `.`、その他の特殊文字など）が含まれている場合、それらは自動的にアンダースコア `_` に置き換えられます。例えば、`bug-syntax-error.csv`は`bug_syntax_error`テーブルになります。
 
@@ -267,7 +267,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 使用ライブラリ
 
 **sqly**は以下の強力なGoライブラリを活用して機能を提供しています：
-- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/Excelファイルに対するSQLデータベースインターフェースを提供し、自動型検出と圧縮ファイルサポートを実現
+- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelファイルに対するSQLデータベースインターフェースを提供し、自動型検出と圧縮ファイルサポートを実現
 - [prompt](https://github.com/nao1215/prompt) - SQL補完とコマンド履歴機能を備えたインタラクティブシェルを実現
 
 ## ライセンス

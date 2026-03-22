@@ -9,13 +9,11 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/domain/model"
 )
 
 const (
-	// Security limits for directory traversal protection
-	maxDirectoryDepth    = 10   // Maximum directory depth to prevent deep traversal
-	maxFilesPerDirectory = 1000 // Maximum files per directory to prevent resource exhaustion
+	// maxDirectoryDepth is the maximum directory depth to prevent deep traversal.
+	maxDirectoryDepth = 10
 )
 
 // importCommand import csv into DB
@@ -91,60 +89,21 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			}
 
 			if len(newTableNames) == 0 {
-				fmt.Fprintf(config.Stdout, "No supported files found in directory %s (supported: csv, tsv, ltsv, xlsx with .gz/.bz2/.xz/.zst compression)\n", path)
+				fmt.Fprintf(config.Stdout, "No supported files found in directory %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx)\n", path)
 			} else {
 				fmt.Fprintf(config.Stdout, "Successfully imported %d tables from directory %s: %v\n", len(newTableNames), path, newTableNames)
 				successCount++
 			}
 		} else {
-			// Handle individual file import (existing logic)
-			var table *model.Table
-			var sheetName string
-
-			switch {
-			case isCSV(cleanPath):
-				table, err = s.usecases.csv.List(cleanPath)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import CSV file %s: %v", path, err))
-					continue
-				}
-			case isTSV(cleanPath):
-				table, err = s.usecases.tsv.List(cleanPath)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import TSV file %s: %v", path, err))
-					continue
-				}
-			case isLTSV(cleanPath):
-				table, err = s.usecases.ltsv.List(cleanPath)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import LTSV file %s: %v", path, err))
-					continue
-				}
-			case isXLAM(cleanPath) || isXLSM(cleanPath) || isXLSX(cleanPath) || isXLTM(cleanPath) || isXLTX(cleanPath):
-				sheetName = s.argument.SheetName
-				if sheetName == "" {
-					sheetName = extractSheetNameFromArgs(argv)
-					if sheetName == "" {
-						errorMessages = append(errorMessages, fmt.Sprintf("sheet name is required for Excel file %s (use --sheet=SHEET_NAME)", path))
-						continue
-					}
-				}
-				table, err = s.usecases.excel.List(cleanPath, sheetName)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import Excel file %s (sheet: %s): %v", path, sheetName, err))
-					continue
-				}
-			default:
-				errorMessages = append(errorMessages, fmt.Sprintf("unsupported file format: %s (supported: csv, tsv, ltsv, xlsx)", getFileTypeFromPath(cleanPath)))
+			// Use filesql.LoadFiles for all file types (CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel).
+			// This avoids double processing and automatically supports all formats that filesql handles.
+			if !isSupportedFile(cleanPath) {
+				errorMessages = append(errorMessages, fmt.Sprintf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx and compressed variants)", filepath.Base(cleanPath)))
 				continue
 			}
 
-			if err := s.usecases.sqlite3.CreateTable(ctx, table); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to create table for %s: %v", path, err))
-				continue
-			}
-			if err := s.usecases.sqlite3.Insert(ctx, table); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to insert data from %s: %v", path, err))
+			if err := s.usecases.filesql.LoadFiles(ctx, cleanPath); err != nil {
+				errorMessages = append(errorMessages, fmt.Sprintf("failed to import file %s: %v", path, err))
 				continue
 			}
 			successCount++
@@ -229,11 +188,11 @@ func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
 	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
 	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, xlam, xlsm, xlsx, xltm, xltx")
-	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst (automatically detected)")
+	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx")
+	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)")
 	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
 	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
 	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
-	fmt.Fprintln(config.Stdout, "  - Does not support importing multiple excel sheets at once")
-	fmt.Fprintln(config.Stdout, "  - If import an Excel file, specify the sheet name with --sheet")
+	fmt.Fprintln(config.Stdout, "  - For Excel files, --sheet selects a specific sheet (default: first sheet)")
+	fmt.Fprintln(config.Stdout, "  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields")
 }

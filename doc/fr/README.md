@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 ou ultérieur
 
 ## Comment utiliser
-sqly importe automatiquement les fichiers CSV/TSV/LTSV/Excel (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
+sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
 
 **Note** : Si le nom du fichier contient des caractères qui pourraient causer des erreurs de syntaxe SQL (comme les traits d'union `-`, les points `.` ou d'autres caractères spéciaux), ils sont automatiquement remplacés par des traits de soulignement `_`. Par exemple, `bug-syntax-error.csv` devient la table `bug_syntax_error`.
 
@@ -267,7 +267,7 @@ Si vous souhaitez envoyer des commentaires tels que "trouver un bug" ou "demande
 ## Bibliothèques utilisées
 
 **sqly** exploite de puissantes bibliothèques Go pour fournir ses fonctionnalités :
-- [filesql](https://github.com/nao1215/filesql) - Fournit une interface de base de données SQL pour les fichiers CSV/TSV/LTSV/Excel avec détection automatique des types et support des fichiers compressés
+- [filesql](https://github.com/nao1215/filesql) - Fournit une interface de base de données SQL pour les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel avec détection automatique des types et support des fichiers compressés
 - [prompt](https://github.com/nao1215/prompt) - Alimente le shell interactif avec des fonctionnalités d'autocomplétion SQL et d'historique des commandes
 
 ## LICENCE
