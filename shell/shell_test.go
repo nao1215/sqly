@@ -747,15 +747,11 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	ltsvRepo := persistence.NewLTSVRepository()
 	excelRepo := persistence.NewExcelRepository()
 	fileRepo := persistence.NewFileRepository()
-	csvInteractor := interactor.NewCSVInteractor(filesqlAdapter, csvRepo, fileRepo)
-	tsvInteractor := interactor.NewTSVInteractor(filesqlAdapter, tsvRepo, fileRepo)
-	ltsvInteractor := interactor.NewLTSVInteractor(filesqlAdapter, ltsvRepo, fileRepo)
-	excelInteractor := interactor.NewExcelInteractor(filesqlAdapter, excelRepo)
 
 	// Use memory-based sqlite3 repository matching production wiring (di/wire_gen.go)
 	sqlite3Repository := memory.NewSQLite3Repository(memoryDB)
-	sql := interactor.NewSQL()
-	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sql)
+	sqlHelper := interactor.NewSQL()
+	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper)
 
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
@@ -766,7 +762,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
 	fileSQLUsecase := interactor.NewFileSQLInteractor(filesqlAdapter)
 	exportInteractor := interactor.NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
-	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, sqLite3Interactor, historyInteractor, excelInteractor, fileSQLUsecase, exportInteractor)
+	usecases := NewUsecases(sqLite3Interactor, historyInteractor, fileSQLUsecase, exportInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()
