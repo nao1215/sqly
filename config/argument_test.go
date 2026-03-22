@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	"errors"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -177,19 +176,10 @@ func getStdout(t *testing.T, f func()) string {
 		Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	Stdout = w
+	var buffer bytes.Buffer
+	Stdout = &buffer
 
 	f()
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
 
 	s := buffer.String()
 	return s[:len(s)-1]

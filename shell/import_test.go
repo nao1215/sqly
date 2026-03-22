@@ -12,9 +12,13 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
-	t.Parallel()
+// These tests intentionally avoid t.Parallel at the top level.
+// importCommand/importDirectory/importFile can write to the package-global
+// config.Stdout, and running them concurrently with shell_test helpers that
+// temporarily swap config.Stdout to an os.Pipe can deadlock on Windows due to
+// the smaller pipe buffer size.
 
+func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -35,8 +39,6 @@ func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
 }
 
 func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -73,8 +75,6 @@ func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
 }
 
 func TestImportCommand_EmptyDirDoesNotMaskFileError(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -93,8 +93,6 @@ func TestImportCommand_EmptyDirDoesNotMaskFileError(t *testing.T) {
 }
 
 func TestFilterExcelSheets_NoCollisionWithSimilarPrefix(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -162,8 +160,6 @@ func TestFilterExcelSheets_NoCollisionWithSimilarPrefix(t *testing.T) {
 }
 
 func TestFilterExcelSheets_UnderscoreInFilename(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -204,8 +200,6 @@ func TestFilterExcelSheets_UnderscoreInFilename(t *testing.T) {
 }
 
 func TestFilterExcelSheets_SheetNotFound(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -242,8 +236,6 @@ func TestFilterExcelSheets_SheetNotFound(t *testing.T) {
 }
 
 func TestFilterExcelSheets_ReimportWithSheet(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -286,8 +278,6 @@ func TestFilterExcelSheets_ReimportWithSheet(t *testing.T) {
 }
 
 func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -348,8 +338,6 @@ func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
 }
 
 func TestImportFile_UnsupportedFormat(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -371,8 +359,6 @@ func TestImportFile_UnsupportedFormat(t *testing.T) {
 }
 
 func TestImportFile_CSVSuccess(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -405,8 +391,6 @@ func TestImportFile_CSVSuccess(t *testing.T) {
 }
 
 func TestImportFile_NonexistentFile(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -420,8 +404,6 @@ func TestImportFile_NonexistentFile(t *testing.T) {
 }
 
 func TestImportFile_ExcelWithSheet(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -451,8 +433,6 @@ func TestImportFile_ExcelWithSheet(t *testing.T) {
 }
 
 func TestImportDirectory_WithCSVFiles(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -486,8 +466,6 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 }
 
 func TestImportCommand_PartialSuccess(t *testing.T) {
-	t.Parallel()
-
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)

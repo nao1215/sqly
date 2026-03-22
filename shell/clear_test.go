@@ -3,6 +3,7 @@ package shell
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // Test_clearCommand tests the clearCommand registration and metadata.
@@ -38,8 +39,13 @@ func Test_clearCommand(t *testing.T) {
 		c := NewCommands()
 		cmd := c[".clear"]
 
+		// Bound the test so Windows console-specific behavior cannot stall the
+		// entire shell package in headless CI environments.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
 		// Call execute and verify it returns (may return error in CI, but shouldn't panic)
-		err := cmd.execute(context.Background(), &Shell{}, []string{})
+		err := cmd.execute(ctx, &Shell{}, []string{})
 		// We don't assert err == nil because clear might fail in headless environments
 		// The important part is it doesn't panic and returns a valid error type if it fails
 		_ = err // Acknowledge we're not checking the error value

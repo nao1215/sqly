@@ -1128,20 +1128,11 @@ func getStdoutForRunFunc(t *testing.T, f func(ctx context.Context) error) []byte
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	if err := f(context.Background()); err != nil {
 		t.Fatal(err)
-	}
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -1153,19 +1144,10 @@ func getStdout(t *testing.T, f func()) []byte {
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	f()
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
 	return buffer.Bytes()
 }
 
@@ -1176,19 +1158,10 @@ func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg s
 		config.Stdout = backupColorStdout
 	}()
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Stdout = w
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
 
 	execErr := f(context.Background(), arg)
-	w.Close() //nolint:gosec // Test cleanup, error not critical for test execution
-
-	var buffer bytes.Buffer
-	if _, err := buffer.ReadFrom(r); err != nil {
-		t.Fatalf("failed to read buffer: %v", err)
-	}
 	return buffer.Bytes(), execErr
 }
 
