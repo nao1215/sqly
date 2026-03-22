@@ -8,7 +8,9 @@ import (
 
 //go:generate mockgen -typed -source=$GOFILE -destination=../interactor/mock/$GOFILE -package mock
 
-// DatabaseUsecase handle Relational Database.
+// DatabaseUsecase handle Relational Database and file import operations.
+// This interface unifies session-level operations: SQL execution, table management,
+// and file import via filesql.
 type DatabaseUsecase interface {
 	// CreateTable create a DB table with columns given as model.Table
 	CreateTable(ctx context.Context, t *model.Table) error
@@ -26,4 +28,19 @@ type DatabaseUsecase interface {
 	Exec(ctx context.Context, statement string) (int64, error)
 	// ExecSQL executes "SELECT/EXPLAIN" query or "INSERT/UPDATE/DELETE" statement
 	ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error)
+
+	// LoadFiles loads multiple files or directories into the database
+	LoadFiles(ctx context.Context, filePaths ...string) error
+	// GetTableNames returns the list of tables in the database
+	GetTableNames(ctx context.Context) ([]*model.Table, error)
+	// IsSupportedFile checks if the file has a format supported by filesql
+	IsSupportedFile(filePath string) bool
+	// IsExcelFile checks if the file is an Excel format
+	IsExcelFile(filePath string) bool
+	// SanitizeForSQL sanitizes a string to be SQL-safe
+	SanitizeForSQL(name string) string
+	// QuoteIdentifier safely quotes a SQL identifier
+	QuoteIdentifier(identifier string) string
+	// GetTableNameFromFilePath derives a table name from a file path
+	GetTableNameFromFilePath(filePath string) string
 }

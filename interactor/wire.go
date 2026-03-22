@@ -9,7 +9,6 @@ import (
 var Set = wire.NewSet(
 	NewSQLite3Interactor,
 	NewHistoryInteractor,
-	NewFileSQLInteractor,
 	NewExportInteractor,
 	NewSQL,
 )

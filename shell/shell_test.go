@@ -751,7 +751,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	// Use memory-based sqlite3 repository matching production wiring (di/wire_gen.go)
 	sqlite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sqlHelper := interactor.NewSQL()
-	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper)
+	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
@@ -760,9 +760,8 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
-	fileSQLUsecase := interactor.NewFileSQLInteractor(filesqlAdapter)
 	exportInteractor := interactor.NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
-	usecases := NewUsecases(sqLite3Interactor, historyInteractor, fileSQLUsecase, exportInteractor)
+	usecases := NewUsecases(sqLite3Interactor, historyInteractor, exportInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()
