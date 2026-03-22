@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+
+	"github.com/nao1215/sqly/config"
 )
 
 // lsCommand list files and directories.
@@ -33,7 +35,7 @@ func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error
 		}
 
 		var cmd *exec.Cmd
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == config.Windows {
 			cmd = exec.CommandContext(context.Background(), "cmd", "/c", "dir", "/q", path) //nolint:gosec // Controlled command for ls functionality
 		} else {
 			cmd = exec.CommandContext(context.Background(), "ls", "-l", path) //nolint:gosec // Controlled command for ls functionality

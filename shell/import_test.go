@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )
 
@@ -549,7 +550,7 @@ func TestValidatePath_Import(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if tt.unixOnly && runtime.GOOS == "windows" {
+			if tt.unixOnly && runtime.GOOS == config.Windows {
 				t.Skip("Unix-only system directory check")
 			}
 			_, err := validatePath(tt.path)

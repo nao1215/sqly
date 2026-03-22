@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+
+	"github.com/nao1215/sqly/config"
 )
 
 // clearCommand clears the terminal screen.
@@ -13,7 +15,7 @@ func (c CommandList) clearCommand(ctx context.Context, _ *Shell, _ []string) err
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
-	case "windows":
+	case config.Windows:
 		cmd = exec.CommandContext(ctx, "cmd", "/c", "cls")
 	default:
 		cmd = exec.CommandContext(ctx, "clear")
