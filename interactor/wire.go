@@ -7,12 +7,8 @@ import (
 
 // Set is interactor wire set.
 var Set = wire.NewSet(
-	NewCSVInteractor,
-	NewTSVInteractor,
-	NewLTSVInteractor,
 	NewSQLite3Interactor,
 	NewHistoryInteractor,
-	NewExcelInteractor,
 	NewFileSQLInteractor,
 	NewExportInteractor,
 	NewSQL,
