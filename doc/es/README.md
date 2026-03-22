@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
@@ -11,12 +11,11 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Français](../fr/README.md)
 
-**sqly** es una poderosa herramienta de línea de comandos que puede ejecutar SQL contra archivos CSV, TSV, LTSV y Microsoft Excel™. sqly importa estos archivos a una base de datos en memoria [SQLite3](https://www.sqlite.org/index.html).
+sqly es una herramienta de línea de comandos que ejecuta SQL contra archivos CSV, TSV, LTSV, JSON, JSONL, Parquet y Microsoft Excel. Importa estos archivos a una base de datos en memoria [SQLite3](https://www.sqlite.org/index.html). Los archivos comprimidos (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) tambien son compatibles. CTE (clausula WITH) esta disponible para consultas complejas.
 
-sqly tiene **sqly-shell**. Puede ejecutar SQL de forma interactiva con autocompletado SQL e historial de comandos. Por supuesto, también puede ejecutar SQL sin ejecutar sqly-shell.
+sqly tiene un shell interactivo (sqly-shell) con autocompletado SQL e historial de comandos. Tambien puede ejecutar SQL directamente desde la linea de comandos sin el shell.
 
 ```shell
-# ¡Funciona con archivos comprimidos!
 sqly --sql "SELECT * FROM data" data.csv.gz
 sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
 ```
@@ -184,36 +183,22 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↑          |Comando anterior|
 |↓          |Comando siguiente|
 
-## 📋 Cambios recientes
+### Formatos de archivo compatibles
 
+| Formato | Extensiones |
+|:--|:--|
+| CSV | `.csv` |
+| TSV | `.tsv` |
+| LTSV | `.ltsv` |
+| JSON | `.json` |
+| JSONL | `.jsonl` |
+| Parquet | `.parquet` |
+| Excel | `.xlsx` |
 
-- Documentación oficial para usuarios y desarrolladores: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- Herramienta alternativa creada por el mismo desarrollador: [interfaz de terminal simple para DBMS y CSV/TSV/LTSV local](https://github.com/nao1215/sqluv)
+Los datos JSON/JSONL se almacenan en una sola columna `data`. Use `json_extract()` de SQLite para consultar campos individuales.
 
-### Nuevo: Soporte para archivos comprimidos
-
-**sqly** ¡ahora soporta archivos comprimidos! Puede procesar directamente:
-- Archivos comprimidos con **Gzip** (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- Archivos comprimidos con **Bzip2** (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- Archivos comprimidos con **XZ** (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- Archivos comprimidos con **Zstandard** (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
-
-
-### Funciones agregadas
-- **Soporte para CTE (Expresiones de Tabla Comunes)**: Ahora soporta cláusulas WITH para consultas complejas y operaciones recursivas
-- **Integración con filesql**: Mejor rendimiento y funcionalidad usando la biblioteca [filesql](https://github.com/nao1215/filesql)
-- **Mejor rendimiento**: Operaciones de inserción masiva con procesamiento de transacciones por lotes para un procesamiento de archivos más rápido
-- **Mejor manejo de tipos**: La detección automática de tipos garantiza un ordenamiento numérico y cálculos apropiados
-- **Soporte para archivos comprimidos**: Soporte nativo para archivos comprimidos `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2` y `.lz4`
-
-### Formatos de entrada reincorporados y nuevos
-- **Soporte JSON/JSONL**: El soporte de formatos JSON y JSONL (JSON Lines) como entrada ha sido reincorporado a través de la biblioteca filesql
-  - Los datos JSON/JSONL se almacenan en una sola columna `data`; use `json_extract()` de SQLite para consultar campos individuales
-- **Soporte Parquet**: El formato de archivo Parquet ahora es soportado como entrada
-
-### Cambios incompatibles
-- La bandera de salida `--json` ha sido eliminada (formatos de salida: tabla, CSV, TSV, LTSV, Excel, Markdown)
-- El formateo numérico en la salida puede diferir ligeramente debido a la detección de tipos mejorada
+Cada formato tambien admite las siguientes extensiones de compresion: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+(por ejemplo: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Benchmark
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
@@ -231,6 +216,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## Herramientas alternativas
 |Nombre| Descripción|
 |:--|:--|
+|[nao1215/sqluv](https://github.com/nao1215/sqluv)|Interfaz de terminal simple para DBMS y CSV/TSV/LTSV local|
 |[harelba/q](https://github.com/harelba/q)|Ejecutar SQL directamente en archivos delimitados y bases de datos sqlite multi-archivo|
 |[dinedal/textql](https://github.com/dinedal/textql)|Ejecutar SQL contra texto estructurado como CSV o TSV|
 |[noborus/trdsql](https://github.com/noborus/trdsql)|Herramienta CLI que puede ejecutar consultas SQL en CSV, LTSV, JSON, YAML y TBLN. Puede generar a varios formatos.|
@@ -283,6 +269,7 @@ Gracias a estas maravillosas personas ([clave de emoji](https://allcontributors.
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://debimate.jp/"><img src="https://avatars.githubusercontent.com/u/22737008?v=4?s=75" width="75px;" alt="CHIKAMATSU Naohiro"/><br /><sub><b>CHIKAMATSU Naohiro</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Code">💻</a> <a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Wozzardman"><img src="https://avatars.githubusercontent.com/u/128730409?v=4?s=75" width="75px;" alt="Wozzardman"/><br /><sub><b>Wozzardman</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=Wozzardman" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>

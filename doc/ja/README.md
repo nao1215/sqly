@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
@@ -11,12 +11,11 @@
 
 [English](../../README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-**sqly** は、CSV、TSV、LTSV、Microsoft Excel™ファイルに対してSQLを実行できる強力なコマンドラインツールです。sqlyはこれらのファイルを[SQLite3](https://www.sqlite.org/index.html)のインメモリデータベースにインポートします。
+sqlyは、CSV、TSV、LTSV、JSON、JSONL、Parquet、Microsoft Excelファイルに対してSQLを実行できるコマンドラインツールです。これらのファイルを[SQLite3](https://www.sqlite.org/index.html)のインメモリデータベースにインポートします。圧縮ファイル (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) にも対応しています。CTE (WITH句) による複雑なクエリも利用可能です。
 
-sqlyには **sqly-shell** があります。SQLの補完とコマンド履歴を使って、対話的にSQLを実行できます。もちろん、sqly-shellを実行せずにSQLを実行することも可能です。
+sqlyにはインタラクティブシェル (sqly-shell) があり、SQL補完とコマンド履歴を使って対話的にSQLを実行できます。シェルを起動せずにコマンドラインから直接SQLを実行することも可能です。
 
 ```shell
-# 圧縮ファイルでも動作！
 sqly --sql "SELECT * FROM data" data.csv.gz
 sqly --sql "SELECT * FROM logs WHERE level='ERROR'" logs.tsv.bz2
 ```
@@ -184,36 +183,22 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 |↑          |前のコマンド|
 |↓          |次のコマンド|
 
-## 📋 最近の変更
+### 対応ファイル形式
 
+| 形式 | 拡張子 |
+|:--|:--|
+| CSV | `.csv` |
+| TSV | `.tsv` |
+| LTSV | `.ltsv` |
+| JSON | `.json` |
+| JSONL | `.jsonl` |
+| Parquet | `.parquet` |
+| Excel | `.xlsx` |
 
-- ユーザー・開発者向け公式ドキュメント: [https://nao1215.github.io/sqly/](https://nao1215.github.io/sqly/)
-- 同じ開発者が作成した代替ツール: [DBMS・ローカルCSV/TSV/LTSV用のシンプルなターミナルUI](https://github.com/nao1215/sqluv)
+JSON/JSONLデータは単一の `data` カラムに格納されます。個々のフィールドを問い合わせるにはSQLiteの `json_extract()` を使用してください。
 
-### 新機能: 圧縮ファイルサポート
-
-**sqly** は圧縮ファイルをサポートしています！以下のファイルを直接処理できます：
-- **Gzip** 圧縮ファイル (`.csv.gz`, `.tsv.gz`, `.ltsv.gz`, `.xlsx.gz`)
-- **Bzip2** 圧縮ファイル (`.csv.bz2`, `.tsv.bz2`, `.ltsv.bz2`, `.xlsx.bz2`)
-- **XZ** 圧縮ファイル (`.csv.xz`, `.tsv.xz`, `.ltsv.xz`, `.xlsx.xz`)
-- **Zstandard** 圧縮ファイル (`.csv.zst`, `.tsv.zst`, `.ltsv.zst`, `.xlsx.zst`)
-
-
-### 追加された機能
-- **CTE（共通テーブル式）サポート**: WITH句による複雑なクエリと再帰操作に対応
-- **filesql統合**: [filesql](https://github.com/nao1215/filesql)ライブラリによるパフォーマンスと機能の向上
-- **パフォーマンス向上**: より高速なファイル処理のためのトランザクションバッチングによるバルクインサート操作
-- **型処理の向上**: 自動型検出により適切な数値ソートと計算を保証
-- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`圧縮ファイルのネイティブサポート
-
-### 再追加および新規入力形式
-- **JSON/JSONLサポート**: filesqlライブラリを通じて、JSON および JSONL（JSON Lines）ファイル形式の入力サポートが再追加されました
-  - JSON/JSONLデータは単一の `data` カラムに格納されます。個々のフィールドを問い合わせるには SQLite の `json_extract()` を使用してください
-- **Parquetサポート**: Parquetファイル形式が入力としてサポートされるようになりました
-
-### 破壊的変更
-- `--json` 出力フラグが削除されました（出力形式: テーブル、CSV、TSV、LTSV、Excel、Markdown）
-- 改善された型検出により、出力の数値フォーマットが若干異なる場合があります
+各形式は以下の圧縮拡張子にも対応しています: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+(例: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## ベンチマーク
 CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics  
@@ -231,6 +216,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 代替ツール
 |名前| 説明|
 |:--|:--|
+|[nao1215/sqluv](https://github.com/nao1215/sqluv)|DBMSおよびローカルCSV/TSV/LTSV用のシンプルなターミナルUI|
 |[harelba/q](https://github.com/harelba/q)|区切り文字ファイルとマルチファイルsqliteデータベースに対してSQLを直接実行|
 |[dinedal/textql](https://github.com/dinedal/textql)|CSVやTSVなどの構造化テキストに対してSQLを実行|
 |[noborus/trdsql](https://github.com/noborus/trdsql)|CSV、LTSV、JSON、YAML、TBLNに対してSQLクエリを実行できるCLIツール。さまざまな形式で出力可能。|
@@ -283,6 +269,7 @@ sqlyプロジェクトは[MIT LICENSE](../../LICENSE)の条項の下でライセ
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://debimate.jp/"><img src="https://avatars.githubusercontent.com/u/22737008?v=4?s=75" width="75px;" alt="CHIKAMATSU Naohiro"/><br /><sub><b>CHIKAMATSU Naohiro</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Code">💻</a> <a href="https://github.com/nao1215/sqly/commits?author=nao1215" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Wozzardman"><img src="https://avatars.githubusercontent.com/u/128730409?v=4?s=75" width="75px;" alt="Wozzardman"/><br /><sub><b>Wozzardman</b></sub></a><br /><a href="https://github.com/nao1215/sqly/commits?author=Wozzardman" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>
