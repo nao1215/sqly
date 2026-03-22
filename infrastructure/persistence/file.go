@@ -17,11 +17,6 @@ func NewFileRepository() repository.FileRepository {
 	return &fileRepository{}
 }
 
-// Open open file.
-func (fr *fileRepository) Open(path string) (*os.File, error) {
-	return os.Open(filepath.Clean(path))
-}
-
 // Create open file or create file.
 func (fr *fileRepository) Create(path string) (*os.File, error) {
 	return os.OpenFile(filepath.Clean(path), os.O_RDWR|os.O_CREATE, 0600)

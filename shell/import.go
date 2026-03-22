@@ -99,12 +99,12 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath stri
 	existingTables := tableNameSet(tablesBefore)
 
 	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
-		return fmt.Errorf("failed to import files from directory %s: %v", displayPath, err)
+		return fmt.Errorf("failed to import files from directory %s: %w", displayPath, err)
 	}
 
 	tablesAfter, err := s.usecases.sqlite3.GetTableNames(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get table names after importing directory %s: %v", displayPath, err)
+		return fmt.Errorf("failed to get table names after importing directory %s: %w", displayPath, err)
 	}
 	newTableNames := diffTableNames(tablesAfter, existingTables)
 
@@ -123,7 +123,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	}
 
 	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
-		return fmt.Errorf("failed to import file %s: %v", displayPath, err)
+		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 
 	// Apply --sheet filtering only to Excel files, scoped by filename prefix
