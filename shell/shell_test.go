@@ -1093,7 +1093,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
-	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
+	historyDB, cleanup2, err := config.NewInMemHistoryDB()
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -1104,6 +1104,13 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	usecases := NewUsecases(sqLite3Interactor, historyInteractor, exportInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	// Create history table in the in-memory DB. File-based history DB may
+	// already have the table from a previous session, but in-memory starts empty.
+	if err := historyInteractor.CreateTable(context.Background()); err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err

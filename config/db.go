@@ -36,6 +36,16 @@ func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
 	return HistoryDB(db), func() { db.Close() }, nil //nolint:gosec // Cleanup function, error not critical
 }
 
+// NewInMemHistoryDB creates an in-memory history DB for testing.
+// This avoids file I/O overhead that is especially costly on Windows.
+func NewInMemHistoryDB() (HistoryDB, func(), error) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		return nil, nil, err
+	}
+	return HistoryDB(db), func() { db.Close() }, nil //nolint:gosec // Cleanup function, error not critical
+}
+
 // InitSQLite3 registers the sqlite3 driver.
 func InitSQLite3() {
 	var once sync.Once
