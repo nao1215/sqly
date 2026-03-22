@@ -6,5 +6,6 @@
   - Files and directories can be mixed in arguments
   - Directories are automatically detected and all supported files are imported
   - If import multiple files/directories, separate them with spaces
-  - For Excel files, --sheet selects a specific sheet (default: first sheet)
+  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)
+  - Use --sheet to import only a specific sheet from an Excel file
   - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields

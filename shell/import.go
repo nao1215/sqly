@@ -123,12 +123,18 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 				continue
 			}
 
-			// For Excel files, filter sheets: keep only the requested sheet (--sheet)
-			// or only the first sheet (default behavior).
+			// For Excel files with --sheet flag, keep only the requested sheet.
+			// Without --sheet, all sheets are retained for cross-sheet JOINs.
 			if isExcel {
-				if err := s.filterExcelSheets(ctx, path, argv, existingTables); err != nil {
-					errorMessages = append(errorMessages, err.Error())
-					continue
+				sheetName := s.argument.SheetName
+				if sheetName == "" {
+					sheetName = extractSheetNameFromArgs(argv)
+				}
+				if sheetName != "" {
+					if err := s.filterExcelSheets(ctx, path, sheetName, existingTables); err != nil {
+						errorMessages = append(errorMessages, err.Error())
+						continue
+					}
 				}
 			}
 
@@ -210,9 +216,8 @@ func extractSheetNameFromArgs(argv []string) string {
 }
 
 // filterExcelSheets keeps only the desired sheet table after an Excel import.
-// If --sheet is specified, keeps only the matching table and errors if not found.
-// If --sheet is not specified, keeps only the first newly imported table.
-func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []string, existingTables map[string]struct{}) error {
+// The sheetName parameter specifies which sheet to keep; all others are dropped.
+func (s *Shell) filterExcelSheets(ctx context.Context, path string, sheetName string, existingTables map[string]struct{}) error {
 	tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get table names after importing %s: %w", path, err)
@@ -230,34 +235,24 @@ func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []strin
 		return fmt.Errorf("no sheets found in Excel file %s", path)
 	}
 
-	sheetName := s.argument.SheetName
-	if sheetName == "" {
-		sheetName = extractSheetNameFromArgs(argv)
-	}
-
+	// Find the matching table for the requested sheet
+	sanitized := s.usecases.filesql.SanitizeForSQL(sheetName)
 	var keepTable string
-	if sheetName != "" {
-		// --sheet specified: find the matching table
-		sanitized := s.usecases.filesql.SanitizeForSQL(sheetName)
+	for _, name := range newTables {
+		if strings.HasSuffix(name, "_"+sanitized) || name == sanitized {
+			keepTable = name
+			break
+		}
+	}
+	if keepTable == "" {
+		// Drop all new tables since the requested sheet was not found
 		for _, name := range newTables {
-			if strings.HasSuffix(name, "_"+sanitized) || name == sanitized {
-				keepTable = name
-				break
+			dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
+			if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+				return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
 			}
 		}
-		if keepTable == "" {
-			// Drop all new tables since the requested sheet was not found
-			for _, name := range newTables {
-				dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
-				if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
-					return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
-				}
-			}
-			return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, path)
-		}
-	} else {
-		// No --sheet: keep only the first sheet (default behavior)
-		keepTable = newTables[0]
+		return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, path)
 	}
 
 	// Drop every new table except the one we want to keep
@@ -283,6 +278,7 @@ func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
 	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
 	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
-	fmt.Fprintln(config.Stdout, "  - For Excel files, --sheet selects a specific sheet (default: first sheet)")
+	fmt.Fprintln(config.Stdout, "  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)")
+	fmt.Fprintln(config.Stdout, "  - Use --sheet to import only a specific sheet from an Excel file")
 	fmt.Fprintln(config.Stdout, "  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields")
 }
