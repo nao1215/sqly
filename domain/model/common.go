@@ -1,3 +1,4 @@
+// Package model defines Data Transfer Object (Entity, Value Object)
 package model
 
 // Header is CSV/TSV/Table header.
