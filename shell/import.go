@@ -24,23 +24,27 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		return nil
 	}
 
+	// Phase 1: Validate all paths and classify them
+	var validPaths []string
+	var excelPaths []string
 	var errorMessages []string
-	var successCount int
+
+	sheetName := s.argument.SheetName
+	if sheetName == "" {
+		sheetName = extractSheetNameFromArgs(argv)
+	}
 
 	for _, path := range argv {
-		// Skip non-path arguments (like --sheet=...)
 		if strings.HasPrefix(path, "--sheet=") {
 			continue
 		}
 
-		// Validate and clean the path to prevent directory traversal
 		cleanPath, err := validatePath(path)
 		if err != nil {
 			errorMessages = append(errorMessages, fmt.Sprintf("invalid path %s: %v", path, err))
 			continue
 		}
 
-		// Check if path is a directory
 		info, err := os.Stat(cleanPath)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -54,107 +58,79 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		}
 
 		if info.IsDir() {
-			// Get existing table names before import to determine what was newly imported
-			tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
-			if err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to get existing table names before importing from directory %s: %v", path, err))
-				continue
-			}
-
-			// Create a set of existing table names for efficient lookup
-			existingTables := make(map[string]struct{}, len(tablesBefore))
-			for _, table := range tablesBefore {
-				existingTables[table.Name()] = struct{}{}
-			}
-
-			// Use filesql to import all files from the directory
-			if err := s.usecases.filesql.LoadFiles(ctx, cleanPath); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to import files from directory %s: %v", path, err))
-				continue
-			}
-
-			// Get and display newly imported tables
-			tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
-			if err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names after importing from directory %s: %v", path, err))
-				continue
-			}
-
-			// Find newly imported tables by comparing with existing set
-			var newTableNames []string
-			for _, table := range tablesAfter {
-				if _, exists := existingTables[table.Name()]; !exists {
-					newTableNames = append(newTableNames, table.Name())
-				}
-			}
-
-			if len(newTableNames) == 0 {
-				fmt.Fprintf(config.Stdout, "No supported files found in directory %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx)\n", path)
-			} else {
-				fmt.Fprintf(config.Stdout, "Successfully imported %d tables from directory %s: %v\n", len(newTableNames), path, newTableNames)
-				successCount++
-			}
+			validPaths = append(validPaths, cleanPath)
 		} else {
-			// Use filesql.LoadFiles for all file types (CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel).
-			// This avoids double processing and automatically supports all formats that filesql handles.
 			if !s.usecases.filesql.IsSupportedFile(cleanPath) {
 				errorMessages = append(errorMessages, fmt.Sprintf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx and compressed variants)", filepath.Base(cleanPath)))
 				continue
 			}
-
-			isExcel := s.usecases.filesql.IsExcelFile(cleanPath)
-
-			// Record tables before import so we can identify newly created ones
-			var existingTables map[string]struct{}
-			if isExcel {
-				tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names before importing %s: %v", path, err))
-					continue
-				}
-				existingTables = make(map[string]struct{}, len(tablesBefore))
-				for _, table := range tablesBefore {
-					existingTables[table.Name()] = struct{}{}
-				}
+			validPaths = append(validPaths, cleanPath)
+			if s.usecases.filesql.IsExcelFile(cleanPath) {
+				excelPaths = append(excelPaths, cleanPath)
 			}
-
-			if err := s.usecases.filesql.LoadFiles(ctx, cleanPath); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to import file %s: %v", path, err))
-				continue
-			}
-
-			// For Excel files with --sheet flag, keep only the requested sheet.
-			// Without --sheet, all sheets are retained for cross-sheet JOINs.
-			if isExcel {
-				sheetName := s.argument.SheetName
-				if sheetName == "" {
-					sheetName = extractSheetNameFromArgs(argv)
-				}
-				if sheetName != "" {
-					if err := s.filterExcelSheets(ctx, path, sheetName, existingTables); err != nil {
-						errorMessages = append(errorMessages, err.Error())
-						continue
-					}
-				}
-			}
-
-			successCount++
 		}
 	}
 
-	// Report results
-	if len(errorMessages) > 0 {
-		if successCount > 0 {
-			fmt.Fprintf(config.Stdout, "\nImport completed with %d successful imports and %d errors:\n", successCount, len(errorMessages))
-		} else {
-			fmt.Fprintf(config.Stdout, "\nImport failed with %d errors:\n", len(errorMessages))
-		}
+	if len(validPaths) == 0 && len(errorMessages) > 0 {
 		for _, errMsg := range errorMessages {
 			fmt.Fprintf(config.Stdout, "  - %s\n", errMsg)
 		}
-		// Return error only if nothing was successfully imported
-		if successCount == 0 {
-			return errors.New("all import attempts failed")
+		return errors.New("all import attempts failed")
+	}
+
+	if len(validPaths) == 0 {
+		return nil
+	}
+
+	// Phase 2: Record tables before import for tracking new tables
+	tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get existing table names: %w", err)
+	}
+	existingTables := make(map[string]struct{}, len(tablesBefore))
+	for _, table := range tablesBefore {
+		existingTables[table.Name()] = struct{}{}
+	}
+
+	// Phase 3: Batch import all validated paths in a single LoadFiles call
+	if err := s.usecases.filesql.LoadFiles(ctx, validPaths...); err != nil {
+		errorMessages = append(errorMessages, fmt.Sprintf("failed to import files: %v", err))
+		for _, errMsg := range errorMessages {
+			fmt.Fprintf(config.Stdout, "  - %s\n", errMsg)
+		}
+		return errors.New("all import attempts failed")
+	}
+
+	// Phase 4: Apply Excel sheet filtering if --sheet was specified
+	if sheetName != "" && len(excelPaths) > 0 {
+		for _, excelPath := range excelPaths {
+			if err := s.filterExcelSheets(ctx, excelPath, sheetName, existingTables); err != nil {
+				errorMessages = append(errorMessages, err.Error())
+			}
+		}
+	}
+
+	// Phase 5: Report results
+	tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names after import: %w", err)
+	}
+	var newTableNames []string
+	for _, table := range tablesAfter {
+		if _, exists := existingTables[table.Name()]; !exists {
+			newTableNames = append(newTableNames, table.Name())
+		}
+	}
+
+	if len(errorMessages) > 0 {
+		if len(newTableNames) > 0 {
+			fmt.Fprintf(config.Stdout, "Successfully imported %d table(s): %v\n", len(newTableNames), newTableNames)
+			fmt.Fprintf(config.Stdout, "Import completed with %d error(s):\n", len(errorMessages))
+		} else {
+			fmt.Fprintf(config.Stdout, "\nImport failed with %d error(s):\n", len(errorMessages))
+		}
+		for _, errMsg := range errorMessages {
+			fmt.Fprintf(config.Stdout, "  - %s\n", errMsg)
 		}
 	}
 
