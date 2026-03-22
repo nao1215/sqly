@@ -339,6 +339,83 @@ func TestFileSQLInteractor_GetTableNames(t *testing.T) {
 	})
 }
 
+func TestFileSQLInteractor_IsSupportedFile(t *testing.T) {
+	t.Parallel()
+
+	interactor := &FileSQLInteractor{}
+
+	tests := []struct {
+		name     string
+		filePath string
+		want     bool
+	}{
+		{"CSV", "test.csv", true},
+		{"TSV", "test.tsv", true},
+		{"LTSV", "test.ltsv", true},
+		{"JSON", "test.json", true},
+		{"JSONL", "test.jsonl", true},
+		{"Parquet", "test.parquet", true},
+		{"XLSX", "test.xlsx", true},
+		{"Compressed CSV", "test.csv.gz", true},
+		{"Compressed CSV snappy", "test.csv.snappy", true},
+		{"Compressed CSV s2", "test.csv.s2", true},
+		{"Compressed CSV lz4", "test.csv.lz4", true},
+		{"Compressed CSV z", "test.csv.z", true},
+		{"Text file", "test.txt", false},
+		{"No extension", "test", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := interactor.IsSupportedFile(tt.filePath); got != tt.want {
+				t.Errorf("IsSupportedFile(%s) = %v, want %v", tt.filePath, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFileSQLInteractor_IsExcelFile(t *testing.T) {
+	t.Parallel()
+
+	interactor := &FileSQLInteractor{}
+
+	tests := []struct {
+		name     string
+		filePath string
+		want     bool
+	}{
+		{"XLSX", "test.xlsx", true},
+		{"Compressed XLSX", "test.xlsx.gz", true},
+		{"CSV", "test.csv", false},
+		{"JSON", "test.json", false},
+		{"Parquet", "test.parquet", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := interactor.IsExcelFile(tt.filePath); got != tt.want {
+				t.Errorf("IsExcelFile(%s) = %v, want %v", tt.filePath, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFileSQLInteractor_SanitizeAndQuote(t *testing.T) {
+	t.Parallel()
+
+	interactor := &FileSQLInteractor{}
+
+	if got := interactor.SanitizeForSQL("My Sheet-1"); got != "My_Sheet_1" {
+		t.Errorf("SanitizeForSQL = %q, want %q", got, "My_Sheet_1")
+	}
+
+	if got := interactor.QuoteIdentifier("2023_data"); got != `"2023_data"` {
+		t.Errorf("QuoteIdentifier = %q, want %q", got, `"2023_data"`)
+	}
+}
+
 func TestFileSQLInteractor_Integration(t *testing.T) {
 	t.Parallel()
 

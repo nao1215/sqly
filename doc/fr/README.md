@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 ou ultérieur
 
 ## Comment utiliser
-sqly importe automatiquement les fichiers CSV/TSV/LTSV/Excel (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
+sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
 
 **Note** : Si le nom du fichier contient des caractères qui pourraient causer des erreurs de syntaxe SQL (comme les traits d'union `-`, les points `.` ou d'autres caractères spéciaux), ils sont automatiquement remplacés par des traits de soulignement `_`. Par exemple, `bug-syntax-error.csv` devient la table `bug_syntax_error`.
 
@@ -204,16 +204,15 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **Intégration filesql** : Performance et fonctionnalité améliorées utilisant la bibliothèque [filesql](https://github.com/nao1215/filesql)
 - **Performance améliorée** : Opérations d'insertion en bloc avec traitement par lots des transactions pour un traitement plus rapide des fichiers
 - **Meilleure gestion des types** : La détection automatique des types assure un tri numérique et des calculs appropriés
-- **Support des fichiers compressés** : Support natif pour les fichiers compressés `.gz`, `.bz2`, `.xz` et `.zst`
+- **Support des fichiers compressés** : Support natif pour les fichiers compressés `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2` et `.lz4`
 
-### Fonctionnalités supprimées
-- **Support JSON** : Le support du format de fichier JSON a été supprimé en faveur de la focalisation sur les formats de données structurées (CSV, TSV, LTSV, Excel)
-  - Utilisez l'export CSV des outils JSON si vous devez traiter des données JSON avec sqly
-  - La suppression permet une meilleure optimisation des formats de fichiers principaux
+### Formats d'entrée réajoutés et nouveaux
+- **Support JSON/JSONL** : Le support des formats JSON et JSONL (JSON Lines) en entrée a été réajouté via la bibliothèque filesql
+  - Les données JSON/JSONL sont stockées dans une seule colonne `data` ; utilisez `json_extract()` de SQLite pour interroger les champs individuels
+- **Support Parquet** : Le format Parquet est maintenant supporté en entrée
 
 ### Changements incompatibles
-- Le flag `--json` a été supprimé
-- Les fichiers JSON (`.json`) ne sont plus supportés en entrée
+- Le flag de sortie `--json` a été supprimé (formats de sortie : table, CSV, TSV, LTSV, Excel, Markdown)
 - Le formatage numérique en sortie peut différer légèrement en raison de la détection de types améliorée
 
 ## Benchmark
@@ -267,7 +266,7 @@ Si vous souhaitez envoyer des commentaires tels que "trouver un bug" ou "demande
 ## Bibliothèques utilisées
 
 **sqly** exploite de puissantes bibliothèques Go pour fournir ses fonctionnalités :
-- [filesql](https://github.com/nao1215/filesql) - Fournit une interface de base de données SQL pour les fichiers CSV/TSV/LTSV/Excel avec détection automatique des types et support des fichiers compressés
+- [filesql](https://github.com/nao1215/filesql) - Fournit une interface de base de données SQL pour les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel avec détection automatique des types et support des fichiers compressés
 - [prompt](https://github.com/nao1215/prompt) - Alimente le shell interactif avec des fonctionnalités d'autocomplétion SQL et d'historique des commandes
 
 ## LICENCE

@@ -56,7 +56,7 @@ func (fi *fileInteractor) List(filePath string) (*model.Table, error) {
 	tableName := GetTableNameFromFilePath(filePath)
 
 	// Query all data from the table
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + QuoteIdentifier(tableName)
 	return fi.adapter.Query(ctx, query)
 }
 
@@ -104,9 +104,8 @@ func (fi *fileInteractor) Dump(filePath string, table *model.Table) error {
 func (fi *fileInteractor) dumpCSV(f *os.File, table *model.Table) error {
 	w := csv.NewWriter(f)
 
-	records := [][]string{
-		table.Header(),
-	}
+	records := make([][]string, 0, 1+len(table.Records()))
+	records = append(records, table.Header())
 	for _, v := range table.Records() {
 		records = append(records, v)
 	}
@@ -190,7 +189,7 @@ func (ei *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, 
 	tableName := baseName + "_" + sheetName
 
 	// Query data from the specific sheet table
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + QuoteIdentifier(tableName)
 	return ei.adapter.Query(ctx, query)
 }
 

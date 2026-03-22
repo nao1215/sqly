@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/nao1215/sqly/config"
 )
 
 func TestImportCompleterDebug(t *testing.T) {
@@ -47,10 +45,11 @@ func TestImportCompleterDebug(t *testing.T) {
 		}
 	}
 
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, shellCleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
 	}
+	defer shellCleanup()
 
 	// Test different states of completion
 	testCases := []struct {
@@ -149,10 +148,11 @@ func TestCompleterDebug(t *testing.T) {
 		}
 	}
 
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, shellCleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
 	}
+	defer shellCleanup()
 
 	// Test: Check if the problem is in isFilePath detection for various cases
 	testCases := []struct {
@@ -348,10 +348,11 @@ func TestRealDirectoryCompletion(t *testing.T) {
 	// Test with actual directory structure using new full-path completion behavior
 
 	// Create a shell instance
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, shellCleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
 	}
+	defer shellCleanup()
 
 	// Test cases for new full-path completion behavior
 	// All inputs should show the same complete list of importable files
@@ -472,10 +473,11 @@ func TestFilePathCompletions(t *testing.T) {
 	}
 
 	// Create shell instance
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, shellCleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
 	}
+	defer shellCleanup()
 
 	tests := []struct {
 		name     string
@@ -557,7 +559,7 @@ func TestFilePathCompletions(t *testing.T) {
 			if testDataEntries, err := os.ReadDir("testdata"); err == nil {
 				t.Logf("testdata directory contents:")
 				for _, entry := range testDataEntries {
-					t.Logf("  testdata/%s (dir: %v, valid: %v)", entry.Name(), entry.IsDir(), isValidFileForCompletion(entry.Name()))
+					t.Logf("  testdata/%s (dir: %v, valid: %v)", entry.Name(), entry.IsDir(), shell.isValidFileForCompletion(entry.Name()))
 				}
 			}
 
@@ -588,32 +590,14 @@ func TestFilePathCompletions(t *testing.T) {
 // Skip integration test for now due to prompt.Document complexity
 // The file path completion logic is tested separately
 
-func TestSupportedFileExtensions(t *testing.T) {
-	t.Parallel()
-
-	extensions := supportedFileExtensions()
-	expected := []string{".csv", ".tsv", ".ltsv", ".xlsx"}
-
-	if len(extensions) != len(expected) {
-		t.Errorf("Expected %d extensions, got %d", len(expected), len(extensions))
-	}
-
-	for _, ext := range expected {
-		found := false
-		for _, actual := range extensions {
-			if actual == ext {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected extension '%s' not found", ext)
-		}
-	}
-}
-
 func TestIsValidFileForCompletion(t *testing.T) {
 	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
 
 	tests := []struct {
 		filename string
@@ -623,19 +607,25 @@ func TestIsValidFileForCompletion(t *testing.T) {
 		{"sample.tsv", true},
 		{"sample.ltsv", true},
 		{"sample.xlsx", true},
+		{"sample.json", true},
+		{"sample.jsonl", true},
+		{"sample.parquet", true},
 		{"sample.csv.gz", true},
 		{"sample.tsv.bz2", true},
 		{"sample.ltsv.xz", true},
 		{"sample.xlsx.zst", true},
+		{"sample.csv.snappy", true},
+		{"sample.csv.s2", true},
+		{"sample.csv.lz4", true},
+		{"sample.csv.z", true},
 		{"sample.txt", false},
-		{"sample.json", false},
 		{"sample", false},
 		{"README.md", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
-			result := isValidFileForCompletion(tt.filename)
+			result := s.isValidFileForCompletion(tt.filename)
 			if result != tt.expected {
 				t.Errorf("isValidFileForCompletion(%s) = %v, expected %v", tt.filename, result, tt.expected)
 			}

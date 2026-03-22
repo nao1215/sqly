@@ -66,7 +66,7 @@ func TestBaseFileInteractor_LoadFileWithNilAdapter(t *testing.T) {
 		f:              nil,
 	}
 
-	_, err := base.loadFile("test.csv", "CSV")
+	err := base.loadFile(context.Background(), "test.csv", "CSV")
 	if err == nil {
 		t.Fatal("Expected error with nil adapter, got nil")
 	}

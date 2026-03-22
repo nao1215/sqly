@@ -123,7 +123,7 @@ func (a *Arg) NeedsOutputToFile() bool {
 
 // usage return usage message.
 func usage(flag pflag.FlagSet) string {
-	s := fmt.Sprintf("%s - execute SQL against CSV/TSV/LTSV/Excel with shell (%s)\n", color.GreenString("sqly"), GetVersion())
+	s := fmt.Sprintf("%s - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel with shell (%s)\n", color.GreenString("sqly"), GetVersion())
 	s += "\n"
 	s += "[Usage]\n"
 	s += fmt.Sprintf("  %s [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]\n", color.GreenString("sqly"))

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nao1215/fileparser"
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -86,7 +87,7 @@ func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
 func (f *FileSQLAdapter) copyTableToSharedDB(ctx context.Context, sourceDB *sql.DB, tableName string) error {
 	// Drop existing table if it exists to avoid conflicts
-	dropSQL := "DROP TABLE IF EXISTS " + quoteIdentifier(tableName)
+	dropSQL := "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName) //nolint:gosec // tableName is quoted with QuoteIdentifier
 	if _, err := f.sharedDB.ExecContext(ctx, dropSQL); err != nil {
 		return fmt.Errorf("failed to drop existing table %s: %w", tableName, err)
 	}
@@ -110,7 +111,7 @@ func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB
 	}
 
 	// Get column names for data copying
-	rows, err := sourceDB.QueryContext(ctx, "PRAGMA table_info("+quoteIdentifier(tableName)+")")
+	rows, err := sourceDB.QueryContext(ctx, "PRAGMA table_info("+QuoteIdentifier(tableName)+")")
 	if err != nil {
 		return err
 	}
@@ -144,9 +145,9 @@ func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB
 	// Quote column names to handle reserved keywords and special characters
 	quotedColumns := make([]string, len(columns))
 	for i, col := range columns {
-		quotedColumns[i] = quoteIdentifier(col)
+		quotedColumns[i] = QuoteIdentifier(col)
 	}
-	quotedTableName := quoteIdentifier(tableName)
+	quotedTableName := QuoteIdentifier(tableName)
 
 	// Begin transaction for bulk insert optimization
 	tx, err := f.sharedDB.BeginTx(ctx, nil)
@@ -359,7 +360,7 @@ func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (
 	}
 
 	// Get column info using PRAGMA
-	query := "PRAGMA table_info(" + quoteIdentifier(tableName) + ")"
+	query := "PRAGMA table_info(" + QuoteIdentifier(tableName) + ")" //nolint:gosec // tableName is quoted with QuoteIdentifier
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, &FileSQLError{Op: "get_header", Err: err.Error()}
@@ -401,10 +402,14 @@ func GetTableNameFromFilePath(filePath string) string {
 	// Get base filename without directory
 	filename := filepath.Base(filePath)
 
-	// Remove compression extensions first (.gz, .bz2, .xz, .zst)
+	// Remove compression extensions first (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
+	compressedExts := map[string]bool{
+		".gz": true, ".bz2": true, ".xz": true, ".zst": true,
+		".z": true, ".snappy": true, ".s2": true, ".lz4": true,
+	}
 	for {
 		ext := filepath.Ext(filename)
-		if ext == ".gz" || ext == ".bz2" || ext == ".xz" || ext == ".zst" {
+		if compressedExts[ext] {
 			filename = strings.TrimSuffix(filename, ext)
 		} else {
 			break
@@ -432,8 +437,15 @@ func GetTableNameFromFilePath(filePath string) string {
 	return string(result)
 }
 
-// quoteIdentifier safely quotes SQL identifiers by escaping embedded double quotes
-func quoteIdentifier(identifier string) string {
+// QuoteIdentifier safely quotes SQL identifiers by escaping embedded double quotes.
+// This handles reserved keywords, names starting with digits, and special characters.
+//
+// Example:
+//
+//	QuoteIdentifier("table_name") returns `"table_name"`
+//	QuoteIdentifier("2023_data") returns `"2023_data"`
+//	QuoteIdentifier(`foo"bar`) returns `"foo""bar"`
+func QuoteIdentifier(identifier string) string {
 	// Escape any existing double quotes by doubling them
 	escaped := strings.ReplaceAll(identifier, `"`, `""`)
 	// Wrap with double quotes
@@ -479,4 +491,19 @@ type FileSQLError struct {
 
 func (e *FileSQLError) Error() string {
 	return "filesql " + e.Op + ": " + e.Err
+}
+
+// IsSupportedFile checks if the file has a format supported by fileparser.
+func IsSupportedFile(filePath string) bool {
+	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
+}
+
+// IsExcelFile checks if the file is an Excel format (.xlsx).
+func IsExcelFile(filePath string) bool {
+	ft := fileparser.DetectFileType(filePath)
+	base := ft
+	if fileparser.IsCompressed(ft) {
+		base = fileparser.BaseFileType(ft)
+	}
+	return base == fileparser.XLSX
 }

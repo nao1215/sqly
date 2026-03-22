@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 이상
 
 ## 사용 방법
-sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
+sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
 
 **참고**: 파일명에 SQL 구문 오류를 일으킬 수 있는 문자(하이픈 `-`, 점 `.`, 기타 특수 문자 등)가 포함되어 있으면 자동으로 밑줄 `_`로 대체됩니다. 예를 들어, `bug-syntax-error.csv`는 `bug_syntax_error` 테이블이 됩니다.
 
@@ -204,16 +204,15 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **filesql 통합**: [filesql](https://github.com/nao1215/filesql) 라이브러리를 사용한 향상된 성능과 기능
 - **향상된 성능**: 더 빠른 파일 처리를 위한 트랜잭션 일괄처리로 대량 삽입 작업
 - **향상된 타입 처리**: 자동 타입 검지가 적절한 숫자 정렬과 계산을 보장
-- **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst` 압축 파일에 대한 네이티브 지원
+- **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4` 압축 파일에 대한 네이티브 지원
 
-### 제거된 기능
-- **JSON 지원**: 구조화된 데이터 형식(CSV, TSV, LTSV, Excel)에 집중하기 위해 JSON 파일 형식 지원이 제거되었습니다
-  - sqly로 JSON 데이터를 처리해야 하는 경우 JSON 도구에서 CSV 내보내기를 사용하십시오
-  - 제거를 통해 핵심 파일 형식의 더 나은 최적화가 가능합니다
+### 재추가 및 새로운 입력 형식
+- **JSON/JSONL 지원**: filesql 라이브러리를 통해 JSON 및 JSONL(JSON Lines) 파일 형식의 입력 지원이 재추가되었습니다
+  - JSON/JSONL 데이터는 단일 `data` 컬럼에 저장됩니다. 개별 필드를 조회하려면 SQLite의 `json_extract()`를 사용하십시오
+- **Parquet 지원**: Parquet 파일 형식이 입력으로 지원됩니다
 
 ### 호환성을 깨는 변경
-- `--json` 플래그가 제거되었습니다
-- JSON 파일(`.json`)이 더 이상 입력으로 지원되지 않습니다
+- `--json` 출력 플래그가 제거되었습니다 (출력 형식: 테이블, CSV, TSV, LTSV, Excel, Markdown)
 - 향상된 타입 검지로 인해 출력의 숫자 형식이 약간 다를 수 있습니다
 
 ## 벤치마크
@@ -267,7 +266,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 사용된 라이브러리
 
 **sqly**는 기능을 제공하기 위해 강력한 Go 라이브러리를 활용합니다:
-- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/Excel 파일에 대한 SQL 데이터베이스 인터페이스를 제공하고 자동 타입 검지 및 압축 파일 지원을 제공합니다
+- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel 파일에 대한 SQL 데이터베이스 인터페이스를 제공하고 자동 타입 검지 및 압축 파일 지원을 제공합니다
 - [prompt](https://github.com/nao1215/prompt) - SQL 자동완성 및 명령 기록 기능으로 대화형 셸을 구현합니다
 
 ## 라이선스
