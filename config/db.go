@@ -38,11 +38,15 @@ func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
 
 // NewInMemHistoryDB creates an in-memory history DB for testing.
 // This avoids file I/O overhead that is especially costly on Windows.
+// The pool is pinned to a single connection because SQLite's ":memory:"
+// creates a separate database per connection.
 func NewInMemHistoryDB() (HistoryDB, func(), error) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		return nil, nil, err
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	return HistoryDB(db), func() { db.Close() }, nil //nolint:gosec // Cleanup function, error not critical
 }
 

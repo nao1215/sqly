@@ -121,17 +121,10 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 
 	// Apply --sheet filtering per-Excel-file within the directory.
-	// Walk the directory to find Excel files and filter each one individually,
-	// so that non-Excel tables (CSV, JSON, etc.) are never affected, and
-	// multiple Excel files each keep their own matching sheet.
-	// Pass the newTableNames as candidates so only freshly-imported tables
-	// are considered, preventing prefix collision with pre-existing tables.
+	// For each Excel file, filterExcelSheets builds candidates from all
+	// current tables matching the file's prefix (nil candidates mode).
+	// This correctly handles both first-import and re-import (overwrite).
 	if sheetName != "" {
-		newSet := make(map[string]struct{}, len(newTableNames))
-		for _, n := range newTableNames {
-			newSet[n] = struct{}{}
-		}
-		// Walk the directory recursively to match filesql's recursive import behavior.
 		err := filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -140,29 +133,8 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 				return nil
 			}
 			if s.usecases.sqlite3.IsExcelFile(path) {
-				// Build a per-file candidate set from newSet entries matching
-				// this file's prefix, then remove them from newSet after
-				// processing. This prevents a later file with the same
-				// sanitized name from re-evaluating already-handled tables.
-				//
-				// Note: if two Excel files produce the same prefix (e.g.
-				// a/report.xlsx and b/report.xlsx), filesql overwrites the
-				// tables so only the last-loaded file's data survives. The
-				// first file processed here consumes all matching candidates;
-				// the second gets an empty set and receives "no sheets found",
-				// which accurately reflects that its tables were overwritten.
-				prefix := s.usecases.sqlite3.GetTableNameFromFilePath(path) + "_"
-				perFile := make(map[string]struct{})
-				for name := range newSet {
-					if strings.HasPrefix(name, prefix) {
-						perFile[name] = struct{}{}
-					}
-				}
-				if err := s.filterExcelSheets(ctx, path, sheetName, perFile); err != nil {
+				if err := s.filterExcelSheets(ctx, path, sheetName, nil); err != nil {
 					return err
-				}
-				for name := range perFile {
-					delete(newSet, name)
 				}
 			}
 			return nil
@@ -189,45 +161,16 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
 	}
 
-	// Snapshot tables before import so we can identify exactly which tables
-	// this file created, preventing --sheet from touching unrelated tables
-	// that happen to share the same sanitized prefix.
-	var tablesBefore map[string]struct{}
-	if s.usecases.sqlite3.IsExcelFile(cleanPath) && sheetName != "" {
-		before, err := s.usecases.sqlite3.GetTableNames(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get table names before import: %w", err)
-		}
-		tablesBefore = tableNameSet(before)
-	}
-
 	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 
+	// Apply --sheet filtering only to Excel files.
+	// Use prefix matching over current tables. LoadFiles just created or
+	// overwrote these tables, so all prefix-matching tables belong to this file.
+	// nil candidates tells filterExcelSheets to build the set from prefix match.
 	if s.usecases.sqlite3.IsExcelFile(cleanPath) && sheetName != "" {
-		after, err := s.usecases.sqlite3.GetTableNames(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get table names after import: %w", err)
-		}
-		candidates := make(map[string]struct{})
-		for _, t := range after {
-			if _, existed := tablesBefore[t.Name()]; !existed {
-				candidates[t.Name()] = struct{}{}
-			}
-		}
-		// If diff is empty (re-import overwrites same tables), fall back to
-		// prefix-scoped candidates from current tables. This is safe because
-		// LoadFiles just overwrote those tables, so they belong to this file.
-		if len(candidates) == 0 {
-			prefix := s.usecases.sqlite3.GetTableNameFromFilePath(cleanPath) + "_"
-			for _, t := range after {
-				if strings.HasPrefix(t.Name(), prefix) {
-					candidates[t.Name()] = struct{}{}
-				}
-			}
-		}
-		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, candidates); err != nil {
+		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, nil); err != nil {
 			return err
 		}
 	}

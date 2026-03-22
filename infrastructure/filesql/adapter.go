@@ -474,8 +474,7 @@ func GetTableNameFromFilePath(filePath string) string {
 
 	// Remove compression extensions first (case-insensitive, matching filesql behavior)
 	lowerFilename := strings.ToLower(filename)
-	compressedExts := []string{".gz", ".bz2", ".xz", ".zst", ".z", ".snappy", ".s2", ".lz4"}
-	for _, ext := range compressedExts {
+	for _, ext := range compressionExts {
 		if strings.HasSuffix(lowerFilename, ext) {
 			filename = filename[:len(filename)-len(ext)]
 			break
