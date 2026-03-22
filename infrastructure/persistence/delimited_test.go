@@ -13,11 +13,11 @@ import (
 	"github.com/nao1215/sqly/golden"
 )
 
-func TestCsvRepositoryDump(t *testing.T) {
+func TestCSVRepositoryDump(t *testing.T) {
 	t.Run("dump csv data", func(t *testing.T) {
 		cr := NewCSVRepository()
 
-		table := readCSVAsTable(t, filepath.Join("testdata", "sample.csv"))
+		table := readDelimitedAsTable(t, filepath.Join("testdata", "sample.csv"), ',')
 
 		var tmpFile *os.File
 		var err error
@@ -44,8 +44,43 @@ func TestCsvRepositoryDump(t *testing.T) {
 	})
 }
 
-// readCSVAsTable reads a CSV file and returns a model.Table for testing Dump.
-func readCSVAsTable(t *testing.T, path string) *model.Table {
+func TestTSVRepositoryDump(t *testing.T) {
+	t.Parallel()
+
+	t.Run("dump tsv data", func(t *testing.T) {
+		t.Parallel()
+
+		r := NewTSVRepository()
+
+		table := readDelimitedAsTable(t, filepath.Join("testdata", "sample.tsv"), '\t')
+
+		var tmpFile *os.File
+		var err error
+		if runtime.GOOS != config.Windows {
+			tmpFile, err = os.CreateTemp(t.TempDir(), "dump.tsv")
+		} else {
+			tmpFile, err = os.CreateTemp(os.TempDir(), "dump.tsv")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := r.Dump(tmpFile, table); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := os.ReadFile(tmpFile.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "sample_tsv", got)
+	})
+}
+
+// readDelimitedAsTable reads a delimiter-separated file and returns a model.Table for testing Dump.
+func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Table {
 	t.Helper()
 
 	f, err := os.Open(path) // #nosec G304 - test helper with controlled input
@@ -55,6 +90,7 @@ func readCSVAsTable(t *testing.T, path string) *model.Table {
 	defer f.Close()
 
 	r := csv.NewReader(f)
+	r.Comma = delimiter
 	var header model.Header
 	var records []model.Record
 	for {
