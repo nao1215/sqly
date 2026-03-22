@@ -205,7 +205,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **filesql 集成**：使用 [filesql](https://github.com/nao1215/filesql) 库提高性能和功能
 - **性能改进**：通过事务批处理进行批量插入操作，以实现更快的文件处理
 - **更好的类型处理**：自动类型检测确保正确的数值排序和计算
-- **压缩文件支持**：原生支持 `.gz`、`.bz2`、`.xz` 和 `.zst` 压缩文件
+- **压缩文件支持**：原生支持 `.gz`、`.bz2`、`.xz`、`.zst`、`.z`、`.snappy`、`.s2` 和 `.lz4` 压缩文件
 
 ### 重新添加和新增输入格式
 - **JSON/JSONL 支持**：通过 filesql 库重新添加了 JSON 和 JSONL（JSON Lines）文件格式的输入支持

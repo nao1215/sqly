@@ -30,7 +30,7 @@ sqly is a command-line SQL query tool for file formats (CSV, TSV, LTSV, Excel) u
 
 ### File Format Support
 - CSV, TSV, LTSV, Excel (.xlsx)
-- Compressed files: .gz, .bz2, .xz, .zst
+- Compressed files: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4
 - Automatic type detection and format recognition
 
 ## Development Standards

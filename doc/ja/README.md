@@ -204,7 +204,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **filesql統合**: [filesql](https://github.com/nao1215/filesql)ライブラリによるパフォーマンスと機能の向上
 - **パフォーマンス向上**: より高速なファイル処理のためのトランザクションバッチングによるバルクインサート操作
 - **型処理の向上**: 自動型検出により適切な数値ソートと計算を保証
-- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`圧縮ファイルのネイティブサポート
+- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`圧縮ファイルのネイティブサポート
 
 ### 再追加および新規入力形式
 - **JSON/JSONLサポート**: filesqlライブラリを通じて、JSON および JSONL（JSON Lines）ファイル形式の入力サポートが再追加されました

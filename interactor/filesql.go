@@ -26,7 +26,7 @@ func NewFileSQLInteractor(adapter *filesql.FileSQLAdapter) usecase.FileSQLUsecas
 // LoadFiles loads multiple files or directories into the database.
 // It accepts file paths and directory paths, automatically detecting the type.
 // For directories, all supported files (CSV, TSV, LTSV, Excel) including compressed
-// versions (.gz, .bz2, .xz, .zst) are imported. Mixed file and directory arguments
+// versions (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) are imported. Mixed file and directory arguments
 // are supported in a single call.
 func (i *FileSQLInteractor) LoadFiles(ctx context.Context, filePaths ...string) error {
 	return i.adapter.LoadFiles(ctx, filePaths...)
