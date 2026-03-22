@@ -4,7 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/nao1215/sqly/domain/model"
 )
 
 func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
@@ -339,5 +342,253 @@ func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
 	_, err = s.usecases.sqlite3.List(ctx, "workbook_Sheet2")
 	if err == nil {
 		t.Error("expected workbook_Sheet2 to be dropped")
+	}
+}
+
+func TestImportFile_UnsupportedFormat(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	tmpFile := filepath.Join(t.TempDir(), "data.txt")
+	if err := os.WriteFile(tmpFile, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.importFile(context.Background(), tmpFile, tmpFile, "")
+	if err == nil {
+		t.Fatal("expected error for unsupported format")
+	}
+	if !strings.Contains(err.Error(), "unsupported file format") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestImportFile_CSVSuccess(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	tmpFile := filepath.Join(t.TempDir(), "people.csv")
+	if err := os.WriteFile(tmpFile, []byte("id,name\n1,Alice\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	if err := s.importFile(ctx, tmpFile, tmpFile, ""); err != nil {
+		t.Fatalf("importFile: %v", err)
+	}
+
+	tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, tbl := range tables {
+		if tbl.Name() == "people" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'people' table after CSV import")
+	}
+}
+
+func TestImportFile_NonexistentFile(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	err = s.importFile(context.Background(), "/nonexistent/file.csv", "/nonexistent/file.csv", "")
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestImportFile_ExcelWithSheet(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Use the project's test Excel file
+	excelPath := filepath.Join("..", "testdata", "sample.xlsx")
+	if _, err := os.Stat(excelPath); os.IsNotExist(err) {
+		t.Skip("testdata/sample.xlsx not found")
+	}
+
+	ctx := context.Background()
+	err = s.importFile(ctx, excelPath, excelPath, "test_sheet")
+	if err != nil {
+		t.Fatalf("importFile with --sheet: %v", err)
+	}
+
+	// Verify at least one table exists after import
+	tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tables) == 0 {
+		t.Error("expected at least one table after Excel import with --sheet")
+	}
+}
+
+func TestImportDirectory_WithCSVFiles(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.csv"), []byte("id,val\n1,x\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.tsv"), []byte("id\tval\n2\ty\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	imported, err := s.importDirectory(ctx, dir, dir, "")
+	if err != nil {
+		t.Fatalf("importDirectory: %v", err)
+	}
+	if !imported {
+		t.Error("expected imported=true")
+	}
+
+	tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tables) < 2 {
+		t.Errorf("expected at least 2 tables, got %d", len(tables))
+	}
+}
+
+func TestImportCommand_PartialSuccess(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "ok.csv")
+	if err := os.WriteFile(csvPath, []byte("id\n1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	// One valid file + one missing file → partial success (no error returned)
+	err = s.commands.importCommand(ctx, s, []string{csvPath, "missing.csv"})
+	if err != nil {
+		t.Errorf("expected nil error for partial success, got: %v", err)
+	}
+}
+
+func TestImportCommand_SheetArgExtraction(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		argv []string
+		want string
+	}{
+		{"no sheet", []string{"file.csv"}, ""},
+		{"sheet flag", []string{"file.xlsx", "--sheet=Summary"}, "Summary"},
+		{"sheet flag first", []string{"--sheet=Data", "file.xlsx"}, "Data"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := extractSheetNameFromArgs(tt.argv)
+			if got != tt.want {
+				t.Errorf("extractSheetNameFromArgs(%v) = %q, want %q", tt.argv, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidatePath_Import(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{"normal path", "testdata/sample.csv", false},
+		{"relative path", "./foo/bar.csv", false},
+		{"path traversal", "../../../etc/passwd", true},
+		{"url encoded traversal", "..%2f..%2fetc/passwd", true},
+		{"system dir /etc", "/etc/hosts", true},
+		{"system dir /proc", "/proc/cpuinfo", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := validatePath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validatePath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDiffTableNames(t *testing.T) {
+	t.Parallel()
+
+	// Minimal test covering the helper function
+	existing := map[string]struct{}{"a": {}, "b": {}}
+
+	tables := []*model.Table{
+		model.NewTable("a", nil, nil),
+		model.NewTable("b", nil, nil),
+		model.NewTable("c", nil, nil),
+	}
+
+	got := diffTableNames(tables, existing)
+	if len(got) != 1 || got[0] != "c" {
+		t.Errorf("diffTableNames = %v, want [c]", got)
+	}
+}
+
+func TestTableNameSet(t *testing.T) {
+	t.Parallel()
+
+	tables := []*model.Table{
+		model.NewTable("x", nil, nil),
+		model.NewTable("y", nil, nil),
+	}
+
+	set := tableNameSet(tables)
+	if len(set) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(set))
+	}
+	if _, ok := set["x"]; !ok {
+		t.Error("expected 'x' in set")
+	}
+	if _, ok := set["y"]; !ok {
+		t.Error("expected 'y' in set")
 	}
 }
