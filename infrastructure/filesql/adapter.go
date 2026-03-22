@@ -75,6 +75,20 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}
 
+	// Clean up filesql global registries for ACH/Fedwire TableSets.
+	// filesql.OpenContext registers TableSets in global maps for DumpACH/DumpFedWire,
+	// but sqly copies data to its own shared DB and does not use round-trip export.
+	// Leaving entries in the registry would leak memory in long-running shells
+	// and cause stale state in registry-based detection.
+	for _, tableName := range tableNames {
+		if baseName, ok := filesql.IsACHBaseTableName(tableName); ok {
+			filesql.UnregisterACHTableSet(baseName)
+		}
+		if baseName, ok := filesql.IsWireBaseTableName(tableName); ok {
+			filesql.UnregisterWireTableSet(baseName)
+		}
+	}
+
 	return nil
 }
 

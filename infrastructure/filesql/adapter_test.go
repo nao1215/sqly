@@ -1417,9 +1417,10 @@ func TestIsACHTable(t *testing.T) {
 	}
 }
 
-// TestIsACHTable_WithImport verifies that IsACHTable returns true only for
-// tables created from an actual ACH file import.
-func TestIsACHTable_WithImport(t *testing.T) {
+// TestIsACHTable_RegistryClearedAfterImport verifies that LoadFile cleans up
+// the filesql ACH registry after copying tables, so IsACHTable always returns
+// false (preventing stale registry state in long-running shells).
+func TestIsACHTable_RegistryClearedAfterImport(t *testing.T) {
 	t.Parallel()
 
 	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
@@ -1440,14 +1441,9 @@ func TestIsACHTable_WithImport(t *testing.T) {
 
 	baseName := GetTableNameFromFilePath(achFile)
 
-	// Tables from the imported ACH file should be detected
-	if !IsACHTable(baseName + "_entries") {
-		t.Errorf("IsACHTable(%q) = false after import, want true", baseName+"_entries")
-	}
-
-	// A table with the same suffix but different base should NOT be detected
-	if IsACHTable("sales_entries") {
-		t.Error("IsACHTable(\"sales_entries\") = true, want false (not from ACH import)")
+	// Registry should be cleaned up after import, so IsACHTable returns false
+	if IsACHTable(baseName + "_entries") {
+		t.Errorf("IsACHTable(%q) = true after import; registry should have been cleaned up", baseName+"_entries")
 	}
 }
 
@@ -1476,9 +1472,9 @@ func TestIsWireTable(t *testing.T) {
 	}
 }
 
-// TestIsWireTable_WithImport verifies that IsWireTable returns true only for
-// tables created from an actual Fedwire file import.
-func TestIsWireTable_WithImport(t *testing.T) {
+// TestIsWireTable_RegistryClearedAfterImport verifies that LoadFile cleans up
+// the filesql Fedwire registry after copying tables.
+func TestIsWireTable_RegistryClearedAfterImport(t *testing.T) {
 	t.Parallel()
 
 	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
@@ -1499,14 +1495,9 @@ func TestIsWireTable_WithImport(t *testing.T) {
 
 	baseName := GetTableNameFromFilePath(fedFile)
 
-	// Table from the imported Fedwire file should be detected
-	if !IsWireTable(baseName + "_message") {
-		t.Errorf("IsWireTable(%q) = false after import, want true", baseName+"_message")
-	}
-
-	// A table with the same suffix but different base should NOT be detected
-	if IsWireTable("chat_message") {
-		t.Error("IsWireTable(\"chat_message\") = true, want false (not from Fedwire import)")
+	// Registry should be cleaned up after import, so IsWireTable returns false
+	if IsWireTable(baseName + "_message") {
+		t.Errorf("IsWireTable(%q) = true after import; registry should have been cleaned up", baseName+"_message")
 	}
 }
 
