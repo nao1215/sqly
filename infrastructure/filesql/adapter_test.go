@@ -405,12 +405,12 @@ func TestGetTableNameFromFilePath(t *testing.T) {
 		{
 			name:     "filename starting with number",
 			filePath: "/path/to/2023-data.csv",
-			expected: "2023_data",
+			expected: "sheet_2023_data",
 		},
 		{
 			name:     "filename with special characters",
 			filePath: "/path/to/data@file#test$.csv",
-			expected: "data_file_test_",
+			expected: "datafiletest",
 		},
 	}
 
@@ -925,7 +925,7 @@ func TestSanitizeForSQL(t *testing.T) {
 		{
 			name:     "empty name",
 			input:    "",
-			expected: "",
+			expected: "sheet",
 		},
 		{
 			name:     "name with only spaces",
@@ -935,7 +935,7 @@ func TestSanitizeForSQL(t *testing.T) {
 		{
 			name:     "unicode characters",
 			input:    "日本語シート",
-			expected: "",
+			expected: "sheet",
 		},
 		{
 			name:     "mixed alphanumeric and special",

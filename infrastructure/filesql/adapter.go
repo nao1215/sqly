@@ -396,44 +396,30 @@ func (f *FileSQLAdapter) Close() error {
 	return nil
 }
 
-// GetTableNameFromFilePath extracts table name from file path (compatible with sqly logic)
+// GetTableNameFromFilePath extracts table name from file path.
+// This function matches the naming logic used by filesql's sanitizeTableName(tableFromFilePath())
+// to ensure consistent table name generation between sqly and filesql.
 func GetTableNameFromFilePath(filePath string) string {
 	// Get base filename without directory
 	filename := filepath.Base(filePath)
 
-	// Remove compression extensions first (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
-	compressedExts := map[string]bool{
-		".gz": true, ".bz2": true, ".xz": true, ".zst": true,
-		".z": true, ".snappy": true, ".s2": true, ".lz4": true,
-	}
-	for {
-		ext := filepath.Ext(filename)
-		if compressedExts[ext] {
-			filename = strings.TrimSuffix(filename, ext)
-		} else {
+	// Remove compression extensions first (case-insensitive, matching filesql behavior)
+	lowerFilename := strings.ToLower(filename)
+	compressedExts := []string{".gz", ".bz2", ".xz", ".zst", ".z", ".snappy", ".s2", ".lz4"}
+	for _, ext := range compressedExts {
+		if strings.HasSuffix(lowerFilename, ext) {
+			filename = filename[:len(filename)-len(ext)]
 			break
 		}
 	}
 
-	// Remove file extension (.csv, .tsv, .ltsv, .xlsx, .parquet)
+	// Remove file extension
 	ext := filepath.Ext(filename)
 	if ext != "" {
 		filename = strings.TrimSuffix(filename, ext)
 	}
 
-	// Sanitize filename to be SQL-safe
-	// Replace characters that can cause SQL syntax errors with underscores
-	// This includes: hyphen (-), dot (.), and other non-alphanumeric characters except underscore
-	result := make([]rune, 0, len(filename))
-	for _, r := range filename {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
-			result = append(result, r)
-		} else {
-			result = append(result, '_')
-		}
-	}
-
-	return string(result)
+	return SanitizeForSQL(filename)
 }
 
 // QuoteIdentifier safely quotes SQL identifiers by escaping embedded double quotes.
@@ -452,18 +438,21 @@ func QuoteIdentifier(identifier string) string {
 }
 
 // SanitizeForSQL sanitizes a string to be SQL-safe. This function matches
-// the sanitization logic used by filesql library when creating table names
-// from file paths and sheet names.
+// the sanitization logic used by filesql library's sanitizeTableName() to ensure
+// consistent table name generation between sqly and filesql.
 //
 // Transformations applied:
 //   - Replaces spaces, hyphens (-), and dots (.) with underscores
 //   - Removes any non-alphanumeric characters except underscores
+//   - Adds "sheet_" prefix if the name starts with a number
+//   - Returns "sheet" as fallback for empty names
 //
 // Example:
 //
 //	SanitizeForSQL("A test") returns "A_test"
 //	SanitizeForSQL("Café") returns "Caf"
 //	SanitizeForSQL("Sheet-1") returns "Sheet_1"
+//	SanitizeForSQL("2023-data") returns "sheet_2023_data"
 func SanitizeForSQL(name string) string {
 	// First replace spaces, hyphens, and dots with underscores
 	result := strings.ReplaceAll(name, " ", "_")
@@ -477,7 +466,20 @@ func SanitizeForSQL(name string) string {
 			sanitized.WriteRune(r)
 		}
 	}
-	return sanitized.String()
+
+	finalResult := sanitized.String()
+
+	// Add "sheet_" prefix if name starts with a number (matches filesql behavior)
+	if len(finalResult) > 0 && finalResult[0] >= '0' && finalResult[0] <= '9' {
+		finalResult = "sheet_" + finalResult
+	}
+
+	// Return "sheet" as fallback for empty names (matches filesql behavior)
+	if finalResult == "" {
+		finalResult = "sheet"
+	}
+
+	return finalResult
 }
 
 // FileSQLError represents an error from filesql operations
