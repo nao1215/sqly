@@ -1,3 +1,5 @@
+// Package usecase defines interfaces for handling different file formats and operations.
+// It follows clean architecture principles to separate business logic from implementation details.
 package usecase
 
 import (

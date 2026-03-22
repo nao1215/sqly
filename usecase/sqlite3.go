@@ -11,6 +11,8 @@ import (
 // DatabaseUsecase handle Relational Database and file import operations.
 // This interface unifies session-level operations: SQL execution, table management,
 // and file import via filesql.
+//
+//nolint:interfacebloat // Intentionally unified: merges SQL execution and file import into one session interface.
 type DatabaseUsecase interface {
 	// CreateTable create a DB table with columns given as model.Table
 	CreateTable(ctx context.Context, t *model.Table) error

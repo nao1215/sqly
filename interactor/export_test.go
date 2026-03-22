@@ -32,7 +32,7 @@ func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 		t.Fatalf("DumpTable CSV failed: %v", err)
 	}
 
-	content, err := os.ReadFile(outputFile)
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test file with controlled path
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 		t.Fatalf("DumpTable TSV failed: %v", err)
 	}
 
-	content, err := os.ReadFile(outputFile)
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test file with controlled path
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 		t.Fatalf("DumpTable LTSV failed: %v", err)
 	}
 
-	content, err := os.ReadFile(outputFile)
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test file with controlled path
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 
 	// Verify Excel file was created (starts with PK for zip format)
 	content := make([]byte, 2)
-	file, err := os.Open(outputFile)
+	file, err := os.Open(outputFile) //nolint:gosec // test file with controlled path
 	if err != nil {
 		t.Fatalf("Failed to open Excel file: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 		t.Fatalf("DumpTable Markdown failed: %v", err)
 	}
 
-	content, err := os.ReadFile(outputFile)
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test file with controlled path
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}

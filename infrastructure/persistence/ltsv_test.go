@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"encoding/csv"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -119,7 +120,7 @@ func TestLtsvRepositoryDump(t *testing.T) {
 
 		lr := &ltsvRepository{}
 		_, _, err := lr.labelAndData("")
-		if err == nil || err != infrastructure.ErrNoLabel {
+		if !errors.Is(err, infrastructure.ErrNoLabel) {
 			t.Errorf("expected ErrNoLabel, got: %v", err)
 		}
 	})
@@ -129,7 +130,7 @@ func TestLtsvRepositoryDump(t *testing.T) {
 func readLTSVAsTable(t *testing.T, path string) *model.Table {
 	t.Helper()
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 - test helper with controlled input
 	if err != nil {
 		t.Fatal(err)
 	}
