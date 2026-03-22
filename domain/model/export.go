@@ -22,17 +22,17 @@ const (
 func (e ExportFormat) String() string {
 	switch e {
 	case ExportCSV:
-		return "csv"
+		return formatCSV
 	case ExportTSV:
-		return "tsv"
+		return formatTSV
 	case ExportLTSV:
-		return "ltsv"
+		return formatLTSV
 	case ExportMarkdown:
-		return "markdown"
+		return formatMarkdown
 	case ExportExcel:
-		return "excel"
+		return formatExcel
 	}
-	return "csv"
+	return formatCSV
 }
 
 // Extension returns the file extension for the ExportFormat.
