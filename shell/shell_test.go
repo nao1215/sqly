@@ -842,6 +842,227 @@ func TestShellExec(t *testing.T) {
 			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
 		g.Assert(t, "bad_arg_with_dot_prefix", []byte(err.Error()))
 	})
+
+	t.Run("import directory with CSV files", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		tmpDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(tmpDir, "a.csv"), []byte("x,y\n1,2\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "b.csv"), []byte("p,q\n3,4\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, ".import "+tmpDir)
+		if err != nil {
+			t.Fatalf("directory import failed: %v", err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, "SELECT * FROM a")
+		if err != nil {
+			t.Fatalf("query table a failed: %v", err)
+		}
+		_, err = getExecStdOutput(t, shell.exec, "SELECT * FROM b")
+		if err != nil {
+			t.Fatalf("query table b failed: %v", err)
+		}
+	})
+
+	t.Run("import empty directory", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		tmpDir := t.TempDir()
+		_, err = getExecStdOutput(t, shell.exec, ".import "+tmpDir)
+		if err == nil {
+			t.Fatal("expected error for empty directory import")
+		}
+	})
+
+	t.Run("import nonexistent path", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		_, err = getExecStdOutput(t, shell.exec, ".import /nonexistent/path/file.csv")
+		if err == nil {
+			t.Fatal("expected error for nonexistent path")
+		}
+	})
+
+	t.Run(".tables with no tables", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		_, err = getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables with no tables should not error: %v", err)
+		}
+	})
+
+	t.Run(".tables after import", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables failed: %v", err)
+		}
+	})
+
+	t.Run(".header after import", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, ".header sample")
+		if err != nil {
+			t.Fatalf(".header failed: %v", err)
+		}
+	})
+
+	t.Run("execute INSERT and verify affected rows", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `INSERT INTO sample(id, first_name) VALUES(999, 'test')`)
+		if err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+	})
+
+	t.Run("execute UPDATE", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `UPDATE sample SET first_name='updated' WHERE id=1`)
+		if err != nil {
+			t.Fatalf("UPDATE failed: %v", err)
+		}
+	})
+
+	t.Run("execute DELETE", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `DELETE FROM sample WHERE id=1`)
+		if err != nil {
+			t.Fatalf("DELETE failed: %v", err)
+		}
+	})
+
+	t.Run("init with file path arguments", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.init(context.Background()); err != nil {
+			t.Fatalf("init with file path failed: %v", err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, "SELECT * FROM sample")
+		if err != nil {
+			t.Fatalf("query after init failed: %v", err)
+		}
+	})
+
+	t.Run("Run with --help", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--help"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --help failed: %v", err)
+		}
+	})
+
+	t.Run("Run with --version", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--version"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --version failed: %v", err)
+		}
+	})
+
+	t.Run("Run with --sql option", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT 1", filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --sql failed: %v", err)
+		}
+	})
+
+	t.Run(".mode change to csv", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		_, err = getExecStdOutput(t, shell.exec, ".mode csv")
+		if err != nil {
+			t.Fatalf(".mode csv failed: %v", err)
+		}
+	})
 }
 
 func newShell(t *testing.T, args []string) (*Shell, func(), error) {
