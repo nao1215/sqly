@@ -26,7 +26,7 @@ func NewFileSQLInteractor(adapter *filesql.FileSQLAdapter) usecase.FileSQLUsecas
 // LoadFiles loads multiple files or directories into the database.
 // It accepts file paths and directory paths, automatically detecting the type.
 // For directories, all supported files (CSV, TSV, LTSV, Excel) including compressed
-// versions (.gz, .bz2, .xz, .zst) are imported. Mixed file and directory arguments
+// versions (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) are imported. Mixed file and directory arguments
 // are supported in a single call.
 func (i *FileSQLInteractor) LoadFiles(ctx context.Context, filePaths ...string) error {
 	return i.adapter.LoadFiles(ctx, filePaths...)
@@ -36,4 +36,24 @@ func (i *FileSQLInteractor) LoadFiles(ctx context.Context, filePaths ...string) 
 // This includes all tables that have been imported from files or directories.
 func (i *FileSQLInteractor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
 	return i.adapter.GetTableNames(ctx)
+}
+
+// IsSupportedFile checks if the file has a format supported by fileparser.
+func (i *FileSQLInteractor) IsSupportedFile(filePath string) bool {
+	return filesql.IsSupportedFile(filePath)
+}
+
+// IsExcelFile checks if the file is an Excel format (.xlsx).
+func (i *FileSQLInteractor) IsExcelFile(filePath string) bool {
+	return filesql.IsExcelFile(filePath)
+}
+
+// SanitizeForSQL sanitizes a string to be SQL-safe.
+func (i *FileSQLInteractor) SanitizeForSQL(name string) string {
+	return filesql.SanitizeForSQL(name)
+}
+
+// QuoteIdentifier safely quotes a SQL identifier.
+func (i *FileSQLInteractor) QuoteIdentifier(identifier string) string {
+	return filesql.QuoteIdentifier(identifier)
 }

@@ -265,16 +265,19 @@
 * Bump modernc.org/sqlite from 1.34.5 to 1.36.1 ([b03c0d2](https://github.com/nao1215/sqly/commit/b03c0d2))
 * Bump github.com/google/go-cmp from 0.6.0 to 0.7.0 ([38d711c](https://github.com/nao1215/sqly/commit/38d711c))
 
+### Re-added and New Input Formats
+- **JSON/JSONL Support**: JSON and JSONL (JSON Lines) file format support has been re-added as input via the filesql library. Data is stored in a single `data` column; use SQLite's `json_extract()` to query individual fields
+- **Parquet Support**: Parquet file format is now supported as input
+
 ### Breaking Changes
-- **JSON Support Removed**: JSON files (`.json`) are no longer supported as input format
-- **CLI Flag Removed**: The `--json` output flag has been removed
+- **CLI Flag Removed**: The `--json` output flag has been removed (output formats: table, CSV, TSV, LTSV, Excel, Markdown)
 - **Output Format**: Numeric formatting may differ slightly due to improved type detection
 - **Dependencies**: Removed CGO dependency (mattn/go-sqlite3) in favor of pure Go implementation
 
 ### Migration Guide
-- **For JSON users**: Export JSON data to CSV format before processing with sqly
-- **For developers**: Update any code that relied on JSON-specific functionality
-- **Benefits**: Enjoy improved performance, compressed file support, and better type handling
+- **For JSON users**: JSON/JSONL files are now supported again as input. Use `json_extract()` to query fields from the `data` column
+- **For developers**: Update any code that relied on the `--json` output flag
+- **Benefits**: Enjoy improved performance, compressed file support, JSON/JSONL/Parquet input, and better type handling
 
 ## [v0.9.0](https://github.com/nao1215/sqly/compare/v0.8.1...v0.9.0) (2025-02-03)
 

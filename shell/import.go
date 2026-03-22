@@ -9,13 +9,11 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/domain/model"
 )
 
 const (
-	// Security limits for directory traversal protection
-	maxDirectoryDepth    = 10   // Maximum directory depth to prevent deep traversal
-	maxFilesPerDirectory = 1000 // Maximum files per directory to prevent resource exhaustion
+	// maxDirectoryDepth is the maximum directory depth to prevent deep traversal.
+	maxDirectoryDepth = 10
 )
 
 // importCommand import csv into DB
@@ -91,62 +89,49 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			}
 
 			if len(newTableNames) == 0 {
-				fmt.Fprintf(config.Stdout, "No supported files found in directory %s (supported: csv, tsv, ltsv, xlsx with .gz/.bz2/.xz/.zst compression)\n", path)
+				fmt.Fprintf(config.Stdout, "No supported files found in directory %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx)\n", path)
 			} else {
 				fmt.Fprintf(config.Stdout, "Successfully imported %d tables from directory %s: %v\n", len(newTableNames), path, newTableNames)
 				successCount++
 			}
 		} else {
-			// Handle individual file import (existing logic)
-			var table *model.Table
-			var sheetName string
-
-			switch {
-			case isCSV(cleanPath):
-				table, err = s.usecases.csv.List(cleanPath)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import CSV file %s: %v", path, err))
-					continue
-				}
-			case isTSV(cleanPath):
-				table, err = s.usecases.tsv.List(cleanPath)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import TSV file %s: %v", path, err))
-					continue
-				}
-			case isLTSV(cleanPath):
-				table, err = s.usecases.ltsv.List(cleanPath)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import LTSV file %s: %v", path, err))
-					continue
-				}
-			case isXLAM(cleanPath) || isXLSM(cleanPath) || isXLSX(cleanPath) || isXLTM(cleanPath) || isXLTX(cleanPath):
-				sheetName = s.argument.SheetName
-				if sheetName == "" {
-					sheetName = extractSheetNameFromArgs(argv)
-					if sheetName == "" {
-						errorMessages = append(errorMessages, fmt.Sprintf("sheet name is required for Excel file %s (use --sheet=SHEET_NAME)", path))
-						continue
-					}
-				}
-				table, err = s.usecases.excel.List(cleanPath, sheetName)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to import Excel file %s (sheet: %s): %v", path, sheetName, err))
-					continue
-				}
-			default:
-				errorMessages = append(errorMessages, fmt.Sprintf("unsupported file format: %s (supported: csv, tsv, ltsv, xlsx)", getFileTypeFromPath(cleanPath)))
+			// Use filesql.LoadFiles for all file types (CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel).
+			// This avoids double processing and automatically supports all formats that filesql handles.
+			if !s.usecases.filesql.IsSupportedFile(cleanPath) {
+				errorMessages = append(errorMessages, fmt.Sprintf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx and compressed variants)", filepath.Base(cleanPath)))
 				continue
 			}
 
-			if err := s.usecases.sqlite3.CreateTable(ctx, table); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to create table for %s: %v", path, err))
+			isExcel := s.usecases.filesql.IsExcelFile(cleanPath)
+
+			// Record tables before import so we can identify newly created ones
+			var existingTables map[string]struct{}
+			if isExcel {
+				tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
+				if err != nil {
+					errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names before importing %s: %v", path, err))
+					continue
+				}
+				existingTables = make(map[string]struct{}, len(tablesBefore))
+				for _, table := range tablesBefore {
+					existingTables[table.Name()] = struct{}{}
+				}
+			}
+
+			if err := s.usecases.filesql.LoadFiles(ctx, cleanPath); err != nil {
+				errorMessages = append(errorMessages, fmt.Sprintf("failed to import file %s: %v", path, err))
 				continue
 			}
-			if err := s.usecases.sqlite3.Insert(ctx, table); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to insert data from %s: %v", path, err))
-				continue
+
+			// For Excel files, filter sheets: keep only the requested sheet (--sheet)
+			// or only the first sheet (default behavior).
+			if isExcel {
+				if err := s.filterExcelSheets(ctx, path, argv, existingTables); err != nil {
+					errorMessages = append(errorMessages, err.Error())
+					continue
+				}
 			}
+
 			successCount++
 		}
 	}
@@ -224,16 +209,80 @@ func extractSheetNameFromArgs(argv []string) string {
 	return ""
 }
 
+// filterExcelSheets keeps only the desired sheet table after an Excel import.
+// If --sheet is specified, keeps only the matching table and errors if not found.
+// If --sheet is not specified, keeps only the first newly imported table.
+func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []string, existingTables map[string]struct{}) error {
+	tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names after importing %s: %w", path, err)
+	}
+
+	// Collect only the newly imported tables (from this Excel file)
+	var newTables []string
+	for _, table := range tablesAfter {
+		if _, existed := existingTables[table.Name()]; !existed {
+			newTables = append(newTables, table.Name())
+		}
+	}
+
+	if len(newTables) == 0 {
+		return fmt.Errorf("no sheets found in Excel file %s", path)
+	}
+
+	sheetName := s.argument.SheetName
+	if sheetName == "" {
+		sheetName = extractSheetNameFromArgs(argv)
+	}
+
+	var keepTable string
+	if sheetName != "" {
+		// --sheet specified: find the matching table
+		sanitized := s.usecases.filesql.SanitizeForSQL(sheetName)
+		for _, name := range newTables {
+			if strings.HasSuffix(name, "_"+sanitized) || name == sanitized {
+				keepTable = name
+				break
+			}
+		}
+		if keepTable == "" {
+			// Drop all new tables since the requested sheet was not found
+			for _, name := range newTables {
+				dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
+				if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+					return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
+				}
+			}
+			return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, path)
+		}
+	} else {
+		// No --sheet: keep only the first sheet (default behavior)
+		keepTable = newTables[0]
+	}
+
+	// Drop every new table except the one we want to keep
+	for _, name := range newTables {
+		if name == keepTable {
+			continue
+		}
+		dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
+		if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+			return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // printImportUsage print import command usage.
 func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
 	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
 	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, xlam, xlsm, xlsx, xltm, xltx")
-	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst (automatically detected)")
+	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx")
+	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)")
 	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
 	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
 	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
-	fmt.Fprintln(config.Stdout, "  - Does not support importing multiple excel sheets at once")
-	fmt.Fprintln(config.Stdout, "  - If import an Excel file, specify the sheet name with --sheet")
+	fmt.Fprintln(config.Stdout, "  - For Excel files, --sheet selects a specific sheet (default: first sheet)")
+	fmt.Fprintln(config.Stdout, "  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields")
 }

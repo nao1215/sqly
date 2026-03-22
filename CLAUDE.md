@@ -34,7 +34,7 @@ sqly follows Clean Architecture principles with dependency injection via Google 
 ### Key Components
 - **Dependency Injection**: Uses Google Wire (`di/wire.go`) for dependency management
 - **Interactive Shell**: Built with go-prompt library, provides SQL completion and command history
-- **File Format Support**: Automatic detection and import of CSV/TSV/LTSV/Excel into SQLite3 in-memory database
+- **File Format Support**: Automatic detection and import of CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel into SQLite3 in-memory database
 - **Multiple Output Formats**: Results can be output as table, CSV, TSV, LTSV
 
 ### Package Structure
@@ -85,8 +85,8 @@ sqly has migrated to use the [filesql](https://github.com/nao1215/filesql) libra
 
 #### Key Changes
 - **Enhanced Performance**: Better bulk insert operations and automatic type detection
-- **Compressed File Support**: Native support for .gz, .bz2, .xz, .zst files
-- **Removed JSON Support**: JSON file format support has been removed to focus on structured data formats
+- **Compressed File Support**: Native support for .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 files
+- **JSON/JSONL/Parquet Input Support**: JSON, JSONL, and Parquet file formats are supported as input (JSON/JSONL data stored in a single `data` column; use `json_extract()` to query fields)
 - **Improved SQLite Integration**: Uses modernc.org/sqlite (pure Go) instead of mattn/go-sqlite3 (CGO)
 
 #### Architecture Changes
@@ -96,8 +96,7 @@ sqly has migrated to use the [filesql](https://github.com/nao1215/filesql) libra
 - Tests updated to use filesql-based implementations for consistency
 
 #### Breaking Changes
-- JSON file support removed (`.json` files no longer supported)
-- `--json` flag removed from CLI
+- `--json` output flag removed from CLI (JSON/JSONL/Parquet files are supported as input)
 - Output formatting may differ slightly due to improved type detection
 - Dependencies reduced by removing CGO-based SQLite driver
 
@@ -110,6 +109,8 @@ The project uses go-arch-lint (`.go-arch-lint.yml`) to enforce architectural bou
 - **Vendor Isolation**: External dependencies are contained within specific layers
 
 ### Supported File Formats
-- CSV, TSV, LTSV files (including compressed versions: .gz, .bz2, .xz, .zst)
+- CSV, TSV, LTSV files (including compressed versions: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
+- JSON, JSONL (JSON Lines) files (data stored in a single `data` column; use `json_extract()` to query fields)
+- Parquet files
 - Microsoft Excel files (.xlsx)
 - Automatic file format detection based on file extension

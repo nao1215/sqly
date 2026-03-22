@@ -48,9 +48,8 @@ func (cr *csvRepository) List(f *os.File) (*model.CSV, error) {
 func (cr *csvRepository) Dump(f *os.File, table *model.Table) error {
 	w := csv.NewWriter(f)
 
-	records := [][]string{
-		table.Header(),
-	}
+	records := make([][]string, 0, 1+len(table.Records()))
+	records = append(records, table.Header())
 	for _, v := range table.Records() {
 		records = append(records, v)
 	}

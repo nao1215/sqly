@@ -12,4 +12,12 @@ type FileSQLUsecase interface {
 	LoadFiles(ctx context.Context, filePaths ...string) error
 	// GetTableNames returns the list of tables in the database
 	GetTableNames(ctx context.Context) ([]*model.Table, error)
+	// IsSupportedFile checks if the file has a format supported by fileparser
+	IsSupportedFile(filePath string) bool
+	// IsExcelFile checks if the file is an Excel format
+	IsExcelFile(filePath string) bool
+	// SanitizeForSQL sanitizes a string to be SQL-safe
+	SanitizeForSQL(name string) string
+	// QuoteIdentifier safely quotes a SQL identifier
+	QuoteIdentifier(identifier string) string
 }

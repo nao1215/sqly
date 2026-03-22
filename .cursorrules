@@ -46,7 +46,7 @@ sqly follows Clean Architecture principles:
 
 ## Key Features
 
-- **File Formats**: CSV, TSV, LTSV, Excel (.xlsx) + compressed (.gz, .bz2, .xz, .zst)
+- **File Formats**: CSV, TSV, LTSV, Excel (.xlsx) + compressed (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
 - **Output Formats**: ASCII table (default), CSV, TSV, LTSV
 - **Interactive Shell**: Commands start with dots (`.help`, `.tables`, `.import`)
 - **Automatic type detection**: Numbers properly sorted and handled
@@ -55,7 +55,7 @@ sqly follows Clean Architecture principles:
 ## Recent Major Changes
 
 - **filesql integration**: Migrated from traditional file processing for better performance
-- **JSON support removed**: Focus on structured data formats only
+- **JSON/JSONL/Parquet input supported**: JSON, JSONL, and Parquet files supported as input via filesql; `--json` output flag removed
 - **Compressed file support**: Native support for compressed files
 - **SQLite driver change**: Pure Go implementation (modernc.org/sqlite)
 

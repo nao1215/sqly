@@ -473,9 +473,9 @@ func TestQuoteIdentifier(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			actual := quoteIdentifier(tt.identifier)
+			actual := QuoteIdentifier(tt.identifier)
 			if actual != tt.expected {
-				t.Errorf("quoteIdentifier(%q) = %q, expected %q", tt.identifier, actual, tt.expected)
+				t.Errorf("QuoteIdentifier(%q) = %q, expected %q", tt.identifier, actual, tt.expected)
 			}
 		})
 	}
@@ -532,7 +532,7 @@ Jane,value2,Los Angeles`
 
 	if len(tables) > 0 {
 		// Try to query the table - this should not cause SQL injection
-		_, err = adapter.Query(ctx, "SELECT * FROM "+quoteIdentifier(tables[0].Name())+" ORDER BY ROWID")
+		_, err = adapter.Query(ctx, "SELECT * FROM "+QuoteIdentifier(tables[0].Name())+" ORDER BY ROWID")
 		if err != nil {
 			t.Logf("Query failed (acceptable for edge case): %v", err)
 		}
@@ -952,5 +952,258 @@ func TestSanitizeForSQL(t *testing.T) {
 				t.Errorf("SanitizeForSQL(%q) = %q, expected %q", tt.input, actual, tt.expected)
 			}
 		})
+	}
+}
+
+// Regression tests
+
+func TestGetTableNameFromFilePath_AdditionalCompressions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		filePath string
+		expected string
+	}{
+		{"snappy compression", "data.csv.snappy", "data"},
+		{"s2 compression", "data.tsv.s2", "data"},
+		{"lz4 compression", "data.ltsv.lz4", "data"},
+		{"z compression", "data.json.z", "data"},
+		{"json file", "data.json", "data"},
+		{"jsonl file", "data.jsonl", "data"},
+		{"parquet file", "data.parquet", "data"},
+		{"compressed parquet", "data.parquet.gz", "data"},
+		{"compressed json", "data.json.zst", "data"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			actual := GetTableNameFromFilePath(tt.filePath)
+			if actual != tt.expected {
+				t.Errorf("GetTableNameFromFilePath(%s) = %s, expected %s", tt.filePath, actual, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	csvFile := filepath.Join(tempDir, "2023-data.csv")
+	csvContent := "id,name,value\n1,alpha,100\n2,beta,200\n"
+
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+		t.Fatalf("Failed to create test CSV file: %v", err)
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, csvFile); err != nil {
+		t.Fatalf("LoadFile failed for numeric-prefix filename: %v", err)
+	}
+
+	// Verify we can query the table (table name starts with digit)
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected at least one table after import")
+	}
+
+	// Query using QuoteIdentifier to handle numeric prefix safely
+	query := "SELECT * FROM " + QuoteIdentifier(tables[0].Name())
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query with numeric-prefix table name failed: %v", err)
+	}
+
+	if len(result.Records()) != 2 {
+		t.Errorf("Expected 2 records, got %d", len(result.Records()))
+	}
+}
+
+func TestFileSQLAdapter_JSONFile(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	jsonFile := filepath.Join(tempDir, "test.json")
+	jsonContent := `[{"name":"Alice","age":30},{"name":"Bob","age":25}]`
+
+	if err := os.WriteFile(jsonFile, []byte(jsonContent), 0600); err != nil {
+		t.Fatalf("Failed to create test JSON file: %v", err)
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, jsonFile); err != nil {
+		t.Fatalf("LoadFile failed for JSON file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected at least one table after JSON import")
+	}
+
+	// JSON data is stored in a 'data' column
+	query := "SELECT * FROM " + QuoteIdentifier(tables[0].Name())
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query JSON table failed: %v", err)
+	}
+
+	if len(result.Records()) != 2 {
+		t.Errorf("Expected 2 records from JSON array, got %d", len(result.Records()))
+	}
+}
+
+func TestFileSQLAdapter_JSONLFile(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	jsonlFile := filepath.Join(tempDir, "test.jsonl")
+	jsonlContent := "{\"name\":\"Alice\",\"age\":30}\n{\"name\":\"Bob\",\"age\":25}\n{\"name\":\"Charlie\",\"age\":35}\n"
+
+	if err := os.WriteFile(jsonlFile, []byte(jsonlContent), 0600); err != nil {
+		t.Fatalf("Failed to create test JSONL file: %v", err)
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, jsonlFile); err != nil {
+		t.Fatalf("LoadFile failed for JSONL file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected at least one table after JSONL import")
+	}
+
+	query := "SELECT * FROM " + QuoteIdentifier(tables[0].Name())
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query JSONL table failed: %v", err)
+	}
+
+	if len(result.Records()) != 3 {
+		t.Errorf("Expected 3 records from JSONL file, got %d", len(result.Records()))
+	}
+}
+
+func TestFileSQLAdapter_ExcelWithoutSheetName(t *testing.T) {
+	t.Parallel()
+
+	// Use the testdata sample.xlsx file
+	xlsxFile := filepath.Join("..", "..", "testdata", "sample.xlsx")
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, xlsxFile); err != nil {
+		t.Fatalf("LoadFile failed for Excel file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected at least one table after Excel import without sheet name")
+	}
+
+	// Should be able to query the first table
+	query := "SELECT * FROM " + QuoteIdentifier(tables[0].Name())
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query Excel table failed: %v", err)
+	}
+
+	if len(result.Records()) == 0 {
+		t.Error("Expected records from Excel import")
+	}
+}
+
+func TestFileSQLAdapter_ReservedWordTableName(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	// "select" is a SQL reserved word
+	csvFile := filepath.Join(tempDir, "select.csv")
+	csvContent := "id,name\n1,test\n"
+
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+		t.Fatalf("Failed to create test CSV file: %v", err)
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, csvFile); err != nil {
+		t.Fatalf("LoadFile failed for reserved-word filename: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected at least one table")
+	}
+
+	// Query using QuoteIdentifier to handle reserved word safely
+	query := "SELECT * FROM " + QuoteIdentifier(tables[0].Name())
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query with reserved-word table name failed: %v", err)
+	}
+
+	if len(result.Records()) != 1 {
+		t.Errorf("Expected 1 record, got %d", len(result.Records()))
 	}
 }

@@ -1,6 +1,7 @@
 package interactor
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -36,9 +37,10 @@ func NewExcelInteractor(
 // List get Excel data using filesql for improved performance and compression support.
 // Excel files have unique sheet name handling that differs from simple file-based formats.
 func (ei *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, error) {
+	ctx := context.Background()
+
 	// Load the Excel file using base functionality
-	ctx, err := ei.loadFile(excelFilePath, "Excel")
-	if err != nil {
+	if err := ei.loadFile(ctx, excelFilePath, "Excel"); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +84,7 @@ func (ei *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, 
 		tableName = tables[0].Name()
 	}
 
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + filesql.QuoteIdentifier(tableName)
 	return ei.queryTable(ctx, query, "Excel")
 }
 

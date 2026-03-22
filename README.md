@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0 or later
 
 ## How to use
-The sqly automatically imports CSV/TSV/LTSV/Excel files (including compressed versions) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
+The sqly automatically imports CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel files (including compressed versions) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
 **Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`.
 
@@ -204,16 +204,15 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **filesql Integration**: Enhanced performance and functionality using the [filesql](https://github.com/nao1215/filesql) library
 - **Improved Performance**: Bulk insert operations with transaction batching for faster file processing
 - **Better Type Handling**: Automatic type detection ensures proper numeric sorting and calculations
-- **Compressed File Support**: Native support for `.gz`, `.bz2`, `.xz`, and `.zst` compressed files
+- **Compressed File Support**: Native support for `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4` compressed files
 
-### Removed Features
-- **JSON Support**: JSON file format support has been removed in favor of focusing on structured data formats (CSV, TSV, LTSV, Excel)
-  - Use CSV export from JSON tools if you need to process JSON data with sqly
-  - The removal allows for better optimization of the core file formats
+### Re-added and New Input Formats
+- **JSON/JSONL Support**: JSON and JSONL (JSON Lines) file format support has been re-added as input via the filesql library
+  - JSON/JSONL data is stored in a single `data` column; use SQLite's `json_extract()` to query individual fields
+- **Parquet Support**: Parquet file format is now supported as input
 
 ### Breaking Changes
-- The `--json` flag has been removed
-- JSON files (`.json`) are no longer supported as input
+- The `--json` output flag has been removed (output formats: table, CSV, TSV, LTSV, Excel, Markdown)
 - Numeric formatting in output may differ slightly due to improved type detection
 
 ## Benchmark
@@ -267,7 +266,7 @@ If you would like to send comments such as "find a bug" or "request for addition
 ## Libraries Used
 
 **sqly** leverages powerful Go libraries to provide its functionality:
-- [filesql](https://github.com/nao1215/filesql) - Provides SQL database interface for CSV/TSV/LTSV/Excel files with automatic type detection and compressed file support
+- [filesql](https://github.com/nao1215/filesql) - Provides SQL database interface for CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel files with automatic type detection and compressed file support
 - [prompt](https://github.com/nao1215/prompt) - Powers the interactive shell with SQL completion and command history features
 
 ## LICENSE
