@@ -13,6 +13,7 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
 	"github.com/nao1215/sqly/infrastructure/filesql"
+	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
 )
@@ -751,8 +752,8 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	ltsvInteractor := interactor.NewLTSVInteractor(filesqlAdapter, ltsvRepo, fileRepo)
 	excelInteractor := interactor.NewExcelInteractor(filesqlAdapter, excelRepo)
 
-	// Use filesql-based sqlite3 repository and interactor for consistency
-	sqlite3Repository := filesql.NewSQLite3Repository(filesqlAdapter)
+	// Use memory-based sqlite3 repository matching production wiring (di/wire_gen.go)
+	sqlite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sql := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sql)
 
