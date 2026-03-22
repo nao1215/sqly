@@ -34,6 +34,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .dump
 [Note]
   Output will be in the format specified in .mode.
   table mode is not available in .dump. If mode is table, .dump output CSV file.
+  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.
 ```
 
 ### exit command
@@ -57,12 +58,16 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .header
 ```shell
 sqly:~/github/github.com/nao1215/sqly(table)$ .import
 [Usage]
-  .import FILE_PATH(S) [--sheet=SHEET_NAME]
+  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]
 
-  - Supported file format: csv, tsv, ltsv, json, xlam, xlsm, xlsx, xltm, xltx
-  - If import multiple files, separate them with spaces
-  - Does not support importing multiple excel sheets at once
-  - If import an Excel file, specify the sheet name with --sheet
+  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed
+  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)
+  - Files and directories can be mixed in arguments
+  - Directories are automatically detected and all supported files are imported
+  - If import multiple files/directories, separate them with spaces
+  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)
+  - Use --sheet to import only a specific sheet from Excel files (works with files and directories)
+  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields
 ```
 
 ### ls command

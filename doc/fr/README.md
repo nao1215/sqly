@@ -210,19 +210,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### Formats de fichiers pris en charge
 
-| Format | Extensions |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| Format | Extensions | Remarques |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | Stocke dans la colonne `data` ; utilisez `json_extract()` pour interroger |
+| JSONL | `.jsonl` | Stocke dans la colonne `data` ; utilisez `json_extract()` pour interroger |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | Chaque feuille devient une table separee |
+| ACH | `.ach` | Cree plusieurs tables (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | Cree une seule table _message |
 
-Les donnees JSON/JSONL sont stockees dans une seule colonne `data`. Utilisez `json_extract()` de SQLite pour interroger les champs individuels.
-
-Chaque format prend egalement en charge les extensions de compression suivantes: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel prennent egalement en charge les extensions de compression suivantes: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (par exemple: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Benchmark

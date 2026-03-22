@@ -210,19 +210,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### 지원 파일 형식
 
-| 형식 | 확장자 |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| 형식 | 확장자 | 비고 |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | `data` 컬럼에 저장. `json_extract()`로 조회 |
+| JSONL | `.jsonl` | `data` 컬럼에 저장. `json_extract()`로 조회 |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | 각 시트가 개별 테이블이 됩니다 |
+| ACH | `.ach` | 여러 테이블 생성 (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | 단일 _message 테이블 생성 |
 
-JSON/JSONL 데이터는 단일 `data` 컬럼에 저장됩니다. 개별 필드를 조회하려면 SQLite의 `json_extract()`를 사용하십시오.
-
-각 형식은 다음 압축 확장자도 지원합니다: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel은 다음 압축 확장자도 지원합니다: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (예: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## 벤치마크

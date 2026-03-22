@@ -210,19 +210,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### Поддерживаемые форматы файлов
 
-| Формат | Расширения |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| Формат | Расширения | Примечания |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | Хранится в столбце `data`; используйте `json_extract()` для запросов |
+| JSONL | `.jsonl` | Хранится в столбце `data`; используйте `json_extract()` для запросов |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | Каждый лист становится отдельной таблицей |
+| ACH | `.ach` | Создает несколько таблиц (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | Создает одну таблицу _message |
 
-Данные JSON/JSONL хранятся в одном столбце `data`. Используйте `json_extract()` SQLite для запроса отдельных полей.
-
-Каждый формат также поддерживает следующие расширения сжатия: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel также поддерживают следующие расширения сжатия: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (например: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Бенчмарк

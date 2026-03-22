@@ -210,19 +210,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### 対応ファイル形式
 
-| 形式 | 拡張子 |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| 形式 | 拡張子 | 備考 |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | `data` カラムに格納。`json_extract()` でクエリ |
+| JSONL | `.jsonl` | `data` カラムに格納。`json_extract()` でクエリ |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | 各シートが個別のテーブルになります |
+| ACH | `.ach` | 複数テーブルを作成 (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | 単一の _message テーブルを作成 |
 
-JSON/JSONLデータは単一の `data` カラムに格納されます。個々のフィールドを問い合わせるにはSQLiteの `json_extract()` を使用してください。
-
-各形式は以下の圧縮拡張子にも対応しています: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelは以下の圧縮拡張子にも対応しています: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (例: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## ベンチマーク

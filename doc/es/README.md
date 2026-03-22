@@ -210,19 +210,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### Formatos de archivo compatibles
 
-| Formato | Extensiones |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| Formato | Extensiones | Notas |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | Almacenado en la columna `data`; use `json_extract()` para consultar |
+| JSONL | `.jsonl` | Almacenado en la columna `data`; use `json_extract()` para consultar |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | Cada hoja se convierte en una tabla separada |
+| ACH | `.ach` | Crea varias tablas (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | Crea una sola tabla _message |
 
-Los datos JSON/JSONL se almacenan en una sola columna `data`. Use `json_extract()` de SQLite para consultar campos individuales.
-
-Cada formato tambien admite las siguientes extensiones de compresion: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel tambien admiten las siguientes extensiones de compresion: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (por ejemplo: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## Benchmark

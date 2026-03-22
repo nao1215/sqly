@@ -211,19 +211,19 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 
 ### 支持的文件格式
 
-| 格式 | 扩展名 |
-|:--|:--|
-| CSV | `.csv` |
-| TSV | `.tsv` |
-| LTSV | `.ltsv` |
-| JSON | `.json` |
-| JSONL | `.jsonl` |
-| Parquet | `.parquet` |
-| Excel | `.xlsx` |
+| 格式 | 扩展名 | 备注 |
+|:--|:--|:--|
+| CSV | `.csv` | |
+| TSV | `.tsv` | |
+| LTSV | `.ltsv` | |
+| JSON | `.json` | 存储在 `data` 列中；使用 `json_extract()` 查询 |
+| JSONL | `.jsonl` | 存储在 `data` 列中；使用 `json_extract()` 查询 |
+| Parquet | `.parquet` | |
+| Excel | `.xlsx` | 每个工作表成为一个单独的表 |
+| ACH | `.ach` | 创建多个表 (_file_header, _batches, _entries, _addenda) |
+| Fedwire | `.fed` | 创建单个 _message 表 |
 
-JSON/JSONL数据存储在单个 `data` 列中。使用SQLite的 `json_extract()` 查询各个字段。
-
-各格式还支持以下压缩扩展名: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
+CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel还支持以下压缩扩展名: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`
 (例如: `.csv.gz`, `.tsv.bz2`, `.ltsv.xz`)
 
 ## 基准测试
