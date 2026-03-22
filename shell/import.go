@@ -96,8 +96,8 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 // importDirectory loads all supported files from a directory into the database.
 // Returns true if at least one new table was actually imported, false if nothing
 // was imported (empty directory or no supported files).
-// When sheetName is specified, Excel files within the directory are filtered
-// to keep only the requested sheet.
+// When sheetName is specified, --sheet filtering is applied per-Excel-file
+// by walking the directory and filtering each Excel file individually.
 func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, sheetName string) (bool, error) {
 	tablesBefore, err := s.usecases.sqlite3.GetTableNames(ctx)
 	if err != nil {
@@ -120,14 +120,31 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		return false, nil
 	}
 
-	// Apply --sheet filtering to newly imported Excel tables in this directory
+	// Apply --sheet filtering per-Excel-file within the directory.
+	// Walk the directory to find Excel files and filter each one individually,
+	// so that non-Excel tables (CSV, JSON, etc.) are never affected, and
+	// multiple Excel files each keep their own matching sheet.
+	// Pass the newTableNames as candidates so only freshly-imported tables
+	// are considered, preventing prefix collision with pre-existing tables.
 	if sheetName != "" {
 		newSet := make(map[string]struct{}, len(newTableNames))
 		for _, n := range newTableNames {
 			newSet[n] = struct{}{}
 		}
-		if err := s.filterExcelSheetsInSet(ctx, newSet, sheetName); err != nil {
-			return false, err
+		entries, err := os.ReadDir(cleanPath)
+		if err != nil {
+			return false, fmt.Errorf("failed to read directory %s for sheet filtering: %w", displayPath, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			filePath := filepath.Join(cleanPath, entry.Name())
+			if s.usecases.sqlite3.IsExcelFile(filePath) {
+				if err := s.filterExcelSheets(ctx, filePath, sheetName, newSet); err != nil {
+					return false, err
+				}
+			}
 		}
 	}
 
@@ -141,29 +158,17 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed and compressed variants)", filepath.Base(cleanPath))
 	}
 
-	// Record tables before import so we can identify exactly which tables were added
-	tablesBefore, err := s.usecases.sqlite3.GetTableNames(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get table names before importing %s: %w", displayPath, err)
-	}
-	existingTables := tableNameSet(tablesBefore)
-
 	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 
-	// Apply --sheet filtering only to Excel files, scoped to tables added by this import
+	// Apply --sheet filtering only to Excel files.
+	// Pass nil candidates so filterExcelSheets falls back to prefix matching
+	// over all current tables. This handles both first-import and re-import:
+	// for a single-file import there's no ambiguity about which file owns
+	// the prefix, so prefix matching is safe here.
 	if s.usecases.sqlite3.IsExcelFile(cleanPath) && sheetName != "" {
-		tablesAfter, err := s.usecases.sqlite3.GetTableNames(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
-		}
-		newNames := diffTableNames(tablesAfter, existingTables)
-		newSet := make(map[string]struct{}, len(newNames))
-		for _, n := range newNames {
-			newSet[n] = struct{}{}
-		}
-		if err := s.filterExcelSheetsInSet(ctx, newSet, sheetName); err != nil {
+		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, nil); err != nil {
 			return err
 		}
 	}
@@ -171,29 +176,48 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	return nil
 }
 
-// filterExcelSheetsInSet keeps only the table matching sheetName from the given
-// set of newly-imported table names, dropping the rest. This avoids the prefix
-// collision problem: instead of guessing which tables belong to a file via prefix
-// matching, we operate only on the exact set of tables added by the most recent import.
-func (s *Shell) filterExcelSheetsInSet(ctx context.Context, newTables map[string]struct{}, sheetName string) error {
-	if len(newTables) == 0 {
-		return nil
+// filterExcelSheets keeps only the requested sheet from a specific Excel file,
+// operating on the given candidate set of table names. If candidates is nil,
+// we build the candidate set from all tables matching the file's prefix (used
+// for re-import where the diff is empty).
+//
+// Candidates isolate the filtering to tables owned by the current import,
+// preventing prefix collisions: e.g. "sales_" won't accidentally match
+// tables from "sales_q1.xlsx" if those tables aren't in the candidate set.
+func (s *Shell) filterExcelSheets(ctx context.Context, excelPath string, sheetName string, candidates map[string]struct{}) error {
+	exactPrefix := s.usecases.sqlite3.GetTableNameFromFilePath(excelPath) + "_"
+
+	// If no candidate set was provided (re-import case), fall back to
+	// prefix matching over all current tables.
+	if candidates == nil {
+		tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get table names for %s: %w", excelPath, err)
+		}
+		candidates = make(map[string]struct{})
+		for _, t := range tables {
+			if strings.HasPrefix(t.Name(), exactPrefix) {
+				candidates[t.Name()] = struct{}{}
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		return fmt.Errorf("no sheets found in Excel file %s", excelPath)
 	}
 
 	sanitized := s.usecases.sqlite3.SanitizeForSQL(sheetName)
-
-	// Find the table whose sheet-part suffix matches the requested sheet name
 	var keepTable string
-	for name := range newTables {
-		// Table names from Excel are formatted as "filename_sheetname".
-		// Extract the sheet part by finding the last occurrence of the sanitized
-		// sheet name as a suffix after an underscore.
-		if idx := strings.Index(name, "_"); idx >= 0 {
-			sheetPart := name[idx+1:]
-			if sheetPart == sanitized {
-				keepTable = name
-				break
-			}
+	for name := range candidates {
+		// Extract sheet part by stripping the known prefix.
+		// Only consider tables that actually start with this file's prefix.
+		if !strings.HasPrefix(name, exactPrefix) {
+			continue
+		}
+		sheetPart := strings.TrimPrefix(name, exactPrefix)
+		if sheetPart == sanitized {
+			keepTable = name
+			break
 		}
 		// Also handle case where table name equals the sheet name directly
 		if name == sanitized {
@@ -203,19 +227,20 @@ func (s *Shell) filterExcelSheetsInSet(ctx context.Context, newTables map[string
 	}
 
 	if keepTable == "" {
-		// Drop all newly imported tables since the requested sheet was not found
-		for name := range newTables {
+		for name := range candidates {
+			if !strings.HasPrefix(name, exactPrefix) {
+				continue
+			}
 			dropSQL := "DROP TABLE IF EXISTS " + s.usecases.sqlite3.QuoteIdentifier(name)
 			if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
 				return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
 			}
 		}
-		return fmt.Errorf("sheet %q not found in imported Excel tables", sheetName)
+		return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, excelPath)
 	}
 
-	// Drop every newly imported table except the one we want to keep
-	for name := range newTables {
-		if name == keepTable {
+	for name := range candidates {
+		if name == keepTable || !strings.HasPrefix(name, exactPrefix) {
 			continue
 		}
 		dropSQL := "DROP TABLE IF EXISTS " + s.usecases.sqlite3.QuoteIdentifier(name)
