@@ -11,6 +11,7 @@ type Usecases struct {
 	history usecase.HistoryUsecase
 	excel   usecase.ExcelUsecase
 	filesql usecase.FileSQLUsecase
+	export  usecase.ExportUsecase
 }
 
 // NewUsecases return *usecases that is assigned the result of parsing os.Args.
@@ -22,6 +23,7 @@ func NewUsecases(
 	history usecase.HistoryUsecase,
 	excel usecase.ExcelUsecase,
 	filesql usecase.FileSQLUsecase,
+	export usecase.ExportUsecase,
 ) Usecases {
 	return Usecases{
 		csv:     csv,
@@ -31,5 +33,6 @@ func NewUsecases(
 		history: history,
 		excel:   excel,
 		filesql: filesql,
+		export:  export,
 	}
 }

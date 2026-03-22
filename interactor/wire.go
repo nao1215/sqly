@@ -14,5 +14,6 @@ var Set = wire.NewSet(
 	NewHistoryInteractor,
 	NewExcelInteractor,
 	NewFileSQLInteractor,
+	NewExportInteractor,
 	NewSQL,
 )
