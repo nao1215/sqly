@@ -131,20 +131,25 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		for _, n := range newTableNames {
 			newSet[n] = struct{}{}
 		}
-		entries, err := os.ReadDir(cleanPath)
-		if err != nil {
-			return false, fmt.Errorf("failed to read directory %s for sheet filtering: %w", displayPath, err)
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+		// Walk the directory recursively to match filesql's recursive import behavior.
+		// filesql uses filepath.WalkDir when importing directories, so sheet filtering
+		// must also traverse subdirectories to find all Excel files.
+		err := filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			filePath := filepath.Join(cleanPath, entry.Name())
-			if s.usecases.sqlite3.IsExcelFile(filePath) {
-				if err := s.filterExcelSheets(ctx, filePath, sheetName, newSet); err != nil {
-					return false, err
+			if d.IsDir() {
+				return nil
+			}
+			if s.usecases.sqlite3.IsExcelFile(path) {
+				if err := s.filterExcelSheets(ctx, path, sheetName, newSet); err != nil {
+					return err
 				}
 			}
+			return nil
+		})
+		if err != nil {
+			return false, fmt.Errorf("failed to walk directory %s for sheet filtering: %w", displayPath, err)
 		}
 	}
 
