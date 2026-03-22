@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/infrastructure/filesql"
 )
 
 const (
@@ -102,10 +103,54 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 				continue
 			}
 
+			// For Excel files with --sheet, we need to filter after import
+			sheetName := ""
+			if isExcelFile(cleanPath) {
+				sheetName = s.argument.SheetName
+				if sheetName == "" {
+					sheetName = extractSheetNameFromArgs(argv)
+				}
+			}
+
+			// Record tables before import so we can identify new ones
+			tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
+			if err != nil {
+				errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names before importing %s: %v", path, err))
+				continue
+			}
+			existingTables := make(map[string]struct{}, len(tablesBefore))
+			for _, table := range tablesBefore {
+				existingTables[table.Name()] = struct{}{}
+			}
+
 			if err := s.usecases.filesql.LoadFiles(ctx, cleanPath); err != nil {
 				errorMessages = append(errorMessages, fmt.Sprintf("failed to import file %s: %v", path, err))
 				continue
 			}
+
+			// For Excel with --sheet, drop tables that don't match the requested sheet
+			if sheetName != "" {
+				tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
+				if err != nil {
+					errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names after importing %s: %v", path, err))
+					continue
+				}
+
+				sanitizedSheet := filesql.SanitizeForSQL(sheetName)
+				for _, table := range tablesAfter {
+					if _, existed := existingTables[table.Name()]; existed {
+						continue
+					}
+					// Keep only the table matching the requested sheet name
+					if !strings.HasSuffix(table.Name(), "_"+sanitizedSheet) && table.Name() != sanitizedSheet {
+						dropSQL := "DROP TABLE IF EXISTS " + filesql.QuoteIdentifier(table.Name())
+						if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+							errorMessages = append(errorMessages, fmt.Sprintf("failed to drop unwanted sheet table %s: %v", table.Name(), err))
+						}
+					}
+				}
+			}
+
 			successCount++
 		}
 	}

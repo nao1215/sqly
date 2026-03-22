@@ -206,14 +206,13 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **Better Type Handling**: Automatic type detection ensures proper numeric sorting and calculations
 - **Compressed File Support**: Native support for `.gz`, `.bz2`, `.xz`, and `.zst` compressed files
 
-### Removed Features
-- **JSON Support**: JSON file format support has been removed in favor of focusing on structured data formats (CSV, TSV, LTSV, Excel)
-  - Use CSV export from JSON tools if you need to process JSON data with sqly
-  - The removal allows for better optimization of the core file formats
+### Re-added and New Input Formats
+- **JSON/JSONL Support**: JSON and JSONL (JSON Lines) file format support has been re-added as input via the filesql library
+  - JSON/JSONL data is stored in a single `data` column; use SQLite's `json_extract()` to query individual fields
+- **Parquet Support**: Parquet file format is now supported as input
 
 ### Breaking Changes
-- The `--json` flag has been removed
-- JSON files (`.json`) are no longer supported as input
+- The `--json` output flag has been removed (output formats: table, CSV, TSV, LTSV, Excel, Markdown)
 - Numeric formatting in output may differ slightly due to improved type detection
 
 ## Benchmark
