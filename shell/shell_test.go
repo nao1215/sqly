@@ -670,6 +670,82 @@ func TestShellExec(t *testing.T) {
 		g.Assert(t, "dump_not_exist_table", []byte(got.Error()))
 	})
 
+	t.Run("execute .dump ACH table returns read-only error", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "ppd-debit.ach")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.csv")
+		_, got := getExecStdOutput(t, shell.exec, ".dump ppd_debit_entries "+file)
+		if got == nil {
+			t.Fatal("expected error when dumping ACH table, got nil")
+		}
+		if !strings.Contains(got.Error(), "read-only") {
+			t.Errorf("expected read-only error, got: %v", got)
+		}
+	})
+
+	t.Run("execute .dump Fedwire table returns read-only error", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "customer-transfer.fed")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.fed")
+		_, got := getExecStdOutput(t, shell.exec, ".dump customer_transfer_message "+file)
+		if got == nil {
+			t.Fatal("expected error when dumping Fedwire table, got nil")
+		}
+		if !strings.Contains(got.Error(), "read-only") {
+			t.Errorf("expected read-only error, got: %v", got)
+		}
+	})
+
+	t.Run("import and query ACH file", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "ppd-debit.ach")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `SELECT * FROM "ppd_debit_entries"`)
+		if err != nil {
+			t.Fatalf("query ACH entries table failed: %v", err)
+		}
+	})
+
+	t.Run("import and query Fedwire file", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "customer-transfer.fed")}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = getExecStdOutput(t, shell.exec, `SELECT * FROM "customer_transfer_message"`)
+		if err != nil {
+			t.Fatalf("query Fedwire message table failed: %v", err)
+		}
+	})
+
 	t.Run("execute sql", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {

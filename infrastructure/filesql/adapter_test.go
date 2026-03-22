@@ -1389,3 +1389,126 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 		t.Error("Expected at least one message record in Fedwire file")
 	}
 }
+
+func TestIsACHTable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		table    string
+		expected bool
+	}{
+		{"entries table", "payment_entries", true},
+		{"file_header table", "payment_file_header", true},
+		{"batches table", "payment_batches", true},
+		{"addenda table", "payment_addenda", true},
+		{"iat_batches table", "payment_iat_batches", true},
+		{"iat_entries table", "payment_iat_entries", true},
+		{"iat_addenda table", "payment_iat_addenda", true},
+		{"regular table", "users", false},
+		{"message table (wire)", "payment_message", false},
+		{"empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsACHTable(tt.table); got != tt.expected {
+				t.Errorf("IsACHTable(%q) = %v, want %v", tt.table, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsWireTable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		table    string
+		expected bool
+	}{
+		{"message table", "payment_message", true},
+		{"entries table (ACH)", "payment_entries", false},
+		{"regular table", "users", false},
+		{"empty string", "", false},
+		{"only suffix", "_message", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsWireTable(tt.table); got != tt.expected {
+				t.Errorf("IsWireTable(%q) = %v, want %v", tt.table, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsSupportedFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"csv", "data.csv", true},
+		{"tsv", "data.tsv", true},
+		{"ltsv", "data.ltsv", true},
+		{"json", "data.json", true},
+		{"jsonl", "data.jsonl", true},
+		{"parquet", "data.parquet", true},
+		{"xlsx", "data.xlsx", true},
+		{"ach", "payment.ach", true},
+		{"fed", "payment.fed", true},
+		{"csv.gz", "data.csv.gz", true},
+		{"tsv.bz2", "data.tsv.bz2", true},
+		{"xlsx.xz", "data.xlsx.xz", true},
+		{"csv.zst", "data.csv.zst", true},
+		{"csv.z", "data.csv.z", true},
+		{"csv.snappy", "data.csv.snappy", true},
+		{"csv.s2", "data.csv.s2", true},
+		{"csv.lz4", "data.csv.lz4", true},
+		{"uppercase ACH", "PAYMENT.ACH", true},
+		{"txt unsupported", "data.txt", false},
+		{"no extension", "data", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsSupportedFile(tt.path); got != tt.expected {
+				t.Errorf("IsSupportedFile(%q) = %v, want %v", tt.path, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsExcelFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"xlsx", "data.xlsx", true},
+		{"xlsx.gz", "data.xlsx.gz", true},
+		{"xlsx.bz2", "data.xlsx.bz2", true},
+		{"uppercase", "DATA.XLSX", true},
+		{"csv", "data.csv", false},
+		{"ach", "payment.ach", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsExcelFile(tt.path); got != tt.expected {
+				t.Errorf("IsExcelFile(%q) = %v, want %v", tt.path, got, tt.expected)
+			}
+		})
+	}
+}
