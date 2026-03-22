@@ -167,7 +167,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
 	if !s.usecases.sqlite3.IsSupportedFile(cleanPath) {
-		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed and compressed variants)", filepath.Base(cleanPath))
+		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
 	}
 
 	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
@@ -337,8 +337,8 @@ func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
 	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
 	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx, ach, fed")
-	fmt.Fprintln(config.Stdout, "  - Compression: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 (automatically detected)")
+	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed")
+	fmt.Fprintln(config.Stdout, "  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4")
 	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
 	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
 	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
