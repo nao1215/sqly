@@ -210,15 +210,7 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 		strings.HasPrefix(currentWord, `..\`) || // Windows relative path
 		strings.HasPrefix(currentWord, `C:\`) || // Windows absolute path (common drive)
 		// Also check if the word looks like a filename with supported extensions
-		(strings.Contains(currentWord, ".") &&
-			(strings.Contains(currentWord, ".csv") ||
-				strings.Contains(currentWord, ".tsv") ||
-				strings.Contains(currentWord, ".ltsv") ||
-				strings.Contains(currentWord, ".xlsx") ||
-				strings.Contains(currentWord, ".gz") ||
-				strings.Contains(currentWord, ".bz2") ||
-				strings.Contains(currentWord, ".xz") ||
-				strings.Contains(currentWord, ".zst")))
+		(strings.Contains(currentWord, ".") && s.usecases.filesql.IsSupportedFile(currentWord))
 	// Check if we're at the end of a path with / or \
 	atEndOfPath := (strings.HasSuffix(text, "/") || strings.HasSuffix(text, `\`)) && len(strings.TrimSpace(text)) > 0
 	// If it looks like a file path OR we're at end of path, provide file completions
@@ -454,41 +446,12 @@ func trimGaps(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// supportedFileExtensions returns list of file extensions that sqly can process
-func supportedFileExtensions() []string {
-	return []string{".csv", ".tsv", ".ltsv", ".xlsx"}
-}
-
-// supportedCompressedExtensions returns list of compression extensions
-func supportedCompressedExtensions() []string {
-	return []string{".gz", ".bz2", ".xz", ".zst"}
-}
-
-// isValidFileForCompletion checks if file has supported extension
-func isValidFileForCompletion(filename string) bool {
-	// Handle compressed files by removing compression extension first
-	name := filename
-	for {
-		found := false
-		for _, compExt := range supportedCompressedExtensions() {
-			if strings.HasSuffix(name, compExt) {
-				name = strings.TrimSuffix(name, compExt)
-				found = true
-				break
-			}
-		}
-		if !found {
-			break
-		}
+// isValidFileForCompletion checks if file has a supported extension.
+func (s *Shell) isValidFileForCompletion(filename string) bool {
+	if s.usecases.filesql == nil {
+		return false
 	}
-
-	// Check if the base file has supported extension
-	for _, ext := range supportedFileExtensions() {
-		if strings.HasSuffix(name, ext) {
-			return true
-		}
-	}
-	return false
+	return s.usecases.filesql.IsSupportedFile(filename)
 }
 
 // getFilePathCompletions returns file path completions for importable files (recursive)
@@ -511,7 +474,7 @@ func (s *Shell) getFilePathCompletions(_ string) []Suggest {
 		}
 
 		// For files, check if they are importable
-		if !d.IsDir() && isValidFileForCompletion(d.Name()) {
+		if !d.IsDir() && s.isValidFileForCompletion(d.Name()) {
 			suggestions = append(suggestions, Suggest{
 				Text:        filepath.ToSlash(path),
 				Description: "Importable file",

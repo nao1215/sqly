@@ -13,12 +13,12 @@ func Test_clearCommand(t *testing.T) {
 		t.Parallel()
 
 		c := NewCommands()
-		
+
 		// Verify the command exists in the command list
 		if !c.hasCmd(".clear") {
 			t.Error("Expected .clear command to be registered")
 		}
-		
+
 		// Verify command has correct metadata
 		cmd := c[".clear"]
 		if cmd.name != ".clear" {
@@ -37,7 +37,7 @@ func Test_clearCommand(t *testing.T) {
 
 		c := NewCommands()
 		cmd := c[".clear"]
-		
+
 		// Call execute and verify it returns (may return error in CI, but shouldn't panic)
 		err := cmd.execute(context.Background(), &Shell{}, []string{})
 		// We don't assert err == nil because clear might fail in headless environments

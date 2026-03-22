@@ -30,7 +30,7 @@ sqly is a command-line SQL query tool for file formats (CSV, TSV, LTSV, Excel) u
 
 ### File Format Support
 - CSV, TSV, LTSV, Excel (.xlsx)
-- Compressed files: .gz, .bz2, .xz, .zst
+- Compressed files: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4
 - Automatic type detection and format recognition
 
 ## Development Standards
@@ -134,7 +134,7 @@ rows, err := db.Query("SELECT * FROM data WHERE column > ?", value)
 
 ### Recent Changes
 - Migrated to filesql for better performance
-- Removed JSON support (focus on structured data)
+- JSON/JSONL/Parquet input re-added via filesql (`--json` output flag removed)
 - Added compressed file support
 - Switched to pure Go SQLite (no CGO)
 
@@ -144,7 +144,7 @@ rows, err := db.Query("SELECT * FROM data WHERE column > ?", value)
 - Respect layer separation and dependency direction
 
 ### Breaking Changes Awareness
-- JSON files no longer supported
+- JSON/JSONL/Parquet files supported as input (data in `data` column; use `json_extract()` for JSON fields)
 - Output formatting may differ due to type detection
 - Dependencies changed from CGO to pure Go
 

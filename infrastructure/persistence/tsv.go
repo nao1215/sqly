@@ -48,9 +48,8 @@ func (tr *tsvRepository) Dump(f *os.File, table *model.Table) error {
 	w := csv.NewWriter(f)
 	w.Comma = '\t'
 
-	records := [][]string{
-		table.Header(),
-	}
+	records := make([][]string, 0, 1+len(table.Records()))
+	records = append(records, table.Header())
 	for _, v := range table.Records() {
 		records = append(records, v)
 	}

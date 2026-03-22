@@ -197,10 +197,11 @@ func TestCommandList_lsCommand(t *testing.T) {
 }
 
 func TestShell_getFilePathCompletions_errorHandling(t *testing.T) {
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer cleanup()
 
 	// Test with a directory that should cause a permission error or similar
 	// This is tricky to test reliably across platforms, so we test the fallback behavior
@@ -262,10 +263,11 @@ func TestShell_getFilePathCompletions_errorHandling(t *testing.T) {
 }
 
 func TestShell_getFilePathCompletions_edgeCases(t *testing.T) {
-	shell := &Shell{
-		argument: &config.Arg{},
-		config:   &config.Config{},
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer cleanup()
 
 	// Test with different directory structures
 	tempDir := t.TempDir()
@@ -273,7 +275,7 @@ func TestShell_getFilePathCompletions_edgeCases(t *testing.T) {
 
 	// Create nested directory structure
 	nestedDir := filepath.Join(tempDir, "subdir")
-	err := os.MkdirAll(nestedDir, 0750)
+	err = os.MkdirAll(nestedDir, 0750)
 	if err != nil {
 		t.Fatalf("Could not create nested directory: %v", err)
 	}

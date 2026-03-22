@@ -37,8 +37,11 @@ func newBaseFileInteractor(
 
 // list loads file data using filesql for improved performance and compression support
 func (bi *baseFileInteractor) list(filePath string, fileType string) (*model.Table, error) {
-	ctx := context.Background()
+	return bi.listContext(context.Background(), filePath, fileType)
+}
 
+// listContext loads file data using filesql with the given context.
+func (bi *baseFileInteractor) listContext(ctx context.Context, filePath string, fileType string) (*model.Table, error) {
 	if bi.filesqlAdapter == nil {
 		return nil, fmt.Errorf("%s file processing: %w", fileType, ErrFilesqlAdapterNotInitialized)
 	}
@@ -48,7 +51,7 @@ func (bi *baseFileInteractor) list(filePath string, fileType string) (*model.Tab
 	}
 
 	tableName := filesql.GetTableNameFromFilePath(filePath)
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + filesql.QuoteIdentifier(tableName)
 
 	table, err := bi.filesqlAdapter.Query(ctx, query)
 	if err != nil {
@@ -59,18 +62,16 @@ func (bi *baseFileInteractor) list(filePath string, fileType string) (*model.Tab
 }
 
 // loadFile loads a file using filesql and returns the context for further operations
-func (bi *baseFileInteractor) loadFile(filePath string, fileType string) (context.Context, error) {
-	ctx := context.Background()
-
+func (bi *baseFileInteractor) loadFile(ctx context.Context, filePath string, fileType string) error {
 	if bi.filesqlAdapter == nil {
-		return nil, fmt.Errorf("%s file processing: %w", fileType, ErrFilesqlAdapterNotInitialized)
+		return fmt.Errorf("%s file processing: %w", fileType, ErrFilesqlAdapterNotInitialized)
 	}
 
 	if err := bi.filesqlAdapter.LoadFile(ctx, filePath); err != nil {
-		return nil, fmt.Errorf("failed to load %s file %q: %w", fileType, filePath, err)
+		return fmt.Errorf("failed to load %s file %q: %w", fileType, filePath, err)
 	}
 
-	return ctx, nil
+	return nil
 }
 
 // getTableNames returns all available table names

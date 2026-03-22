@@ -39,7 +39,7 @@ brew install nao1215/tap/sqly
 - go1.25.0以降
 
 ## 使用方法
-sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
+sqlyは、ファイルパスやディレクトリパスを引数として渡すと、CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelファイル（圧縮版を含む）を自動的にDBにインポートします。同じコマンドでファイルとディレクトリを混在させることもできます。DBテーブル名は、ファイル名またはシート名と同じになります（例：user.csvをインポートした場合、sqlyコマンドはuserテーブルを作成します）。
 
 **注意**: ファイル名にSQL構文エラーの原因となる文字（ハイフン `-`、ドット `.`、その他の特殊文字など）が含まれている場合、それらは自動的にアンダースコア `_` に置き換えられます。例えば、`bug-syntax-error.csv`は`bug_syntax_error`テーブルになります。
 
@@ -204,16 +204,15 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **filesql統合**: [filesql](https://github.com/nao1215/filesql)ライブラリによるパフォーマンスと機能の向上
 - **パフォーマンス向上**: より高速なファイル処理のためのトランザクションバッチングによるバルクインサート操作
 - **型処理の向上**: 自動型検出により適切な数値ソートと計算を保証
-- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`圧縮ファイルのネイティブサポート
+- **圧縮ファイルサポート**: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`圧縮ファイルのネイティブサポート
 
-### 削除された機能
-- **JSONサポート**: 構造化データ形式（CSV、TSV、LTSV、Excel）に焦点を当てるため、JSONファイル形式のサポートが削除されました
-  - JSONデータをsqlyで処理する必要がある場合は、JSONツールからのCSVエクスポートを使用してください
-  - この削除により、コアファイル形式のより良い最適化が可能になります
+### 再追加および新規入力形式
+- **JSON/JSONLサポート**: filesqlライブラリを通じて、JSON および JSONL（JSON Lines）ファイル形式の入力サポートが再追加されました
+  - JSON/JSONLデータは単一の `data` カラムに格納されます。個々のフィールドを問い合わせるには SQLite の `json_extract()` を使用してください
+- **Parquetサポート**: Parquetファイル形式が入力としてサポートされるようになりました
 
 ### 破壊的変更
-- `--json`フラグが削除されました
-- JSONファイル（`.json`）は入力としてサポートされなくなりました
+- `--json` 出力フラグが削除されました（出力形式: テーブル、CSV、TSV、LTSV、Excel、Markdown）
 - 改善された型検出により、出力の数値フォーマットが若干異なる場合があります
 
 ## ベンチマーク
@@ -267,7 +266,7 @@ SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC 
 ## 使用ライブラリ
 
 **sqly**は以下の強力なGoライブラリを活用して機能を提供しています：
-- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/Excelファイルに対するSQLデータベースインターフェースを提供し、自動型検出と圧縮ファイルサポートを実現
+- [filesql](https://github.com/nao1215/filesql) - CSV/TSV/LTSV/JSON/JSONL/Parquet/Excelファイルに対するSQLデータベースインターフェースを提供し、自動型検出と圧縮ファイルサポートを実現
 - [prompt](https://github.com/nao1215/prompt) - SQL補完とコマンド履歴機能を備えたインタラクティブシェルを実現
 
 ## ライセンス
