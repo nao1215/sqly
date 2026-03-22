@@ -19,10 +19,23 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		fmt.Fprintln(config.Stdout, "[Note]")
 		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
 		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
+		fmt.Fprintln(config.Stdout, "  ACH and Fedwire tables are read-only and cannot be exported via .dump.")
 		return nil
 	}
 
-	table, err := s.usecases.sqlite3.List(ctx, argv[0])
+	tableName := argv[0]
+
+	// ACH and Fedwire tables are read-only in sqly. These formats have complex
+	// multi-table structures (ACH) or structural constraints that make single-table
+	// export lossy. Import and query are fully supported.
+	if s.usecases.sqlite3.IsACHTable(tableName) {
+		return fmt.Errorf("table %q belongs to an ACH file and cannot be exported via .dump (ACH files are read-only in sqly)", tableName)
+	}
+	if s.usecases.sqlite3.IsWireTable(tableName) {
+		return fmt.Errorf("table %q belongs to a Fedwire file and cannot be exported via .dump (Fedwire files are read-only in sqly)", tableName)
+	}
+
+	table, err := s.usecases.sqlite3.List(ctx, tableName)
 	if err != nil {
 		return err
 	}

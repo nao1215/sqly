@@ -482,6 +482,18 @@ func SanitizeForSQL(name string) string {
 	return finalResult
 }
 
+// IsACHTable checks if a table name belongs to an ACH file (multi-table set).
+func IsACHTable(tableName string) bool {
+	_, isACH := filesql.IsACHBaseTableName(tableName)
+	return isACH
+}
+
+// IsWireTable checks if a table name belongs to a Fedwire file.
+func IsWireTable(tableName string) bool {
+	_, isWire := filesql.IsWireBaseTableName(tableName)
+	return isWire
+}
+
 // FileSQLError represents an error from filesql operations
 //
 //nolint:revive // Name maintained for consistency with FileSQLAdapter and clear context indication
