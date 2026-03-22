@@ -215,7 +215,7 @@ func extractSheetNameFromArgs(argv []string) string {
 func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []string, existingTables map[string]struct{}) error {
 	tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get table names after importing %s: %v", path, err)
+		return fmt.Errorf("failed to get table names after importing %s: %w", path, err)
 	}
 
 	// Collect only the newly imported tables (from this Excel file)
@@ -249,7 +249,9 @@ func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []strin
 			// Drop all new tables since the requested sheet was not found
 			for _, name := range newTables {
 				dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
-				_, _ = s.usecases.sqlite3.Exec(ctx, dropSQL)
+				if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+					return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
+				}
 			}
 			return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, path)
 		}
@@ -265,7 +267,7 @@ func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []strin
 		}
 		dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
 		if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
-			return fmt.Errorf("failed to drop sheet table %s: %v", name, err)
+			return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
 		}
 	}
 	return nil
