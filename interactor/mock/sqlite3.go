@@ -158,6 +158,83 @@ func (c *MockDatabaseUsecaseExecSQLCall) DoAndReturn(f func(context.Context, str
 	return c
 }
 
+// GetTableNameFromFilePath mocks base method.
+func (m *MockDatabaseUsecase) GetTableNameFromFilePath(filePath string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTableNameFromFilePath", filePath)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetTableNameFromFilePath indicates an expected call of GetTableNameFromFilePath.
+func (mr *MockDatabaseUsecaseMockRecorder) GetTableNameFromFilePath(filePath any) *MockDatabaseUsecaseGetTableNameFromFilePathCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTableNameFromFilePath", reflect.TypeOf((*MockDatabaseUsecase)(nil).GetTableNameFromFilePath), filePath)
+	return &MockDatabaseUsecaseGetTableNameFromFilePathCall{Call: call}
+}
+
+// MockDatabaseUsecaseGetTableNameFromFilePathCall wrap *gomock.Call
+type MockDatabaseUsecaseGetTableNameFromFilePathCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseGetTableNameFromFilePathCall) Return(arg0 string) *MockDatabaseUsecaseGetTableNameFromFilePathCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseGetTableNameFromFilePathCall) Do(f func(string) string) *MockDatabaseUsecaseGetTableNameFromFilePathCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseGetTableNameFromFilePathCall) DoAndReturn(f func(string) string) *MockDatabaseUsecaseGetTableNameFromFilePathCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetTableNames mocks base method.
+func (m *MockDatabaseUsecase) GetTableNames(ctx context.Context) ([]*model.Table, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTableNames", ctx)
+	ret0, _ := ret[0].([]*model.Table)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTableNames indicates an expected call of GetTableNames.
+func (mr *MockDatabaseUsecaseMockRecorder) GetTableNames(ctx any) *MockDatabaseUsecaseGetTableNamesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTableNames", reflect.TypeOf((*MockDatabaseUsecase)(nil).GetTableNames), ctx)
+	return &MockDatabaseUsecaseGetTableNamesCall{Call: call}
+}
+
+// MockDatabaseUsecaseGetTableNamesCall wrap *gomock.Call
+type MockDatabaseUsecaseGetTableNamesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseGetTableNamesCall) Return(arg0 []*model.Table, arg1 error) *MockDatabaseUsecaseGetTableNamesCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseGetTableNamesCall) Do(f func(context.Context) ([]*model.Table, error)) *MockDatabaseUsecaseGetTableNamesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseGetTableNamesCall) DoAndReturn(f func(context.Context) ([]*model.Table, error)) *MockDatabaseUsecaseGetTableNamesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Header mocks base method.
 func (m *MockDatabaseUsecase) Header(ctx context.Context, tableName string) (*model.Table, error) {
 	m.ctrl.T.Helper()
@@ -235,6 +312,82 @@ func (c *MockDatabaseUsecaseInsertCall) DoAndReturn(f func(context.Context, *mod
 	return c
 }
 
+// IsExcelFile mocks base method.
+func (m *MockDatabaseUsecase) IsExcelFile(filePath string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsExcelFile", filePath)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsExcelFile indicates an expected call of IsExcelFile.
+func (mr *MockDatabaseUsecaseMockRecorder) IsExcelFile(filePath any) *MockDatabaseUsecaseIsExcelFileCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsExcelFile", reflect.TypeOf((*MockDatabaseUsecase)(nil).IsExcelFile), filePath)
+	return &MockDatabaseUsecaseIsExcelFileCall{Call: call}
+}
+
+// MockDatabaseUsecaseIsExcelFileCall wrap *gomock.Call
+type MockDatabaseUsecaseIsExcelFileCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseIsExcelFileCall) Return(arg0 bool) *MockDatabaseUsecaseIsExcelFileCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseIsExcelFileCall) Do(f func(string) bool) *MockDatabaseUsecaseIsExcelFileCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseIsExcelFileCall) DoAndReturn(f func(string) bool) *MockDatabaseUsecaseIsExcelFileCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// IsSupportedFile mocks base method.
+func (m *MockDatabaseUsecase) IsSupportedFile(filePath string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSupportedFile", filePath)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSupportedFile indicates an expected call of IsSupportedFile.
+func (mr *MockDatabaseUsecaseMockRecorder) IsSupportedFile(filePath any) *MockDatabaseUsecaseIsSupportedFileCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSupportedFile", reflect.TypeOf((*MockDatabaseUsecase)(nil).IsSupportedFile), filePath)
+	return &MockDatabaseUsecaseIsSupportedFileCall{Call: call}
+}
+
+// MockDatabaseUsecaseIsSupportedFileCall wrap *gomock.Call
+type MockDatabaseUsecaseIsSupportedFileCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseIsSupportedFileCall) Return(arg0 bool) *MockDatabaseUsecaseIsSupportedFileCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseIsSupportedFileCall) Do(f func(string) bool) *MockDatabaseUsecaseIsSupportedFileCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseIsSupportedFileCall) DoAndReturn(f func(string) bool) *MockDatabaseUsecaseIsSupportedFileCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // List mocks base method.
 func (m *MockDatabaseUsecase) List(ctx context.Context, tableName string) (*model.Table, error) {
 	m.ctrl.T.Helper()
@@ -274,6 +427,49 @@ func (c *MockDatabaseUsecaseListCall) DoAndReturn(f func(context.Context, string
 	return c
 }
 
+// LoadFiles mocks base method.
+func (m *MockDatabaseUsecase) LoadFiles(ctx context.Context, filePaths ...string) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx}
+	for _, a := range filePaths {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "LoadFiles", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LoadFiles indicates an expected call of LoadFiles.
+func (mr *MockDatabaseUsecaseMockRecorder) LoadFiles(ctx any, filePaths ...any) *MockDatabaseUsecaseLoadFilesCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx}, filePaths...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadFiles", reflect.TypeOf((*MockDatabaseUsecase)(nil).LoadFiles), varargs...)
+	return &MockDatabaseUsecaseLoadFilesCall{Call: call}
+}
+
+// MockDatabaseUsecaseLoadFilesCall wrap *gomock.Call
+type MockDatabaseUsecaseLoadFilesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseLoadFilesCall) Return(arg0 error) *MockDatabaseUsecaseLoadFilesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseLoadFilesCall) Do(f func(context.Context, ...string) error) *MockDatabaseUsecaseLoadFilesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseLoadFilesCall) DoAndReturn(f func(context.Context, ...string) error) *MockDatabaseUsecaseLoadFilesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Query mocks base method.
 func (m *MockDatabaseUsecase) Query(ctx context.Context, query string) (*model.Table, error) {
 	m.ctrl.T.Helper()
@@ -309,6 +505,82 @@ func (c *MockDatabaseUsecaseQueryCall) Do(f func(context.Context, string) (*mode
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockDatabaseUsecaseQueryCall) DoAndReturn(f func(context.Context, string) (*model.Table, error)) *MockDatabaseUsecaseQueryCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QuoteIdentifier mocks base method.
+func (m *MockDatabaseUsecase) QuoteIdentifier(identifier string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QuoteIdentifier", identifier)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// QuoteIdentifier indicates an expected call of QuoteIdentifier.
+func (mr *MockDatabaseUsecaseMockRecorder) QuoteIdentifier(identifier any) *MockDatabaseUsecaseQuoteIdentifierCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QuoteIdentifier", reflect.TypeOf((*MockDatabaseUsecase)(nil).QuoteIdentifier), identifier)
+	return &MockDatabaseUsecaseQuoteIdentifierCall{Call: call}
+}
+
+// MockDatabaseUsecaseQuoteIdentifierCall wrap *gomock.Call
+type MockDatabaseUsecaseQuoteIdentifierCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseQuoteIdentifierCall) Return(arg0 string) *MockDatabaseUsecaseQuoteIdentifierCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseQuoteIdentifierCall) Do(f func(string) string) *MockDatabaseUsecaseQuoteIdentifierCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseQuoteIdentifierCall) DoAndReturn(f func(string) string) *MockDatabaseUsecaseQuoteIdentifierCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SanitizeForSQL mocks base method.
+func (m *MockDatabaseUsecase) SanitizeForSQL(name string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SanitizeForSQL", name)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// SanitizeForSQL indicates an expected call of SanitizeForSQL.
+func (mr *MockDatabaseUsecaseMockRecorder) SanitizeForSQL(name any) *MockDatabaseUsecaseSanitizeForSQLCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SanitizeForSQL", reflect.TypeOf((*MockDatabaseUsecase)(nil).SanitizeForSQL), name)
+	return &MockDatabaseUsecaseSanitizeForSQLCall{Call: call}
+}
+
+// MockDatabaseUsecaseSanitizeForSQLCall wrap *gomock.Call
+type MockDatabaseUsecaseSanitizeForSQLCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUsecaseSanitizeForSQLCall) Return(arg0 string) *MockDatabaseUsecaseSanitizeForSQLCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUsecaseSanitizeForSQLCall) Do(f func(string) string) *MockDatabaseUsecaseSanitizeForSQLCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUsecaseSanitizeForSQLCall) DoAndReturn(f func(string) string) *MockDatabaseUsecaseSanitizeForSQLCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

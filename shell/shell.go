@@ -210,7 +210,7 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 		strings.HasPrefix(currentWord, `..\`) || // Windows relative path
 		strings.HasPrefix(currentWord, `C:\`) || // Windows absolute path (common drive)
 		// Also check if the word looks like a filename with supported extensions
-		(strings.Contains(currentWord, ".") && s.usecases.filesql.IsSupportedFile(currentWord))
+		(strings.Contains(currentWord, ".") && s.usecases.sqlite3.IsSupportedFile(currentWord))
 	// Check if we're at the end of a path with / or \
 	atEndOfPath := (strings.HasSuffix(text, "/") || strings.HasSuffix(text, `\`)) && len(strings.TrimSpace(text)) > 0
 	// If it looks like a file path OR we're at end of path, provide file completions
@@ -416,11 +416,13 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 
 // outputToFile output table data to file.
 func (s *Shell) outputToFile(table *model.Table) error {
-	if err := dumpToFile(s, s.argument.Output.FilePath, table); err != nil {
+	exportFmt := model.ExportFormatFromPrintMode(s.state.mode.PrintMode)
+	filePath := normalizeDumpExt(s.argument.Output.FilePath, exportFmt)
+	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
-		color.HiCyanString(s.argument.Output.FilePath), dumpMode(s.state.mode.PrintMode))
+		color.HiCyanString(filePath), exportFmt.String())
 	return nil
 }
 
@@ -448,10 +450,7 @@ func trimGaps(s string) string {
 
 // isValidFileForCompletion checks if file has a supported extension.
 func (s *Shell) isValidFileForCompletion(filename string) bool {
-	if s.usecases.filesql == nil {
-		return false
-	}
-	return s.usecases.filesql.IsSupportedFile(filename)
+	return s.usecases.sqlite3.IsSupportedFile(filename)
 }
 
 // getFilePathCompletions returns file path completions for importable files (recursive)

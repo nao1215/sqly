@@ -46,6 +46,15 @@ func isAllNumeric(values []string) bool {
 // PrintMode is enum to specify output method
 type PrintMode uint
 
+// Format name constants shared between PrintMode and ExportFormat.
+const (
+	formatCSV      = "csv"
+	formatTSV      = "tsv"
+	formatLTSV     = "ltsv"
+	formatMarkdown = "markdown"
+	formatExcel    = "excel"
+)
+
 const (
 	// PrintModeTable print data in table format
 	PrintModeTable PrintMode = iota
@@ -67,15 +76,15 @@ func (p PrintMode) String() string {
 	case PrintModeTable:
 		return "table"
 	case PrintModeMarkdownTable:
-		return "markdown"
+		return formatMarkdown
 	case PrintModeCSV:
-		return "csv"
+		return formatCSV
 	case PrintModeTSV:
-		return "tsv"
+		return formatTSV
 	case PrintModeLTSV:
-		return "ltsv"
+		return formatLTSV
 	case PrintModeExcel:
-		return "excel"
+		return formatExcel
 	}
 	return "unknown"
 }

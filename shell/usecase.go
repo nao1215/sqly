@@ -3,33 +3,25 @@ package shell
 import "github.com/nao1215/sqly/usecase"
 
 // Usecases is a structure that holds the usecase layer.
+// After consolidation, only three service boundaries remain:
+// - sqlite3 (DatabaseUsecase): session operations including SQL execution and file import
+// - history (HistoryUsecase): command history management
+// - export (ExportUsecase): table export to various file formats
 type Usecases struct {
-	csv     usecase.CSVUsecase
-	tsv     usecase.TSVUsecase
-	ltsv    usecase.LTSVUsecase
 	sqlite3 usecase.DatabaseUsecase
 	history usecase.HistoryUsecase
-	excel   usecase.ExcelUsecase
-	filesql usecase.FileSQLUsecase
+	export  usecase.ExportUsecase
 }
 
-// NewUsecases return *usecases that is assigned the result of parsing os.Args.
+// NewUsecases return Usecases with all required usecase dependencies.
 func NewUsecases(
-	csv usecase.CSVUsecase,
-	tsv usecase.TSVUsecase,
-	ltsv usecase.LTSVUsecase,
 	sqlite3 usecase.DatabaseUsecase,
 	history usecase.HistoryUsecase,
-	excel usecase.ExcelUsecase,
-	filesql usecase.FileSQLUsecase,
+	export usecase.ExportUsecase,
 ) Usecases {
 	return Usecases{
-		csv:     csv,
-		tsv:     tsv,
-		ltsv:    ltsv,
 		sqlite3: sqlite3,
 		history: history,
-		excel:   excel,
-		filesql: filesql,
+		export:  export,
 	}
 }

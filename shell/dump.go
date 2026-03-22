@@ -11,7 +11,7 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-// dumpCommand dump specified table to csv file
+// dumpCommand dump specified table to file in the current export format
 func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) != 2 {
 		fmt.Fprintln(config.Stdout, "[Usage]")
@@ -27,61 +27,22 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return err
 	}
 
-	if err := dumpToFile(s, argv[1], table); err != nil {
+	exportFmt := model.ExportFormatFromPrintMode(s.state.mode.PrintMode)
+	filePath := normalizeDumpExt(argv[1], exportFmt)
+	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
-		color.CyanString(argv[0]), color.HiCyanString(argv[1]), dumpMode(s.state.mode.PrintMode))
+		color.CyanString(argv[0]), color.HiCyanString(filePath), exportFmt.String())
 
 	return nil
 }
 
-// dumpToFile is dump table data to file.
-// normalizeDumpExt normalizes the output file extension based on the current print mode
-func normalizeDumpExt(path string, m model.PrintMode) string {
-	ext := map[model.PrintMode]string{
-		model.PrintModeCSV:           ".csv",
-		model.PrintModeTSV:           ".tsv",
-		model.PrintModeLTSV:          ".ltsv",
-		model.PrintModeExcel:         ".xlsx",
-		model.PrintModeMarkdownTable: ".md",
-		model.PrintModeTable:         ".csv",
-	}[m]
-	if ext == "" {
-		return path
-	}
+// normalizeDumpExt normalizes the output file extension based on the export format
+func normalizeDumpExt(path string, ef model.ExportFormat) string {
+	ext := ef.Extension()
 	if filepath.Ext(path) == ext {
 		return path
 	}
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ext
-}
-
-func dumpToFile(s *Shell, filePath string, table *model.Table) error {
-	var err error
-	filePath = normalizeDumpExt(filePath, s.state.mode.PrintMode)
-	switch s.state.mode.PrintMode {
-	case model.PrintModeCSV:
-		err = s.usecases.csv.Dump(filePath, table)
-	case model.PrintModeTSV:
-		err = s.usecases.tsv.Dump(filePath, table)
-	case model.PrintModeLTSV:
-		err = s.usecases.ltsv.Dump(filePath, table)
-	case model.PrintModeExcel:
-		err = s.usecases.excel.Dump(filePath, table)
-	case model.PrintModeMarkdownTable:
-		err = s.usecases.csv.Dump(filePath, table)
-	case model.PrintModeTable:
-		fallthrough
-	default:
-		err = s.usecases.csv.Dump(filePath, table)
-	}
-	return err
-}
-
-// dumpMode is dump mode.
-func dumpMode(m model.PrintMode) string {
-	if m == model.PrintModeTable {
-		return "csv"
-	}
-	return m.String()
 }

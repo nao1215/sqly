@@ -13,6 +13,7 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
 	"github.com/nao1215/sqly/infrastructure/filesql"
+	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
 )
@@ -604,6 +605,33 @@ func TestShellExec(t *testing.T) {
 		g.Assert(t, "dump_ltsv", got)
 	})
 
+	t.Run("execute .dump markdown (print markdown mode)", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--markdown"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.md")
+		_, err = getExecStdOutput(t, shell.exec, ".dump sample "+file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := os.ReadFile(filepath.Clean(file))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "dump_markdown", got)
+	})
+
 	t.Run("execute .dump with few argument", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
@@ -719,15 +747,11 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	ltsvRepo := persistence.NewLTSVRepository()
 	excelRepo := persistence.NewExcelRepository()
 	fileRepo := persistence.NewFileRepository()
-	csvInteractor := interactor.NewCSVInteractor(filesqlAdapter, csvRepo, fileRepo)
-	tsvInteractor := interactor.NewTSVInteractor(filesqlAdapter, tsvRepo, fileRepo)
-	ltsvInteractor := interactor.NewLTSVInteractor(filesqlAdapter, ltsvRepo, fileRepo)
-	excelInteractor := interactor.NewExcelInteractor(filesqlAdapter, excelRepo)
 
-	// Use filesql-based sqlite3 repository and interactor for consistency
-	sqlite3Repository := filesql.NewSQLite3Repository(filesqlAdapter)
-	sql := interactor.NewSQL()
-	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sql)
+	// Use memory-based sqlite3 repository matching production wiring (di/wire_gen.go)
+	sqlite3Repository := memory.NewSQLite3Repository(memoryDB)
+	sqlHelper := interactor.NewSQL()
+	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
@@ -736,8 +760,8 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
-	fileSQLUsecase := interactor.NewFileSQLInteractor(filesqlAdapter)
-	usecases := NewUsecases(csvInteractor, tsvInteractor, ltsvInteractor, sqLite3Interactor, historyInteractor, excelInteractor, fileSQLUsecase)
+	exportInteractor := interactor.NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	usecases := NewUsecases(sqLite3Interactor, historyInteractor, exportInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()

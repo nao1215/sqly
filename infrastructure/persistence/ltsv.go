@@ -2,9 +2,7 @@ package persistence
 
 import (
 	"encoding/csv"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
@@ -17,44 +15,9 @@ var _ repository.LTSVRepository = (*ltsvRepository)(nil)
 
 type ltsvRepository struct{}
 
-// NewLTSVRepository return TSVRepository
+// NewLTSVRepository return LTSVRepository
 func NewLTSVRepository() repository.LTSVRepository {
 	return &ltsvRepository{}
-}
-
-// List return tsv all record.
-func (lr *ltsvRepository) List(f *os.File) (*model.LTSV, error) {
-	r := csv.NewReader(f)
-	r.Comma = '\t'
-
-	label := model.Label{}
-	records := []model.Record{}
-	for {
-		row, err := r.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		if len(label) == 0 {
-			for _, v := range row {
-				l, _, err := lr.labelAndData(v)
-				if err != nil {
-					return nil, err
-				}
-				label = append(label, l)
-			}
-		}
-
-		r := model.Record{}
-		for _, v := range row {
-			_, data, _ := lr.labelAndData(v) //nolint:errcheck // error is already checked.
-			r = append(r, data)
-		}
-		records = append(records, r)
-	}
-	return model.NewLTSV(filepath.Base(f.Name()), label, records), nil
 }
 
 // Dump write contents of DB table to LTSV file

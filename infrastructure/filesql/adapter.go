@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nao1215/fileparser"
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -493,17 +492,51 @@ func (e *FileSQLError) Error() string {
 	return "filesql " + e.Op + ": " + e.Err
 }
 
-// IsSupportedFile checks if the file has a format supported by fileparser.
+// supportedBaseExts lists the base file extensions that filesql can handle.
+var supportedBaseExts = []string{".csv", ".tsv", ".ltsv", ".parquet", ".xlsx", ".json", ".jsonl"}
+
+// compressionExts lists the compression extensions that filesql can decompress.
+var compressionExts = []string{".gz", ".bz2", ".xz", ".zst", ".z", ".snappy", ".s2", ".lz4"}
+
+// IsSupportedFile checks if the file has a format supported by filesql.
+// This covers all formats that filesql can import: CSV, TSV, LTSV, JSON, JSONL,
+// Parquet, XLSX (with compression variants), plus ACH and Fedwire.
 func IsSupportedFile(filePath string) bool {
-	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
+	lower := strings.ToLower(filePath)
+
+	// Check ACH and Fedwire (no compression variants)
+	if strings.HasSuffix(lower, ".ach") || strings.HasSuffix(lower, ".fed") {
+		return true
+	}
+
+	// Strip compression extension if present
+	for _, ext := range compressionExts {
+		if strings.HasSuffix(lower, ext) {
+			lower = strings.TrimSuffix(lower, ext)
+			break
+		}
+	}
+
+	// Check base file extensions
+	for _, ext := range supportedBaseExts {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
 }
 
-// IsExcelFile checks if the file is an Excel format (.xlsx).
+// IsExcelFile checks if the file is an Excel format (.xlsx), including compressed variants.
 func IsExcelFile(filePath string) bool {
-	ft := fileparser.DetectFileType(filePath)
-	base := ft
-	if fileparser.IsCompressed(ft) {
-		base = fileparser.BaseFileType(ft)
+	lower := strings.ToLower(filePath)
+
+	// Strip compression extension if present
+	for _, ext := range compressionExts {
+		if strings.HasSuffix(lower, ext) {
+			lower = strings.TrimSuffix(lower, ext)
+			break
+		}
 	}
-	return base == fileparser.XLSX
+
+	return strings.HasSuffix(lower, ".xlsx")
 }

@@ -17,9 +17,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute CREATE error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
 
 		want := "not support data definition language"
@@ -30,9 +28,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute DROP error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "DROP TABLE test")
 
 		want := "not support data definition language"
@@ -43,9 +39,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute ALTER error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "ALTER TABLE test ADD COLUMN age INTEGER")
 
 		want := "not support data definition language"
@@ -56,9 +50,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute REINDEX error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "REINDEX test")
 
 		want := "not support data definition language"
@@ -69,9 +61,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute BEGIN error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "BEGIN")
 
 		want := "not support transaction control language"
@@ -82,9 +72,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute COMMIT error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "COMMIT")
 
 		want := "not support transaction control language"
@@ -95,9 +83,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute ROLLBACK error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "ROLLBACK")
 
 		want := "not support transaction control language"
@@ -108,9 +94,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute SAVEPOINT error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "SAVEPOINT test")
 
 		want := "not support transaction control language"
@@ -121,9 +105,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute RELEASE error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "RELEASE test")
 
 		want := "not support transaction control language"
@@ -134,9 +116,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute GRANT error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "GRANT SELECT ON test TO user")
 
 		want := "not support data control language"
@@ -147,9 +127,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute REVOKE error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "REVOKE SELECT ON test FROM user")
 
 		want := "not support data control language"
@@ -175,7 +153,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, _, err := interactor.ExecSQL(context.Background(), query)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -195,7 +173,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, _, err := interactor.ExecSQL(context.Background(), query)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -218,7 +196,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		)
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, _, err := interactor.ExecSQL(context.Background(), query)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -238,7 +216,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, _, err := interactor.ExecSQL(context.Background(), query)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -262,7 +240,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, _, err := interactor.ExecSQL(context.Background(), query)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -282,7 +260,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, _, err := interactor.ExecSQL(context.Background(), query)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -299,7 +277,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, got, err := interactor.ExecSQL(context.Background(), statement)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -319,7 +297,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, got, err := interactor.ExecSQL(context.Background(), statement)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -339,7 +317,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, got, err := interactor.ExecSQL(context.Background(), statement)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -359,7 +337,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(int64(0), someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, _, err := interactor.ExecSQL(context.Background(), statement)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -368,9 +346,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	t.Run("execute undifined statement error", func(t *testing.T) {
 		t.Parallel()
-		interactor := NewSQLite3Interactor(nil, nil)
-
-		si := NewSQLite3Interactor(interactor, NewSQL())
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
 		_, _, got := si.ExecSQL(context.Background(), "UNDEFINED STATEMENT")
 
 		want := "this input is not sql query or sqly helper command:"
@@ -399,7 +375,7 @@ func TestSqlite3InteractorCreateTable(t *testing.T) {
 		)
 		repo.EXPECT().CreateTable(gomock.Any(), table).Return(nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		if err := interactor.CreateTable(context.Background(), table); err != nil {
 			t.Errorf("want: nil, got: %v", err)
 		}
@@ -423,7 +399,7 @@ func TestSqlite3InteractorCreateTable(t *testing.T) {
 		someErr := errors.New("failed to create table")
 		repo.EXPECT().CreateTable(gomock.Any(), table).Return(someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		if err := interactor.CreateTable(context.Background(), table); !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
 		}
@@ -446,7 +422,7 @@ func TestSqlite3InteractorTablesName(t *testing.T) {
 
 		repo.EXPECT().TablesName(gomock.Any()).Return(tables, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.TablesName(context.Background())
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -465,7 +441,7 @@ func TestSqlite3InteractorTablesName(t *testing.T) {
 		someErr := errors.New("failed to get tables name")
 		repo.EXPECT().TablesName(gomock.Any()).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, err := interactor.TablesName(context.Background())
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -493,7 +469,7 @@ func TestSqlite3InteractorInsert(t *testing.T) {
 
 		repo.EXPECT().Insert(gomock.Any(), table).Return(nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		if err := interactor.Insert(context.Background(), table); err != nil {
 			t.Errorf("want: nil, got: %v", err)
 		}
@@ -517,7 +493,7 @@ func TestSqlite3InteractorInsert(t *testing.T) {
 		someErr := errors.New("failed to insert records")
 		repo.EXPECT().Insert(gomock.Any(), table).Return(someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		if err := interactor.Insert(context.Background(), table); !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
 		}
@@ -545,7 +521,7 @@ func TestSqlite3InteractorList(t *testing.T) {
 
 		repo.EXPECT().List(gomock.Any(), tableName).Return(expectedTable, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.List(context.Background(), tableName)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -566,7 +542,7 @@ func TestSqlite3InteractorList(t *testing.T) {
 
 		repo.EXPECT().List(gomock.Any(), tableName).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, err := interactor.List(context.Background(), tableName)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -591,7 +567,7 @@ func TestSqlite3InteractorHeader(t *testing.T) {
 		)
 		repo.EXPECT().Header(gomock.Any(), tableName).Return(expectedHeader, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.Header(context.Background(), tableName)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -612,7 +588,7 @@ func TestSqlite3InteractorHeader(t *testing.T) {
 
 		repo.EXPECT().Header(gomock.Any(), tableName).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, err := interactor.Header(context.Background(), tableName)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -640,7 +616,7 @@ func TestSqlite3InteractorQuery(t *testing.T) {
 		)
 		repo.EXPECT().Query(gomock.Any(), query).Return(expectedTable, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.Query(context.Background(), query)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -661,7 +637,7 @@ func TestSqlite3InteractorQuery(t *testing.T) {
 
 		repo.EXPECT().Query(gomock.Any(), query).Return(nil, someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, err := interactor.Query(context.Background(), query)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
@@ -683,7 +659,7 @@ func TestSqlite3InteractorExec(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.Exec(context.Background(), statement)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -704,7 +680,7 @@ func TestSqlite3InteractorExec(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.Exec(context.Background(), statement)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -725,7 +701,7 @@ func TestSqlite3InteractorExec(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		got, err := interactor.Exec(context.Background(), statement)
 		if err != nil {
 			t.Errorf("want: nil, got: %v", err)
@@ -746,7 +722,7 @@ func TestSqlite3InteractorExec(t *testing.T) {
 
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(int64(0), someErr)
 
-		interactor := NewSQLite3Interactor(repo, NewSQL())
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, err := interactor.Exec(context.Background(), statement)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)

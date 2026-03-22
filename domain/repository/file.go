@@ -2,12 +2,8 @@ package repository
 
 import "os"
 
-//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
-
-// FileRepository is a repository that handles file.
+// FileRepository is a repository that handles file creation for export.
 type FileRepository interface {
-	// Open open file.
-	Open(filePath string) (*os.File, error)
-	// Create open file or create file.
+	// Create creates or opens a file at the given path for writing.
 	Create(filePath string) (*os.File, error)
 }

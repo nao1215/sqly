@@ -7,13 +7,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
-
-// CSVRepository is a repository that handles CSV file.
-// The process of opening and closing CSV files is the responsibility of the upper layer.
+// CSVRepository is a repository that handles CSV file export.
 type CSVRepository interface {
-	// List get csv all data with header.
-	List(csv *os.File) (*model.CSV, error)
 	// Dump write contents of DB table to CSV file
 	Dump(csv *os.File, table *model.Table) error
 }

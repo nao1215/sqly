@@ -8,10 +8,8 @@ import (
 
 //go:generate mockgen -typed -source=$GOFILE -destination=../interactor/mock/$GOFILE -package mock
 
-// ExcelUsecase handle Excel file.
-type ExcelUsecase interface {
-	// List get Excel data.
-	List(excelFilePath, sheetName string) (*model.Table, error)
-	// Dump write contents of DB table to Excel file.
-	Dump(excelFilePath string, table *model.Table) error
+// ExportUsecase handles exporting table data to files in various formats.
+type ExportUsecase interface {
+	// DumpTable exports a table to a file in the specified format.
+	DumpTable(filePath string, table *model.Table, format model.ExportFormat) error
 }

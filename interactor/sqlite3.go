@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
+	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
 )
 
@@ -16,16 +17,24 @@ import (
 var _ usecase.DatabaseUsecase = (*sqlite3Interactor)(nil)
 
 // sqlite3Interactor implementation of use cases related to SQLite3 handler.
+// It also handles file import operations via the filesql adapter, providing
+// a unified session interactor for both SQL execution and file loading.
 type sqlite3Interactor struct {
-	r   repository.SQLite3Repository
-	sql *SQL
+	r       repository.SQLite3Repository
+	sql     *SQL
+	adapter *filesql.FileSQLAdapter
 }
 
 // NewSQLite3Interactor returns a new SQLite3Interactor that implements DatabaseUsecase
-func NewSQLite3Interactor(r repository.SQLite3Repository, sql *SQL) usecase.DatabaseUsecase {
+func NewSQLite3Interactor(
+	r repository.SQLite3Repository,
+	sql *SQL,
+	adapter *filesql.FileSQLAdapter,
+) usecase.DatabaseUsecase {
 	return &sqlite3Interactor{
-		r:   r,
-		sql: sql,
+		r:       r,
+		sql:     sql,
+		adapter: adapter,
 	}
 }
 
@@ -102,4 +111,39 @@ func (si *sqlite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 			"please report this log", color.CyanString(statement),
 			"Web site: https://github.com/nao1215/sqly/issues")
 	}
+}
+
+// LoadFiles loads multiple files or directories into the database.
+func (si *sqlite3Interactor) LoadFiles(ctx context.Context, filePaths ...string) error {
+	return si.adapter.LoadFiles(ctx, filePaths...)
+}
+
+// GetTableNames returns the list of tables currently available in the database.
+func (si *sqlite3Interactor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
+	return si.adapter.GetTableNames(ctx)
+}
+
+// IsSupportedFile checks if the file has a format supported by filesql.
+func (si *sqlite3Interactor) IsSupportedFile(filePath string) bool {
+	return filesql.IsSupportedFile(filePath)
+}
+
+// IsExcelFile checks if the file is an Excel format (.xlsx).
+func (si *sqlite3Interactor) IsExcelFile(filePath string) bool {
+	return filesql.IsExcelFile(filePath)
+}
+
+// SanitizeForSQL sanitizes a string to be SQL-safe.
+func (si *sqlite3Interactor) SanitizeForSQL(name string) string {
+	return filesql.SanitizeForSQL(name)
+}
+
+// QuoteIdentifier safely quotes a SQL identifier.
+func (si *sqlite3Interactor) QuoteIdentifier(identifier string) string {
+	return filesql.QuoteIdentifier(identifier)
+}
+
+// GetTableNameFromFilePath derives a table name from a file path.
+func (si *sqlite3Interactor) GetTableNameFromFilePath(filePath string) string {
+	return filesql.GetTableNameFromFilePath(filePath)
 }

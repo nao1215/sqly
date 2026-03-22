@@ -9,40 +9,6 @@ import (
 	"github.com/nao1215/sqly/config"
 )
 
-func TestFileRepositoryOpen(t *testing.T) {
-	t.Parallel()
-
-	t.Run("file open succeeded", func(t *testing.T) {
-		t.Parallel()
-
-		fr := NewFileRepository()
-		f, err := fr.Open(filepath.Join("testdata", "sample.txt"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
-
-		if f == nil {
-			t.Fatal("file is nil")
-		}
-		got := f.Name()
-		want := filepath.Join("testdata", "sample.txt")
-		if got != want {
-			t.Errorf("mismatch got=%s, want=%s", got, want)
-		}
-	})
-
-	t.Run("because file does not exist, file open failed", func(t *testing.T) {
-		t.Parallel()
-
-		fr := NewFileRepository()
-		_, err := fr.Open(filepath.Join("testdata", "not_exist.txt"))
-		if err == nil {
-			t.Fatal("error is nil")
-		}
-	})
-}
-
 func TestFileRepositoryCreate(t *testing.T) {
 	if runtime.GOOS == config.Windows {
 		t.Skip("skip on windows")

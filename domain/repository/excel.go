@@ -5,13 +5,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-//go:generate mockgen -typed -source=$GOFILE -destination=../../infrastructure/mock/$GOFILE -package mock
-
-// ExcelRepository is a repository that handles XLAM / XLSM / XLSX / XLTM / XLTX file.
-// The process of opening and closing XLAM / XLSM / XLSX / XLTM / XLTX files is the responsibility of the upper layer.
+// ExcelRepository is a repository that handles XLSX file export.
 type ExcelRepository interface {
-	// List get excel all data with header.
-	List(excelFilePath string, sheetName string) (*model.Excel, error)
 	// Dump write contents of DB table to XLSX file
 	Dump(excelFilePath string, table *model.Table) error
 }
