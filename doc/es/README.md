@@ -36,7 +36,7 @@ brew install nao1215/tap/sqly
 - Windows
 - macOS
 - Linux
-- go1.24.0 o posterior
+- go1.25.0 o posterior
 
 ## Cómo usar
 sqly importa automáticamente archivos CSV/TSV/LTSV/Excel (incluyendo versiones comprimidas) a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
