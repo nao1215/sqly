@@ -312,44 +312,6 @@ func (c *MockDatabaseUsecaseInsertCall) DoAndReturn(f func(context.Context, *mod
 	return c
 }
 
-// IsACHTable mocks base method.
-func (m *MockDatabaseUsecase) IsACHTable(tableName string) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsACHTable", tableName)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsACHTable indicates an expected call of IsACHTable.
-func (mr *MockDatabaseUsecaseMockRecorder) IsACHTable(tableName any) *MockDatabaseUsecaseIsACHTableCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsACHTable", reflect.TypeOf((*MockDatabaseUsecase)(nil).IsACHTable), tableName)
-	return &MockDatabaseUsecaseIsACHTableCall{Call: call}
-}
-
-// MockDatabaseUsecaseIsACHTableCall wrap *gomock.Call
-type MockDatabaseUsecaseIsACHTableCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockDatabaseUsecaseIsACHTableCall) Return(arg0 bool) *MockDatabaseUsecaseIsACHTableCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockDatabaseUsecaseIsACHTableCall) Do(f func(string) bool) *MockDatabaseUsecaseIsACHTableCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockDatabaseUsecaseIsACHTableCall) DoAndReturn(f func(string) bool) *MockDatabaseUsecaseIsACHTableCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // IsExcelFile mocks base method.
 func (m *MockDatabaseUsecase) IsExcelFile(filePath string) bool {
 	m.ctrl.T.Helper()
@@ -422,44 +384,6 @@ func (c *MockDatabaseUsecaseIsSupportedFileCall) Do(f func(string) bool) *MockDa
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockDatabaseUsecaseIsSupportedFileCall) DoAndReturn(f func(string) bool) *MockDatabaseUsecaseIsSupportedFileCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// IsWireTable mocks base method.
-func (m *MockDatabaseUsecase) IsWireTable(tableName string) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsWireTable", tableName)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsWireTable indicates an expected call of IsWireTable.
-func (mr *MockDatabaseUsecaseMockRecorder) IsWireTable(tableName any) *MockDatabaseUsecaseIsWireTableCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsWireTable", reflect.TypeOf((*MockDatabaseUsecase)(nil).IsWireTable), tableName)
-	return &MockDatabaseUsecaseIsWireTableCall{Call: call}
-}
-
-// MockDatabaseUsecaseIsWireTableCall wrap *gomock.Call
-type MockDatabaseUsecaseIsWireTableCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockDatabaseUsecaseIsWireTableCall) Return(arg0 bool) *MockDatabaseUsecaseIsWireTableCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockDatabaseUsecaseIsWireTableCall) Do(f func(string) bool) *MockDatabaseUsecaseIsWireTableCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockDatabaseUsecaseIsWireTableCall) DoAndReturn(f func(string) bool) *MockDatabaseUsecaseIsWireTableCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

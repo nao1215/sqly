@@ -45,8 +45,4 @@ type DatabaseUsecase interface {
 	QuoteIdentifier(identifier string) string
 	// GetTableNameFromFilePath derives a table name from a file path
 	GetTableNameFromFilePath(filePath string) string
-	// IsACHTable checks if a table belongs to an ACH file (read-only format)
-	IsACHTable(tableName string) bool
-	// IsWireTable checks if a table belongs to a Fedwire file (read-only format)
-	IsWireTable(tableName string) bool
 }

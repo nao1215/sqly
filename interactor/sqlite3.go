@@ -147,13 +147,3 @@ func (si *sqlite3Interactor) QuoteIdentifier(identifier string) string {
 func (si *sqlite3Interactor) GetTableNameFromFilePath(filePath string) string {
 	return filesql.GetTableNameFromFilePath(filePath)
 }
-
-// IsACHTable checks if a table belongs to an ACH file (read-only format).
-func (si *sqlite3Interactor) IsACHTable(tableName string) bool {
-	return filesql.IsACHTable(tableName)
-}
-
-// IsWireTable checks if a table belongs to a Fedwire file (read-only format).
-func (si *sqlite3Interactor) IsWireTable(tableName string) bool {
-	return filesql.IsWireTable(tableName)
-}
