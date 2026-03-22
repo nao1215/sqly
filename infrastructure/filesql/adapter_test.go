@@ -1393,55 +1393,120 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 func TestIsACHTable(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		table    string
-		expected bool
+	// Without loading an ACH file, no table should be detected as ACH.
+	// This prevents false positives like "sales_entries" being blocked.
+	falsePositives := []struct {
+		name  string
+		table string
 	}{
-		{"entries table", "payment_entries", true},
-		{"file_header table", "payment_file_header", true},
-		{"batches table", "payment_batches", true},
-		{"addenda table", "payment_addenda", true},
-		{"iat_batches table", "payment_iat_batches", true},
-		{"iat_entries table", "payment_iat_entries", true},
-		{"iat_addenda table", "payment_iat_addenda", true},
-		{"regular table", "users", false},
-		{"message table (wire)", "payment_message", false},
-		{"empty string", "", false},
+		{"regular table with _entries suffix", "sales_entries"},
+		{"regular table with _batches suffix", "log_batches"},
+		{"regular table with _addenda suffix", "data_addenda"},
+		{"regular table with _file_header suffix", "my_file_header"},
+		{"regular table", "users"},
+		{"empty string", ""},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range falsePositives {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := IsACHTable(tt.table); got != tt.expected {
-				t.Errorf("IsACHTable(%q) = %v, want %v", tt.table, got, tt.expected)
+			if IsACHTable(tt.table) {
+				t.Errorf("IsACHTable(%q) = true without ACH import, want false", tt.table)
 			}
 		})
+	}
+}
+
+// TestIsACHTable_WithImport verifies that IsACHTable returns true only for
+// tables created from an actual ACH file import.
+func TestIsACHTable_WithImport(t *testing.T) {
+	t.Parallel()
+
+	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
+	if _, err := os.Stat(achFile); os.IsNotExist(err) {
+		t.Skip("ACH test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	if err := adapter.LoadFile(context.Background(), achFile); err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+
+	baseName := GetTableNameFromFilePath(achFile)
+
+	// Tables from the imported ACH file should be detected
+	if !IsACHTable(baseName + "_entries") {
+		t.Errorf("IsACHTable(%q) = false after import, want true", baseName+"_entries")
+	}
+
+	// A table with the same suffix but different base should NOT be detected
+	if IsACHTable("sales_entries") {
+		t.Error("IsACHTable(\"sales_entries\") = true, want false (not from ACH import)")
 	}
 }
 
 func TestIsWireTable(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		table    string
-		expected bool
+	// Without loading a Fedwire file, no table should be detected as Wire.
+	falsePositives := []struct {
+		name  string
+		table string
 	}{
-		{"message table", "payment_message", true},
-		{"entries table (ACH)", "payment_entries", false},
-		{"regular table", "users", false},
-		{"empty string", "", false},
-		{"only suffix", "_message", false},
+		{"regular table with _message suffix", "chat_message"},
+		{"regular table with _message suffix", "error_message"},
+		{"regular table", "users"},
+		{"empty string", ""},
+		{"only suffix", "_message"},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range falsePositives {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := IsWireTable(tt.table); got != tt.expected {
-				t.Errorf("IsWireTable(%q) = %v, want %v", tt.table, got, tt.expected)
+			if IsWireTable(tt.table) {
+				t.Errorf("IsWireTable(%q) = true without Fedwire import, want false", tt.table)
 			}
 		})
+	}
+}
+
+// TestIsWireTable_WithImport verifies that IsWireTable returns true only for
+// tables created from an actual Fedwire file import.
+func TestIsWireTable_WithImport(t *testing.T) {
+	t.Parallel()
+
+	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
+	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
+		t.Skip("FED test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	if err := adapter.LoadFile(context.Background(), fedFile); err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+
+	baseName := GetTableNameFromFilePath(fedFile)
+
+	// Table from the imported Fedwire file should be detected
+	if !IsWireTable(baseName + "_message") {
+		t.Errorf("IsWireTable(%q) = false after import, want true", baseName+"_message")
+	}
+
+	// A table with the same suffix but different base should NOT be detected
+	if IsWireTable("chat_message") {
+		t.Error("IsWireTable(\"chat_message\") = true, want false (not from Fedwire import)")
 	}
 }
 

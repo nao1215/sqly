@@ -712,6 +712,31 @@ func TestShellExec(t *testing.T) {
 		}
 	})
 
+	t.Run("dump table with ACH-like suffix from CSV is allowed", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		// Create a CSV file whose table name ends with _entries (ACH-like suffix)
+		tmpDir := t.TempDir()
+		csvFile := filepath.Join(tmpDir, "sales_entries.csv")
+		if err := os.WriteFile(csvFile, []byte("id,amount\n1,100\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{csvFile}); err != nil {
+			t.Fatal(err)
+		}
+
+		outFile := filepath.Join(tmpDir, "dump.csv")
+		_, err = getExecStdOutput(t, shell.exec, ".dump sales_entries "+outFile)
+		if err != nil {
+			t.Fatalf("dump of CSV-origin table with _entries suffix should succeed, got: %v", err)
+		}
+	})
+
 	t.Run("import and query ACH file", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
