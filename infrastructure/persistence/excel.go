@@ -19,34 +19,6 @@ func NewExcelRepository() repository.ExcelRepository {
 	return &excelRepository{}
 }
 
-// List get excel all data with header.
-func (r *excelRepository) List(excelFilePath string, sheetName string) (excel *model.Excel, err error) {
-	f, err := excelize.OpenFile(excelFilePath)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if e := f.Close(); err != nil {
-			err = errors.Join(err, e)
-		}
-	}()
-	rows, err := f.GetRows(sheetName)
-	if err != nil {
-		return nil, err
-	}
-
-	header := model.Header{}
-	records := []model.Record{}
-	for i, row := range rows {
-		if i == 0 {
-			header = row
-			continue
-		}
-		records = append(records, row)
-	}
-	return model.NewExcel(sheetName, model.NewHeader(header), records), nil
-}
-
 // Dump write contents of DB table to XLSX file
 func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err error) {
 	f := excelize.NewFile()
