@@ -132,8 +132,6 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 			newSet[n] = struct{}{}
 		}
 		// Walk the directory recursively to match filesql's recursive import behavior.
-		// filesql uses filepath.WalkDir when importing directories, so sheet filtering
-		// must also traverse subdirectories to find all Excel files.
 		err := filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -142,8 +140,24 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 				return nil
 			}
 			if s.usecases.sqlite3.IsExcelFile(path) {
-				if err := s.filterExcelSheets(ctx, path, sheetName, newSet); err != nil {
+				// Build a per-file candidate set containing only tables that
+				// belong to this specific Excel file. This prevents same-prefix
+				// collisions (e.g. a/report.xlsx vs b/report.xlsx both producing
+				// prefix "report_") from cross-contaminating each other's sheets.
+				prefix := s.usecases.sqlite3.GetTableNameFromFilePath(path) + "_"
+				perFile := make(map[string]struct{})
+				for name := range newSet {
+					if strings.HasPrefix(name, prefix) {
+						perFile[name] = struct{}{}
+					}
+				}
+				if err := s.filterExcelSheets(ctx, path, sheetName, perFile); err != nil {
 					return err
+				}
+				// Remove processed tables from newSet so they are not
+				// re-evaluated by a later file with the same prefix.
+				for name := range perFile {
+					delete(newSet, name)
 				}
 			}
 			return nil
