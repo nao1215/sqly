@@ -83,24 +83,27 @@ func TestSQLite3Interactor_IsSupportedFile(t *testing.T) {
 	defer cleanup()
 
 	tests := []struct {
+		name string
 		path string
 		want bool
 	}{
-		{"test.csv", true},
-		{"test.tsv", true},
-		{"test.ltsv", true},
-		{"test.json", true},
-		{"test.jsonl", true},
-		{"test.parquet", true},
-		{"test.xlsx", true},
-		{"test.csv.gz", true},
-		{"test.txt", false},
-		{"test", false},
+		{"csv is supported", "test.csv", true},
+		{"tsv is supported", "test.tsv", true},
+		{"ltsv is supported", "test.ltsv", true},
+		{"json is supported", "test.json", true},
+		{"jsonl is supported", "test.jsonl", true},
+		{"parquet is supported", "test.parquet", true},
+		{"xlsx is supported", "test.xlsx", true},
+		{"compressed csv is supported", "test.csv.gz", true},
+		{"txt is not supported", "test.txt", false},
+		{"no extension is not supported", "test", false},
 	}
 	for _, tt := range tests {
-		if got := si.IsSupportedFile(tt.path); got != tt.want {
-			t.Errorf("IsSupportedFile(%q) = %v, want %v", tt.path, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if got := si.IsSupportedFile(tt.path); got != tt.want {
+				t.Errorf("IsSupportedFile(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -111,18 +114,21 @@ func TestSQLite3Interactor_IsExcelFile(t *testing.T) {
 	defer cleanup()
 
 	tests := []struct {
+		name string
 		path string
 		want bool
 	}{
-		{"test.xlsx", true},
-		{"test.xlsx.gz", true},
-		{"test.csv", false},
-		{"test.json", false},
+		{"xlsx is excel", "test.xlsx", true},
+		{"compressed xlsx is excel", "test.xlsx.gz", true},
+		{"csv is not excel", "test.csv", false},
+		{"json is not excel", "test.json", false},
 	}
 	for _, tt := range tests {
-		if got := si.IsExcelFile(tt.path); got != tt.want {
-			t.Errorf("IsExcelFile(%q) = %v, want %v", tt.path, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if got := si.IsExcelFile(tt.path); got != tt.want {
+				t.Errorf("IsExcelFile(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
 	}
 }
 

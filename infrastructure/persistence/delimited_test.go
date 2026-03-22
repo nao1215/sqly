@@ -14,7 +14,11 @@ import (
 )
 
 func TestCSVRepositoryDump(t *testing.T) {
+	t.Parallel()
+
 	t.Run("dump csv data", func(t *testing.T) {
+		t.Parallel()
+
 		cr := NewCSVRepository()
 
 		table := readDelimitedAsTable(t, filepath.Join("testdata", "sample.csv"), ',')

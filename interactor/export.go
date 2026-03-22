@@ -77,12 +77,16 @@ func (e *exportInteractor) dumpWithFile(filePath string, table *model.Table, dum
 }
 
 // dumpMarkdown writes table data to file in Markdown table format.
-func (e *exportInteractor) dumpMarkdown(filePath string, table *model.Table) error {
-	f, err := os.Create(filepath.Clean(filePath)) // #nosec G304 - path is validated by caller
+func (e *exportInteractor) dumpMarkdown(filePath string, table *model.Table) (err error) {
+	f, err := e.fileRepo.Create(filepath.Clean(filePath))
 	if err != nil {
-		return fmt.Errorf("failed to create markdown file %s: %w", filePath, err)
+		return fmt.Errorf("create markdown file %q: %w", filePath, err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close markdown file %q: %w", filePath, cerr)
+		}
+	}()
 
 	return table.Print(f, model.PrintModeMarkdownTable)
 }

@@ -11,7 +11,11 @@ import (
 )
 
 func TestExcelRepositoryDump(t *testing.T) {
+	t.Parallel()
+
 	t.Run("dump excel data and verify round-trip", func(t *testing.T) {
+		t.Parallel()
+
 		r := NewExcelRepository()
 
 		table := model.NewTable(

@@ -8,17 +8,25 @@ import (
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/infrastructure/persistence"
+	"github.com/nao1215/sqly/usecase"
 )
+
+// newTestExportInteractor creates an ExportUsecase backed by real persistence
+// repositories. This avoids repeating the 5-line setup in every test function.
+func newTestExportInteractor() usecase.ExportUsecase {
+	return NewExportInteractor(
+		persistence.NewCSVRepository(),
+		persistence.NewTSVRepository(),
+		persistence.NewLTSVRepository(),
+		persistence.NewExcelRepository(),
+		persistence.NewFileRepository(),
+	)
+}
 
 func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age", "city"}), []model.Record{
 		model.NewRecord([]string{"John", "25", "New York"}),
@@ -49,12 +57,7 @@ func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age", "city"}), []model.Record{
 		model.NewRecord([]string{"John", "25", "New York"}),
@@ -80,12 +83,7 @@ func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
 		model.NewRecord([]string{"John", "25"}),
@@ -111,12 +109,7 @@ func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test_sheet", model.NewHeader([]string{"id", "name"}), []model.Record{
 		model.NewRecord([]string{"1", "Gina"}),
@@ -149,12 +142,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
 		model.NewRecord([]string{"1", "Alice"}),
@@ -180,12 +168,7 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 func TestExportInteractor_DumpTable_DefaultFormat(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"id"}), nil)
 
@@ -201,12 +184,7 @@ func TestExportInteractor_DumpTable_DefaultFormat(t *testing.T) {
 func TestExportInteractor_DumpTable_InvalidPath(t *testing.T) {
 	t.Parallel()
 
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
-	exp := NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"id"}), nil)
 
