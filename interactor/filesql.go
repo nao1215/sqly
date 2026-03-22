@@ -38,7 +38,7 @@ func (i *FileSQLInteractor) GetTableNames(ctx context.Context) ([]*model.Table, 
 	return i.adapter.GetTableNames(ctx)
 }
 
-// IsSupportedFile checks if the file has a format supported by fileparser.
+// IsSupportedFile checks if the file has a format supported by filesql.
 func (i *FileSQLInteractor) IsSupportedFile(filePath string) bool {
 	return filesql.IsSupportedFile(filePath)
 }
