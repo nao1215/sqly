@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -533,20 +534,24 @@ func TestValidatePath_Import(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		path    string
-		wantErr bool
+		name      string
+		path      string
+		wantErr   bool
+		unixOnly  bool
 	}{
-		{"normal path", "testdata/sample.csv", false},
-		{"relative path", "./foo/bar.csv", false},
-		{"path traversal", "../../../etc/passwd", true},
-		{"url encoded traversal", "..%2f..%2fetc/passwd", true},
-		{"system dir /etc", "/etc/hosts", true},
-		{"system dir /proc", "/proc/cpuinfo", true},
+		{"normal path", "testdata/sample.csv", false, false},
+		{"relative path", "./foo/bar.csv", false, false},
+		{"path traversal", "../../../etc/passwd", true, false},
+		{"url encoded traversal", "..%2f..%2fetc/passwd", true, false},
+		{"system dir /etc", "/etc/hosts", true, true},
+		{"system dir /proc", "/proc/cpuinfo", true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			if tt.unixOnly && runtime.GOOS == "windows" {
+				t.Skip("Unix-only system directory check")
+			}
 			_, err := validatePath(tt.path)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validatePath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
