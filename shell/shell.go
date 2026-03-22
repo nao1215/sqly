@@ -416,11 +416,12 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 
 // outputToFile output table data to file.
 func (s *Shell) outputToFile(table *model.Table) error {
-	if err := dumpToFile(s, s.argument.Output.FilePath, table); err != nil {
+	exportFmt := model.ExportFormatFromPrintMode(s.state.mode.PrintMode)
+	if err := dumpToFile(s, s.argument.Output.FilePath, table, exportFmt); err != nil {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
-		color.HiCyanString(s.argument.Output.FilePath), dumpMode(s.state.mode.PrintMode))
+		color.HiCyanString(s.argument.Output.FilePath), exportFmt.String())
 	return nil
 }
 
