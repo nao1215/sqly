@@ -56,7 +56,7 @@ func (fi *fileInteractor) List(filePath string) (*model.Table, error) {
 	tableName := GetTableNameFromFilePath(filePath)
 
 	// Query all data from the table
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + QuoteIdentifier(tableName)
 	return fi.adapter.Query(ctx, query)
 }
 
@@ -190,7 +190,7 @@ func (ei *excelInteractor) List(excelFilePath, sheetName string) (*model.Table, 
 	tableName := baseName + "_" + sheetName
 
 	// Query data from the specific sheet table
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + QuoteIdentifier(tableName)
 	return ei.adapter.Query(ctx, query)
 }
 

@@ -206,14 +206,13 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **향상된 타입 처리**: 자동 타입 검지가 적절한 숫자 정렬과 계산을 보장
 - **압축 파일 지원**: `.gz`, `.bz2`, `.xz`, `.zst` 압축 파일에 대한 네이티브 지원
 
-### 제거된 기능
-- **JSON 지원**: 구조화된 데이터 형식(CSV, TSV, LTSV, Excel)에 집중하기 위해 JSON 파일 형식 지원이 제거되었습니다
-  - sqly로 JSON 데이터를 처리해야 하는 경우 JSON 도구에서 CSV 내보내기를 사용하십시오
-  - 제거를 통해 핵심 파일 형식의 더 나은 최적화가 가능합니다
+### 재추가 및 새로운 입력 형식
+- **JSON/JSONL 지원**: filesql 라이브러리를 통해 JSON 및 JSONL(JSON Lines) 파일 형식의 입력 지원이 재추가되었습니다
+  - JSON/JSONL 데이터는 단일 `data` 컬럼에 저장됩니다. 개별 필드를 조회하려면 SQLite의 `json_extract()`를 사용하십시오
+- **Parquet 지원**: Parquet 파일 형식이 입력으로 지원됩니다
 
 ### 호환성을 깨는 변경
-- `--json` 플래그가 제거되었습니다
-- JSON 파일(`.json`)이 더 이상 입력으로 지원되지 않습니다
+- `--json` 출력 플래그가 제거되었습니다 (출력 형식: 테이블, CSV, TSV, LTSV, Excel, Markdown)
 - 향상된 타입 검지로 인해 출력의 숫자 형식이 약간 다를 수 있습니다
 
 ## 벤치마크

@@ -207,14 +207,13 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **更好的类型处理**：自动类型检测确保正确的数值排序和计算
 - **压缩文件支持**：原生支持 `.gz`、`.bz2`、`.xz` 和 `.zst` 压缩文件
 
-### 移除功能
-- **JSON 支持**：为了专注于结构化数据格式（CSV、TSV、LTSV、Excel），JSON 文件格式支持已被移除
-  - 如果您需要使用 sqly 处理 JSON 数据，请使用 JSON 工具的 CSV 导出功能
-  - 此移除允许对核心文件格式进行更好的优化
+### 重新添加和新增输入格式
+- **JSON/JSONL 支持**：通过 filesql 库重新添加了 JSON 和 JSONL（JSON Lines）文件格式的输入支持
+  - JSON/JSONL 数据存储在单个 `data` 列中；使用 SQLite 的 `json_extract()` 查询各个字段
+- **Parquet 支持**：现在支持 Parquet 文件格式作为输入
 
 ### 破坏性变更
-- `--json` 标志已被移除
-- JSON 文件（`.json`）不再作为输入支持
+- `--json` 输出标志已被移除（输出格式：表格、CSV、TSV、LTSV、Excel、Markdown）
 - 由于改进了类型检测，输出中的数值格式可能会略有不同
 
 ## 基准测试

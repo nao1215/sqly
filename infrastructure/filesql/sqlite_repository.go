@@ -42,7 +42,7 @@ func (r *sqlite3Repository) Insert(_ context.Context, _ *model.Table) error {
 
 // List gets records in the specified table
 func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
-	query := "SELECT * FROM " + tableName
+	query := "SELECT * FROM " + QuoteIdentifier(tableName)
 	return r.adapter.Query(ctx, query)
 }
 
