@@ -25,7 +25,11 @@ func newTestSQLite3InteractorWithAdapter(t *testing.T) (*sqlite3Interactor, func
 		sql:     NewSQL(),
 		adapter: adapter,
 	}
-	return si, func() { sharedDB.Close() }
+	return si, func() {
+		if err := sharedDB.Close(); err != nil {
+			t.Logf("failed to close shared DB: %v", err)
+		}
+	}
 }
 
 func TestSQLite3Interactor_LoadFiles(t *testing.T) {
