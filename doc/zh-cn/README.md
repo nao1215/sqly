@@ -37,7 +37,7 @@ brew install nao1215/tap/sqly
 - Windows
 - macOS
 - Linux
-- go1.26.0或更高版本
+- go1.25.0或更高版本
 
 ## 使用方法
 当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/Excel文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。

@@ -19,6 +19,7 @@ jobs:
           - "macos-latest"
         go:
           - "1"
+          - "1.25"
           - "1.26"
       fail-fast: false
     runs-on: ${{ matrix.os }}
