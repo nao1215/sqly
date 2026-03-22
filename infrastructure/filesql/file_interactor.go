@@ -104,9 +104,8 @@ func (fi *fileInteractor) Dump(filePath string, table *model.Table) error {
 func (fi *fileInteractor) dumpCSV(f *os.File, table *model.Table) error {
 	w := csv.NewWriter(f)
 
-	records := [][]string{
-		table.Header(),
-	}
+	records := make([][]string, 0, 1+len(table.Records()))
+	records = append(records, table.Header())
 	for _, v := range table.Records() {
 		records = append(records, v)
 	}
