@@ -3,26 +3,7 @@ package shell
 import (
 	"path/filepath"
 	"strings"
-
-	"github.com/nao1215/fileparser"
 )
-
-// isSupportedFile checks if the file has a format supported by fileparser.
-// This includes CSV, TSV, LTSV, JSON, JSONL, Parquet, XLSX and all supported
-// compression variants (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4).
-func isSupportedFile(filePath string) bool {
-	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
-}
-
-// isExcelFile checks if the file is an Excel format (.xlsx).
-func isExcelFile(filePath string) bool {
-	ft := fileparser.DetectFileType(filePath)
-	base := ft
-	if fileparser.IsCompressed(ft) {
-		base = fileparser.BaseFileType(ft)
-	}
-	return base == fileparser.XLSX
-}
 
 // ext extracts file extension from path.
 // If path does not have extension, ext return "".

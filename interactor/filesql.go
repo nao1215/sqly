@@ -3,6 +3,7 @@ package interactor
 import (
 	"context"
 
+	"github.com/nao1215/fileparser"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
@@ -36,4 +37,29 @@ func (i *FileSQLInteractor) LoadFiles(ctx context.Context, filePaths ...string) 
 // This includes all tables that have been imported from files or directories.
 func (i *FileSQLInteractor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
 	return i.adapter.GetTableNames(ctx)
+}
+
+// IsSupportedFile checks if the file has a format supported by fileparser.
+func (i *FileSQLInteractor) IsSupportedFile(filePath string) bool {
+	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
+}
+
+// IsExcelFile checks if the file is an Excel format (.xlsx).
+func (i *FileSQLInteractor) IsExcelFile(filePath string) bool {
+	ft := fileparser.DetectFileType(filePath)
+	base := ft
+	if fileparser.IsCompressed(ft) {
+		base = fileparser.BaseFileType(ft)
+	}
+	return base == fileparser.XLSX
+}
+
+// SanitizeForSQL sanitizes a string to be SQL-safe.
+func (i *FileSQLInteractor) SanitizeForSQL(name string) string {
+	return filesql.SanitizeForSQL(name)
+}
+
+// QuoteIdentifier safely quotes a SQL identifier.
+func (i *FileSQLInteractor) QuoteIdentifier(identifier string) string {
+	return filesql.QuoteIdentifier(identifier)
 }

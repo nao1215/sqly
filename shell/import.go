@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/infrastructure/filesql"
 )
 
 const (
@@ -98,12 +97,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		} else {
 			// Use filesql.LoadFiles for all file types (CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel).
 			// This avoids double processing and automatically supports all formats that filesql handles.
-			if !isSupportedFile(cleanPath) {
+			if !s.usecases.filesql.IsSupportedFile(cleanPath) {
 				errorMessages = append(errorMessages, fmt.Sprintf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx and compressed variants)", filepath.Base(cleanPath)))
 				continue
 			}
 
-			isExcel := isExcelFile(cleanPath)
+			isExcel := s.usecases.filesql.IsExcelFile(cleanPath)
 
 			// Record tables before import so we can identify newly created ones
 			var existingTables map[string]struct{}
@@ -239,7 +238,7 @@ func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []strin
 	var keepTable string
 	if sheetName != "" {
 		// --sheet specified: find the matching table
-		sanitized := filesql.SanitizeForSQL(sheetName)
+		sanitized := s.usecases.filesql.SanitizeForSQL(sheetName)
 		for _, name := range newTables {
 			if strings.HasSuffix(name, "_"+sanitized) || name == sanitized {
 				keepTable = name
@@ -249,7 +248,7 @@ func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []strin
 		if keepTable == "" {
 			// Drop all new tables since the requested sheet was not found
 			for _, name := range newTables {
-				dropSQL := "DROP TABLE IF EXISTS " + filesql.QuoteIdentifier(name)
+				dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
 				_, _ = s.usecases.sqlite3.Exec(ctx, dropSQL)
 			}
 			return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, path)
@@ -264,7 +263,7 @@ func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []strin
 		if name == keepTable {
 			continue
 		}
-		dropSQL := "DROP TABLE IF EXISTS " + filesql.QuoteIdentifier(name)
+		dropSQL := "DROP TABLE IF EXISTS " + s.usecases.filesql.QuoteIdentifier(name)
 		if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
 			return fmt.Errorf("failed to drop sheet table %s: %v", name, err)
 		}

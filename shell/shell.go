@@ -210,7 +210,7 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 		strings.HasPrefix(currentWord, `..\`) || // Windows relative path
 		strings.HasPrefix(currentWord, `C:\`) || // Windows absolute path (common drive)
 		// Also check if the word looks like a filename with supported extensions
-		(strings.Contains(currentWord, ".") && isSupportedFile(currentWord))
+		(strings.Contains(currentWord, ".") && s.usecases.filesql.IsSupportedFile(currentWord))
 	// Check if we're at the end of a path with / or \
 	atEndOfPath := (strings.HasSuffix(text, "/") || strings.HasSuffix(text, `\`)) && len(strings.TrimSpace(text)) > 0
 	// If it looks like a file path OR we're at end of path, provide file completions
@@ -446,9 +446,12 @@ func trimGaps(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// isValidFileForCompletion checks if file has a supported extension using fileparser.
-func isValidFileForCompletion(filename string) bool {
-	return isSupportedFile(filename)
+// isValidFileForCompletion checks if file has a supported extension.
+func (s *Shell) isValidFileForCompletion(filename string) bool {
+	if s.usecases.filesql == nil {
+		return false
+	}
+	return s.usecases.filesql.IsSupportedFile(filename)
 }
 
 // getFilePathCompletions returns file path completions for importable files (recursive)
@@ -471,7 +474,7 @@ func (s *Shell) getFilePathCompletions(_ string) []Suggest {
 		}
 
 		// For files, check if they are importable
-		if !d.IsDir() && isValidFileForCompletion(d.Name()) {
+		if !d.IsDir() && s.isValidFileForCompletion(d.Name()) {
 			suggestions = append(suggestions, Suggest{
 				Text:        filepath.ToSlash(path),
 				Description: "Importable file",
