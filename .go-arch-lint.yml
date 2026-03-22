@@ -20,6 +20,7 @@ vendors:
   gomock: { in: go.uber.org/mock/gomock }
   prompt: { in: github.com/nao1215/prompt }
   filesql: { in: github.com/nao1215/filesql }
+  fileparser: { in: github.com/nao1215/fileparser }
 
 components:
   cmd:   { in: . }
@@ -108,6 +109,7 @@ deps:
   memory-infra:
     canUse:
       - filesql
+      - fileparser
       - excelize
     mayDependOn:
       - model

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nao1215/fileparser"
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -86,7 +87,7 @@ func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
 func (f *FileSQLAdapter) copyTableToSharedDB(ctx context.Context, sourceDB *sql.DB, tableName string) error {
 	// Drop existing table if it exists to avoid conflicts
-	dropSQL := "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName)
+	dropSQL := "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName) //nolint:gosec // tableName is quoted with QuoteIdentifier
 	if _, err := f.sharedDB.ExecContext(ctx, dropSQL); err != nil {
 		return fmt.Errorf("failed to drop existing table %s: %w", tableName, err)
 	}
@@ -359,7 +360,7 @@ func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (
 	}
 
 	// Get column info using PRAGMA
-	query := "PRAGMA table_info(" + QuoteIdentifier(tableName) + ")"
+	query := "PRAGMA table_info(" + QuoteIdentifier(tableName) + ")" //nolint:gosec // tableName is quoted with QuoteIdentifier
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, &FileSQLError{Op: "get_header", Err: err.Error()}
@@ -490,4 +491,19 @@ type FileSQLError struct {
 
 func (e *FileSQLError) Error() string {
 	return "filesql " + e.Op + ": " + e.Err
+}
+
+// IsSupportedFile checks if the file has a format supported by fileparser.
+func IsSupportedFile(filePath string) bool {
+	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
+}
+
+// IsExcelFile checks if the file is an Excel format (.xlsx).
+func IsExcelFile(filePath string) bool {
+	ft := fileparser.DetectFileType(filePath)
+	base := ft
+	if fileparser.IsCompressed(ft) {
+		base = fileparser.BaseFileType(ft)
+	}
+	return base == fileparser.XLSX
 }

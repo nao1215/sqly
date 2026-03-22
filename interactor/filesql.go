@@ -3,7 +3,6 @@ package interactor
 import (
 	"context"
 
-	"github.com/nao1215/fileparser"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
@@ -41,17 +40,12 @@ func (i *FileSQLInteractor) GetTableNames(ctx context.Context) ([]*model.Table, 
 
 // IsSupportedFile checks if the file has a format supported by fileparser.
 func (i *FileSQLInteractor) IsSupportedFile(filePath string) bool {
-	return fileparser.DetectFileType(filePath) != fileparser.Unsupported
+	return filesql.IsSupportedFile(filePath)
 }
 
 // IsExcelFile checks if the file is an Excel format (.xlsx).
 func (i *FileSQLInteractor) IsExcelFile(filePath string) bool {
-	ft := fileparser.DetectFileType(filePath)
-	base := ft
-	if fileparser.IsCompressed(ft) {
-		base = fileparser.BaseFileType(ft)
-	}
-	return base == fileparser.XLSX
+	return filesql.IsExcelFile(filePath)
 }
 
 // SanitizeForSQL sanitizes a string to be SQL-safe.
