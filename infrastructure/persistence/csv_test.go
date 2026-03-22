@@ -48,7 +48,7 @@ func TestCsvRepositoryDump(t *testing.T) {
 func readCSVAsTable(t *testing.T, path string) *model.Table {
 	t.Helper()
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 - test helper with controlled input
 	if err != nil {
 		t.Fatal(err)
 	}
