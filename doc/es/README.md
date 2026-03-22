@@ -11,7 +11,7 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [한국어](../ko/README.md) | [Français](../fr/README.md)
 
-sqly es una herramienta de línea de comandos que ejecuta SQL contra archivos CSV, TSV, LTSV, JSON, JSONL, Parquet y Microsoft Excel. Importa estos archivos a una base de datos en memoria [SQLite3](https://www.sqlite.org/index.html). Los archivos comprimidos (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) tambien son compatibles. CTE (clausula WITH) esta disponible para consultas complejas.
+sqly es una herramienta de línea de comandos que ejecuta SQL contra archivos CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH y Fedwire. Importa estos archivos a una base de datos en memoria [SQLite3](https://www.sqlite.org/index.html). Los archivos comprimidos (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) tambien son compatibles. CTE (clausula WITH) esta disponible para consultas complejas.
 
 sqly tiene un shell interactivo (sqly-shell) con autocompletado SQL e historial de comandos. Tambien puede ejecutar SQL directamente desde la linea de comandos sin el shell.
 
@@ -38,9 +38,11 @@ brew install nao1215/tap/sqly
 - go1.25.0 o posterior
 
 ## Cómo usar
-sqly importa automáticamente archivos CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel (incluyendo versiones comprimidas) a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
+sqly importa automáticamente archivos CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire (incluyendo versiones comprimidas) a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
 
 **Nota**: Si el nombre del archivo contiene caracteres que podrían causar errores de sintaxis SQL (como guiones `-`, puntos `.` u otros caracteres especiales), se reemplazan automáticamente con guiones bajos `_`. Por ejemplo, `bug-syntax-error.csv` se convierte en la tabla `bug_syntax_error`.
+
+Si el nombre resultante comienza con un dígito, se agrega el prefijo `sheet_` (por ejemplo, `2023-data.csv` se convierte en la tabla `sheet_2023_data`).
 
 ### Nombres de hojas de Excel
 Al importar archivos Excel, los nombres de las tablas se crean en el formato `nombrearchivo_nombrehoja`. Los nombres de las hojas también se procesan para compatibilidad con SQL:
@@ -59,6 +61,29 @@ $ sqly report.xlsx --sheet="Café"
 
 sqly determina automáticamente el formato del archivo a partir de la extensión, incluyendo archivos comprimidos.
 
+### Archivos ACH
+Los archivos ACH (Automated Clearing House) (`.ach`) se cargan como múltiples tablas para facilitar las consultas:
+- `{filename}_file_header` — encabezado a nivel de archivo (1 fila)
+- `{filename}_batches` — información de encabezado de lote
+- `{filename}_entries` — registros de detalle de entrada (datos principales de transacciones)
+- `{filename}_addenda` — registros de adenda
+
+Para IAT (International ACH Transactions), se crean tablas adicionales: `{filename}_iat_batches`, `{filename}_iat_entries`, `{filename}_iat_addenda`.
+
+```shell
+$ sqly ppd-debit.ach
+$ sqly --sql "SELECT * FROM ppd_debit_entries WHERE amount > 10000" ppd-debit.ach
+```
+
+### Archivos Fedwire
+Los archivos Fedwire (`.fed`) se cargan como una única tabla de mensaje:
+- `{filename}_message` — tabla plana con todos los campos de FEDWireMessage
+
+```shell
+$ sqly customer-transfer.fed
+$ sqly --sql "SELECT * FROM customer_transfer_message" customer-transfer.fed
+```
+
 ### Ejecutar SQL en terminal: opción --sql
 La opción --sql toma una declaración SQL como argumento opcional.
 
@@ -74,7 +99,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### Importación de directorios
-Puede importar directorios completos que contengan archivos compatibles. sqly detecta automáticamente todos los archivos CSV, TSV, LTSV y Excel (incluyendo versiones comprimidas) en el directorio y los importa:
+Puede importar directorios completos que contengan archivos compatibles. sqly detecta automáticamente todos los archivos CSV, TSV, LTSV, Excel, ACH y Fedwire (incluyendo versiones comprimidas) en el directorio y los importa:
 
 ```shell
 # Importar todos los archivos de un directorio

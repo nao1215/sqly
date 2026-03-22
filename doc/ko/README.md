@@ -11,7 +11,7 @@
 
 [English](../../README.md) | [日本語](../ja/README.md) | [Русский](../ru/README.md) | [中文](../zh-cn/README.md) | [Español](../es/README.md) | [Français](../fr/README.md)
 
-sqly는 CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel 파일에 대해 SQL을 실행할 수 있는 명령줄 도구입니다. 이러한 파일들을 [SQLite3](https://www.sqlite.org/index.html) 인메모리 데이터베이스로 가져옵니다. 압축 파일 (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)도 지원됩니다. CTE (WITH 절)를 사용한 복잡한 쿼리도 사용할 수 있습니다.
+sqly는 CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH, Fedwire 파일에 대해 SQL을 실행할 수 있는 명령줄 도구입니다. 이러한 파일들을 [SQLite3](https://www.sqlite.org/index.html) 인메모리 데이터베이스로 가져옵니다. 압축 파일 (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)도 지원됩니다. CTE (WITH 절)를 사용한 복잡한 쿼리도 사용할 수 있습니다.
 
 sqly에는 인터랙티브 셸 (sqly-shell)이 있으며, SQL 자동완성과 명령 기록을 통해 대화식으로 SQL을 실행할 수 있습니다. 셸 없이 명령줄에서 직접 SQL을 실행할 수도 있습니다.
 
@@ -38,9 +38,11 @@ brew install nao1215/tap/sqly
 - go1.25.0 이상
 
 ## 사용 방법
-sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
+sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
 
 **참고**: 파일명에 SQL 구문 오류를 일으킬 수 있는 문자(하이픈 `-`, 점 `.`, 기타 특수 문자 등)가 포함되어 있으면 자동으로 밑줄 `_`로 대체됩니다. 예를 들어, `bug-syntax-error.csv`는 `bug_syntax_error` 테이블이 됩니다.
+
+결과 이름이 숫자로 시작하는 경우, `sheet_` 접두사가 추가됩니다 (예: `2023-data.csv`는 테이블 `sheet_2023_data`가 됩니다).
 
 ### Excel 시트 이름
 Excel 파일을 가져올 때 테이블 이름은 `파일명_시트명` 형식으로 생성됩니다. 시트 이름도 SQL 호환성을 위해 정제됩니다:
@@ -59,6 +61,29 @@ $ sqly report.xlsx --sheet="Café"
 
 sqly는 압축 파일을 포함하여 파일 확장자에서 파일 형식을 자동으로 결정합니다.
 
+### ACH 파일
+ACH (Automated Clearing House) 파일 (`.ach`)은 쉬운 쿼리를 위해 여러 테이블로 로드됩니다:
+- `{filename}_file_header` — 파일 수준 헤더 (1행)
+- `{filename}_batches` — 배치 헤더 정보
+- `{filename}_entries` — 엔트리 상세 레코드 (주요 거래 데이터)
+- `{filename}_addenda` — 부가 레코드
+
+IAT (International ACH Transactions)의 경우 추가 테이블이 생성됩니다: `{filename}_iat_batches`, `{filename}_iat_entries`, `{filename}_iat_addenda`.
+
+```shell
+$ sqly ppd-debit.ach
+$ sqly --sql "SELECT * FROM ppd_debit_entries WHERE amount > 10000" ppd-debit.ach
+```
+
+### Fedwire 파일
+Fedwire 파일 (`.fed`)은 단일 메시지 테이블로 로드됩니다:
+- `{filename}_message` — 모든 FEDWireMessage 필드를 포함하는 플랫 테이블
+
+```shell
+$ sqly customer-transfer.fed
+$ sqly --sql "SELECT * FROM customer_transfer_message" customer-transfer.fed
+```
+
 ### 터미널에서 SQL 실행: --sql 옵션
 --sql 옵션은 SQL 문을 선택적 인수로 받습니다.
 
@@ -74,7 +99,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### 디렉토리 가져오기
-지원되는 파일이 포함된 전체 디렉토리를 가져올 수 있습니다. sqly는 디렉토리에서 모든 CSV, TSV, LTSV, Excel 파일(압축 버전 포함)을 자동으로 감지하고 가져옵니다:
+지원되는 파일이 포함된 전체 디렉토리를 가져올 수 있습니다. sqly는 디렉토리에서 모든 CSV, TSV, LTSV, Excel, ACH, Fedwire 파일(압축 버전 포함)을 자동으로 감지하고 가져옵니다:
 
 ```shell
 # 디렉토리에서 모든 파일 가져오기
