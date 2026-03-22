@@ -3,4 +3,4 @@
 [Note]
   Output will be in the format specified in .mode.
   table mode is not available in .dump. If mode is table, .dump output CSV file.
-  ACH and Fedwire tables are read-only and cannot be exported via .dump.
+  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.

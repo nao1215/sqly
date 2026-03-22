@@ -670,7 +670,7 @@ func TestShellExec(t *testing.T) {
 		g.Assert(t, "dump_not_exist_table", []byte(got.Error()))
 	})
 
-	t.Run("execute .dump ACH table returns read-only error", func(t *testing.T) {
+	t.Run("dump ACH table to CSV succeeds", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Error(err)
@@ -682,16 +682,34 @@ func TestShellExec(t *testing.T) {
 		}
 
 		file := filepath.Join(t.TempDir(), "dump.csv")
-		_, got := getExecStdOutput(t, shell.exec, ".dump ppd_debit_entries "+file)
-		if got == nil {
-			t.Fatal("expected error when dumping ACH table, got nil")
-		}
-		if !strings.Contains(got.Error(), "read-only") {
-			t.Errorf("expected read-only error, got: %v", got)
+		_, err = getExecStdOutput(t, shell.exec, ".dump ppd_debit_entries "+file)
+		if err != nil {
+			t.Fatalf("dump ACH table to CSV should succeed, got: %v", err)
 		}
 	})
 
-	t.Run("execute .dump Fedwire table returns read-only error", func(t *testing.T) {
+	t.Run("dump ACH table to .ach format is blocked", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("..", "testdata", "ppd-debit.ach")}); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(t.TempDir(), "dump.ach")
+		_, got := getExecStdOutput(t, shell.exec, ".dump ppd_debit_entries "+file)
+		if got == nil {
+			t.Fatal("expected error when dumping to .ach format, got nil")
+		}
+		if !strings.Contains(got.Error(), "ACH format") {
+			t.Errorf("expected ACH format error, got: %v", got)
+		}
+	})
+
+	t.Run("dump Fedwire table to .fed format is blocked", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Error(err)
@@ -705,10 +723,10 @@ func TestShellExec(t *testing.T) {
 		file := filepath.Join(t.TempDir(), "dump.fed")
 		_, got := getExecStdOutput(t, shell.exec, ".dump customer_transfer_message "+file)
 		if got == nil {
-			t.Fatal("expected error when dumping Fedwire table, got nil")
+			t.Fatal("expected error when dumping to .fed format, got nil")
 		}
-		if !strings.Contains(got.Error(), "read-only") {
-			t.Errorf("expected read-only error, got: %v", got)
+		if !strings.Contains(got.Error(), "Fedwire format") {
+			t.Errorf("expected Fedwire format error, got: %v", got)
 		}
 	})
 
