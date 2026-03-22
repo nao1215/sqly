@@ -85,7 +85,7 @@ sqly has migrated to use the [filesql](https://github.com/nao1215/filesql) libra
 
 #### Key Changes
 - **Enhanced Performance**: Better bulk insert operations and automatic type detection
-- **Compressed File Support**: Native support for .gz, .bz2, .xz, .zst files
+- **Compressed File Support**: Native support for .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4 files
 - **JSON/JSONL/Parquet Input Support**: JSON, JSONL, and Parquet file formats are supported as input (JSON/JSONL data stored in a single `data` column; use `json_extract()` to query fields)
 - **Improved SQLite Integration**: Uses modernc.org/sqlite (pure Go) instead of mattn/go-sqlite3 (CGO)
 
@@ -109,7 +109,7 @@ The project uses go-arch-lint (`.go-arch-lint.yml`) to enforce architectural bou
 - **Vendor Isolation**: External dependencies are contained within specific layers
 
 ### Supported File Formats
-- CSV, TSV, LTSV files (including compressed versions: .gz, .bz2, .xz, .zst)
+- CSV, TSV, LTSV files (including compressed versions: .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
 - JSON, JSONL (JSON Lines) files (data stored in a single `data` column; use `json_extract()` to query fields)
 - Parquet files
 - Microsoft Excel files (.xlsx)

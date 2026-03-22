@@ -103,24 +103,20 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 				continue
 			}
 
-			// For Excel files with --sheet, we need to filter after import
-			sheetName := ""
-			if isExcelFile(cleanPath) {
-				sheetName = s.argument.SheetName
-				if sheetName == "" {
-					sheetName = extractSheetNameFromArgs(argv)
-				}
-			}
+			isExcel := isExcelFile(cleanPath)
 
-			// Record tables before import so we can identify new ones
-			tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
-			if err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names before importing %s: %v", path, err))
-				continue
-			}
-			existingTables := make(map[string]struct{}, len(tablesBefore))
-			for _, table := range tablesBefore {
-				existingTables[table.Name()] = struct{}{}
+			// Record tables before import so we can identify newly created ones
+			var existingTables map[string]struct{}
+			if isExcel {
+				tablesBefore, err := s.usecases.filesql.GetTableNames(ctx)
+				if err != nil {
+					errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names before importing %s: %v", path, err))
+					continue
+				}
+				existingTables = make(map[string]struct{}, len(tablesBefore))
+				for _, table := range tablesBefore {
+					existingTables[table.Name()] = struct{}{}
+				}
 			}
 
 			if err := s.usecases.filesql.LoadFiles(ctx, cleanPath); err != nil {
@@ -128,26 +124,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 				continue
 			}
 
-			// For Excel with --sheet, drop tables that don't match the requested sheet
-			if sheetName != "" {
-				tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
-				if err != nil {
-					errorMessages = append(errorMessages, fmt.Sprintf("failed to get table names after importing %s: %v", path, err))
+			// For Excel files, filter sheets: keep only the requested sheet (--sheet)
+			// or only the first sheet (default behavior).
+			if isExcel {
+				if err := s.filterExcelSheets(ctx, path, argv, existingTables); err != nil {
+					errorMessages = append(errorMessages, err.Error())
 					continue
-				}
-
-				sanitizedSheet := filesql.SanitizeForSQL(sheetName)
-				for _, table := range tablesAfter {
-					if _, existed := existingTables[table.Name()]; existed {
-						continue
-					}
-					// Keep only the table matching the requested sheet name
-					if !strings.HasSuffix(table.Name(), "_"+sanitizedSheet) && table.Name() != sanitizedSheet {
-						dropSQL := "DROP TABLE IF EXISTS " + filesql.QuoteIdentifier(table.Name())
-						if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
-							errorMessages = append(errorMessages, fmt.Sprintf("failed to drop unwanted sheet table %s: %v", table.Name(), err))
-						}
-					}
 				}
 			}
 
@@ -226,6 +208,68 @@ func extractSheetNameFromArgs(argv []string) string {
 		}
 	}
 	return ""
+}
+
+// filterExcelSheets keeps only the desired sheet table after an Excel import.
+// If --sheet is specified, keeps only the matching table and errors if not found.
+// If --sheet is not specified, keeps only the first newly imported table.
+func (s *Shell) filterExcelSheets(ctx context.Context, path string, argv []string, existingTables map[string]struct{}) error {
+	tablesAfter, err := s.usecases.filesql.GetTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names after importing %s: %v", path, err)
+	}
+
+	// Collect only the newly imported tables (from this Excel file)
+	var newTables []string
+	for _, table := range tablesAfter {
+		if _, existed := existingTables[table.Name()]; !existed {
+			newTables = append(newTables, table.Name())
+		}
+	}
+
+	if len(newTables) == 0 {
+		return fmt.Errorf("no sheets found in Excel file %s", path)
+	}
+
+	sheetName := s.argument.SheetName
+	if sheetName == "" {
+		sheetName = extractSheetNameFromArgs(argv)
+	}
+
+	var keepTable string
+	if sheetName != "" {
+		// --sheet specified: find the matching table
+		sanitized := filesql.SanitizeForSQL(sheetName)
+		for _, name := range newTables {
+			if strings.HasSuffix(name, "_"+sanitized) || name == sanitized {
+				keepTable = name
+				break
+			}
+		}
+		if keepTable == "" {
+			// Drop all new tables since the requested sheet was not found
+			for _, name := range newTables {
+				dropSQL := "DROP TABLE IF EXISTS " + filesql.QuoteIdentifier(name)
+				_, _ = s.usecases.sqlite3.Exec(ctx, dropSQL)
+			}
+			return fmt.Errorf("sheet %q not found in Excel file %s", sheetName, path)
+		}
+	} else {
+		// No --sheet: keep only the first sheet (default behavior)
+		keepTable = newTables[0]
+	}
+
+	// Drop every new table except the one we want to keep
+	for _, name := range newTables {
+		if name == keepTable {
+			continue
+		}
+		dropSQL := "DROP TABLE IF EXISTS " + filesql.QuoteIdentifier(name)
+		if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+			return fmt.Errorf("failed to drop sheet table %s: %v", name, err)
+		}
+	}
+	return nil
 }
 
 // printImportUsage print import command usage.

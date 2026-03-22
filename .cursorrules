@@ -46,7 +46,7 @@ sqly follows Clean Architecture principles:
 
 ## Key Features
 
-- **File Formats**: CSV, TSV, LTSV, Excel (.xlsx) + compressed (.gz, .bz2, .xz, .zst)
+- **File Formats**: CSV, TSV, LTSV, Excel (.xlsx) + compressed (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4)
 - **Output Formats**: ASCII table (default), CSV, TSV, LTSV
 - **Interactive Shell**: Commands start with dots (`.help`, `.tables`, `.import`)
 - **Automatic type detection**: Numbers properly sorted and handled

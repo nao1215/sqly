@@ -204,7 +204,7 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 - **Intégration filesql** : Performance et fonctionnalité améliorées utilisant la bibliothèque [filesql](https://github.com/nao1215/filesql)
 - **Performance améliorée** : Opérations d'insertion en bloc avec traitement par lots des transactions pour un traitement plus rapide des fichiers
 - **Meilleure gestion des types** : La détection automatique des types assure un tri numérique et des calculs appropriés
-- **Support des fichiers compressés** : Support natif pour les fichiers compressés `.gz`, `.bz2`, `.xz` et `.zst`
+- **Support des fichiers compressés** : Support natif pour les fichiers compressés `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2` et `.lz4`
 
 ### Formats d'entrée réajoutés et nouveaux
 - **Support JSON/JSONL** : Le support des formats JSON et JSONL (JSON Lines) en entrée a été réajouté via la bibliothèque filesql
