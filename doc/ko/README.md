@@ -36,7 +36,7 @@ brew install nao1215/tap/sqly
 - Windows
 - macOS
 - Linux
-- go1.26.0 이상
+- go1.25.0 이상
 
 ## 사용 방법
 sqly는 파일 경로나 디렉토리 경로를 인수로 전달하면 CSV/TSV/LTSV/Excel 파일(압축 버전 포함)을 자동으로 DB로 가져옵니다. 같은 명령어에서 파일과 디렉토리를 혼합할 수도 있습니다. DB 테이블 이름은 파일명 또는 시트명과 동일합니다(예: user.csv를 가져오면 sqly 명령이 user 테이블을 생성함).
