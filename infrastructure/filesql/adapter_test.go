@@ -1280,3 +1280,112 @@ func TestFileSQLAdapter_ReservedWordTableName(t *testing.T) {
 		t.Errorf("Expected 1 record, got %d", len(result.Records()))
 	}
 }
+
+func TestFileSQLAdapter_ACHFile(t *testing.T) {
+	t.Parallel()
+
+	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
+	if _, err := os.Stat(achFile); os.IsNotExist(err) {
+		t.Skip("ACH test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, achFile); err != nil {
+		t.Fatalf("LoadFile failed for ACH file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected ACH tables to be created")
+	}
+
+	// ACH files create multiple tables (file_header, batches, entries, etc.)
+	tableNames := make(map[string]bool)
+	for _, tbl := range tables {
+		tableNames[tbl.Name()] = true
+	}
+
+	// Verify at least the entries table exists (main transaction data)
+	baseName := GetTableNameFromFilePath(achFile)
+	entriesTable := baseName + "_entries"
+	if !tableNames[entriesTable] {
+		t.Errorf("Expected entries table %q, got tables: %v", entriesTable, tableNames)
+	}
+
+	// Verify we can query the entries table
+	query := "SELECT * FROM " + QuoteIdentifier(entriesTable)
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query ACH entries failed: %v", err)
+	}
+
+	if len(result.Records()) == 0 {
+		t.Error("Expected at least one entry record in ACH file")
+	}
+}
+
+func TestFileSQLAdapter_FedWireFile(t *testing.T) {
+	t.Parallel()
+
+	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
+	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
+		t.Skip("FED test data not available")
+	}
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer sharedDB.Close()
+
+	adapter := NewFileSQLAdapter(sharedDB)
+	ctx := context.Background()
+
+	if err := adapter.LoadFile(ctx, fedFile); err != nil {
+		t.Fatalf("LoadFile failed for Fedwire file: %v", err)
+	}
+
+	tables, err := adapter.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) == 0 {
+		t.Fatal("Expected Fedwire tables to be created")
+	}
+
+	// Fedwire creates a _message table
+	baseName := GetTableNameFromFilePath(fedFile)
+	messageTable := baseName + "_message"
+	tableNames := make(map[string]bool)
+	for _, tbl := range tables {
+		tableNames[tbl.Name()] = true
+	}
+
+	if !tableNames[messageTable] {
+		t.Errorf("Expected message table %q, got tables: %v", messageTable, tableNames)
+	}
+
+	// Verify we can query the message table
+	query := "SELECT * FROM " + QuoteIdentifier(messageTable)
+	result, err := adapter.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("Query Fedwire message failed: %v", err)
+	}
+
+	if len(result.Records()) == 0 {
+		t.Error("Expected at least one message record in Fedwire file")
+	}
+}
