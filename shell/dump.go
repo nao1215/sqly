@@ -3,7 +3,6 @@ package shell
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -29,11 +28,12 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	}
 
 	exportFmt := model.ExportFormatFromPrintMode(s.state.mode.PrintMode)
-	if err := dumpToFile(s, argv[1], table, exportFmt); err != nil {
+	filePath := normalizeDumpExt(argv[1], exportFmt)
+	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
-		color.CyanString(argv[0]), color.HiCyanString(argv[1]), exportFmt.String())
+		color.CyanString(argv[0]), color.HiCyanString(filePath), exportFmt.String())
 
 	return nil
 }
@@ -45,34 +45,4 @@ func normalizeDumpExt(path string, ef model.ExportFormat) string {
 		return path
 	}
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ext
-}
-
-// dumpToFile writes table data to file using the specified export format
-func dumpToFile(s *Shell, filePath string, table *model.Table, ef model.ExportFormat) error {
-	filePath = normalizeDumpExt(filePath, ef)
-	switch ef {
-	case model.ExportCSV:
-		return s.usecases.csv.Dump(filePath, table)
-	case model.ExportTSV:
-		return s.usecases.tsv.Dump(filePath, table)
-	case model.ExportLTSV:
-		return s.usecases.ltsv.Dump(filePath, table)
-	case model.ExportExcel:
-		return s.usecases.excel.Dump(filePath, table)
-	case model.ExportMarkdown:
-		return dumpMarkdown(filePath, table)
-	default:
-		return s.usecases.csv.Dump(filePath, table)
-	}
-}
-
-// dumpMarkdown writes table data to file in Markdown table format
-func dumpMarkdown(filePath string, table *model.Table) error {
-	f, err := os.Create(filePath) // #nosec G304 - path is validated by normalizeDumpExt
-	if err != nil {
-		return fmt.Errorf("failed to create markdown file %s: %w", filePath, err)
-	}
-	defer f.Close()
-
-	return table.Print(f, model.PrintModeMarkdownTable)
 }
