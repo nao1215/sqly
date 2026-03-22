@@ -131,20 +131,24 @@ func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames [
 }
 
 // addACHOrWireBaseName checks if path is an ACH or Fedwire file and appends
-// its sanitized base name to the appropriate slice, deduplicating via seen.
+// its sanitized base name to the appropriate slice, deduplicating per type.
+// ACH and Fedwire are tracked independently so that payment.ach and payment.fed
+// in the same import both get their respective cleanup entries.
 func addACHOrWireBaseName(path string, seen map[string]bool, achOut, wireOut *[]string) {
 	lower := strings.ToLower(path)
 	baseName := GetTableNameFromFilePath(path)
-	if seen[baseName+"|ach"] || seen[baseName+"|fed"] {
-		return
-	}
-	switch {
-	case strings.HasSuffix(lower, ".ach"):
-		seen[baseName+"|ach"] = true
-		*achOut = append(*achOut, baseName)
-	case strings.HasSuffix(lower, ".fed"):
-		seen[baseName+"|fed"] = true
-		*wireOut = append(*wireOut, baseName)
+	if strings.HasSuffix(lower, ".ach") {
+		key := baseName + "|ach"
+		if !seen[key] {
+			seen[key] = true
+			*achOut = append(*achOut, baseName)
+		}
+	} else if strings.HasSuffix(lower, ".fed") {
+		key := baseName + "|fed"
+		if !seen[key] {
+			seen[key] = true
+			*wireOut = append(*wireOut, baseName)
+		}
 	}
 }
 
