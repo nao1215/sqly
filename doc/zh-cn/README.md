@@ -41,9 +41,12 @@ brew install nao1215/tap/sqly
 ## 使用方法
 当您将文件路径或目录路径作为参数传递时，sqly会自动将CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire文件（包括压缩版本）导入数据库。您也可以在同一命令中混合文件和目录。数据库表名与文件名或工作表名相同（例如，如果导入user.csv，sqly命令将创建user表）。
 
-**注意**：如果文件名包含可能导致SQL语法错误的字符（如连字符 `-`、点号 `.` 或其他特殊字符），它们会自动替换为下划线 `_`。例如，`bug-syntax-error.csv` 会变成表 `bug_syntax_error`。
+**注意**：表名会为SQL兼容性进行清理。空格、连字符 (`-`) 和点号 (`.`) 会替换为下划线 (`_`)。其他特殊字符（如 `@`、`#`、`$`）会被删除。如果生成的名称以数字开头，会添加 `sheet_` 前缀。
 
-如果生成的名称以数字开头，会添加 `sheet_` 前缀（例如，`2023-data.csv` 会变成表 `sheet_2023_data`）。
+示例：
+- `bug-syntax-error.csv` → 表 `bug_syntax_error`
+- `2023-data.csv` → 表 `sheet_2023_data`
+- `data@v2.csv` → 表 `datav2`
 
 ### Excel工作表名称
 导入Excel文件时，表名以 `文件名_工作表名` 的格式创建。工作表名称也会为SQL兼容性进行处理：

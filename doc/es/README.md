@@ -40,9 +40,12 @@ brew install nao1215/tap/sqly
 ## Cómo usar
 sqly importa automáticamente archivos CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire (incluyendo versiones comprimidas) a la base de datos cuando pasa rutas de archivo o rutas de directorio como argumentos. También puede mezclar archivos y directorios en el mismo comando. El nombre de la tabla de la base de datos es el mismo que el nombre del archivo o nombre de hoja (por ejemplo, si importa user.csv, el comando sqly crea la tabla user).
 
-**Nota**: Si el nombre del archivo contiene caracteres que podrían causar errores de sintaxis SQL (como guiones `-`, puntos `.` u otros caracteres especiales), se reemplazan automáticamente con guiones bajos `_`. Por ejemplo, `bug-syntax-error.csv` se convierte en la tabla `bug_syntax_error`.
+**Nota**: Los nombres de las tablas se sanitizan para compatibilidad con SQL. Los espacios, guiones (`-`) y puntos (`.`) se reemplazan con guiones bajos (`_`). Otros caracteres especiales (por ejemplo, `@`, `#`, `$`) se eliminan. Si el nombre resultante comienza con un digito, se agrega el prefijo `sheet_`.
 
-Si el nombre resultante comienza con un dígito, se agrega el prefijo `sheet_` (por ejemplo, `2023-data.csv` se convierte en la tabla `sheet_2023_data`).
+Ejemplos:
+- `bug-syntax-error.csv` → tabla `bug_syntax_error`
+- `2023-data.csv` → tabla `sheet_2023_data`
+- `data@v2.csv` → tabla `datav2`
 
 ### Nombres de hojas de Excel
 Al importar archivos Excel, los nombres de las tablas se crean en el formato `nombrearchivo_nombrehoja`. Los nombres de las hojas también se procesan para compatibilidad con SQL:

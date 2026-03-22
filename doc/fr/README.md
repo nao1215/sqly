@@ -40,9 +40,12 @@ brew install nao1215/tap/sqly
 ## Comment utiliser
 sqly importe automatiquement les fichiers CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire (y compris les versions compressées) dans la base de données lorsque vous passez des chemins de fichier ou des chemins de répertoire comme arguments. Vous pouvez également mélanger fichiers et répertoires dans la même commande. Le nom de la table de la base de données est identique au nom du fichier ou nom de feuille (par exemple, si vous importez user.csv, la commande sqly crée la table user).
 
-**Note** : Si le nom du fichier contient des caractères qui pourraient causer des erreurs de syntaxe SQL (comme les traits d'union `-`, les points `.` ou d'autres caractères spéciaux), ils sont automatiquement remplacés par des traits de soulignement `_`. Par exemple, `bug-syntax-error.csv` devient la table `bug_syntax_error`.
+**Note** : Les noms de tables sont assainis pour la compatibilite SQL. Les espaces, traits d'union (`-`) et points (`.`) sont remplaces par des traits de soulignement (`_`). Les autres caracteres speciaux (par exemple, `@`, `#`, `$`) sont supprimes. Si le nom resultant commence par un chiffre, le prefixe `sheet_` est ajoute.
 
-Si le nom résultant commence par un chiffre, le préfixe `sheet_` est ajouté (par exemple, `2023-data.csv` devient la table `sheet_2023_data`).
+Exemples :
+- `bug-syntax-error.csv` → table `bug_syntax_error`
+- `2023-data.csv` → table `sheet_2023_data`
+- `data@v2.csv` → table `datav2`
 
 ### Noms des feuilles Excel
 Lors de l'importation de fichiers Excel, les noms de tables sont créés au format `nomfichier_nomfeuille`. Les noms de feuilles sont également traités pour la compatibilité SQL :

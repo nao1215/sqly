@@ -40,7 +40,12 @@ brew install nao1215/tap/sqly
 ## How to use
 The sqly automatically imports CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire files (including compressed versions for tabular formats) into the DB when you pass file paths or directory paths as arguments. You can also mix files and directories in the same command. DB table name is the same as the file name or sheet name (e.g., if you import user.csv, sqly command create the user table).
 
-**Note**: If the filename contains characters that would cause SQL syntax errors (such as hyphens `-`, dots `.`, or other special characters), they are automatically replaced with underscores `_`. For example, `bug-syntax-error.csv` becomes table `bug_syntax_error`. If the resulting name starts with a digit, a `sheet_` prefix is added (e.g., `2023-data.csv` becomes table `sheet_2023_data`).
+**Note**: Table names are sanitized for SQL compatibility. Spaces, hyphens (`-`), and dots (`.`) are replaced with underscores (`_`). Other special characters (e.g., `@`, `#`, `$`) are removed. If the resulting name starts with a digit, a `sheet_` prefix is added.
+
+Examples:
+- `bug-syntax-error.csv` → table `bug_syntax_error`
+- `2023-data.csv` → table `sheet_2023_data`
+- `data@v2.csv` → table `datav2`
 
 ### Excel Sheet Names
 When importing Excel files, table names are created in the format `filename_sheetname`. Sheet names are also sanitized for SQL compatibility:
