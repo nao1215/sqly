@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,6 +41,11 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		return errors.New("shared database is not initialized")
 	}
 
+	// Identify ACH/Fedwire base names from input paths (not table names) so we
+	// can clean up the filesql global registry. We must do this before OpenContext
+	// and defer the cleanup so it runs even if table copying fails.
+	achBaseNames, wireBaseNames := collectRegistryBaseNames(filePaths)
+
 	// Use filesql to load files into temporary database, then copy to shared database
 	tmpDB, err := filesql.OpenContext(ctx, filePaths...)
 	if err != nil {
@@ -47,8 +53,20 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	}
 	defer tmpDB.Close()
 
+	// Clean up filesql global registries for ACH/Fedwire TableSets.
+	// filesql.OpenContext registers TableSets in global maps for DumpACH/DumpFedWire,
+	// but sqly copies data to its own shared DB and does not use round-trip export.
+	// Using defer ensures cleanup even if table copying fails partway through.
+	defer func() {
+		for _, baseName := range achBaseNames {
+			filesql.UnregisterACHTableSet(baseName)
+		}
+		for _, baseName := range wireBaseNames {
+			filesql.UnregisterWireTableSet(baseName)
+		}
+	}()
+
 	// Get actual table names from the temporary database created by filesql
-	// This handles cases where filesql creates different table names than expected (e.g., Excel sheets)
 	rows, err := tmpDB.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
 	if err != nil {
 		return fmt.Errorf("failed to get table names from filesql database: %w", err)
@@ -75,26 +93,59 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}
 
-	// Clean up filesql global registries for ACH/Fedwire TableSets.
-	// filesql.OpenContext registers TableSets in global maps for DumpACH/DumpFedWire,
-	// but sqly copies data to its own shared DB and does not use round-trip export.
-	// Leaving entries in the registry would leak memory in long-running shells
-	// and cause stale state in registry-based detection.
-	for _, tableName := range tableNames {
-		if baseName, ok := filesql.IsACHBaseTableName(tableName); ok {
-			filesql.UnregisterACHTableSet(baseName)
-		}
-		if baseName, ok := filesql.IsWireBaseTableName(tableName); ok {
-			filesql.UnregisterWireTableSet(baseName)
-		}
-	}
-
 	return nil
 }
 
 // LoadFile loads a single file into the database
 func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 	return f.LoadFiles(ctx, filePath)
+}
+
+// collectRegistryBaseNames scans the input file paths and returns the sanitized
+// base names for any ACH (.ach) or Fedwire (.fed) files. These base names
+// correspond to the keys that filesql.OpenContext registers in its global
+// ACH/Fedwire TableSet registries. Directory paths are walked recursively to
+// find nested ACH/FED files.
+func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames []string) {
+	seen := make(map[string]bool)
+	for _, p := range filePaths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if !info.IsDir() {
+			addACHOrWireBaseName(p, seen, &achBaseNames, &wireBaseNames)
+			continue
+		}
+		// Walk directory to find nested ACH/FED files.
+		// Errors from unreadable entries are skipped.
+		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error { //nolint:errcheck // best-effort scan of directory for cleanup
+			if walkErr != nil || d.IsDir() {
+				return nil //nolint:nilerr // skip unreadable entries
+			}
+			addACHOrWireBaseName(path, seen, &achBaseNames, &wireBaseNames)
+			return nil
+		})
+	}
+	return
+}
+
+// addACHOrWireBaseName checks if path is an ACH or Fedwire file and appends
+// its sanitized base name to the appropriate slice, deduplicating via seen.
+func addACHOrWireBaseName(path string, seen map[string]bool, achOut, wireOut *[]string) {
+	lower := strings.ToLower(path)
+	baseName := GetTableNameFromFilePath(path)
+	if seen[baseName+"|ach"] || seen[baseName+"|fed"] {
+		return
+	}
+	switch {
+	case strings.HasSuffix(lower, ".ach"):
+		seen[baseName+"|ach"] = true
+		*achOut = append(*achOut, baseName)
+	case strings.HasSuffix(lower, ".fed"):
+		seen[baseName+"|fed"] = true
+		*wireOut = append(*wireOut, baseName)
+	}
 }
 
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
