@@ -35,7 +35,7 @@ changelog:
       - "^test:"
 nfpms:
   - maintainer: Naohiro CHIKAMATSU <n.chika156@gmail.com>
-    description: sqly - eaisly execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with shell.
+    description: sqly - easily execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with shell.
     homepage: https://github.com/nao1215/sqly
     license: MIT License
     formats:
