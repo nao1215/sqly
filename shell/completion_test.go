@@ -1,9 +1,11 @@
+//nolint:goconst
 package shell
 
 import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -28,11 +30,11 @@ func TestImportCompleterDebug(t *testing.T) {
 
 	for path, isDir := range testStructure {
 		if isDir {
-			if err := os.MkdirAll(path, 0750); err != nil {
+			if err := os.MkdirAll(path, 0o750); err != nil {
 				t.Fatal(err)
 			}
 		} else {
-			if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 				t.Fatal(err)
 			}
 			f, err := os.Create(filepath.Clean(path))
@@ -131,11 +133,11 @@ func TestCompleterDebug(t *testing.T) {
 
 	for path, isDir := range testStructure {
 		if isDir {
-			if err := os.MkdirAll(path, 0750); err != nil {
+			if err := os.MkdirAll(path, 0o750); err != nil {
 				t.Fatal(err)
 			}
 		} else {
-			if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 				t.Fatal(err)
 			}
 			f, err := os.Create(filepath.Clean(path))
@@ -318,11 +320,11 @@ func TestGoPromptCompletionBehavior(t *testing.T) {
 
 	for path, isDir := range testStructure {
 		if isDir {
-			if err := os.MkdirAll(path, 0750); err != nil {
+			if err := os.MkdirAll(path, 0o750); err != nil {
 				t.Fatal(err)
 			}
 		} else {
-			if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 				t.Fatal(err)
 			}
 			f, err := os.Create(filepath.Clean(path))
@@ -455,11 +457,11 @@ func TestFilePathCompletions(t *testing.T) {
 	// Create the directory structure
 	for path, isDir := range testStructure {
 		if isDir {
-			if err := os.MkdirAll(path, 0750); err != nil {
+			if err := os.MkdirAll(path, 0o750); err != nil {
 				t.Fatal(err)
 			}
 		} else {
-			if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 				t.Fatal(err)
 			}
 			f, err := os.Create(filepath.Clean(path))
@@ -572,13 +574,7 @@ func TestFilePathCompletions(t *testing.T) {
 
 			// Check if all expected completions are present
 			for _, expected := range tt.expected {
-				found := false
-				for _, result := range results {
-					if result == expected {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(results, expected)
 				if !found {
 					t.Errorf("Expected completion '%s' not found in results: %v", expected, results)
 				}

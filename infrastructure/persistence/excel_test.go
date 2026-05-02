@@ -1,3 +1,4 @@
+//nolint:goconst
 package persistence
 
 import (
@@ -28,7 +29,7 @@ func TestExcelRepositoryDump(t *testing.T) {
 			},
 		)
 		tempFilePath := filepath.Join(os.TempDir(), "dump.xlsx")
-		defer os.Remove(tempFilePath)
+		defer func() { _ = os.Remove(tempFilePath) }()
 		if err := r.Dump(tempFilePath, table); err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +39,7 @@ func TestExcelRepositoryDump(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		rows, err := f.GetRows("test_sheet")
 		if err != nil {

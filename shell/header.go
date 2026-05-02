@@ -14,8 +14,8 @@ import (
 // headerCommand print table header.
 func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .header TABLE_NAME")
+		_, _ = fmt.Fprintln(config.Stdout, "[Usage]")
+		_, _ = fmt.Fprintln(config.Stdout, "  .header TABLE_NAME")
 		return nil
 	}
 

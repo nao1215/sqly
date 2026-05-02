@@ -1,3 +1,4 @@
+//nolint:goconst
 package interactor
 
 import (
@@ -40,7 +41,7 @@ func TestSQLite3Interactor_LoadFiles(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	csvPath := filepath.Join(tmpDir, "users.csv")
-	if err := os.WriteFile(csvPath, []byte("id,name\n1,Alice\n2,Bob\n"), 0600); err != nil {
+	if err := os.WriteFile(csvPath, []byte("id,name\n1,Alice\n2,Bob\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

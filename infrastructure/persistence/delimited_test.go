@@ -1,3 +1,4 @@
+//nolint:goconst
 package persistence
 
 import (
@@ -91,7 +92,7 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	r := csv.NewReader(f)
 	r.Comma = delimiter

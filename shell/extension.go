@@ -7,6 +7,8 @@ import (
 
 // ext extracts file extension from path.
 // If path does not have extension, ext return "".
+//
+//nolint:unused
 func ext(path string) string {
 	base := filepath.Base(path)
 	pos := strings.LastIndex(base, ".")
@@ -18,6 +20,8 @@ func ext(path string) string {
 
 // getFileTypeFromPath returns the file type by removing compression extensions first.
 // This handles compressed files like sample.xlsx.gz correctly by returning ".xlsx".
+//
+//nolint:unused
 func getFileTypeFromPath(filePath string) string {
 	name := filepath.Base(filePath)
 
@@ -26,8 +30,8 @@ func getFileTypeFromPath(filePath string) string {
 	for {
 		found := false
 		for _, compExt := range compressedExtensions {
-			if strings.HasSuffix(name, compExt) {
-				name = strings.TrimSuffix(name, compExt)
+			if before, ok := strings.CutSuffix(name, compExt); ok {
+				name = before
 				found = true
 				break
 			}

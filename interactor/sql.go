@@ -1,6 +1,21 @@
 package interactor
 
+import "slices"
+
 import "strings"
+
+const (
+	sqlSELECT  = "SELECT"
+	sqlINSERT  = "INSERT"
+	sqlUPDATE  = "UPDATE"
+	sqlDELETE  = "DELETE"
+	sqlCREATE  = "CREATE"
+	sqlDROP    = "DROP"
+	sqlALTER   = "ALTER"
+	sqlREINDEX = "REINDEX"
+	sqlEXPLAIN = "EXPLAIN"
+	sqlWITH    = "WITH"
+)
 
 // ddl is Data Definition Language List
 type ddl []string
@@ -25,8 +40,8 @@ type SQL struct {
 // NewSQL return *SQL
 func NewSQL() *SQL {
 	return &SQL{
-		ddl: []string{"CREATE", "DROP", "ALTER", "REINDEX"},
-		dml: []string{"SELECT", "INSERT", "UPDATE", "DELETE", "EXPLAIN", "WITH"},
+		ddl: []string{sqlCREATE, sqlDROP, sqlALTER, sqlREINDEX},
+		dml: []string{sqlSELECT, sqlINSERT, sqlUPDATE, sqlDELETE, sqlEXPLAIN, sqlWITH},
 		tcl: []string{"BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE"},
 		dcl: []string{"GRANT", "REVOKE"},
 	}
@@ -54,42 +69,37 @@ func (sql *SQL) isDCL(s string) bool {
 
 // isSelect returns true if the given string represents a SELECT statement.
 func (sql *SQL) isSelect(s string) bool {
-	return strings.ToUpper(s) == "SELECT"
+	return strings.ToUpper(s) == sqlSELECT
 }
 
 // isInsert returns true if the given string represents an INSERT statement.
 func (sql *SQL) isInsert(s string) bool {
-	return strings.ToUpper(s) == "INSERT"
+	return strings.ToUpper(s) == sqlINSERT
 }
 
 // isUpdate returns true if the given string represents an UPDATE statement.
 func (sql *SQL) isUpdate(s string) bool {
-	return strings.ToUpper(s) == "UPDATE"
+	return strings.ToUpper(s) == sqlUPDATE
 }
 
 // isDelete returns true if the given string represents a DELETE statement.
 func (sql *SQL) isDelete(s string) bool {
-	return strings.ToUpper(s) == "DELETE"
+	return strings.ToUpper(s) == sqlDELETE
 }
 
 // isExplain returns true if the given string represents an EXPLAIN statement.
 func (sql *SQL) isExplain(s string) bool {
-	return strings.ToUpper(s) == "EXPLAIN"
+	return strings.ToUpper(s) == sqlEXPLAIN
 }
 
 // isWithCTE checks if the statement is a WITH (CTE) query.
 func (sql *SQL) isWithCTE(s string) bool {
-	return strings.ToUpper(s) == "WITH"
+	return strings.ToUpper(s) == sqlWITH
 }
 
 // contains checks if a string exists in a slice of strings.
 func contains(list []string, v string) bool {
-	for _, s := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, v)
 }
 
 // trimWordGaps trims extra spaces between words in a string.

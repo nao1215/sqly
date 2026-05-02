@@ -14,6 +14,6 @@ func (c CommandList) pwdCommand(_ context.Context, _ *Shell, _ []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(config.Stdout, dir)
+	_, _ = fmt.Fprintln(config.Stdout, dir)
 	return nil
 }

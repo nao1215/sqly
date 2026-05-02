@@ -1,3 +1,4 @@
+//nolint:goconst
 package shell
 
 import (
@@ -48,7 +49,7 @@ func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
 	dir := t.TempDir()
 	csvContent := "id,name\n1,Alice\n"
 	csvPath := filepath.Join(dir, "data.csv")
-	if err := os.WriteFile(csvPath, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvPath, []byte(csvContent), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -345,7 +346,7 @@ func TestImportFile_UnsupportedFormat(t *testing.T) {
 	defer cleanup()
 
 	tmpFile := filepath.Join(t.TempDir(), "data.txt")
-	if err := os.WriteFile(tmpFile, []byte("hello"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -366,7 +367,7 @@ func TestImportFile_CSVSuccess(t *testing.T) {
 	defer cleanup()
 
 	tmpFile := filepath.Join(t.TempDir(), "people.csv")
-	if err := os.WriteFile(tmpFile, []byte("id,name\n1,Alice\n"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -440,10 +441,10 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 	defer cleanup()
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "a.csv"), []byte("id,val\n1,x\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.csv"), []byte("id,val\n1,x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "b.tsv"), []byte("id\tval\n2\ty\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "b.tsv"), []byte("id\tval\n2\ty\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -474,7 +475,7 @@ func TestImportCommand_PartialSuccess(t *testing.T) {
 
 	dir := t.TempDir()
 	csvPath := filepath.Join(dir, "ok.csv")
-	if err := os.WriteFile(csvPath, []byte("id\n1\n"), 0600); err != nil {
+	if err := os.WriteFile(csvPath, []byte("id\n1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

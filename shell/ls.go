@@ -36,9 +36,9 @@ func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error
 
 		var cmd *exec.Cmd
 		if runtime.GOOS == config.Windows {
-			cmd = exec.CommandContext(context.Background(), "cmd", "/c", "dir", "/q", path) //nolint:gosec // Controlled command for ls functionality
+			cmd = exec.CommandContext(context.Background(), "cmd", "/c", "dir", "/q", path) // #nosec G204
 		} else {
-			cmd = exec.CommandContext(context.Background(), "ls", "-l", path) //nolint:gosec // Controlled command for ls functionality
+			cmd = exec.CommandContext(context.Background(), "ls", "-l", path) // #nosec G204
 		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

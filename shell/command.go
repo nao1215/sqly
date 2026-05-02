@@ -7,10 +7,8 @@ import (
 	"strings"
 )
 
-var (
-	// ErrExitSqly is not error. developer must not print this error.
-	ErrExitSqly = errors.New("this is not error. however, user want to exit sqly command")
-)
+// ErrExitSqly is not error. developer must not print this error.
+var ErrExitSqly = errors.New("this is not error. however, user want to exit sqly command")
 
 // command is type of sqly helper command
 type command struct {
@@ -26,17 +24,17 @@ type CommandList map[string]command
 // NewCommands return *CommandList that set sqly helper commands.
 func NewCommands() CommandList {
 	c := CommandList{}
-	c[".cd"] = command{execute: c.cdCommand, name: ".cd", description: "change directory"}
-	c[".clear"] = command{execute: c.clearCommand, name: ".clear", description: "clear terminal screen"}
-	c[".dump"] = command{execute: c.dumpCommand, name: ".dump", description: "dump db table to file in a format according to output mode (default: csv)"}
-	c[".exit"] = command{execute: c.exitCommand, name: ".exit", description: "exit sqly"}
-	c[".header"] = command{execute: c.headerCommand, name: ".header", description: "print table header"}
-	c[".help"] = command{execute: c.helpCommand, name: ".help", description: "print help message"}
-	c[".import"] = command{execute: c.importCommand, name: ".import", description: "import file(s) and/or directory(ies)"}
-	c[".ls"] = command{execute: c.lsCommand, name: ".ls", description: "print directory contents"}
-	c[".mode"] = command{execute: c.modeCommand, name: ".mode", description: "change output mode"}
-	c[".tables"] = command{execute: c.tablesCommand, name: ".tables", description: "print tables"}
-	c[".pwd"] = command{execute: c.pwdCommand, name: ".pwd", description: "print current working directory"}
+	c[cdCommand] = command{execute: c.cdCommand, name: cdCommand, description: "change directory"}
+	c[clearCommand] = command{execute: c.clearCommand, name: clearCommand, description: "clear terminal screen"}
+	c[dumpCommand] = command{execute: c.dumpCommand, name: dumpCommand, description: "dump db table to file in a format according to output mode (default: csv)"}
+	c[exitCommand] = command{execute: c.exitCommand, name: exitCommand, description: "exit sqly"}
+	c[headerCommand] = command{execute: c.headerCommand, name: headerCommand, description: "print table header"}
+	c[helpCommand] = command{execute: c.helpCommand, name: helpCommand, description: "print help message"}
+	c[importCommand] = command{execute: c.importCommand, name: importCommand, description: "import file(s) and/or directory(ies)"}
+	c[lsCommand] = command{execute: c.lsCommand, name: lsCommand, description: "print directory contents"}
+	c[modeCommand] = command{execute: c.modeCommand, name: modeCommand, description: "change output mode"}
+	c[tablesCommand] = command{execute: c.tablesCommand, name: tablesCommand, description: "print tables"}
+	c[pwdCommand] = command{execute: c.pwdCommand, name: pwdCommand, description: "print current working directory"}
 	return c
 }
 

@@ -7,7 +7,7 @@ import (
 
 func TestGolden_WithFilePerms(t *testing.T) {
 	t.Run("change file permission to 0666", func(t *testing.T) {
-		want := fs.FileMode(0666)
+		want := fs.FileMode(0o666)
 		g := New(t,
 			WithFilePerms(want),
 		)
@@ -20,7 +20,7 @@ func TestGolden_WithFilePerms(t *testing.T) {
 
 func TestGolden_WithDirPerms(t *testing.T) {
 	t.Run("change directory permission to 0666", func(t *testing.T) {
-		want := fs.FileMode(0666)
+		want := fs.FileMode(0o666)
 		g := New(t,
 			WithDirPerms(want),
 		)

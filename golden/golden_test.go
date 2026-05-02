@@ -1,3 +1,4 @@
+//nolint:goconst
 package golden
 
 import (
@@ -66,7 +67,7 @@ func TestEnsureDir(t *testing.T) {
 		dir         string
 		shouldExist bool
 		fileExist   bool
-		err         interface{}
+		err         any
 	}{
 		"with existing directory": {
 			dir:         "example1",
@@ -173,7 +174,8 @@ func TestDiffEngines(t *testing.T) {
 			engine: engine{
 				engine: Simple,
 				diff: `Expected: Lorem dolor sit amet.
-Got: Lorem ipsum dolor.`},
+Got: Lorem ipsum dolor.`,
+			},
 		},
 		"classic": {
 			actual:   "Lorem ipsum dolor.",
@@ -185,7 +187,8 @@ Got: Lorem ipsum dolor.`},
 @@ -1 +1 @@
 -Lorem dolor sit amet.
 +Lorem ipsum dolor.
-`},
+`,
+			},
 		},
 		"colored": {
 			actual:   "Lorem ipsum dolor.",

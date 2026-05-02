@@ -1,3 +1,4 @@
+//nolint:goconst
 package model
 
 import "testing"

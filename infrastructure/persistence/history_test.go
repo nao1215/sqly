@@ -1,4 +1,6 @@
 // Package persistence handle sqlite3, csv
+//
+//nolint:goconst
 package persistence
 
 import (

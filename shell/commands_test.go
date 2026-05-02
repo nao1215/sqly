@@ -1,3 +1,4 @@
+//nolint:goconst
 package shell
 
 import (
@@ -275,7 +276,7 @@ func TestShell_getFilePathCompletions_edgeCases(t *testing.T) {
 
 	// Create nested directory structure
 	nestedDir := filepath.Join(tempDir, "subdir")
-	err = os.MkdirAll(nestedDir, 0750)
+	err = os.MkdirAll(nestedDir, 0o750)
 	if err != nil {
 		t.Fatalf("Could not create nested directory: %v", err)
 	}
@@ -296,7 +297,7 @@ func TestShell_getFilePathCompletions_edgeCases(t *testing.T) {
 
 	// Create hidden directory (should be skipped)
 	hiddenDir := filepath.Join(tempDir, ".hidden")
-	err = os.MkdirAll(hiddenDir, 0750)
+	err = os.MkdirAll(hiddenDir, 0o750)
 	if err != nil {
 		t.Fatalf("Could not create hidden directory: %v", err)
 	}

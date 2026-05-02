@@ -72,7 +72,7 @@ func GenerateCreateTableStatement(t *model.Table) string {
 	var builder strings.Builder
 	builder.WriteString("CREATE TABLE " + Quote(t.Name()) + "(")
 	for i, v := range t.Header() {
-		builder.WriteString(fmt.Sprintf("%s %s", Quote(v), indexTypeMap[i]))
+		fmt.Fprintf(&builder, "%s %s", Quote(v), indexTypeMap[i])
 		if i != len(t.Header())-1 {
 			builder.WriteString(", ")
 		} else {

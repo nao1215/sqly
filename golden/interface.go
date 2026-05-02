@@ -6,8 +6,10 @@ import (
 )
 
 // Compile time assurance
-var _ Tester = (*Golden)(nil)
-var _ OptionProcessor = (*Golden)(nil)
+var (
+	_ Tester          = (*Golden)(nil)
+	_ OptionProcessor = (*Golden)(nil)
+)
 
 // Option defines the signature of a functional option method that can apply
 // options to an OptionProcessor.
@@ -16,16 +18,16 @@ type Option func(OptionProcessor) error
 // Tester defines the methods that any golden tester should support.
 type Tester interface {
 	Assert(t *testing.T, name string, actualData []byte)
-	AssertJSON(t *testing.T, name string, actualJSONData interface{})
-	AssertXML(t *testing.T, name string, actualXMLData interface{})
-	AssertWithTemplate(t *testing.T, name string, data interface{}, actualData []byte)
+	AssertJSON(t *testing.T, name string, actualJSONData any)
+	AssertXML(t *testing.T, name string, actualXMLData any)
+	AssertWithTemplate(t *testing.T, name string, data any, actualData []byte)
 	Update(t *testing.T, name string, actualData []byte) error
 	GoldenFileName(t *testing.T, name string) string
 }
 
 // DiffFn takes in an actual and expected and will return a diff string
 // representing the differences between the two.
-type DiffFn func(actual string, expected string) string
+type DiffFn func(actual, expected string) string
 
 // DiffEngine is used to enumerate the diff engine processors that are
 // available.

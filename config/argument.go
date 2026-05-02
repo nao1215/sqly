@@ -155,7 +155,7 @@ func usage(flag pflag.FlagSet) string {
 
 // version print version message.
 func version() {
-	fmt.Fprintf(Stdout, "sqly %s\n", GetVersion())
+	_, _ = fmt.Fprintf(Stdout, "sqly %s\n", GetVersion())
 }
 
 // GetVersion return sqly command version.

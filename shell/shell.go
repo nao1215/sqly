@@ -27,8 +27,19 @@ var (
 )
 
 const (
-	// importCommand is the command for importing files
 	importCommand = ".import"
+	cdCommand     = ".cd"
+	clearCommand  = ".clear"
+	dumpCommand   = ".dump"
+	exitCommand   = ".exit"
+	headerCommand = ".header"
+	helpCommand   = ".help"
+	lsCommand     = ".ls"
+	modeCommand   = ".mode"
+	tablesCommand = ".tables"
+	pwdCommand    = ".pwd"
+
+	msgImportableFile = "Importable file"
 )
 
 // Shell is main class of the sqly command.
@@ -65,7 +76,7 @@ func NewShell(
 // After successful initialization, start the interactive shell.
 func (s *Shell) Run(ctx context.Context) error {
 	if s.argument.HelpFlag {
-		fmt.Fprintf(config.Stdout, "%s", s.argument.Usage)
+		_, _ = fmt.Fprintf(config.Stdout, "%s", s.argument.Usage)
 		return nil
 	}
 
@@ -100,7 +111,7 @@ func (s *Shell) communicate(ctx context.Context) error {
 			if errors.Is(err, ErrExitSqly) {
 				return nil // user input ".exit"
 			}
-			fmt.Fprintf(Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(Stderr, "%v\n", err)
 			continue
 		}
 	}
@@ -120,11 +131,11 @@ func (s *Shell) init(ctx context.Context) error {
 
 // printWelcomeMessage print version and help information.
 func (s *Shell) printWelcomeMessage() {
-	fmt.Fprintf(config.Stdout, "%s %s\n", color.GreenString("sqly"), config.GetVersion())
-	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "enter \"SQL query\" or \"sqly command that begins with a dot\".")
-	fmt.Fprintf(config.Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
-	fmt.Fprintln(config.Stdout, "")
+	_, _ = fmt.Fprintf(config.Stdout, "%s %s\n", color.GreenString("sqly"), config.GetVersion())
+	_, _ = fmt.Fprintln(config.Stdout, "")
+	_, _ = fmt.Fprintln(config.Stdout, "enter \"SQL query\" or \"sqly command that begins with a dot\".")
+	_, _ = fmt.Fprintf(config.Stdout, "%s print usage, %s exit sqly.\n", color.CyanString(".help"), color.CyanString(".exit"))
+	_, _ = fmt.Fprintln(config.Stdout, "")
 }
 
 // printPrompt print "sqly>" prompt and getting user input
@@ -134,19 +145,20 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	const historySize = 100
 	p, err := prompt.New(
 		fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String()),
 		prompt.WithCompleter(func(d prompt.Document) []prompt.Suggestion {
 			return s.completerNew(ctx, d.Text)
 		}),
-		prompt.WithMemoryHistory(100),
+		prompt.WithMemoryHistory(historySize),
 		prompt.WithTheme(prompt.ThemeNightOwl),
 		prompt.WithMultiline(true),
 	)
 	if err != nil {
 		return "", err
 	}
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	// Add existing history entries to the prompt
 	for _, h := range histories.ToStringList() {
@@ -251,8 +263,8 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 				if len(fileCompletions) > 0 {
 					// Mix with regular completions
 					regularCompletions := s.getRegularCompletions(ctx, input)
-					allCompletions := append(regularCompletions, fileCompletions...)
-					return filterHasPrefix(allCompletions, currentWord, true)
+					regularCompletions = append(regularCompletions, fileCompletions...)
+					return filterHasPrefix(regularCompletions, currentWord, true)
 				}
 			}
 		}
@@ -400,7 +412,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		return err
 	}
 	if table == nil {
-		fmt.Printf("affected is %d row(s)\n", affectedRows)
+		_, _ = fmt.Printf("affected is %d row(s)\n", affectedRows)
 		return nil
 	}
 
@@ -421,7 +433,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
 		return err
 	}
-	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
+	_, _ = fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
 		color.HiCyanString(filePath), exportFmt.String())
 	return nil
 }
@@ -476,13 +488,12 @@ func (s *Shell) getFilePathCompletions(_ string) []Suggest {
 		if !d.IsDir() && s.isValidFileForCompletion(d.Name()) {
 			suggestions = append(suggestions, Suggest{
 				Text:        filepath.ToSlash(path),
-				Description: "Importable file",
+				Description: msgImportableFile,
 			})
 		}
 
 		return nil
 	})
-
 	if err != nil {
 		return nil
 	}

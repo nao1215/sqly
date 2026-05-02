@@ -1,3 +1,4 @@
+//nolint:goconst
 package persistence
 
 import (
@@ -26,7 +27,7 @@ func TestFileRepositoryCreate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		if f == nil {
 			t.Fatal("file is nil")
@@ -42,7 +43,7 @@ func TestFileRepositoryCreate(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		wantMode := os.FileMode(0600)
+		wantMode := os.FileMode(0o600)
 		gotMode := info.Mode()
 		if gotMode != wantMode {
 			t.Errorf("mismatch got=%s, want=%s", gotMode, wantMode)

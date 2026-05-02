@@ -1,3 +1,4 @@
+//nolint:goconst
 package golden
 
 import (
@@ -74,7 +75,7 @@ func TestCompareTemplate(t *testing.T) {
 		name         string
 		actualData   []byte
 		expectedData []byte
-		data         interface{}
+		data         any
 		update       bool
 		err          error
 	}{
@@ -109,7 +110,8 @@ func TestCompareTemplate(t *testing.T) {
 			data:         nil,
 			update:       true,
 			err:          &missingKeyError{},
-		}}
+		},
+	}
 
 	g := New(t)
 

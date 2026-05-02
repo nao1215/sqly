@@ -14,7 +14,12 @@ const (
 	Windows = "windows"
 )
 
-// Config is sqly configuration.
+const (
+	// defaultDirPerm is the default permission for directory creation.
+	defaultDirPerm = 0o750
+)
+
+// Config is the configuration for sqly.
 type Config struct {
 	HistoryDBPath string `env:"SQLY_HISTORY_DB_PATH"`
 }
@@ -43,5 +48,5 @@ func (c *Config) Dir() string {
 
 // CreateDir make configuration directory.
 func (c *Config) CreateDir() error {
-	return os.MkdirAll(c.Dir(), 0750)
+	return os.MkdirAll(c.Dir(), defaultDirPerm)
 }

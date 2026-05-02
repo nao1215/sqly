@@ -1,3 +1,4 @@
+//nolint:goconst
 package interactor
 
 import (
@@ -128,7 +129,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open Excel file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if _, err := file.Read(content); err != nil {
 		t.Fatalf("Failed to read Excel file header: %v", err)

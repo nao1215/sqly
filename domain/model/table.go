@@ -55,6 +55,15 @@ const (
 	formatExcel    = "excel"
 )
 
+// Extension name constants.
+const (
+	ExtCSV      = ".csv"
+	ExtTSV      = ".tsv"
+	ExtLTSV     = ".ltsv"
+	ExtMarkdown = ".md"
+	ExtExcel    = ".xlsx"
+)
+
 const (
 	// PrintModeTable print data in table format
 	PrintModeTable PrintMode = iota
@@ -287,42 +296,42 @@ func (t *Table) printTable(out io.Writer) error {
 // printMarkdownTable print all record with header; output format is markdown
 func (t *Table) printMarkdownTable(out io.Writer) {
 	// Print header row
-	fmt.Fprint(out, "|")
+	_, _ = fmt.Fprint(out, "|")
 	for _, h := range t.Header() {
-		fmt.Fprintf(out, " %s |", strings.ReplaceAll(h, "|", "\\|"))
+		_, _ = fmt.Fprintf(out, " %s |", strings.ReplaceAll(h, "|", "\\|"))
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
 	// Print separator row
-	fmt.Fprint(out, "|")
+	_, _ = fmt.Fprint(out, "|")
 	for range t.Header() {
-		fmt.Fprint(out, "-----|")
+		_, _ = fmt.Fprint(out, "-----|")
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
 	// Print data rows
 	for _, record := range t.Records() {
-		fmt.Fprint(out, "|")
+		_, _ = fmt.Fprint(out, "|")
 		for _, cell := range record {
-			fmt.Fprintf(out, " %s |", strings.ReplaceAll(cell, "|", "\\|"))
+			_, _ = fmt.Fprintf(out, " %s |", strings.ReplaceAll(cell, "|", "\\|"))
 		}
-		fmt.Fprintln(out)
+		_, _ = fmt.Fprintln(out)
 	}
 }
 
 // printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header(), ","))
+	_, _ = fmt.Fprintln(out, strings.Join(t.Header(), ","))
 	for _, v := range t.Records() {
-		fmt.Fprintln(out, strings.Join(v, ","))
+		_, _ = fmt.Fprintln(out, strings.Join(v, ","))
 	}
 }
 
 // printTSV print all record with header; output format is tsv
 func (t *Table) printTSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header(), "\t"))
+	_, _ = fmt.Fprintln(out, strings.Join(t.Header(), "\t"))
 	for _, v := range t.Records() {
-		fmt.Fprintln(out, strings.Join(v, "\t"))
+		_, _ = fmt.Fprintln(out, strings.Join(v, "\t"))
 	}
 }
 
@@ -333,7 +342,7 @@ func (t *Table) printLTSV(out io.Writer) {
 		for i, data := range v {
 			r = append(r, t.Header()[i]+":"+data)
 		}
-		fmt.Fprintln(out, strings.Join(r, "\t"))
+		_, _ = fmt.Fprintln(out, strings.Join(r, "\t"))
 	}
 }
 

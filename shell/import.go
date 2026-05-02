@@ -48,11 +48,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 		info, err := os.Stat(cleanPath)
 		if err != nil {
-			if os.IsNotExist(err) {
+			switch {
+			case os.IsNotExist(err):
 				errorMessages = append(errorMessages, "path does not exist: "+path)
-			} else if os.IsPermission(err) {
+			case os.IsPermission(err):
 				errorMessages = append(errorMessages, "permission denied accessing path: "+path)
-			} else {
+			default:
 				errorMessages = append(errorMessages, fmt.Sprintf("failed to access path %s: %v", path, err))
 			}
 			continue
@@ -78,12 +79,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 	if len(errorMessages) > 0 {
 		if successCount > 0 {
-			fmt.Fprintf(config.Stdout, "\nImport completed with %d successful import(s) and %d error(s):\n", successCount, len(errorMessages))
+			_, _ = fmt.Fprintf(config.Stdout, "\nImport completed with %d successful import(s) and %d error(s):\n", successCount, len(errorMessages))
 		} else {
-			fmt.Fprintf(config.Stdout, "\nImport failed with %d error(s):\n", len(errorMessages))
+			_, _ = fmt.Fprintf(config.Stdout, "\nImport failed with %d error(s):\n", len(errorMessages))
 		}
 		for _, errMsg := range errorMessages {
-			fmt.Fprintf(config.Stdout, "  - %s\n", errMsg)
+			_, _ = fmt.Fprintf(config.Stdout, "  - %s\n", errMsg)
 		}
 		if successCount == 0 {
 			return errors.New("all import attempts failed")
@@ -116,7 +117,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	newTableNames := diffTableNames(tablesAfter, existingTables)
 
 	if len(newTableNames) == 0 {
-		fmt.Fprintf(config.Stdout, "No supported files found in directory %s\n", displayPath)
+		_, _ = fmt.Fprintf(config.Stdout, "No supported files found in directory %s\n", displayPath)
 		return false, nil
 	}
 
@@ -151,7 +152,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 	remainingNames := diffTableNames(tablesNow, existingTables)
 
-	fmt.Fprintf(config.Stdout, "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
+	_, _ = fmt.Fprintf(config.Stdout, "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
 	return true, nil
 }
 
@@ -183,7 +184,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 // a candidates set scoped to tables owned by the current import to prevent
 // prefix collisions between files with the same sanitized name.
 // If candidates is nil, falls back to prefix matching over all current tables.
-func (s *Shell) filterExcelSheets(ctx context.Context, excelPath string, sheetName string, candidates map[string]struct{}) error {
+func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName string, candidates map[string]struct{}) error {
 	exactPrefix := s.usecases.sqlite3.GetTableNameFromFilePath(excelPath) + "_"
 
 	// If no candidate set was provided (re-import case), fall back to
@@ -321,15 +322,15 @@ func extractSheetNameFromArgs(argv []string) string {
 
 // printImportUsage print import command usage.
 func printImportUsage() {
-	fmt.Fprintln(config.Stdout, "[Usage]")
-	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
-	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed")
-	fmt.Fprintln(config.Stdout, "  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4")
-	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
-	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
-	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
-	fmt.Fprintln(config.Stdout, "  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)")
-	fmt.Fprintln(config.Stdout, "  - Use --sheet to import only a specific sheet from Excel files (works with files and directories)")
-	fmt.Fprintln(config.Stdout, "  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields")
+	_, _ = fmt.Fprintln(config.Stdout, "[Usage]")
+	_, _ = fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
+	_, _ = fmt.Fprintln(config.Stdout, "")
+	_, _ = fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed")
+	_, _ = fmt.Fprintln(config.Stdout, "  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4")
+	_, _ = fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
+	_, _ = fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
+	_, _ = fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
+	_, _ = fmt.Fprintln(config.Stdout, "  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)")
+	_, _ = fmt.Fprintln(config.Stdout, "  - Use --sheet to import only a specific sheet from Excel files (works with files and directories)")
+	_, _ = fmt.Fprintln(config.Stdout, "  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields")
 }
