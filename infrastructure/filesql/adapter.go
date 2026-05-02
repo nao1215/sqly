@@ -135,7 +135,7 @@ func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames [
 		}
 		// Walk directory to find nested ACH/FED files.
 		// Errors from unreadable entries are skipped.
-		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error { //nolint:errcheck // best-effort scan of directory for cleanup
+		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil || d.IsDir() {
 				return nil //nolint:nilerr // skip unreadable entries
 			}
@@ -444,13 +444,16 @@ func (f *FileSQLAdapter) GetTableNames(ctx context.Context) ([]*model.Table, err
 	return tables, nil
 }
 
-// GetTableHeader returns header information for a specific table
+// GetTableHeader returns header information for a specific table.
+// The tableName is safely quoted via QuoteIdentifier, so any non-empty
+// SQLite identifier (including names with spaces, hyphens, or starting
+// with digits) is accepted.
 func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (*model.Table, error) {
 	if f.sharedDB == nil {
 		return nil, &FileSQLError{Op: opGetHeader, Err: errDatabaseNotInit}
 	}
-	if !validTableName.MatchString(tableName) {
-		return nil, &FileSQLError{Op: opGetHeader, Err: fmt.Sprintf("invalid table name: %q", tableName)}
+	if strings.TrimSpace(tableName) == "" {
+		return nil, &FileSQLError{Op: opGetHeader, Err: "table name is empty"}
 	}
 
 	// Get column info using PRAGMA

@@ -6,9 +6,9 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"html/template"
 	"os"
 	"testing"
+	"text/template"
 )
 
 // Assert compares the actual data received with the expected data in the

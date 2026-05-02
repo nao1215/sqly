@@ -61,22 +61,22 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 
 	switch modeName {
 	case model.PrintModeTable.String():
-		_, _ = fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeTable.String())
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeTable.String())
 		m.PrintMode = model.PrintModeTable
 	case model.PrintModeMarkdownTable.String():
-		_, _ = fmt.Fprintf(config.Stdout, "Change output mode from %s to %s table\n", m.String(), model.PrintModeMarkdownTable.String())
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s table\n", m.String(), model.PrintModeMarkdownTable.String())
 		m.PrintMode = model.PrintModeMarkdownTable
 	case model.PrintModeCSV.String():
-		_, _ = fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeCSV.String())
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeCSV.String())
 		m.PrintMode = model.PrintModeCSV
 	case model.PrintModeTSV.String():
-		_, _ = fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeTSV.String())
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeTSV.String())
 		m.PrintMode = model.PrintModeTSV
 	case model.PrintModeLTSV.String():
-		_, _ = fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeLTSV.String())
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeLTSV.String())
 		m.PrintMode = model.PrintModeLTSV
 	case model.PrintModeExcel.String():
-		_, _ = fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
 			m.String(), model.PrintModeExcel.String())
 		m.PrintMode = model.PrintModeExcel
 	default:

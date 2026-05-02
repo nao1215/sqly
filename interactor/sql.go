@@ -1,8 +1,9 @@
 package interactor
 
-import "slices"
-
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 const (
 	sqlSELECT  = "SELECT"

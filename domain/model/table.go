@@ -296,42 +296,42 @@ func (t *Table) printTable(out io.Writer) error {
 // printMarkdownTable print all record with header; output format is markdown
 func (t *Table) printMarkdownTable(out io.Writer) {
 	// Print header row
-	_, _ = fmt.Fprint(out, "|")
+	fmt.Fprint(out, "|")
 	for _, h := range t.Header() {
-		_, _ = fmt.Fprintf(out, " %s |", strings.ReplaceAll(h, "|", "\\|"))
+		fmt.Fprintf(out, " %s |", strings.ReplaceAll(h, "|", "\\|"))
 	}
-	_, _ = fmt.Fprintln(out)
+	fmt.Fprintln(out)
 
 	// Print separator row
-	_, _ = fmt.Fprint(out, "|")
+	fmt.Fprint(out, "|")
 	for range t.Header() {
-		_, _ = fmt.Fprint(out, "-----|")
+		fmt.Fprint(out, "-----|")
 	}
-	_, _ = fmt.Fprintln(out)
+	fmt.Fprintln(out)
 
 	// Print data rows
 	for _, record := range t.Records() {
-		_, _ = fmt.Fprint(out, "|")
+		fmt.Fprint(out, "|")
 		for _, cell := range record {
-			_, _ = fmt.Fprintf(out, " %s |", strings.ReplaceAll(cell, "|", "\\|"))
+			fmt.Fprintf(out, " %s |", strings.ReplaceAll(cell, "|", "\\|"))
 		}
-		_, _ = fmt.Fprintln(out)
+		fmt.Fprintln(out)
 	}
 }
 
 // printCSV print all record with header; output format is csv
 func (t *Table) printCSV(out io.Writer) {
-	_, _ = fmt.Fprintln(out, strings.Join(t.Header(), ","))
+	fmt.Fprintln(out, strings.Join(t.Header(), ","))
 	for _, v := range t.Records() {
-		_, _ = fmt.Fprintln(out, strings.Join(v, ","))
+		fmt.Fprintln(out, strings.Join(v, ","))
 	}
 }
 
 // printTSV print all record with header; output format is tsv
 func (t *Table) printTSV(out io.Writer) {
-	_, _ = fmt.Fprintln(out, strings.Join(t.Header(), "\t"))
+	fmt.Fprintln(out, strings.Join(t.Header(), "\t"))
 	for _, v := range t.Records() {
-		_, _ = fmt.Fprintln(out, strings.Join(v, "\t"))
+		fmt.Fprintln(out, strings.Join(v, "\t"))
 	}
 }
 
@@ -342,7 +342,7 @@ func (t *Table) printLTSV(out io.Writer) {
 		for i, data := range v {
 			r = append(r, t.Header()[i]+":"+data)
 		}
-		_, _ = fmt.Fprintln(out, strings.Join(r, "\t"))
+		fmt.Fprintln(out, strings.Join(r, "\t"))
 	}
 }
 

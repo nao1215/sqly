@@ -15,12 +15,12 @@ import (
 func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) error {
 	const expectedArgLen = 2
 	if len(argv) != expectedArgLen {
-		_, _ = fmt.Fprintln(config.Stdout, "[Usage]")
-		_, _ = fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
-		_, _ = fmt.Fprintln(config.Stdout, "[Note]")
-		_, _ = fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
-		_, _ = fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
-		_, _ = fmt.Fprintln(config.Stdout, "  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.")
+		fmt.Fprintln(config.Stdout, "[Usage]")
+		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
+		fmt.Fprintln(config.Stdout, "[Note]")
+		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
+		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
+		fmt.Fprintln(config.Stdout, "  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.")
 		return nil
 	}
 
@@ -48,7 +48,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
+	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
 		color.CyanString(argv[0]), color.HiCyanString(filePath), exportFmt.String())
 
 	return nil

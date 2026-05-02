@@ -37,8 +37,6 @@ func (lr *ltsvRepository) Dump(f *os.File, table *model.Table) error {
 }
 
 // labelAndData split label and data.
-//
-//nolint:unused
 func (lr *ltsvRepository) labelAndData(s string) (string, string, error) {
 	idx := strings.Index(s, ":")
 	if idx == -1 || idx == 0 {

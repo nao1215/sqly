@@ -27,7 +27,7 @@ func (c CommandList) tablesCommand(ctx context.Context, s *Shell, _ []string) er
 // printTables print table name
 func printTables(out io.Writer, t []*model.Table) error {
 	if len(t) == 0 {
-		_, _ = fmt.Fprintf(out,
+		fmt.Fprintf(out,
 			"there is no table. use %s for importing file\n",
 			color.CyanString(".import"))
 		return nil

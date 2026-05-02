@@ -1,4 +1,3 @@
-//nolint:goconst
 package filesql
 
 import (
