@@ -1,4 +1,3 @@
-// Package persistence handle sqlite3, csv
 package persistence
 
 import (

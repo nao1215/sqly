@@ -134,6 +134,7 @@ func TestShell_completer(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo
 func TestShellExec(t *testing.T) {
 	t.Run("execute .tables", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
@@ -740,7 +741,7 @@ func TestShellExec(t *testing.T) {
 		// Create a CSV file whose table name ends with _entries (ACH-like suffix)
 		tmpDir := t.TempDir()
 		csvFile := filepath.Join(tmpDir, "sales_entries.csv")
-		if err := os.WriteFile(csvFile, []byte("id,amount\n1,100\n"), 0600); err != nil {
+		if err := os.WriteFile(csvFile, []byte("id,amount\n1,100\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -851,10 +852,10 @@ func TestShellExec(t *testing.T) {
 		defer cleanup()
 
 		tmpDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(tmpDir, "a.csv"), []byte("x,y\n1,2\n"), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, "a.csv"), []byte("x,y\n1,2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(tmpDir, "b.csv"), []byte("p,q\n3,4\n"), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, "b.csv"), []byte("p,q\n3,4\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -1278,13 +1279,13 @@ func TestShell_getFilePathCompletions(t *testing.T) {
 	txtFile := filepath.Join(tempDir, "test.txt")
 
 	// Create test files
-	if err := os.WriteFile(csvFile, []byte("test"), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(tsvFile, []byte("test"), 0600); err != nil {
+	if err := os.WriteFile(tsvFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(txtFile, []byte("test"), 0600); err != nil {
+	if err := os.WriteFile(txtFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1400,7 +1401,7 @@ func TestShell_init(t *testing.T) {
 	tempDir := t.TempDir()
 	testCSV := filepath.Join(tempDir, "test.csv")
 	csvContent := "name,age\nJohn,25\nJane,30"
-	if err := os.WriteFile(testCSV, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(testCSV, []byte(csvContent), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

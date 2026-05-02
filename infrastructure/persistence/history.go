@@ -29,7 +29,7 @@ func (h *historyRepository) CreateTable(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	q := "CREATE TABLE IF NOT EXISTS `history` (id INTEGER PRIMARY KEY AUTOINCREMENT, request TEXT)"
 	_, err = tx.ExecContext(ctx, q)
@@ -55,7 +55,7 @@ func (h *historyRepository) Create(ctx context.Context, t *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, v := range t.Records() {
 		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
@@ -71,14 +71,14 @@ func (h *historyRepository) List(ctx context.Context) (model.Histories, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	rows, err := tx.QueryContext(ctx,
 		"SELECT `id`, `request` FROM `history` ORDER BY `id` ASC")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var id int
 	var request string

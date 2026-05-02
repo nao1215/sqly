@@ -36,11 +36,11 @@ const (
 
 	// defaultFilePerms is used to set the permissions on the golden fixture
 	// files.
-	defaultFilePerms os.FileMode = 0644
+	defaultFilePerms os.FileMode = 0o644
 
 	// defaultDirPerms is used to set the permissions on the golden fixture
 	// folder.
-	defaultDirPerms os.FileMode = 0755
+	defaultDirPerms os.FileMode = 0o755
 
 	// defaultDiffEngine sets which diff engine to use if not defined.
 	defaultDiffEngine = ClassicDiff
@@ -122,7 +122,7 @@ func New(t *testing.T, options ...Option) *Golden {
 // Diff generates a string that shows the difference between the actual and the
 // expected. This method could be called in your own DiffFn in case you want
 // to leverage any of the engines defined.
-func Diff(engine DiffEngine, actual string, expected string) (diff string) {
+func Diff(engine DiffEngine, actual, expected string) (diff string) {
 	switch engine {
 	case UndefinedDiff:
 		fallthrough

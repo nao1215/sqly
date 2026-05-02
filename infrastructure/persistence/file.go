@@ -19,5 +19,6 @@ func NewFileRepository() repository.FileRepository {
 
 // Create open file or create file.
 func (fr *fileRepository) Create(path string) (*os.File, error) {
-	return os.OpenFile(filepath.Clean(path), os.O_RDWR|os.O_CREATE, 0600)
+	const defaultFilePerm = 0o600
+	return os.OpenFile(filepath.Clean(path), os.O_RDWR|os.O_CREATE, defaultFilePerm)
 }

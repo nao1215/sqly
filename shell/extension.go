@@ -26,8 +26,8 @@ func getFileTypeFromPath(filePath string) string {
 	for {
 		found := false
 		for _, compExt := range compressedExtensions {
-			if strings.HasSuffix(name, compExt) {
-				name = strings.TrimSuffix(name, compExt)
+			if before, ok := strings.CutSuffix(name, compExt); ok {
+				name = before
 				found = true
 				break
 			}

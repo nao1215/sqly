@@ -55,6 +55,15 @@ const (
 	formatExcel    = "excel"
 )
 
+// Extension name constants.
+const (
+	ExtCSV      = ".csv"
+	ExtTSV      = ".tsv"
+	ExtLTSV     = ".ltsv"
+	ExtMarkdown = ".md"
+	ExtExcel    = ".xlsx"
+)
+
 const (
 	// PrintModeTable print data in table format
 	PrintModeTable PrintMode = iota

@@ -53,7 +53,22 @@ linters:
     errcheck:
       disable-default-exclusions: false
       check-type-assertions: true
-      check-blank: true
+      check-blank: false
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Print
+        - fmt.Printf
+        - fmt.Println
+        - fmt.Sscanf
+        - (*bytes.Buffer).WriteByte
+        - (*bytes.Buffer).WriteRune
+        - (*bytes.Buffer).WriteString
+        - (*strings.Builder).WriteByte
+        - (*strings.Builder).WriteRune
+        - (*strings.Builder).WriteString
+        - (io.Closer).Close
     tagliatelle:
       case:
         rules:

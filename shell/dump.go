@@ -13,7 +13,8 @@ import (
 
 // dumpCommand dump specified table to file in the current export format
 func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) error {
-	if len(argv) != 2 {
+	const expectedArgLen = 2
+	if len(argv) != expectedArgLen {
 		fmt.Fprintln(config.Stdout, "[Usage]")
 		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
 		fmt.Fprintln(config.Stdout, "[Note]")

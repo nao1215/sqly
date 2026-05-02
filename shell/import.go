@@ -48,11 +48,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 		info, err := os.Stat(cleanPath)
 		if err != nil {
-			if os.IsNotExist(err) {
+			switch {
+			case os.IsNotExist(err):
 				errorMessages = append(errorMessages, "path does not exist: "+path)
-			} else if os.IsPermission(err) {
+			case os.IsPermission(err):
 				errorMessages = append(errorMessages, "permission denied accessing path: "+path)
-			} else {
+			default:
 				errorMessages = append(errorMessages, fmt.Sprintf("failed to access path %s: %v", path, err))
 			}
 			continue
@@ -183,7 +184,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 // a candidates set scoped to tables owned by the current import to prevent
 // prefix collisions between files with the same sanitized name.
 // If candidates is nil, falls back to prefix matching over all current tables.
-func (s *Shell) filterExcelSheets(ctx context.Context, excelPath string, sheetName string, candidates map[string]struct{}) error {
+func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName string, candidates map[string]struct{}) error {
 	exactPrefix := s.usecases.sqlite3.GetTableNameFromFilePath(excelPath) + "_"
 
 	// If no candidate set was provided (re-import case), fall back to

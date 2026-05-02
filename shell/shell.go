@@ -27,8 +27,19 @@ var (
 )
 
 const (
-	// importCommand is the command for importing files
 	importCommand = ".import"
+	cdCommand     = ".cd"
+	clearCommand  = ".clear"
+	dumpCommand   = ".dump"
+	exitCommand   = ".exit"
+	headerCommand = ".header"
+	helpCommand   = ".help"
+	lsCommand     = ".ls"
+	modeCommand   = ".mode"
+	tablesCommand = ".tables"
+	pwdCommand    = ".pwd"
+
+	msgImportableFile = "Importable file"
 )
 
 // Shell is main class of the sqly command.
@@ -100,7 +111,7 @@ func (s *Shell) communicate(ctx context.Context) error {
 			if errors.Is(err, ErrExitSqly) {
 				return nil // user input ".exit"
 			}
-			fmt.Fprintf(Stderr, "%v\n", err)
+			fmt.Fprintf(config.Stderr, "%v\n", err)
 			continue
 		}
 	}
@@ -134,19 +145,20 @@ func (s *Shell) prompt(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	const historySize = 100
 	p, err := prompt.New(
 		fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String()),
 		prompt.WithCompleter(func(d prompt.Document) []prompt.Suggestion {
 			return s.completerNew(ctx, d.Text)
 		}),
-		prompt.WithMemoryHistory(100),
+		prompt.WithMemoryHistory(historySize),
 		prompt.WithTheme(prompt.ThemeNightOwl),
 		prompt.WithMultiline(true),
 	)
 	if err != nil {
 		return "", err
 	}
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	// Add existing history entries to the prompt
 	for _, h := range histories.ToStringList() {
@@ -251,8 +263,8 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 				if len(fileCompletions) > 0 {
 					// Mix with regular completions
 					regularCompletions := s.getRegularCompletions(ctx, input)
-					allCompletions := append(regularCompletions, fileCompletions...)
-					return filterHasPrefix(allCompletions, currentWord, true)
+					regularCompletions = append(regularCompletions, fileCompletions...)
+					return filterHasPrefix(regularCompletions, currentWord, true)
 				}
 			}
 		}
@@ -400,7 +412,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		return err
 	}
 	if table == nil {
-		fmt.Printf("affected is %d row(s)\n", affectedRows)
+		fmt.Fprintf(config.Stdout, "affected is %d row(s)\n", affectedRows)
 		return nil
 	}
 
@@ -476,13 +488,12 @@ func (s *Shell) getFilePathCompletions(_ string) []Suggest {
 		if !d.IsDir() && s.isValidFileForCompletion(d.Name()) {
 			suggestions = append(suggestions, Suggest{
 				Text:        filepath.ToSlash(path),
-				Description: "Importable file",
+				Description: msgImportableFile,
 			})
 		}
 
 		return nil
 	})
-
 	if err != nil {
 		return nil
 	}

@@ -23,7 +23,7 @@ func TestFileSQLAdapter_LoadFile(t *testing.T) {
 John,25,New York
 Jane,30,Los Angeles`
 
-	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test CSV file: %v", err)
 	}
 
@@ -32,7 +32,7 @@ Jane,30,Los Angeles`
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
 	adapter := NewFileSQLAdapter(sharedDB)
@@ -88,7 +88,7 @@ func TestFileSQLAdapter_LoadFileWithReservedKeywords(t *testing.T) {
 1,100,A,X
 2,200,B,Y`
 
-	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test CSV file: %v", err)
 	}
 
@@ -97,7 +97,7 @@ func TestFileSQLAdapter_LoadFileWithReservedKeywords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
 	adapter := NewFileSQLAdapter(sharedDB)
@@ -147,7 +147,7 @@ func TestFileSQLAdapter_LoadFileEmptyColumnName(t *testing.T) {
 John,25,New York
 Jane,30,Los Angeles`
 
-	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test CSV file: %v", err)
 	}
 
@@ -156,7 +156,7 @@ Jane,30,Los Angeles`
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
 	adapter := NewFileSQLAdapter(sharedDB)
@@ -164,7 +164,6 @@ Jane,30,Los Angeles`
 	// Test LoadFile with empty column name - this should handle gracefully
 	ctx := context.Background()
 	err = adapter.LoadFile(ctx, csvFile)
-
 	// Note: This test depends on how filesql handles empty column names
 	// It may succeed with auto-generated column names or fail
 	// We test that it doesn't panic and handles the error gracefully
@@ -184,7 +183,7 @@ func TestFileSQLAdapter_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create test table
 	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE test_table (id INTEGER, name TEXT, age INTEGER)`)
@@ -238,7 +237,7 @@ func TestFileSQLAdapter_GetTableNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create test tables
 	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE table1 (id INTEGER)`)
@@ -285,7 +284,7 @@ func TestFileSQLAdapter_Exec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
 	adapter := NewFileSQLAdapter(sharedDB)
@@ -331,7 +330,7 @@ func TestNewFileSQLAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Test NewFileSQLAdapter
 	adapter := NewFileSQLAdapter(sharedDB)
@@ -495,7 +494,7 @@ func TestFileSQLAdapter_LoadFileWithQuotesInColumnNames(t *testing.T) {
 John,value1,New York
 Jane,value2,Los Angeles`
 
-	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test CSV file: %v", err)
 	}
 
@@ -504,7 +503,7 @@ Jane,value2,Los Angeles`
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
 	adapter := NewFileSQLAdapter(sharedDB)
@@ -512,7 +511,6 @@ Jane,value2,Los Angeles`
 	// Test LoadFile with quotes in column names
 	ctx := context.Background()
 	err = adapter.LoadFile(ctx, csvFile)
-
 	// The behavior depends on how filesql handles this case
 	// The important thing is that our quoting function handles it safely
 	if err != nil {
@@ -547,7 +545,7 @@ func TestFileSQLAdapter_Close(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 
@@ -616,7 +614,7 @@ func TestFileSQLAdapter_LoadFilesEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -652,7 +650,7 @@ func TestFileSQLAdapter_LoadFileNonexistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -688,7 +686,7 @@ func TestFileSQLAdapter_GetTableHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create test table with various column types
 	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE test_header (id INTEGER, name TEXT, balance REAL, active BOOLEAN)`)
@@ -734,7 +732,7 @@ func TestFileSQLAdapter_GetTableHeaderNonexistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -760,7 +758,7 @@ func TestFileSQLAdapter_QueryWithDifferentDataTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	// Create test table with various data types
 	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE test_types (id INTEGER, name TEXT, balance REAL, data BLOB)`)
@@ -1010,7 +1008,7 @@ func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
 	csvFile := filepath.Join(tempDir, "2023-data.csv")
 	csvContent := "id,name,value\n1,alpha,100\n2,beta,200\n"
 
-	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test CSV file: %v", err)
 	}
 
@@ -1018,7 +1016,7 @@ func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1072,7 +1070,7 @@ func TestGetTableNameFromFilePath_MatchesFilesqlNaming(t *testing.T) {
 
 			tempDir := t.TempDir()
 			csvFile := filepath.Join(tempDir, tt.filename)
-			if err := os.WriteFile(csvFile, []byte("a,b\n1,2\n"), 0600); err != nil {
+			if err := os.WriteFile(csvFile, []byte("a,b\n1,2\n"), 0o600); err != nil {
 				t.Fatalf("Failed to create file: %v", err)
 			}
 
@@ -1080,7 +1078,7 @@ func TestGetTableNameFromFilePath_MatchesFilesqlNaming(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create database: %v", err)
 			}
-			defer sharedDB.Close()
+			defer func() { _ = sharedDB.Close() }()
 
 			adapter := NewFileSQLAdapter(sharedDB)
 			if err := adapter.LoadFile(context.Background(), csvFile); err != nil {
@@ -1114,7 +1112,7 @@ func TestFileSQLAdapter_JSONFile(t *testing.T) {
 	jsonFile := filepath.Join(tempDir, "test.json")
 	jsonContent := `[{"name":"Alice","age":30},{"name":"Bob","age":25}]`
 
-	if err := os.WriteFile(jsonFile, []byte(jsonContent), 0600); err != nil {
+	if err := os.WriteFile(jsonFile, []byte(jsonContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test JSON file: %v", err)
 	}
 
@@ -1122,7 +1120,7 @@ func TestFileSQLAdapter_JSONFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1159,7 +1157,7 @@ func TestFileSQLAdapter_JSONLFile(t *testing.T) {
 	jsonlFile := filepath.Join(tempDir, "test.jsonl")
 	jsonlContent := "{\"name\":\"Alice\",\"age\":30}\n{\"name\":\"Bob\",\"age\":25}\n{\"name\":\"Charlie\",\"age\":35}\n"
 
-	if err := os.WriteFile(jsonlFile, []byte(jsonlContent), 0600); err != nil {
+	if err := os.WriteFile(jsonlFile, []byte(jsonlContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test JSONL file: %v", err)
 	}
 
@@ -1167,7 +1165,7 @@ func TestFileSQLAdapter_JSONLFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1206,7 +1204,7 @@ func TestFileSQLAdapter_ExcelWithoutSheetName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1244,7 +1242,7 @@ func TestFileSQLAdapter_ReservedWordTableName(t *testing.T) {
 	csvFile := filepath.Join(tempDir, "select.csv")
 	csvContent := "id,name\n1,test\n"
 
-	if err := os.WriteFile(csvFile, []byte(csvContent), 0600); err != nil {
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test CSV file: %v", err)
 	}
 
@@ -1252,7 +1250,7 @@ func TestFileSQLAdapter_ReservedWordTableName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1294,7 +1292,7 @@ func TestFileSQLAdapter_ACHFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1349,7 +1347,7 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	ctx := context.Background()
@@ -1393,9 +1391,10 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 
 // TestLoadFile_ACHRegistryClearedAfterImport verifies that LoadFile cleans up
 // the filesql ACH registry after copying tables to prevent memory leaks.
+//
+// This test inspects filesql's process-global ACH registry, so it must not
+// run in parallel with other tests that load ACH files (e.g. TestFileSQLAdapter_ACHFile).
 func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
-	t.Parallel()
-
 	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
 	if _, err := os.Stat(achFile); os.IsNotExist(err) {
 		t.Skip("ACH test data not available")
@@ -1405,7 +1404,7 @@ func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	if err := adapter.LoadFile(context.Background(), achFile); err != nil {
@@ -1421,9 +1420,10 @@ func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
 
 // TestLoadFile_WireRegistryClearedAfterImport verifies that LoadFile cleans up
 // the filesql Fedwire registry after copying tables.
+//
+// This test inspects filesql's process-global Fedwire registry, so it must not
+// run in parallel with other tests that load FED files.
 func TestLoadFile_WireRegistryClearedAfterImport(t *testing.T) {
-	t.Parallel()
-
 	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
 	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
 		t.Skip("FED test data not available")
@@ -1433,7 +1433,7 @@ func TestLoadFile_WireRegistryClearedAfterImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
-	defer sharedDB.Close()
+	defer func() { _ = sharedDB.Close() }()
 
 	adapter := NewFileSQLAdapter(sharedDB)
 	if err := adapter.LoadFile(context.Background(), fedFile); err != nil {

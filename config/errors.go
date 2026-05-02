@@ -2,7 +2,5 @@ package config
 
 import "errors"
 
-var (
-	// ErrEmptyArg is argument for NewArg() is empty
-	ErrEmptyArg = errors.New("argument is empty")
-)
+// ErrEmptyArg is argument for NewArg() is empty
+var ErrEmptyArg = errors.New("argument is empty")

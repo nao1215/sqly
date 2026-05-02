@@ -134,7 +134,7 @@ func readLTSVAsTable(t *testing.T, path string) *model.Table {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	r := csv.NewReader(f)
 	r.Comma = '\t'
@@ -158,9 +158,9 @@ func readLTSVAsTable(t *testing.T, path string) *model.Table {
 		}
 		var record model.Record
 		for _, v := range row {
-			idx := strings.Index(v, ":")
-			if idx >= 0 {
-				record = append(record, v[idx+1:])
+			_, after, ok := strings.Cut(v, ":")
+			if ok {
+				record = append(record, after)
 			} else {
 				record = append(record, v)
 			}

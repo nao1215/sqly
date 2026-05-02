@@ -32,7 +32,7 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	_, err = tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
 	if err != nil {
@@ -48,14 +48,14 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	rows, err := tx.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%'")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	tables := []*model.Table{}
 	var name string
@@ -87,7 +87,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, v := range t.Records() {
 		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
@@ -117,13 +117,13 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	header, err := rows.Columns()
 	if err != nil {
@@ -133,7 +133,7 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 		return nil, infra.ErrNoRows
 	}
 
-	scanDest := make([]interface{}, len(header))
+	scanDest := make([]any, len(header))
 	rawResult := make([][]byte, len(header))
 	for i := range header {
 		scanDest[i] = &rawResult[i]
@@ -180,7 +180,7 @@ func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, 
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	result, err := tx.ExecContext(ctx, statement)
 	if err != nil {

@@ -39,17 +39,17 @@ func (e ExportFormat) String() string {
 func (e ExportFormat) Extension() string {
 	switch e {
 	case ExportCSV:
-		return ".csv"
+		return ExtCSV
 	case ExportTSV:
-		return ".tsv"
+		return ExtTSV
 	case ExportLTSV:
-		return ".ltsv"
+		return ExtLTSV
 	case ExportMarkdown:
-		return ".md"
+		return ExtMarkdown
 	case ExportExcel:
-		return ".xlsx"
+		return ExtExcel
 	}
-	return ".csv"
+	return ExtCSV
 }
 
 // ExportFormatFromPrintMode converts a PrintMode to an ExportFormat.

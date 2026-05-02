@@ -10,11 +10,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
+)
+
+var validTableName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
+const (
+	opQuery      = "query"
+	opRows       = "rows"
+	opExec       = "exec"
+	opGetTables  = "get_tables"
+	opGetHeader  = "get_header"
+	opScanTable  = "scan_table"
+	opScanHeader = "scan_header"
+
+	errDatabaseNotInit = "database not initialized"
+	defaultSheetName   = "sheet"
 )
 
 // FileSQLAdapter wraps filesql functionality to integrate with sqly architecture
@@ -51,7 +67,7 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	if err != nil {
 		return err
 	}
-	defer tmpDB.Close()
+	defer func() { _ = tmpDB.Close() }()
 
 	// Clean up filesql global registries for ACH/Fedwire TableSets.
 	// filesql.OpenContext registers TableSets in global maps for DumpACH/DumpFedWire,
@@ -71,7 +87,7 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	if err != nil {
 		return fmt.Errorf("failed to get table names from filesql database: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tableNames []string
 	for rows.Next() {
@@ -119,7 +135,7 @@ func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames [
 		}
 		// Walk directory to find nested ACH/FED files.
 		// Errors from unreadable entries are skipped.
-		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error { //nolint:errcheck // best-effort scan of directory for cleanup
+		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil || d.IsDir() {
 				return nil //nolint:nilerr // skip unreadable entries
 			}
@@ -127,7 +143,7 @@ func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames [
 			return nil
 		})
 	}
-	return
+	return achBaseNames, wireBaseNames
 }
 
 // addACHOrWireBaseName checks if path is an ACH or Fedwire file and appends
@@ -154,8 +170,13 @@ func addACHOrWireBaseName(path string, seen map[string]bool, achOut, wireOut *[]
 
 // copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
 func (f *FileSQLAdapter) copyTableToSharedDB(ctx context.Context, sourceDB *sql.DB, tableName string) error {
+	if !validTableName.MatchString(tableName) {
+		return fmt.Errorf("invalid table name: %q", tableName)
+	}
+
 	// Drop existing table if it exists to avoid conflicts
-	dropSQL := "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName) //nolint:gosec // tableName is quoted with QuoteIdentifier
+	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query
+	dropSQL := "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName) // #nosec G202
 	if _, err := f.sharedDB.ExecContext(ctx, dropSQL); err != nil {
 		return fmt.Errorf("failed to drop existing table %s: %w", tableName, err)
 	}
@@ -166,6 +187,9 @@ func (f *FileSQLAdapter) copyTableToSharedDB(ctx context.Context, sourceDB *sql.
 
 // copyTableManually performs manual table copy with proper type preservation
 func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB, tableName string) error {
+	if !validTableName.MatchString(tableName) {
+		return fmt.Errorf("invalid table name: %q", tableName)
+	}
 	// Get the original CREATE TABLE statement from filesql database
 	var createTableSQL string
 	err := sourceDB.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&createTableSQL)
@@ -179,11 +203,12 @@ func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB
 	}
 
 	// Get column names for data copying
+	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query, go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
 	rows, err := sourceDB.QueryContext(ctx, "PRAGMA table_info("+QuoteIdentifier(tableName)+")")
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []string
 	for rows.Next() {
@@ -222,28 +247,30 @@ func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Will be no-op if tx.Commit() succeeds
+	defer func() { _ = tx.Rollback() }() // Will be no-op if tx.Commit() succeeds
 
 	// Copy data from source to shared database
-	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(quotedColumns, ", "), quotedTableName) //nolint:gosec // Table name is controlled by filesql, columns are validated
+	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query
+	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(quotedColumns, ", "), quotedTableName) // #nosec G201
+	// nosemgrep: go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
 	sourceRows, err := sourceDB.QueryContext(ctx, selectSQL)
 	if err != nil {
 		return err
 	}
-	defer sourceRows.Close()
+	defer func() { _ = sourceRows.Close() }()
 
 	// Prepare insert statement with transaction
 	placeholders := make([]string, len(columns))
 	for i := range placeholders {
 		placeholders[i] = "?"
 	}
-	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", //nolint:gosec // Table and column names are controlled by filesql, placeholders are safe
+	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", // #nosec G201
 		quotedTableName, strings.Join(quotedColumns, ", "), strings.Join(placeholders, ", "))
 	stmt, err := tx.PrepareContext(ctx, insertSQL)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	// Bulk insert with batching for optimal performance
 	const batchSize = 1000
@@ -276,13 +303,13 @@ func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB
 			if tx, err = f.sharedDB.BeginTx(ctx, nil); err != nil {
 				return fmt.Errorf("failed to begin new transaction at row %d: %w", rowCount, err)
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 
 			// Re-prepare statement for new transaction
 			if stmt, err = tx.PrepareContext(ctx, insertSQL); err != nil {
 				return fmt.Errorf("failed to re-prepare statement at row %d: %w", rowCount, err)
 			}
-			defer stmt.Close()
+			defer func() { _ = stmt.Close() }()
 		}
 	}
 
@@ -302,14 +329,14 @@ func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB
 // Query executes SQL query and returns Table model
 func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table, error) {
 	if f.sharedDB == nil {
-		return nil, &FileSQLError{Op: "query", Err: "shared database not initialized"}
+		return nil, &FileSQLError{Op: opQuery, Err: "shared database not initialized"}
 	}
 
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
-		return nil, &FileSQLError{Op: "query", Err: err.Error()}
+		return nil, &FileSQLError{Op: opQuery, Err: err.Error()}
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Get column names
 	columns, err := rows.Columns()
@@ -357,15 +384,11 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, &FileSQLError{Op: "rows", Err: err.Error()}
+		return nil, &FileSQLError{Op: opRows, Err: err.Error()}
 	}
 
 	// Generate unique table name for query results to avoid conflicts
-	randomBytes := make([]byte, 4)
-	if _, err := rand.Read(randomBytes); err != nil {
-		return nil, &FileSQLError{Op: "generate_table_name", Err: err.Error()}
-	}
-	tableName := "query_result_" + hex.EncodeToString(randomBytes)
+	tableName := "query_result_" + generateRandomName()
 
 	return model.NewTable(tableName, header, records), nil
 }
@@ -373,12 +396,12 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 // Exec executes SQL statement (INSERT, UPDATE, DELETE)
 func (f *FileSQLAdapter) Exec(ctx context.Context, statement string) (int64, error) {
 	if f.sharedDB == nil {
-		return 0, &FileSQLError{Op: "exec", Err: "database not initialized"}
+		return 0, &FileSQLError{Op: opExec, Err: errDatabaseNotInit}
 	}
 
 	result, err := f.sharedDB.ExecContext(ctx, statement)
 	if err != nil {
-		return 0, &FileSQLError{Op: "exec", Err: err.Error()}
+		return 0, &FileSQLError{Op: opExec, Err: err.Error()}
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -392,22 +415,22 @@ func (f *FileSQLAdapter) Exec(ctx context.Context, statement string) (int64, err
 // GetTableNames returns all table names in the database
 func (f *FileSQLAdapter) GetTableNames(ctx context.Context) ([]*model.Table, error) {
 	if f.sharedDB == nil {
-		return nil, &FileSQLError{Op: "get_tables", Err: "database not initialized"}
+		return nil, &FileSQLError{Op: opGetTables, Err: errDatabaseNotInit}
 	}
 
 	// Query sqlite_master for table names, excluding system tables and temporary query result tables
 	query := "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%'"
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
-		return nil, &FileSQLError{Op: "get_tables", Err: err.Error()}
+		return nil, &FileSQLError{Op: opGetTables, Err: err.Error()}
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []*model.Table
 	for rows.Next() {
 		var tableName string
 		if err := rows.Scan(&tableName); err != nil {
-			return nil, &FileSQLError{Op: "scan_table", Err: err.Error()}
+			return nil, &FileSQLError{Op: opScanTable, Err: err.Error()}
 		}
 
 		// Create table model with just the name
@@ -415,25 +438,32 @@ func (f *FileSQLAdapter) GetTableNames(ctx context.Context) ([]*model.Table, err
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, &FileSQLError{Op: "rows", Err: err.Error()}
+		return nil, &FileSQLError{Op: opRows, Err: err.Error()}
 	}
 
 	return tables, nil
 }
 
-// GetTableHeader returns header information for a specific table
+// GetTableHeader returns header information for a specific table.
+// The tableName is safely quoted via QuoteIdentifier, so any non-empty
+// SQLite identifier (including names with spaces, hyphens, or starting
+// with digits) is accepted.
 func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (*model.Table, error) {
 	if f.sharedDB == nil {
-		return nil, &FileSQLError{Op: "get_header", Err: "database not initialized"}
+		return nil, &FileSQLError{Op: opGetHeader, Err: errDatabaseNotInit}
+	}
+	if strings.TrimSpace(tableName) == "" {
+		return nil, &FileSQLError{Op: opGetHeader, Err: "table name is empty"}
 	}
 
 	// Get column info using PRAGMA
-	query := "PRAGMA table_info(" + QuoteIdentifier(tableName) + ")" //nolint:gosec // tableName is quoted with QuoteIdentifier
+	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query, go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
+	query := "PRAGMA table_info(" + QuoteIdentifier(tableName) + ")" // #nosec G202
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
-		return nil, &FileSQLError{Op: "get_header", Err: err.Error()}
+		return nil, &FileSQLError{Op: opGetHeader, Err: err.Error()}
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []string
 	for rows.Next() {
@@ -445,7 +475,7 @@ func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (
 		var pk int
 
 		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return nil, &FileSQLError{Op: "scan_header", Err: err.Error()}
+			return nil, &FileSQLError{Op: opScanHeader, Err: err.Error()}
 		}
 		columns = append(columns, name)
 	}
@@ -539,12 +569,12 @@ func SanitizeForSQL(name string) string {
 
 	// Add "sheet_" prefix if name starts with a number (matches filesql behavior)
 	if len(finalResult) > 0 && finalResult[0] >= '0' && finalResult[0] <= '9' {
-		finalResult = "sheet_" + finalResult
+		finalResult = defaultSheetName + "_" + finalResult
 	}
 
 	// Return "sheet" as fallback for empty names (matches filesql behavior)
 	if finalResult == "" {
-		finalResult = "sheet"
+		finalResult = defaultSheetName
 	}
 
 	return finalResult
@@ -581,8 +611,8 @@ func IsSupportedFile(filePath string) bool {
 
 	// Strip compression extension if present
 	for _, ext := range compressionExts {
-		if strings.HasSuffix(lower, ext) {
-			lower = strings.TrimSuffix(lower, ext)
+		if before, ok := strings.CutSuffix(lower, ext); ok {
+			lower = before
 			break
 		}
 	}
@@ -602,11 +632,19 @@ func IsExcelFile(filePath string) bool {
 
 	// Strip compression extension if present
 	for _, ext := range compressionExts {
-		if strings.HasSuffix(lower, ext) {
-			lower = strings.TrimSuffix(lower, ext)
+		if before, ok := strings.CutSuffix(lower, ext); ok {
+			lower = before
 			break
 		}
 	}
 
 	return strings.HasSuffix(lower, ".xlsx")
+}
+
+// generateRandomName generates a random 4-byte hex string.
+func generateRandomName() string {
+	const randomBytesLen = 4
+	randomBytes := make([]byte, randomBytesLen)
+	_, _ = rand.Read(randomBytes)
+	return hex.EncodeToString(randomBytes)
 }

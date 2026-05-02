@@ -58,10 +58,9 @@ func (g *Golden) Assert(t *testing.T, name string, actualData []byte) {
 // `name` refers to the name of the test and it should typically be unique
 // within the package. Also it should be a valid file name (so keeping to
 // `a-z0-9\-\_` is a good idea).
-func (g *Golden) AssertJSON(t *testing.T, name string, actualJSONData interface{}) {
+func (g *Golden) AssertJSON(t *testing.T, name string, actualJSONData any) {
 	t.Helper()
 	js, err := json.MarshalIndent(actualJSONData, "", "  ")
-
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -77,10 +76,9 @@ func (g *Golden) AssertJSON(t *testing.T, name string, actualJSONData interface{
 // `name` refers to the name of the test and it should typically be unique
 // within the package. Also it should be a valid file name (so keeping to
 // `a-z0-9\-\_` is a good idea).
-func (g *Golden) AssertXML(t *testing.T, name string, actualXMLData interface{}) {
+func (g *Golden) AssertXML(t *testing.T, name string, actualXMLData any) {
 	t.Helper()
 	x, err := xml.MarshalIndent(actualXMLData, "", "  ")
-
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -109,7 +107,7 @@ func normalizeLF(d []byte) []byte {
 // the name of the test and it should typically be unique within the package.
 // Also it should be a valid file name (so keeping to `a-z0-9\-\_` is a good
 // idea).
-func (g *Golden) AssertWithTemplate(t *testing.T, name string, data interface{}, actualData []byte) {
+func (g *Golden) AssertWithTemplate(t *testing.T, name string, data any, actualData []byte) {
 	t.Helper()
 	if *update {
 		err := g.Update(t, name, actualData)
@@ -147,7 +145,6 @@ func (g *Golden) AssertWithTemplate(t *testing.T, name string, data interface{},
 func (g *Golden) compare(t *testing.T, name string, actualData []byte) error {
 	t.Helper()
 	expectedData, err := os.ReadFile(g.GoldenFileName(t, name))
-
 	if err != nil {
 		if os.IsNotExist(err) {
 			return newErrFixtureNotFound()
@@ -175,10 +172,9 @@ func (g *Golden) compare(t *testing.T, name string, actualData []byte) error {
 
 // compareTemplate is reading the golden fixture file and compare the stored
 // data with the actual data.
-func (g *Golden) compareTemplate(t *testing.T, name string, data interface{}, actualData []byte) error {
+func (g *Golden) compareTemplate(t *testing.T, name string, data any, actualData []byte) error {
 	t.Helper()
 	expectedDataTmpl, err := os.ReadFile(g.GoldenFileName(t, name))
-
 	if err != nil {
 		if os.IsNotExist(err) {
 			return newErrFixtureNotFound()
