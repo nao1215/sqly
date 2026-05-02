@@ -1391,9 +1391,10 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 
 // TestLoadFile_ACHRegistryClearedAfterImport verifies that LoadFile cleans up
 // the filesql ACH registry after copying tables to prevent memory leaks.
+//
+// This test inspects filesql's process-global ACH registry, so it must not
+// run in parallel with other tests that load ACH files (e.g. TestFileSQLAdapter_ACHFile).
 func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
-	t.Parallel()
-
 	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
 	if _, err := os.Stat(achFile); os.IsNotExist(err) {
 		t.Skip("ACH test data not available")
@@ -1419,9 +1420,10 @@ func TestLoadFile_ACHRegistryClearedAfterImport(t *testing.T) {
 
 // TestLoadFile_WireRegistryClearedAfterImport verifies that LoadFile cleans up
 // the filesql Fedwire registry after copying tables.
+//
+// This test inspects filesql's process-global Fedwire registry, so it must not
+// run in parallel with other tests that load FED files.
 func TestLoadFile_WireRegistryClearedAfterImport(t *testing.T) {
-	t.Parallel()
-
 	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
 	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
 		t.Skip("FED test data not available")
