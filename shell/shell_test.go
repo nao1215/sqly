@@ -1102,7 +1102,7 @@ func newShell(t *testing.T, args []string) (*Shell, func(), error) {
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
 	exportInteractor := interactor.NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
-	usecases := NewUsecases(sqLite3Interactor, historyInteractor, exportInteractor)
+	usecases := NewUsecases(sqLite3Interactor, sqLite3Interactor, sqLite3Interactor, historyInteractor, exportInteractor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()
@@ -1418,7 +1418,7 @@ func TestShell_init(t *testing.T) {
 	}
 
 	// Verify table was loaded
-	tables, err := shell.usecases.sqlite3.TablesName(context.Background())
+	tables, err := shell.usecases.metadata.TablesName(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

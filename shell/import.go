@@ -100,17 +100,17 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 // When sheetName is specified, --sheet filtering is applied per-Excel-file
 // by walking the directory and filtering each Excel file individually.
 func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, sheetName string) (bool, error) {
-	tablesBefore, err := s.usecases.sqlite3.GetTableNames(ctx)
+	tablesBefore, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get table names before importing directory %s: %w", displayPath, err)
 	}
 	existingTables := tableNameSet(tablesBefore)
 
-	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
+	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
 		return false, fmt.Errorf("failed to import files from directory %s: %w", displayPath, err)
 	}
 
-	tablesAfter, err := s.usecases.sqlite3.GetTableNames(ctx)
+	tablesAfter, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get table names after importing directory %s: %w", displayPath, err)
 	}
@@ -133,7 +133,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 			if d.IsDir() {
 				return nil
 			}
-			if s.usecases.sqlite3.IsExcelFile(path) {
+			if s.usecases.importer.IsExcelFile(path) {
 				if err := s.filterExcelSheets(ctx, path, sheetName, nil); err != nil {
 					return err
 				}
@@ -146,7 +146,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 
 	// Recompute remaining tables after potential sheet filtering may have dropped some.
-	tablesNow, err := s.usecases.sqlite3.GetTableNames(ctx)
+	tablesNow, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get table names after sheet filtering for %s: %w", displayPath, err)
 	}
@@ -158,11 +158,11 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
-	if !s.usecases.sqlite3.IsSupportedFile(cleanPath) {
+	if !s.usecases.importer.IsSupportedFile(cleanPath) {
 		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
 	}
 
-	if err := s.usecases.sqlite3.LoadFiles(ctx, cleanPath); err != nil {
+	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 
@@ -170,7 +170,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// Use prefix matching over current tables. LoadFiles just created or
 	// overwrote these tables, so all prefix-matching tables belong to this file.
 	// nil candidates tells filterExcelSheets to build the set from prefix match.
-	if s.usecases.sqlite3.IsExcelFile(cleanPath) && sheetName != "" {
+	if s.usecases.importer.IsExcelFile(cleanPath) && sheetName != "" {
 		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, nil); err != nil {
 			return err
 		}
@@ -185,12 +185,12 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 // prefix collisions between files with the same sanitized name.
 // If candidates is nil, falls back to prefix matching over all current tables.
 func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName string, candidates map[string]struct{}) error {
-	exactPrefix := s.usecases.sqlite3.GetTableNameFromFilePath(excelPath) + "_"
+	exactPrefix := s.usecases.importer.GetTableNameFromFilePath(excelPath) + "_"
 
 	// If no candidate set was provided (re-import case), fall back to
 	// prefix matching over all current tables.
 	if candidates == nil {
-		tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+		tables, err := s.usecases.importer.GetTableNames(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get table names for %s: %w", excelPath, err)
 		}
@@ -206,7 +206,7 @@ func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName stri
 		return fmt.Errorf("no sheets found in Excel file %s", excelPath)
 	}
 
-	sanitized := s.usecases.sqlite3.SanitizeForSQL(sheetName)
+	sanitized := s.usecases.importer.SanitizeForSQL(sheetName)
 	var keepTable string
 	for name := range candidates {
 		// Extract sheet part by stripping the known prefix.
@@ -226,8 +226,8 @@ func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName stri
 			if !strings.HasPrefix(name, exactPrefix) {
 				continue
 			}
-			dropSQL := "DROP TABLE IF EXISTS " + s.usecases.sqlite3.QuoteIdentifier(name)
-			if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+			dropSQL := "DROP TABLE IF EXISTS " + s.usecases.importer.QuoteIdentifier(name)
+			if _, err := s.usecases.query.Exec(ctx, dropSQL); err != nil {
 				return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
 			}
 		}
@@ -238,8 +238,8 @@ func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName stri
 		if name == keepTable || !strings.HasPrefix(name, exactPrefix) {
 			continue
 		}
-		dropSQL := "DROP TABLE IF EXISTS " + s.usecases.sqlite3.QuoteIdentifier(name)
-		if _, err := s.usecases.sqlite3.Exec(ctx, dropSQL); err != nil {
+		dropSQL := "DROP TABLE IF EXISTS " + s.usecases.importer.QuoteIdentifier(name)
+		if _, err := s.usecases.query.Exec(ctx, dropSQL); err != nil {
 			return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
 		}
 	}

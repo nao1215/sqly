@@ -37,7 +37,10 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	sqLite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sql := interactor.NewSQL()
 	fileSQLAdapter := provideFileSQLAdapter(memoryDB)
-	databaseUsecase := interactor.NewSQLite3Interactor(sqLite3Repository, sql, fileSQLAdapter)
+	sqLite3Interactor := interactor.NewSQLite3Interactor(sqLite3Repository, sql, fileSQLAdapter)
+	queryUsecase := interactor.NewQueryUsecase(sqLite3Interactor)
+	importUsecase := interactor.NewImportUsecase(sqLite3Interactor)
+	metadataUsecase := interactor.NewMetadataUsecase(sqLite3Interactor)
 	historyDB, cleanup2, err := config.NewHistoryDB(configConfig)
 	if err != nil {
 		cleanup()
@@ -51,7 +54,7 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	excelRepository := persistence.NewExcelRepository()
 	fileRepository := persistence.NewFileRepository()
 	exportUsecase := interactor.NewExportInteractor(csvRepository, tsvRepository, ltsvRepository, excelRepository, fileRepository)
-	usecases := shell.NewUsecases(databaseUsecase, historyUsecase, exportUsecase)
+	usecases := shell.NewUsecases(queryUsecase, importUsecase, metadataUsecase, historyUsecase, exportUsecase)
 	shellShell, err := shell.NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()

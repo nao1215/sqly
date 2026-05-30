@@ -102,24 +102,24 @@ func TestFilterExcelSheets_NoCollisionWithSimilarPrefix(t *testing.T) {
 	ctx := context.Background()
 
 	// Simulate pre-existing tables from sales_q1.xlsx (prefix: sales_q1_)
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE sales_q1_Revenue (id INTEGER, amount REAL)")
 	if err != nil {
 		t.Fatalf("failed to create pre-existing table: %v", err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"INSERT INTO sales_q1_Revenue VALUES (1, 100.0)")
 	if err != nil {
 		t.Fatalf("failed to insert: %v", err)
 	}
 
 	// Simulate tables from sales.xlsx (prefix: sales_)
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE sales_Summary (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE sales_Details (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestFilterExcelSheets_NoCollisionWithSimilarPrefix(t *testing.T) {
 	}
 
 	// sales_q1_Revenue must NOT be dropped (different prefix)
-	table, err := s.usecases.sqlite3.List(ctx, "sales_q1_Revenue")
+	table, err := s.usecases.metadata.List(ctx, "sales_q1_Revenue")
 	if err != nil {
 		t.Fatalf("sales_q1_Revenue should still exist: %v", err)
 	}
@@ -147,13 +147,13 @@ func TestFilterExcelSheets_NoCollisionWithSimilarPrefix(t *testing.T) {
 	}
 
 	// sales_Summary must be kept
-	_, err = s.usecases.sqlite3.List(ctx, "sales_Summary")
+	_, err = s.usecases.metadata.List(ctx, "sales_Summary")
 	if err != nil {
 		t.Fatalf("sales_Summary should still exist: %v", err)
 	}
 
 	// sales_Details must be dropped
-	_, err = s.usecases.sqlite3.List(ctx, "sales_Details")
+	_, err = s.usecases.metadata.List(ctx, "sales_Details")
 	if err == nil {
 		t.Error("expected sales_Details to be dropped, but it still exists")
 	}
@@ -170,12 +170,12 @@ func TestFilterExcelSheets_UnderscoreInFilename(t *testing.T) {
 
 	// sales_q1.xlsx produces tables with prefix "sales_q1_"
 	// So sales_q1_Summary has sheet part "Summary" (after stripping "sales_q1_")
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE sales_q1_Summary (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE sales_q1_Details (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
@@ -187,13 +187,13 @@ func TestFilterExcelSheets_UnderscoreInFilename(t *testing.T) {
 	}
 
 	// Summary should be kept
-	_, err = s.usecases.sqlite3.List(ctx, "sales_q1_Summary")
+	_, err = s.usecases.metadata.List(ctx, "sales_q1_Summary")
 	if err != nil {
 		t.Fatalf("sales_q1_Summary should still exist: %v", err)
 	}
 
 	// Details should be dropped
-	_, err = s.usecases.sqlite3.List(ctx, "sales_q1_Details")
+	_, err = s.usecases.metadata.List(ctx, "sales_q1_Details")
 	if err == nil {
 		t.Error("expected sales_q1_Details to be dropped")
 	}
@@ -208,12 +208,12 @@ func TestFilterExcelSheets_SheetNotFound(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE report_Sheet1 (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE report_Sheet2 (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
@@ -225,11 +225,11 @@ func TestFilterExcelSheets_SheetNotFound(t *testing.T) {
 	}
 
 	// Both tables should be dropped
-	_, err = s.usecases.sqlite3.List(ctx, "report_Sheet1")
+	_, err = s.usecases.metadata.List(ctx, "report_Sheet1")
 	if err == nil {
 		t.Error("expected report_Sheet1 to be dropped")
 	}
-	_, err = s.usecases.sqlite3.List(ctx, "report_Sheet2")
+	_, err = s.usecases.metadata.List(ctx, "report_Sheet2")
 	if err == nil {
 		t.Error("expected report_Sheet2 to be dropped")
 	}
@@ -245,12 +245,12 @@ func TestFilterExcelSheets_ReimportWithSheet(t *testing.T) {
 	ctx := context.Background()
 
 	// Simulate first import of report.xlsx (all sheets loaded)
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE report_Summary (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE report_Details (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
@@ -265,13 +265,13 @@ func TestFilterExcelSheets_ReimportWithSheet(t *testing.T) {
 	}
 
 	// Summary should be kept
-	_, err = s.usecases.sqlite3.List(ctx, "report_Summary")
+	_, err = s.usecases.metadata.List(ctx, "report_Summary")
 	if err != nil {
 		t.Fatalf("report_Summary should still exist: %v", err)
 	}
 
 	// Details should be dropped
-	_, err = s.usecases.sqlite3.List(ctx, "report_Details")
+	_, err = s.usecases.metadata.List(ctx, "report_Details")
 	if err == nil {
 		t.Error("expected report_Details to be dropped on re-import with --sheet")
 	}
@@ -287,24 +287,24 @@ func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
 	ctx := context.Background()
 
 	// Pre-load a CSV table that should survive --sheet filtering
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE users (id INTEGER, name TEXT)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"INSERT INTO users VALUES (1, 'Alice')")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Simulate Excel tables that would be imported from a directory
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE workbook_Sheet1 (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.usecases.sqlite3.Exec(ctx,
+	_, err = s.usecases.query.Exec(ctx,
 		"CREATE TABLE workbook_Sheet2 (id INTEGER)")
 	if err != nil {
 		t.Fatal(err)
@@ -318,7 +318,7 @@ func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
 	}
 
 	// users table must still exist
-	table, err := s.usecases.sqlite3.List(ctx, "users")
+	table, err := s.usecases.metadata.List(ctx, "users")
 	if err != nil {
 		t.Fatalf("users table should still exist: %v", err)
 	}
@@ -327,11 +327,11 @@ func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
 	}
 
 	// workbook_Sheet1 kept, workbook_Sheet2 dropped
-	_, err = s.usecases.sqlite3.List(ctx, "workbook_Sheet1")
+	_, err = s.usecases.metadata.List(ctx, "workbook_Sheet1")
 	if err != nil {
 		t.Fatalf("workbook_Sheet1 should still exist: %v", err)
 	}
-	_, err = s.usecases.sqlite3.List(ctx, "workbook_Sheet2")
+	_, err = s.usecases.metadata.List(ctx, "workbook_Sheet2")
 	if err == nil {
 		t.Error("expected workbook_Sheet2 to be dropped")
 	}
@@ -375,7 +375,7 @@ func TestImportFile_CSVSuccess(t *testing.T) {
 		t.Fatalf("importFile: %v", err)
 	}
 
-	tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+	tables, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestImportFile_ExcelWithSheet(t *testing.T) {
 	}
 
 	// Verify at least one table exists after import
-	tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+	tables, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 		t.Error("expected imported=true")
 	}
 
-	tables, err := s.usecases.sqlite3.GetTableNames(ctx)
+	tables, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

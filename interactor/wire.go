@@ -8,6 +8,9 @@ import (
 // Set is interactor wire set.
 var Set = wire.NewSet(
 	NewSQLite3Interactor,
+	NewQueryUsecase,
+	NewImportUsecase,
+	NewMetadataUsecase,
 	NewHistoryInteractor,
 	NewExportInteractor,
 	NewSQL,

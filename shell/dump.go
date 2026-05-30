@@ -38,7 +38,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return fmt.Errorf(".dump does not support Fedwire format output; use csv/tsv/xlsx instead (e.g., .dump %s %s.csv)", tableName, strings.TrimSuffix(userPath, filepath.Ext(userPath)))
 	}
 
-	table, err := s.usecases.sqlite3.List(ctx, tableName)
+	table, err := s.usecases.metadata.List(ctx, tableName)
 	if err != nil {
 		return err
 	}

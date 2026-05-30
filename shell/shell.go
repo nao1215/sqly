@@ -222,7 +222,7 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 		strings.HasPrefix(currentWord, `..\`) || // Windows relative path
 		strings.HasPrefix(currentWord, `C:\`) || // Windows absolute path (common drive)
 		// Also check if the word looks like a filename with supported extensions
-		(strings.Contains(currentWord, ".") && s.usecases.sqlite3.IsSupportedFile(currentWord))
+		(strings.Contains(currentWord, ".") && s.usecases.importer.IsSupportedFile(currentWord))
 	// Check if we're at the end of a path with / or \
 	atEndOfPath := (strings.HasSuffix(text, "/") || strings.HasSuffix(text, `\`)) && len(strings.TrimSpace(text)) > 0
 	// If it looks like a file path OR we're at end of path, provide file completions
@@ -330,7 +330,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		})
 	}
 
-	tables, err := s.usecases.sqlite3.TablesName(ctx)
+	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		// Get current word for filtering
 		lastSpace := strings.LastIndex(input, " ")
@@ -348,7 +348,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 			Description: "table: " + v.Name(),
 		})
 
-		table, err := s.usecases.sqlite3.Header(ctx, v.Name())
+		table, err := s.usecases.metadata.Header(ctx, v.Name())
 		if err != nil {
 			// Get current word for filtering
 			lastSpace := strings.LastIndex(input, " ")
@@ -407,7 +407,7 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 // execSQL execute SQL query.
 func (s *Shell) execSQL(ctx context.Context, req string) error {
 	req = strings.TrimRight(req, ";")
-	table, affectedRows, err := s.usecases.sqlite3.ExecSQL(ctx, req)
+	table, affectedRows, err := s.usecases.query.ExecSQL(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -462,7 +462,7 @@ func trimGaps(s string) string {
 
 // isValidFileForCompletion checks if file has a supported extension.
 func (s *Shell) isValidFileForCompletion(filename string) bool {
-	return s.usecases.sqlite3.IsSupportedFile(filename)
+	return s.usecases.importer.IsSupportedFile(filename)
 }
 
 // getFilePathCompletions returns file path completions for importable files (recursive)

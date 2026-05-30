@@ -19,7 +19,7 @@ func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string)
 		return nil
 	}
 
-	table, err := s.usecases.sqlite3.Header(ctx, argv[0])
+	table, err := s.usecases.metadata.Header(ctx, argv[0])
 	if err != nil {
 		return err
 	}
