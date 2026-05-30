@@ -101,6 +101,15 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
+### Batch mode: pipe commands via stdin
+When standard input is not a terminal (piped or redirected), sqly reads SQL queries and shell commands from stdin, one per line, instead of starting the interactive shell. A failed command makes sqly exit non-zero, so batch runs are scriptable.
+
+```shell
+$ echo "SELECT * FROM user LIMIT 1" | sqly testdata/user.csv
+
+$ printf '.tables\nSELECT COUNT(*) FROM user\n' | sqly testdata/user.csv
+```
+
 ### Directory import
 You can import entire directories containing supported files. The sqly automatically detects all supported files (CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire, including compressed versions) in the directory recursively and imports them:
 
@@ -124,6 +133,10 @@ Successfully imported 3 tables from directory ./csv_files: [users products order
 
 sqly:~/data$ .import file1.csv ./directory file2.tsv
 # Imports file1.csv, all files from directory, and file2.tsv
+
+# Quote arguments that contain spaces
+sqly:~/data$ .import "my data.csv"
+sqly:~/data$ .import --sheet "Q1 Sales" report.xlsx
 
 sqly:~/data$ .tables
 orders

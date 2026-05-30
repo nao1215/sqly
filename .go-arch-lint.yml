@@ -19,6 +19,7 @@ vendors:
   excelize: { in: github.com/xuri/excelize/v2 }
   gomock: { in: go.uber.org/mock/gomock }
   prompt: { in: github.com/nao1215/prompt }
+  term: { in: golang.org/x/term }
   filesql: { in: github.com/nao1215/filesql }
   fileparser: { in: github.com/nao1215/fileparser }
 
@@ -73,6 +74,7 @@ deps:
       - env
       - sqlite
       - wire
+      - term
   model:
     canUse:
       - tablewriter

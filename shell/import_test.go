@@ -572,6 +572,8 @@ func TestImportCommand_SheetArgExtraction(t *testing.T) {
 		{"no sheet", []string{"file.csv"}, ""},
 		{"sheet flag", []string{"file.xlsx", "--sheet=Summary"}, "Summary"},
 		{"sheet flag first", []string{"--sheet=Data", "file.xlsx"}, "Data"},
+		{"separated sheet flag", []string{"file.xlsx", "--sheet", "Summary"}, "Summary"},
+		{"separated sheet flag with space value", []string{"--sheet", "Q1 Sales", "file.xlsx"}, "Q1 Sales"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

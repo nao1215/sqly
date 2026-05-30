@@ -12,6 +12,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
     sqly ./path/to/data/directory
   - Mix files and directories
     sqly file1.csv ./data_dir file2.tsv
+  - Batch mode: pipe SQL/commands via stdin (no TTY)
+    echo 'SELECT * FROM sample' | sqly ./path/to/sample.csv
 
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
