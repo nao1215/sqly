@@ -7,6 +7,7 @@ import (
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
+	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
 )
 
@@ -58,6 +59,8 @@ func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format
 		return e.dumpViaPrint(filePath, table, model.PrintModeJSON)
 	case model.ExportNDJSON:
 		return e.dumpViaPrint(filePath, table, model.PrintModeNDJSON)
+	case model.ExportParquet:
+		return filesql.DumpTableToParquet(filepath.Clean(filePath), table)
 	default:
 		return e.dumpWithFile(filePath, table, e.csvRepo.Dump)
 	}

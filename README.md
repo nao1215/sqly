@@ -165,6 +165,7 @@ The sqly output sql query results in following formats:
 - LTSV format (--ltsv option)
 - JSON format (--json option)
 - NDJSON format (--ndjson option)
+- Parquet export (--parquet option, export-only)
 
 ```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -188,6 +189,13 @@ $ sqly --sql "SELECT user_name, identifier FROM user LIMIT 2" --ndjson testdata/
 ```
 
 In the shell, switch with `.mode json` or `.mode ndjson`. `.dump` writes the current mode to a file (`.json`/`.ndjson`).
+
+Parquet is export-only, like Excel: `.mode parquet` (or `--parquet`) renders as CSV on screen and writes a `.parquet` file through `.dump` or `--output`. sqly can re-import the file. An empty result cannot be exported because Parquet needs at least one row to infer its schema.
+
+```shell
+$ sqly --parquet --output result.parquet --sql "SELECT * FROM user" testdata/user.csv
+Output sql result to result.parquet (output mode=parquet)
+```
 
 ### Run sqly shell
 The sqly shell starts when you run the sqly command without the --sql option. When you execute sqly command with file path, the sqly-shell starts after importing the file into the SQLite3 in-memory database.  

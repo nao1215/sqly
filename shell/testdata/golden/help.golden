@@ -23,6 +23,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -t, --tsv             change output format to tsv (default: table)
   -j, --json            change output format to json (default: table)
   -n, --ndjson          change output format to ndjson (default: table)
+  -p, --parquet         export results as parquet (export-only; use with --output or .dump)
   -S, --sheet string    excel sheet name you want to import
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option

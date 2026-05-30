@@ -121,6 +121,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .mode
   json
   ndjson
   excel ※ active only when executing .dump, otherwise same as csv mode
+  parquet ※ active only when executing .dump, otherwise same as csv mode
 ```
 
 ### pwd command

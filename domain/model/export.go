@@ -20,6 +20,8 @@ const (
 	ExportJSON
 	// ExportNDJSON exports data as newline-delimited JSON
 	ExportNDJSON
+	// ExportParquet exports data as Apache Parquet
+	ExportParquet
 )
 
 // String returns the string representation of the ExportFormat.
@@ -39,6 +41,8 @@ func (e ExportFormat) String() string {
 		return formatJSON
 	case ExportNDJSON:
 		return formatNDJSON
+	case ExportParquet:
+		return formatParquet
 	}
 	return formatCSV
 }
@@ -60,6 +64,8 @@ func (e ExportFormat) Extension() string {
 		return ExtJSON
 	case ExportNDJSON:
 		return ExtNDJSON
+	case ExportParquet:
+		return ExtParquet
 	}
 	return ExtCSV
 }
@@ -82,6 +88,8 @@ func ExportFormatFromPrintMode(m PrintMode) ExportFormat {
 		return ExportJSON
 	case PrintModeNDJSON:
 		return ExportNDJSON
+	case PrintModeParquet:
+		return ExportParquet
 	default:
 		return ExportCSV
 	}

@@ -57,6 +57,7 @@ const (
 	formatExcel    = "excel"
 	formatJSON     = "json"
 	formatNDJSON   = "ndjson"
+	formatParquet  = "parquet"
 )
 
 // Extension name constants.
@@ -68,6 +69,7 @@ const (
 	ExtExcel    = ".xlsx"
 	ExtJSON     = ".json"
 	ExtNDJSON   = ".ndjson"
+	ExtParquet  = ".parquet"
 )
 
 const (
@@ -87,6 +89,9 @@ const (
 	PrintModeJSON
 	// PrintModeNDJSON print data as newline-delimited JSON (one object per line)
 	PrintModeNDJSON
+	// PrintModeParquet is an export-only mode; on screen it renders like CSV and
+	// only writes a Parquet file via .dump or --output (same pattern as Excel).
+	PrintModeParquet
 )
 
 // String return string of PrintMode.
@@ -108,6 +113,8 @@ func (p PrintMode) String() string {
 		return formatJSON
 	case PrintModeNDJSON:
 		return formatNDJSON
+	case PrintModeParquet:
+		return formatParquet
 	}
 	return "unknown"
 }
@@ -242,6 +249,11 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 		return t.printJSON(out)
 	case PrintModeNDJSON:
 		return t.printNDJSON(out)
+	case PrintModeParquet:
+		// Export-only: on screen, render like CSV. The Parquet file is written
+		// by the export path (.dump / --output), not here.
+		t.printCSV(out)
+		return nil
 	default:
 		return t.printTable(out)
 	}

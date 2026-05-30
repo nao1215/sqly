@@ -364,6 +364,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "json", Description: "sqly command argument: json output format"},
 		{Text: "ndjson", Description: "sqly command argument: ndjson output format"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
+		{Text: "parquet", Description: "sqly command argument: parquet export format"},
 	}
 
 	for _, v := range s.commands {

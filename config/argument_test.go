@@ -117,6 +117,17 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("user set --parquet option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--parquet"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if arg.Output.Mode != model.PrintModeParquet {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeParquet)
+		}
+	})
+
 	t.Run("default print mode", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly"})
 		if err != nil {
