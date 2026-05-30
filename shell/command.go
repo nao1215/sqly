@@ -35,6 +35,8 @@ func NewCommands() CommandList {
 	c[modeCommand] = command{execute: c.modeCommand, name: modeCommand, description: "change output mode"}
 	c[tablesCommand] = command{execute: c.tablesCommand, name: tablesCommand, description: "print tables"}
 	c[pwdCommand] = command{execute: c.pwdCommand, name: pwdCommand, description: "print current working directory"}
+	c[schemaCommand] = command{execute: c.schemaCommand, name: schemaCommand, description: "print CREATE TABLE statement of a table"}
+	c[describeCommand] = command{execute: c.describeCommand, name: describeCommand, description: "print column information of a table"}
 	return c
 }
 

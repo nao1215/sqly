@@ -1915,6 +1915,167 @@ func TestShellExec_NDJSONModeSwitch(t *testing.T) {
 	}
 }
 
+func TestShellExec_SchemaAndDescribe(t *testing.T) {
+	// Regression for #238: schema inspection commands over an imported CSV.
+	newImportedShell := func(t *testing.T) (*Shell, func()) {
+		t.Helper()
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		return shell, cleanup
+	}
+
+	t.Run(".schema sample prints a CREATE TABLE statement", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		got, err := getExecStdOutput(t, shell.exec, ".schema sample")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, "CREATE TABLE") || !strings.Contains(out, "first_name") {
+			t.Fatalf(".schema output missing CREATE statement: %q", out)
+		}
+	})
+
+	t.Run(".schema on a missing table returns an error", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		if _, err := getExecStdOutput(t, shell.exec, ".schema no_such_table"); err == nil {
+			t.Fatal(".schema on missing table returned nil error, want error")
+		}
+	})
+
+	t.Run(".describe sample lists columns in definition order with types", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		got, err := getExecStdOutput(t, shell.exec, ".describe sample")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, "first_name") || !strings.Contains(out, "last_name") {
+			t.Fatalf(".describe output missing columns: %q", out)
+		}
+		// Stable ordering: first_name precedes last_name (CSV column order).
+		// Use unambiguous names; "id" would collide with the PRAGMA "cid" header.
+		if strings.Index(out, "first_name") > strings.Index(out, "last_name") {
+			t.Fatalf(".describe column order not stable: %q", out)
+		}
+	})
+
+	t.Run(".describe on a missing table returns an error", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		if _, err := getExecStdOutput(t, shell.exec, ".describe no_such_table"); err == nil {
+			t.Fatal(".describe on missing table returned nil error, want error")
+		}
+	})
+
+	t.Run(".describe emits structured JSON in json mode", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		if _, err := getExecStdOutput(t, shell.exec, ".mode json"); err != nil {
+			t.Fatalf(".mode json failed: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".describe sample")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var cols []map[string]string
+		if err := json.Unmarshal(got, &cols); err != nil {
+			t.Fatalf(".describe json mode output is not a JSON array: %v\n%s", err, got)
+		}
+		if len(cols) == 0 {
+			t.Fatal(".describe json output has no columns")
+		}
+		if cols[0]["name"] != "id" {
+			t.Fatalf("first column name = %q, want id", cols[0]["name"])
+		}
+		if _, ok := cols[0]["type"]; !ok {
+			t.Fatalf(".describe json column missing 'type' key: %#v", cols[0])
+		}
+	})
+
+	t.Run(".schema emits a structured JSON object in json mode", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		if _, err := getExecStdOutput(t, shell.exec, ".mode json"); err != nil {
+			t.Fatalf(".mode json failed: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema sample")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var rows []map[string]string
+		if err := json.Unmarshal(got, &rows); err != nil {
+			t.Fatalf(".schema json mode output is not a JSON array: %v\n%s", err, got)
+		}
+		if len(rows) != 1 {
+			t.Fatalf(".schema json rows = %d, want 1", len(rows))
+		}
+		if rows[0]["table"] != "sample" {
+			t.Fatalf(".schema json table = %q, want sample", rows[0]["table"])
+		}
+		if !strings.Contains(rows[0]["schema"], "CREATE TABLE") {
+			t.Fatalf(".schema json schema missing CREATE: %q", rows[0]["schema"])
+		}
+	})
+}
+
+func TestShell_buildCreateStatement(t *testing.T) {
+	// The fallback DDL builder must preserve types and constraints from
+	// PRAGMA table_info rows (cid, name, type, notnull, dflt_value, pk).
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	tests := []struct {
+		name string
+		cols []model.Record
+		want string
+	}{
+		{
+			name: "types and constraints",
+			cols: []model.Record{
+				{"0", "id", "INTEGER", "1", "", "1"},
+				{"1", "name", "TEXT", "0", "'x'", "0"},
+			},
+			want: `CREATE TABLE "t" ("id" INTEGER NOT NULL PRIMARY KEY, "name" TEXT DEFAULT 'x')`,
+		},
+		{
+			name: "composite primary key becomes a table-level clause",
+			cols: []model.Record{
+				{"0", "a", "INTEGER", "1", "", "1"},
+				{"1", "b", "INTEGER", "1", "", "2"},
+				{"2", "c", "TEXT", "0", "", "0"},
+			},
+			want: `CREATE TABLE "t" ("a" INTEGER NOT NULL, "b" INTEGER NOT NULL, "c" TEXT, PRIMARY KEY ("a", "b"))`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cols := model.NewTable("t", model.Header{"cid", "name", "type", "notnull", "dflt_value", "pk"}, tt.cols)
+			if got := shell.buildCreateStatement("t", cols); got != tt.want {
+				t.Errorf("buildCreateStatement()\n got: %s\nwant: %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestShell_shortCWD(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

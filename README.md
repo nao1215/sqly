@@ -9,8 +9,6 @@
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
 ![demo](./doc/img/demo.gif)  
 
-[日本語](./doc/ja/README.md) | [Русский](./doc/ru/README.md) | [中文](./doc/zh-cn/README.md) | [한국어](./doc/ko/README.md) | [Español](./doc/es/README.md) | [Français](./doc/fr/README.md)
-
 sqly is a command-line tool that executes SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH, and Fedwire files. It imports those files into an [SQLite3](https://www.sqlite.org/index.html) in-memory database. Compressed files (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4) are also supported. CTE (WITH clause) is available for complex queries.
 
 sqly has an interactive shell (sqly-shell) with SQL completion and command history. You can also execute SQL directly from the command line without the shell.
@@ -212,6 +210,7 @@ The sqly-shell has the following helper commands:
 sqly:~/github/github.com/nao1215/sqly(table)$ .help
         .cd: change directory
      .clear: clear terminal screen
+  .describe: print column information of a table
       .dump: dump db table to file in a format according to output mode (default: csv)
       .exit: exit sqly
     .header: print table header
@@ -220,7 +219,26 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
         .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory
+    .schema: print CREATE TABLE statement of a table
     .tables: print tables
+```
+
+### Inspect table schema
+Use `.schema` to see a table's `CREATE TABLE` statement and `.describe` to list its columns. Both work for every imported format (CSV, JSON, Excel, ACH, Fedwire). In `.mode json` they emit structured output.
+
+```shell
+sqly:~/data(table)$ .schema user
+CREATE TABLE "user" ("user_name" TEXT, "identifier" INTEGER, "first_name" TEXT, "last_name" TEXT)
+
+sqly:~/data(table)$ .describe user
++-----+------------+---------+---------+------------+----+
+| cid |    name    |  type   | notnull | dflt_value | pk |
++-----+------------+---------+---------+------------+----+
+|   0 | user_name  | TEXT    |       0 |            |  0 |
+|   1 | identifier | INTEGER |       0 |            |  0 |
+|   2 | first_name | TEXT    |       0 |            |  0 |
+|   3 | last_name  | TEXT    |       0 |            |  0 |
++-----+------------+---------+---------+------------+----+
 ```
 
 ### Output sql result to file
