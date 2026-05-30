@@ -10,6 +10,8 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/interactor/mock"
+	"go.uber.org/mock/gomock"
 )
 
 // These tests intentionally avoid t.Parallel at the top level.
@@ -89,6 +91,79 @@ func TestImportCommand_EmptyDirDoesNotMaskFileError(t *testing.T) {
 	err = cmds.importCommand(ctx, s, []string{emptyDir, "missing.csv"})
 	if err == nil {
 		t.Error("expected error when all imports fail, got nil")
+	}
+}
+
+func TestShell_importDirectory_dependsOnImportUsecase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	importer := mock.NewMockImportUsecase(ctrl)
+	dir := t.TempDir()
+
+	before := []*model.Table{
+		model.NewTable("users", nil, nil),
+	}
+	after := []*model.Table{
+		model.NewTable("users", nil, nil),
+		model.NewTable("orders", nil, nil),
+	}
+
+	gomock.InOrder(
+		importer.EXPECT().GetTableNames(gomock.Any()).Return(before, nil),
+		importer.EXPECT().LoadFiles(gomock.Any(), dir).Return(nil),
+		importer.EXPECT().GetTableNames(gomock.Any()).Return(after, nil),
+		importer.EXPECT().GetTableNames(gomock.Any()).Return(after, nil),
+	)
+
+	s := newBoundaryTestShell(t, Usecases{importer: importer})
+
+	var (
+		imported bool
+		err      error
+	)
+	out := captureStdout(t, func() {
+		imported, err = s.importDirectory(context.Background(), dir, "fixtures", "")
+	})
+	if err != nil {
+		t.Fatalf("importDirectory returned error: %v", err)
+	}
+	if !imported {
+		t.Fatal("importDirectory reported imported=false, want true")
+	}
+	if !strings.Contains(out, "Successfully imported 1 table(s) from directory fixtures") {
+		t.Fatalf("output %q does not report a successful import", out)
+	}
+	if !strings.Contains(out, "orders") {
+		t.Fatalf("output %q does not mention imported table name", out)
+	}
+}
+
+func TestShell_importFile_excelSheetFiltering_dependsOnImportAndQueryUsecases(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	importer := mock.NewMockImportUsecase(ctrl)
+	query := mock.NewMockQueryUsecase(ctrl)
+	filePath := "report.xlsx"
+
+	gomock.InOrder(
+		importer.EXPECT().IsSupportedFile(filePath).Return(true),
+		importer.EXPECT().LoadFiles(gomock.Any(), filePath).Return(nil),
+		importer.EXPECT().IsExcelFile(filePath).Return(true),
+		importer.EXPECT().GetTableNameFromFilePath(filePath).Return("report"),
+		importer.EXPECT().GetTableNames(gomock.Any()).Return([]*model.Table{
+			model.NewTable("report_Summary", nil, nil),
+			model.NewTable("report_Details", nil, nil),
+		}, nil),
+		importer.EXPECT().SanitizeForSQL("Summary").Return("Summary"),
+		importer.EXPECT().QuoteIdentifier("report_Details").Return(`"report_Details"`),
+		query.EXPECT().Exec(gomock.Any(), `DROP TABLE IF EXISTS "report_Details"`).Return(int64(0), nil),
+	)
+
+	s := newBoundaryTestShell(t, Usecases{
+		importer: importer,
+		query:    query,
+	})
+
+	if err := s.importFile(context.Background(), filePath, filePath, "Summary"); err != nil {
+		t.Fatalf("importFile returned error: %v", err)
 	}
 }
 

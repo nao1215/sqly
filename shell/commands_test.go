@@ -15,6 +15,26 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+func newBoundaryTestShell(t *testing.T, usecases Usecases) *Shell {
+	t.Helper()
+
+	arg := &config.Arg{
+		Output: &config.Output{
+			Mode: model.PrintModeTable,
+		},
+	}
+	state, err := newState(arg)
+	if err != nil {
+		t.Fatalf("newState: %v", err)
+	}
+	return &Shell{
+		argument: arg,
+		commands: NewCommands(),
+		state:    state,
+		usecases: usecases,
+	}
+}
+
 func TestCommandList_cdCommand(t *testing.T) {
 	// Note: Cannot use t.Parallel() because of t.Chdir() and t.Setenv() usage
 	tests := []struct {
@@ -437,4 +457,34 @@ func TestShell_execSQL_dependsOnQueryUsecase(t *testing.T) {
 			t.Errorf("execSQL error = %v, want %v", err, wantErr)
 		}
 	})
+}
+
+func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	exporter := mock.NewMockExportUsecase(ctrl)
+
+	outputPath := filepath.Join(t.TempDir(), "report.out")
+	normalizedPath := normalizeDumpExt(outputPath, model.ExportCSV)
+	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
+
+	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
+	exporter.EXPECT().DumpTable(normalizedPath, table, model.ExportCSV).Return(nil)
+
+	s := newBoundaryTestShell(t, Usecases{
+		metadata: metadata,
+		export:   exporter,
+	})
+
+	out := captureStdout(t, func() {
+		if err := NewCommands().dumpCommand(context.Background(), s, []string{"users", outputPath}); err != nil {
+			t.Fatalf("dumpCommand returned error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dump `") || !strings.Contains(out, "table to") {
+		t.Fatalf("output %q does not describe dump execution", out)
+	}
+	if !strings.Contains(out, normalizedPath) {
+		t.Fatalf("output %q does not include normalized csv path %q", out, normalizedPath)
+	}
 }

@@ -7,7 +7,20 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/interactor/mock"
+	"go.uber.org/mock/gomock"
 )
+
+func hasSuggestionText(suggestions []Suggest, text string) bool {
+	for _, suggestion := range suggestions {
+		if suggestion.Text == text {
+			return true
+		}
+	}
+	return false
+}
 
 func TestImportCompleterDebug(t *testing.T) {
 	// Test the actual completer function behavior for .import commands
@@ -780,6 +793,57 @@ func TestCompleterNonImportCommands(t *testing.T) {
 				t.Error("Expected table completions but found none")
 			}
 		})
+	}
+}
+
+func TestShell_getRegularCompletions_dependsOnMetadataUsecase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+
+	metadata.EXPECT().TablesName(gomock.Any()).Return([]*model.Table{
+		model.NewTable("users", nil, nil),
+	}, nil)
+	metadata.EXPECT().Header(gomock.Any(), "users").Return(
+		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil)
+
+	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
+
+	completions := s.getRegularCompletions(context.Background(), "")
+	if !hasSuggestionText(completions, "users") {
+		t.Fatalf("completions do not include table suggestion: %#v", completions)
+	}
+	if !hasSuggestionText(completions, "name") {
+		t.Fatalf("completions do not include header suggestion: %#v", completions)
+	}
+}
+
+func TestShell_getFilePathCompletions_dependsOnImportUsecase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	importer := mock.NewMockImportUsecase(ctrl)
+
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	for _, file := range []string{"data.csv", "notes.txt", ".hidden.csv"} {
+		if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+			t.Fatalf("WriteFile(%s): %v", file, err)
+		}
+	}
+
+	importer.EXPECT().IsSupportedFile("data.csv").Return(true)
+	importer.EXPECT().IsSupportedFile("notes.txt").Return(false)
+
+	s := newBoundaryTestShell(t, Usecases{importer: importer})
+
+	completions := s.getFilePathCompletions("")
+	if len(completions) != 1 {
+		t.Fatalf("expected 1 completion, got %d: %#v", len(completions), completions)
+	}
+	if completions[0].Text != "data.csv" {
+		t.Fatalf("completion text = %q, want %q", completions[0].Text, "data.csv")
+	}
+	if completions[0].Description != msgImportableFile {
+		t.Fatalf("completion description = %q, want %q", completions[0].Description, msgImportableFile)
 	}
 }
 
