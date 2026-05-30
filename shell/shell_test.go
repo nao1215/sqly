@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -1173,6 +1174,7 @@ type fakePromptSession struct {
 	addedHistories  []string
 	prefixes        []string
 	closeCalls      int
+	closeErr        error
 	runCalls        int
 	initialPrefix   string
 	capturedSuggest []prompt.Suggestion
@@ -1184,7 +1186,7 @@ func (f *fakePromptSession) AddHistory(history string) {
 
 func (f *fakePromptSession) Close() error {
 	f.closeCalls++
-	return nil
+	return f.closeErr
 }
 
 func (f *fakePromptSession) Run() (string, error) {
@@ -1236,6 +1238,23 @@ func hasPromptSuggestion(suggestions []prompt.Suggestion, text string) bool {
 		}
 	}
 	return false
+}
+
+type historyUsecaseStub struct {
+	histories model.Histories
+	listErr   error
+}
+
+func (h historyUsecaseStub) CreateTable(context.Context) error {
+	return nil
+}
+
+func (h historyUsecaseStub) Create(context.Context, model.History) error {
+	return nil
+}
+
+func (h historyUsecaseStub) List(context.Context) (model.Histories, error) {
+	return h.histories, h.listErr
 }
 
 func TestShellCommunicate_ReusesPromptSessionForMultilineSQL(t *testing.T) {
@@ -1362,6 +1381,71 @@ func TestShellCommunicate_RefreshesPromptPrefixBetweenRuns(t *testing.T) {
 	}
 	if !strings.Contains(fakePrompt.prefixes[1], "(csv)") {
 		t.Fatalf("second prefix = %q, want csv mode", fakePrompt.prefixes[1])
+	}
+}
+
+func TestShellCommunicate_LogsPromptCloseError(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	fakePrompt := &fakePromptSession{
+		results:  []string{".exit"},
+		closeErr: errors.New("prompt close failed"),
+	}
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return fakePrompt, nil
+	}
+
+	backupStderr := config.Stderr
+	defer func() {
+		config.Stderr = backupStderr
+	}()
+
+	var stderr bytes.Buffer
+	config.Stderr = &stderr
+
+	if err := shell.communicate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if fakePrompt.closeCalls != 1 {
+		t.Fatalf("prompt close calls = %d, want 1", fakePrompt.closeCalls)
+	}
+	if !strings.Contains(stderr.String(), "failed to close prompt session: prompt close failed") {
+		t.Fatalf("stderr = %q, want prompt close warning", stderr.String())
+	}
+}
+
+func TestShellNewPromptSession_JoinsCloseErrorOnHistoryFailure(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	listErr := errors.New("history list failed")
+	closeErr := errors.New("prompt close failed")
+	fakePrompt := &fakePromptSession{closeErr: closeErr}
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return fakePrompt, nil
+	}
+	shell.usecases.history = historyUsecaseStub{listErr: listErr}
+
+	_, err = shell.newPromptSession(context.Background())
+	if err == nil {
+		t.Fatal("newPromptSession returned nil error")
+	}
+	if !errors.Is(err, listErr) {
+		t.Fatalf("error %v does not include history list failure", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("error %v does not include prompt close failure", err)
+	}
+	if fakePrompt.closeCalls != 1 {
+		t.Fatalf("prompt close calls = %d, want 1", fakePrompt.closeCalls)
 	}
 }
 

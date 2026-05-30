@@ -127,7 +127,11 @@ func (s *Shell) communicate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = p.Close() }()
+	defer func() {
+		if err := p.Close(); err != nil {
+			fmt.Fprintf(config.Stderr, "failed to close prompt session: %v\n", err)
+		}
+	}()
 
 	for {
 		input, err := s.prompt(p)
@@ -154,7 +158,9 @@ func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 
 	histories, err := s.usecases.history.List(ctx)
 	if err != nil {
-		_ = p.Close()
+		if errClose := p.Close(); errClose != nil {
+			return nil, errors.Join(err, fmt.Errorf("failed to close prompt session: %w", errClose))
+		}
 		return nil, err
 	}
 	for _, h := range histories.ToStringList() {
