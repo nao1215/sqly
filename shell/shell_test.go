@@ -1710,6 +1710,140 @@ func TestShell_init(t *testing.T) {
 	}
 }
 
+func TestSplitArgs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{"plain words split on spaces", ".import a.csv b.csv", []string{".import", "a.csv", "b.csv"}, false},
+		{"collapses repeated whitespace", ".import\ta.csv   b.csv", []string{".import", "a.csv", "b.csv"}, false},
+		{"double-quoted path with space stays one arg", `.import "my data.csv"`, []string{".import", "my data.csv"}, false},
+		{"single-quoted path with space stays one arg", `.import 'my data.csv'`, []string{".import", "my data.csv"}, false},
+		{"joined --sheet= with quoted value", `.import --sheet="Q1 Sales" r.xlsx`, []string{".import", "--sheet=Q1 Sales", "r.xlsx"}, false},
+		{"separated --sheet with quoted value", `.import --sheet "Q1 Sales" r.xlsx`, []string{".import", "--sheet", "Q1 Sales", "r.xlsx"}, false},
+		{"backslash escapes a space", `.import my\ data.csv`, []string{".import", "my data.csv"}, false},
+		{"windows path keeps backslashes", `.import C:\data\file.csv`, []string{".import", `C:\data\file.csv`}, false},
+		{"empty input yields no args", "   ", nil, false},
+		{"unterminated double quote errors", `.import "oops`, nil, true},
+		{"unterminated single quote errors", `.import 'oops`, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := splitArgs(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("splitArgs(%q) error = nil, want error", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("splitArgs(%q) unexpected error: %v", tt.input, err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("splitArgs(%q) = %#v, want %#v", tt.input, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("splitArgs(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestShellRun_BatchModeReadsStdin(t *testing.T) {
+	// Regression for issue #246: without a TTY, sqly reads SQL and helper
+	// commands from stdin instead of failing on prompt initialization.
+	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	promptCalled := false
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		promptCalled = true
+		return nil, errors.New("prompt must not be created in batch mode")
+	}
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader(".tables\nSELECT actor FROM actor ORDER BY actor ASC LIMIT 1\n")
+
+	got := getStdoutForRunFunc(t, shell.Run)
+
+	if promptCalled {
+		t.Fatal("interactive prompt was started in batch mode")
+	}
+	if !strings.Contains(string(got), "actor") {
+		t.Fatalf("batch output missing query result: %q", string(got))
+	}
+}
+
+func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
+	// Batch execution must surface failures so the process can exit non-zero.
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("SELECT * FROM no_such_table\n")
+
+	backupStderr := config.Stderr
+	defer func() { config.Stderr = backupStderr }()
+	config.Stderr = &bytes.Buffer{}
+
+	if err := shell.Run(context.Background()); err == nil {
+		t.Fatal("batch Run returned nil error for failing command, want non-nil")
+	}
+}
+
+func TestShellRunBatch_ExitStopsEarly(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader(".exit\nSELECT * FROM no_such_table\n")
+
+	if err := shell.Run(context.Background()); err != nil {
+		t.Fatalf("batch Run returned error after .exit: %v", err)
+	}
+}
+
+func TestShellRunBatch_QuotedSheetArgument(t *testing.T) {
+	// End-to-end: a quoted --sheet value with a space is parsed as one argument.
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	spaced := filepath.Join(dir, "my data.csv")
+	if err := os.WriteFile(spaced, []byte("id,name\n1,foo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader(".import \"" + filepath.ToSlash(spaced) + "\"\n.tables\n")
+
+	got := getStdoutForRunFunc(t, shell.Run)
+	if strings.Contains(string(got), "does not exist") {
+		t.Fatalf("spaced path was split into multiple args: %q", string(got))
+	}
+	if !strings.Contains(string(got), "my_data") {
+		t.Fatalf("batch output missing imported table from spaced path: %q", string(got))
+	}
+}
+
 func TestShell_shortCWD(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

@@ -137,6 +137,8 @@ func usage(flag pflag.FlagSet) string {
 	s += "    sqly ./path/to/data/directory\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Mix files and directories"))
 	s += "    sqly file1.csv ./data_dir file2.tsv\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Batch mode: pipe SQL/commands via stdin (no TTY)"))
+	s += "    echo 'SELECT * FROM sample' | sqly ./path/to/sample.csv\n"
 	s += "\n"
 	s += "[OPTIONS]\n"
 	s += flag.FlagUsages()

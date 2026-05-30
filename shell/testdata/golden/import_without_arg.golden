@@ -1,5 +1,7 @@
 [Usage]
-  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]
+  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet SHEET_NAME]
+
+  - Quote arguments that contain spaces: .import "my data.csv" or --sheet "Q1 Sales"
 
   - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed
   - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4

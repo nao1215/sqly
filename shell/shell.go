@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -51,6 +53,12 @@ type Shell struct {
 	usecases  Usecases
 	state     *state
 	newPrompt promptFactory
+	// stdin is the source for non-TTY batch mode. It defaults to os.Stdin and
+	// is overridable in tests so piped input can be simulated without a terminal.
+	stdin io.Reader
+	// isTTY reports whether stdin is an interactive terminal. When false, Run
+	// reads commands from stdin in batch mode instead of starting the prompt.
+	isTTY func() bool
 }
 
 type promptSession interface {
@@ -90,6 +98,8 @@ func NewShell(
 				prompt.WithMultiline(true),
 			)
 		},
+		stdin: os.Stdin,
+		isTTY: config.IsInputFromTTY,
 	}, nil
 }
 
@@ -112,6 +122,12 @@ func (s *Shell) Run(ctx context.Context) error {
 
 	if s.argument.Query != "" {
 		return s.execSQL(ctx, s.argument.Query)
+	}
+
+	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
+	// initialize, so read SQL and helper commands from stdin in batch mode.
+	if !s.isTTY() {
+		return s.runBatch(ctx)
 	}
 
 	// Start shell
@@ -404,8 +420,11 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 // exec execute sqly helper command or sql query.
 func (s *Shell) exec(ctx context.Context, request string) error {
 	req := strings.TrimSpace(request)
-	argv := strings.Split(trimGaps(req), " ")
-	if argv[0] == "" {
+	argv, err := splitArgs(req)
+	if err != nil {
+		return err
+	}
+	if len(argv) == 0 || argv[0] == "" {
 		return nil // user only input enter, space tab
 	}
 

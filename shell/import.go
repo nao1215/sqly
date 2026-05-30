@@ -15,6 +15,11 @@ import (
 const (
 	// maxDirectoryDepth is the maximum directory depth to prevent deep traversal.
 	maxDirectoryDepth = 10
+	// sheetFlag is the .import flag selecting a single Excel sheet. It accepts
+	// both the separated form "--sheet NAME" and the joined form "--sheet=NAME".
+	sheetFlag = "--sheet"
+	// sheetFlagAssign is the joined form prefix of sheetFlag.
+	sheetFlagAssign = sheetFlag + "="
 )
 
 // importCommand imports files into the in-memory database.
@@ -35,8 +40,13 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	var errorMessages []string
 	var successCount int
 
-	for _, path := range argv {
-		if strings.HasPrefix(path, "--sheet=") {
+	for i := 0; i < len(argv); i++ {
+		path := argv[i]
+		if path == sheetFlag {
+			i++ // skip the separated value (e.g. --sheet "Q1 Sales")
+			continue
+		}
+		if strings.HasPrefix(path, sheetFlagAssign) {
 			continue
 		}
 
@@ -309,12 +319,18 @@ func validatePath(path string) (string, error) {
 }
 
 // extractSheetNameFromArgs extracts the sheet name from command line arguments.
-// It looks for arguments in the format "--sheet=SHEET_NAME" and returns the sheet name.
-// If no sheet name is found, it returns an empty string.
+// It accepts both the joined form "--sheet=SHEET_NAME" and the separated form
+// "--sheet SHEET_NAME", returning the first match. The separated form lets the
+// value carry spaces once splitArgs has tokenized the quoted input. If no sheet
+// name is found, it returns an empty string.
 func extractSheetNameFromArgs(argv []string) string {
-	for _, arg := range argv {
-		if value, found := strings.CutPrefix(arg, "--sheet="); found {
+	for i := range argv {
+		arg := argv[i]
+		if value, found := strings.CutPrefix(arg, sheetFlagAssign); found {
 			return value
+		}
+		if arg == sheetFlag && i+1 < len(argv) {
+			return argv[i+1]
 		}
 	}
 	return ""
@@ -323,7 +339,9 @@ func extractSheetNameFromArgs(argv []string) string {
 // printImportUsage print import command usage.
 func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
-	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet=SHEET_NAME]")
+	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet SHEET_NAME]")
+	fmt.Fprintln(config.Stdout, "")
+	fmt.Fprintln(config.Stdout, "  - Quote arguments that contain spaces: .import \"my data.csv\" or --sheet \"Q1 Sales\"")
 	fmt.Fprintln(config.Stdout, "")
 	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed")
 	fmt.Fprintln(config.Stdout, "  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4")
