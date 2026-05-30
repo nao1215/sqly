@@ -8,7 +8,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
-	github.com/mattn/go-colorable v0.1.14
+	github.com/mattn/go-colorable v0.1.15
 	github.com/nao1215/filesql v0.12.0
 	github.com/nao1215/prompt v0.0.4
 	github.com/olekukonko/tablewriter v1.1.4
