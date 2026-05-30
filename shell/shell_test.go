@@ -2034,6 +2034,48 @@ func TestShellExec_SchemaAndDescribe(t *testing.T) {
 	})
 }
 
+func TestShell_buildCreateStatement(t *testing.T) {
+	// The fallback DDL builder must preserve types and constraints from
+	// PRAGMA table_info rows (cid, name, type, notnull, dflt_value, pk).
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	tests := []struct {
+		name string
+		cols []model.Record
+		want string
+	}{
+		{
+			name: "types and constraints",
+			cols: []model.Record{
+				{"0", "id", "INTEGER", "1", "", "1"},
+				{"1", "name", "TEXT", "0", "'x'", "0"},
+			},
+			want: `CREATE TABLE "t" ("id" INTEGER NOT NULL PRIMARY KEY, "name" TEXT DEFAULT 'x')`,
+		},
+		{
+			name: "composite primary key becomes a table-level clause",
+			cols: []model.Record{
+				{"0", "a", "INTEGER", "1", "", "1"},
+				{"1", "b", "INTEGER", "1", "", "2"},
+				{"2", "c", "TEXT", "0", "", "0"},
+			},
+			want: `CREATE TABLE "t" ("a" INTEGER NOT NULL, "b" INTEGER NOT NULL, "c" TEXT, PRIMARY KEY ("a", "b"))`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cols := model.NewTable("t", model.Header{"cid", "name", "type", "notnull", "dflt_value", "pk"}, tt.cols)
+			if got := shell.buildCreateStatement("t", cols); got != tt.want {
+				t.Errorf("buildCreateStatement()\n got: %s\nwant: %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestShell_shortCWD(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

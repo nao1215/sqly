@@ -86,8 +86,9 @@ Describe 'sqly schema inspection'
       End
       When run sqly testdata/user.csv
       The status should be success
-      The output should include '"name":"user_name"'
-      The output should include '"type":"INTEGER"'
+      # Pair name and type for the same column so the assertion verifies
+      # user_name's own type rather than matching another column's INTEGER.
+      The output should include '"name":"user_name","type":"TEXT"'
     End
 
     It 'errors on a missing table'

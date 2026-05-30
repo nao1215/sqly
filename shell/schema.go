@@ -3,6 +3,8 @@ package shell
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/nao1215/sqly/config"
@@ -66,10 +68,14 @@ func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (str
 	return s.buildCreateStatement(tableName, cols), nil
 }
 
-// buildCreateStatement assembles a CREATE TABLE statement with quoted
-// identifiers and detected types from PRAGMA table_info records
-// (columns: cid, name, type, notnull, dflt_value, pk).
+// buildCreateStatement assembles a CREATE TABLE statement from PRAGMA
+// table_info records (columns: cid, name, type, notnull, dflt_value, pk) so the
+// fallback stays faithful to the real schema: it preserves quoted identifiers,
+// detected types, NOT NULL, DEFAULT, and the primary key. A single-column key is
+// written inline; a composite key becomes a table-level PRIMARY KEY clause.
 func (s *Shell) buildCreateStatement(tableName string, cols *model.Table) string {
+	pkCols := primaryKeyColumns(cols)
+
 	var b strings.Builder
 	b.WriteString("CREATE TABLE ")
 	b.WriteString(s.usecases.importer.QuoteIdentifier(tableName))
@@ -83,7 +89,53 @@ func (s *Shell) buildCreateStatement(tableName string, cols *model.Table) string
 			b.WriteString(" ")
 			b.WriteString(colType)
 		}
+		if rec[3] == "1" {
+			b.WriteString(" NOT NULL")
+		}
+		if rec[4] != "" {
+			b.WriteString(" DEFAULT ")
+			b.WriteString(rec[4]) // PRAGMA already gives a SQL-literal token
+		}
+		if len(pkCols) == 1 && rec[5] != "0" && rec[5] != "" {
+			b.WriteString(" PRIMARY KEY")
+		}
+	}
+	if len(pkCols) > 1 {
+		b.WriteString(", PRIMARY KEY (")
+		for i, name := range pkCols {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(s.usecases.importer.QuoteIdentifier(name))
+		}
+		b.WriteString(")")
 	}
 	b.WriteString(")")
 	return b.String()
+}
+
+// primaryKeyColumns returns the primary-key column names in key order (PRAGMA's
+// pk value is the 1-based position within the key, 0 when not part of it).
+func primaryKeyColumns(cols *model.Table) []string {
+	type pkCol struct {
+		name string
+		pos  int
+	}
+	var pks []pkCol
+	for _, rec := range cols.Records() {
+		if rec[5] == "0" || rec[5] == "" {
+			continue
+		}
+		pos, err := strconv.Atoi(rec[5])
+		if err != nil {
+			continue
+		}
+		pks = append(pks, pkCol{name: rec[1], pos: pos})
+	}
+	sort.Slice(pks, func(i, j int) bool { return pks[i].pos < pks[j].pos })
+	names := make([]string, len(pks))
+	for i, p := range pks {
+		names[i] = p.name
+	}
+	return names
 }
