@@ -1,14 +1,39 @@
 package shell
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/interactor/mock"
+	"go.uber.org/mock/gomock"
 )
+
+func newBoundaryTestShell(t *testing.T, usecases Usecases) *Shell {
+	t.Helper()
+
+	arg := &config.Arg{
+		Output: &config.Output{
+			Mode: model.PrintModeTable,
+		},
+	}
+	state, err := newState(arg)
+	if err != nil {
+		t.Fatalf("newState: %v", err)
+	}
+	return &Shell{
+		argument: arg,
+		commands: NewCommands(),
+		state:    state,
+		usecases: usecases,
+	}
+}
 
 func TestCommandList_cdCommand(t *testing.T) {
 	// Note: Cannot use t.Parallel() because of t.Chdir() and t.Setenv() usage
@@ -335,5 +360,131 @@ func TestShell_getFilePathCompletions_edgeCases(t *testing.T) {
 	}
 	if foundHidden {
 		t.Error("Should not find hidden.csv in .hidden directory")
+	}
+}
+
+// captureStdout runs f with config.Stdout redirected to a buffer and returns
+// what was written. It lets command tests assert on user-facing output without
+// a full shell.
+//
+// Tests using this helper must not run in parallel because config.Stdout is a
+// package-global writer shared across shell tests.
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+	backup := config.Stdout
+	defer func() { config.Stdout = backup }()
+	var buf bytes.Buffer
+	config.Stdout = &buf
+	f()
+	return buf.String()
+}
+
+// TestCommandList_tablesCommand_dependsOnMetadataUsecase verifies that .tables
+// is satisfied by a MetadataUsecase mock alone: given two table names, it lists
+// both.
+func TestCommandList_tablesCommand_dependsOnMetadataUsecase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	metadata.EXPECT().TablesName(gomock.Any()).Return([]*model.Table{
+		model.NewTable("users", nil, nil),
+		model.NewTable("orders", nil, nil),
+	}, nil)
+
+	s := &Shell{usecases: Usecases{metadata: metadata}}
+	out := captureStdout(t, func() {
+		if err := NewCommands().tablesCommand(context.Background(), s, nil); err != nil {
+			t.Fatalf("tablesCommand returned error: %v", err)
+		}
+	})
+
+	for _, want := range []string{"users", "orders"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output %q does not contain table name %q", out, want)
+		}
+	}
+}
+
+// TestCommandList_headerCommand_dependsOnMetadataUsecase verifies that .header
+// is satisfied by a MetadataUsecase mock alone and prints the table's columns.
+func TestCommandList_headerCommand_dependsOnMetadataUsecase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	metadata.EXPECT().Header(gomock.Any(), "users").Return(
+		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil)
+
+	s := &Shell{usecases: Usecases{metadata: metadata}}
+	out := captureStdout(t, func() {
+		if err := NewCommands().headerCommand(context.Background(), s, []string{"users"}); err != nil {
+			t.Fatalf("headerCommand returned error: %v", err)
+		}
+	})
+
+	for _, want := range []string{"id", "name"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output %q does not contain column %q", out, want)
+		}
+	}
+}
+
+// TestShell_execSQL_dependsOnQueryUsecase verifies that execSQL routes through
+// the QueryUsecase boundary: a statement that affects rows reports the count,
+// and an execution error is propagated unchanged.
+func TestShell_execSQL_dependsOnQueryUsecase(t *testing.T) {
+	t.Run("DELETE prints affected row count", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		query := mock.NewMockQueryUsecase(ctrl)
+		query.EXPECT().ExecSQL(gomock.Any(), "DELETE FROM users").Return(nil, int64(3), nil)
+
+		s := &Shell{usecases: Usecases{query: query}}
+		out := captureStdout(t, func() {
+			if err := s.execSQL(context.Background(), "DELETE FROM users;"); err != nil {
+				t.Fatalf("execSQL returned error: %v", err)
+			}
+		})
+		if !strings.Contains(out, "affected is 3 row(s)") {
+			t.Errorf("output %q does not report affected rows", out)
+		}
+	})
+
+	t.Run("query error is propagated", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		wantErr := errors.New("boom")
+		query := mock.NewMockQueryUsecase(ctrl)
+		query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(nil, int64(0), wantErr)
+
+		s := &Shell{usecases: Usecases{query: query}}
+		if err := s.execSQL(context.Background(), "SELECT 1"); !errors.Is(err, wantErr) {
+			t.Errorf("execSQL error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	exporter := mock.NewMockExportUsecase(ctrl)
+
+	outputPath := filepath.Join(t.TempDir(), "report.out")
+	normalizedPath := normalizeDumpExt(outputPath, model.ExportCSV)
+	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
+
+	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
+	exporter.EXPECT().DumpTable(normalizedPath, table, model.ExportCSV).Return(nil)
+
+	s := newBoundaryTestShell(t, Usecases{
+		metadata: metadata,
+		export:   exporter,
+	})
+
+	out := captureStdout(t, func() {
+		if err := NewCommands().dumpCommand(context.Background(), s, []string{"users", outputPath}); err != nil {
+			t.Fatalf("dumpCommand returned error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dump `") || !strings.Contains(out, "table to") {
+		t.Fatalf("output %q does not describe dump execution", out)
+	}
+	if !strings.Contains(out, normalizedPath) {
+		t.Fatalf("output %q does not include normalized csv path %q", out, normalizedPath)
 	}
 }

@@ -13,63 +13,81 @@ import (
 	"github.com/nao1215/sqly/usecase"
 )
 
-// _ interface implementation check
-var _ usecase.DatabaseUsecase = (*sqlite3Interactor)(nil)
+// Interface implementation checks. One concrete interactor satisfies the three
+// focused session interfaces; commands depend on the narrow one they need.
+var (
+	_ usecase.QueryUsecase    = (*SQLite3Interactor)(nil)
+	_ usecase.ImportUsecase   = (*SQLite3Interactor)(nil)
+	_ usecase.MetadataUsecase = (*SQLite3Interactor)(nil)
+)
 
-// sqlite3Interactor implementation of use cases related to SQLite3 handler.
-// It also handles file import operations via the filesql adapter, providing
-// a unified session interactor for both SQL execution and file loading.
-type sqlite3Interactor struct {
+// SQLite3Interactor implements the SQLite3-backed session use cases. It handles
+// SQL execution via the repository and file import via the filesql adapter.
+// It is exported so dependency injection can bind the QueryUsecase,
+// ImportUsecase, and MetadataUsecase interfaces to a single instance.
+type SQLite3Interactor struct {
 	r       repository.SQLite3Repository
 	sql     *SQL
 	adapter *filesql.FileSQLAdapter
 }
 
-// NewSQLite3Interactor returns a new SQLite3Interactor that implements DatabaseUsecase
+// NewSQLite3Interactor returns a new SQLite3Interactor that implements the
+// QueryUsecase, ImportUsecase, and MetadataUsecase interfaces.
 func NewSQLite3Interactor(
 	r repository.SQLite3Repository,
 	sql *SQL,
 	adapter *filesql.FileSQLAdapter,
-) usecase.DatabaseUsecase {
-	return &sqlite3Interactor{
+) *SQLite3Interactor {
+	return &SQLite3Interactor{
 		r:       r,
 		sql:     sql,
 		adapter: adapter,
 	}
 }
 
+// NewQueryUsecase exposes the interactor as the focused QueryUsecase.
+// It exists so dependency injection hands shell a usecase interface rather than
+// the concrete interactor.
+func NewQueryUsecase(i *SQLite3Interactor) usecase.QueryUsecase { return i }
+
+// NewImportUsecase exposes the interactor as the focused ImportUsecase.
+func NewImportUsecase(i *SQLite3Interactor) usecase.ImportUsecase { return i }
+
+// NewMetadataUsecase exposes the interactor as the focused MetadataUsecase.
+func NewMetadataUsecase(i *SQLite3Interactor) usecase.MetadataUsecase { return i }
+
 // CreateTable create a DB table with columns given as model.Table
-func (si *sqlite3Interactor) CreateTable(ctx context.Context, t *model.Table) error {
+func (si *SQLite3Interactor) CreateTable(ctx context.Context, t *model.Table) error {
 	return si.r.CreateTable(ctx, t)
 }
 
 // TablesName return all table name.
-func (si *sqlite3Interactor) TablesName(ctx context.Context) ([]*model.Table, error) {
+func (si *SQLite3Interactor) TablesName(ctx context.Context) ([]*model.Table, error) {
 	return si.r.TablesName(ctx)
 }
 
 // Insert set records in DB
-func (si *sqlite3Interactor) Insert(ctx context.Context, t *model.Table) error {
+func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
 	return si.r.Insert(ctx, t)
 }
 
 // List get records in the specified table
-func (si *sqlite3Interactor) List(ctx context.Context, tableName string) (*model.Table, error) {
+func (si *SQLite3Interactor) List(ctx context.Context, tableName string) (*model.Table, error) {
 	return si.r.List(ctx, tableName)
 }
 
 // Header get table header name.
-func (si *sqlite3Interactor) Header(ctx context.Context, tableName string) (*model.Table, error) {
+func (si *SQLite3Interactor) Header(ctx context.Context, tableName string) (*model.Table, error) {
 	return si.r.Header(ctx, tableName)
 }
 
 // Query execute "SELECT" or "EXPLAIN" query
-func (si *sqlite3Interactor) Query(ctx context.Context, query string) (*model.Table, error) {
+func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Table, error) {
 	return si.r.Query(ctx, query)
 }
 
 // Exec execute "INSERT" or "UPDATE" or "DELETE" statement
-func (si *sqlite3Interactor) Exec(ctx context.Context, statement string) (int64, error) {
+func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64, error) {
 	return si.r.Exec(ctx, statement)
 }
 
@@ -78,7 +96,7 @@ func (si *sqlite3Interactor) Exec(ctx context.Context, statement string) (int64,
 // - For SELECT/EXPLAIN: (*model.Table, 0, error)
 // - For INSERT/UPDATE/DELETE: (nil, affected_rows, error)
 // - For unsupported commands: (nil, 0, error)
-func (si *sqlite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
+func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	argv := strings.Split(trimWordGaps(statement), " ")
 
 	// NOTE: SQLY uses SQLite3. There is some SQL that can be changed from non-support
@@ -114,36 +132,36 @@ func (si *sqlite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 }
 
 // LoadFiles loads multiple files or directories into the database.
-func (si *sqlite3Interactor) LoadFiles(ctx context.Context, filePaths ...string) error {
+func (si *SQLite3Interactor) LoadFiles(ctx context.Context, filePaths ...string) error {
 	return si.adapter.LoadFiles(ctx, filePaths...)
 }
 
 // GetTableNames returns the list of tables currently available in the database.
-func (si *sqlite3Interactor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
+func (si *SQLite3Interactor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
 	return si.adapter.GetTableNames(ctx)
 }
 
 // IsSupportedFile checks if the file has a format supported by filesql.
-func (si *sqlite3Interactor) IsSupportedFile(filePath string) bool {
+func (si *SQLite3Interactor) IsSupportedFile(filePath string) bool {
 	return filesql.IsSupportedFile(filePath)
 }
 
 // IsExcelFile checks if the file is an Excel format (.xlsx).
-func (si *sqlite3Interactor) IsExcelFile(filePath string) bool {
+func (si *SQLite3Interactor) IsExcelFile(filePath string) bool {
 	return filesql.IsExcelFile(filePath)
 }
 
 // SanitizeForSQL sanitizes a string to be SQL-safe.
-func (si *sqlite3Interactor) SanitizeForSQL(name string) string {
+func (si *SQLite3Interactor) SanitizeForSQL(name string) string {
 	return filesql.SanitizeForSQL(name)
 }
 
 // QuoteIdentifier safely quotes a SQL identifier.
-func (si *sqlite3Interactor) QuoteIdentifier(identifier string) string {
+func (si *SQLite3Interactor) QuoteIdentifier(identifier string) string {
 	return filesql.QuoteIdentifier(identifier)
 }
 
 // GetTableNameFromFilePath derives a table name from a file path.
-func (si *sqlite3Interactor) GetTableNameFromFilePath(filePath string) string {
+func (si *SQLite3Interactor) GetTableNameFromFilePath(filePath string) string {
 	return filesql.GetTableNameFromFilePath(filePath)
 }

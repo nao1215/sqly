@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Refactoring
+* **Session Usecase Boundaries**: Split the monolithic database usecase into focused `QueryUsecase`, `ImportUsecase`, and `MetadataUsecase` interfaces so each shell command depends only on the capability it uses. Behavior is unchanged.
+
 ## [v0.15.0](https://github.com/nao1215/sqly/compare/v0.14.2...v0.15.0) (2026-03-22)
 
 ### New Features

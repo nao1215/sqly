@@ -11,7 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func newTestSQLite3InteractorWithAdapter(t *testing.T) (*sqlite3Interactor, func()) {
+func newTestSQLite3InteractorWithAdapter(t *testing.T) (*SQLite3Interactor, func()) {
 	t.Helper()
 
 	sharedDB, err := sql.Open("sqlite", ":memory:")
@@ -20,7 +20,7 @@ func newTestSQLite3InteractorWithAdapter(t *testing.T) (*sqlite3Interactor, func
 	}
 
 	adapter := filesql.NewFileSQLAdapter(sharedDB)
-	si := &sqlite3Interactor{
+	si := &SQLite3Interactor{
 		r:       nil,
 		sql:     NewSQL(),
 		adapter: adapter,
