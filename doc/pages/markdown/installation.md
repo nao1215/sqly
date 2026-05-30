@@ -5,7 +5,7 @@ The following OS and Go versions are supported. The sqly is likely to work on BS
 - Windows
 - macOS
 - Linux
-- go1.22 or later
+- go1.25.0 or later
 
 ### Use "go install"
 

@@ -1,6 +1,6 @@
 **sqly: A Design Overview**  
 
-sqly operates by reading CSV, TSV, LTSV, and JSON files, inserting the loaded data into an in-memory SQLite3 database, and then executing SQL queries against it.  
+sqly operates by reading CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files, inserting the loaded data into an in-memory SQLite3 database, and then executing SQL queries against it.  
 
 The main advantage of this design is that there is no need to implement a custom SQL parser, making development significantly easier (which is crucial). Even if additional file formats are supported in the future, as long as the data insertion process is implemented, no modifications to the SQL parsing logic will be necessary.  
 
