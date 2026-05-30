@@ -8,9 +8,11 @@
 
 ### Bug Fixes
 * **Shell Prompt Session**: Reuse a single `sqly-shell` prompt across interactive commands so multiline SQL, history preload, and completion state no longer depend on per-command prompt teardown workarounds.
+* **`.cd` Prompt Path**: Store the normalized absolute path after a directory change so the prompt stays correct after relative moves such as `.cd ..`.
 
 ### Refactoring
 * **Session Usecase Boundaries**: Split the monolithic database usecase into focused `QueryUsecase`, `ImportUsecase`, and `MetadataUsecase` interfaces so each shell command depends only on the capability it uses. Behavior is unchanged.
+* **In-Process Shell Helpers**: `.ls` and `.clear` no longer shell out to `ls`/`dir`/`clear`/`cls`. `.ls` lists entries sorted with a trailing `/` on directories for output stable across operating systems; `.clear` uses ANSI escapes. This avoids stalls in headless environments.
 
 ## [v0.15.0](https://github.com/nao1215/sqly/compare/v0.14.2...v0.15.0) (2026-03-22)
 

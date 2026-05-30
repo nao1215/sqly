@@ -11,21 +11,24 @@ import (
 // If there is one argument, change to the specified directory.
 // If there are multiple arguments, return an error.
 func (c CommandList) cdCommand(_ context.Context, s *Shell, argv []string) error {
-	if len(argv) == 0 {
-		home := os.Getenv("HOME")
-		if err := os.Chdir(home); err != nil {
-			return err
-		}
-		s.state.cwd = home
-		return nil
-	}
 	if len(argv) > 1 {
 		return errors.New("too many arguments")
 	}
 
-	if err := os.Chdir(argv[0]); err != nil {
+	target := os.Getenv("HOME")
+	if len(argv) == 1 {
+		target = argv[0]
+	}
+
+	if err := os.Chdir(target); err != nil {
 		return err
 	}
-	s.state.cwd = argv[0]
+	// Store the normalized absolute path (via os.Getwd), not the raw argument,
+	// so the prompt stays correct after relative moves (e.g. ".." or "sub").
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	s.state.cwd = cwd
 	return nil
 }

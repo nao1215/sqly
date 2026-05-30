@@ -1,9 +1,13 @@
 package shell
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/nao1215/sqly/config"
 )
 
 // Test_clearCommand tests the clearCommand registration and metadata.
@@ -30,6 +34,24 @@ func Test_clearCommand(t *testing.T) {
 		}
 		if cmd.execute == nil {
 			t.Error("Expected execute function to be set")
+		}
+	})
+
+	t.Run("writes ANSI clear sequence to stdout in-process", func(t *testing.T) {
+		// Regression for #236: .clear must clear the screen in-process via ANSI
+		// escapes instead of shelling out to clear/cls.
+		c := NewCommands()
+
+		backup := config.Stdout
+		defer func() { config.Stdout = backup }()
+		var buf bytes.Buffer
+		config.Stdout = &buf
+
+		if err := c[".clear"].execute(context.Background(), &Shell{}, []string{}); err != nil {
+			t.Fatalf("clear command returned error: %v", err)
+		}
+		if !strings.Contains(buf.String(), "\x1b[2J") {
+			t.Fatalf("clear output = %q, want it to contain the ANSI clear-screen escape", buf.String())
 		}
 	})
 
