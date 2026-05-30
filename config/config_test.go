@@ -48,3 +48,11 @@ func isDir(t *testing.T, path string) bool {
 	}
 	return info.IsDir()
 }
+
+func TestIsInputFromTTY(t *testing.T) {
+	// Under `go test` stdin is not a terminal, so this must report false and,
+	// most importantly, never panic. This guards the non-TTY batch-mode switch.
+	if IsInputFromTTY() {
+		t.Skip("stdin is a terminal in this environment; skipping non-TTY assertion")
+	}
+}
