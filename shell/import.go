@@ -43,8 +43,14 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	for i := 0; i < len(argv); i++ {
 		path := argv[i]
 		if path == sheetFlag {
-			i++ // skip the separated value (e.g. --sheet "Q1 Sales")
-			continue
+			// Require a value (e.g. --sheet "Q1 Sales"). A trailing --sheet or
+			// one followed by another flag is rejected instead of silently
+			// importing nothing, which would hide the mistake in scripts.
+			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
+				i++ // consume the separated value
+				continue
+			}
+			return fmt.Errorf("%s requires a value", sheetFlag)
 		}
 		if strings.HasPrefix(path, sheetFlagAssign) {
 			continue
@@ -329,7 +335,7 @@ func extractSheetNameFromArgs(argv []string) string {
 		if value, found := strings.CutPrefix(arg, sheetFlagAssign); found {
 			return value
 		}
-		if arg == sheetFlag && i+1 < len(argv) {
+		if arg == sheetFlag && i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
 			return argv[i+1]
 		}
 	}
@@ -339,7 +345,7 @@ func extractSheetNameFromArgs(argv []string) string {
 // printImportUsage print import command usage.
 func printImportUsage() {
 	fmt.Fprintln(config.Stdout, "[Usage]")
-	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet SHEET_NAME]")
+	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet NAME | --sheet=NAME]")
 	fmt.Fprintln(config.Stdout, "")
 	fmt.Fprintln(config.Stdout, "  - Quote arguments that contain spaces: .import \"my data.csv\" or --sheet \"Q1 Sales\"")
 	fmt.Fprintln(config.Stdout, "")

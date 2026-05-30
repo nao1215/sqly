@@ -27,13 +27,17 @@ func (s *Shell) runBatch(ctx context.Context) error {
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxBatchLineBytes)
 
 	failed := false
+	lineNo := 0
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Text()
 		if err := s.exec(ctx, line); err != nil {
 			if errors.Is(err, ErrExitSqly) {
 				return nil // user input ".exit"
 			}
-			fmt.Fprintf(config.Stderr, "%v\n", err)
+			// Report the line number and content so a failing command is
+			// identifiable when many lines are piped in.
+			fmt.Fprintf(config.Stderr, "batch line %d failed: %q: %v\n", lineNo, line, err)
 			failed = true
 		}
 	}

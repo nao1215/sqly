@@ -586,6 +586,30 @@ func TestImportCommand_SheetArgExtraction(t *testing.T) {
 	}
 }
 
+func TestImportCommand_MissingSheetValueErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		argv []string
+	}{
+		{"sheet flag alone", []string{"--sheet"}},
+		{"sheet flag at end after file", []string{"file.xlsx", "--sheet"}},
+		{"sheet flag followed by another flag", []string{"--sheet", "--sheet=Data"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			if err := s.commands.importCommand(context.Background(), s, tt.argv); err == nil {
+				t.Errorf("importCommand(%v) = nil error, want missing-value error", tt.argv)
+			}
+		})
+	}
+}
+
 func TestValidatePath_Import(t *testing.T) {
 	t.Parallel()
 

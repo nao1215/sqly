@@ -1792,14 +1792,22 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	defer cleanup()
 
 	shell.isTTY = func() bool { return false }
-	shell.stdin = strings.NewReader("SELECT * FROM no_such_table\n")
+	shell.stdin = strings.NewReader("SELECT 1\nSELECT * FROM no_such_table\n")
 
 	backupStderr := config.Stderr
 	defer func() { config.Stderr = backupStderr }()
-	config.Stderr = &bytes.Buffer{}
+	var stderr bytes.Buffer
+	config.Stderr = &stderr
 
 	if err := shell.Run(context.Background()); err == nil {
 		t.Fatal("batch Run returned nil error for failing command, want non-nil")
+	}
+	// The failing line is the second input line; stderr must identify it.
+	if !strings.Contains(stderr.String(), "batch line 2 failed") {
+		t.Fatalf("stderr = %q, want it to name the failing line number", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "no_such_table") {
+		t.Fatalf("stderr = %q, want it to include the failing line content", stderr.String())
 	}
 }
 
