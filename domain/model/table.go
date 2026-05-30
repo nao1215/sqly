@@ -1,6 +1,8 @@
 package model
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -53,6 +55,8 @@ const (
 	formatLTSV     = "ltsv"
 	formatMarkdown = "markdown"
 	formatExcel    = "excel"
+	formatJSON     = "json"
+	formatNDJSON   = "ndjson"
 )
 
 // Extension name constants.
@@ -62,6 +66,8 @@ const (
 	ExtLTSV     = ".ltsv"
 	ExtMarkdown = ".md"
 	ExtExcel    = ".xlsx"
+	ExtJSON     = ".json"
+	ExtNDJSON   = ".ndjson"
 )
 
 const (
@@ -77,6 +83,10 @@ const (
 	PrintModeLTSV
 	// PrintModeExcel print data in excel format
 	PrintModeExcel
+	// PrintModeJSON print data as a JSON array of objects
+	PrintModeJSON
+	// PrintModeNDJSON print data as newline-delimited JSON (one object per line)
+	PrintModeNDJSON
 )
 
 // String return string of PrintMode.
@@ -94,6 +104,10 @@ func (p PrintMode) String() string {
 		return formatLTSV
 	case PrintModeExcel:
 		return formatExcel
+	case PrintModeJSON:
+		return formatJSON
+	case PrintModeNDJSON:
+		return formatNDJSON
 	}
 	return "unknown"
 }
@@ -224,6 +238,10 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 	case PrintModeExcel:
 		t.printExcel(out)
 		return nil
+	case PrintModeJSON:
+		return t.printJSON(out)
+	case PrintModeNDJSON:
+		return t.printNDJSON(out)
 	default:
 		return t.printTable(out)
 	}
@@ -350,4 +368,79 @@ func (t *Table) printLTSV(out io.Writer) {
 // This is the same as printCSV.
 func (t *Table) printExcel(out io.Writer) {
 	t.printCSV(out)
+}
+
+// rowToJSONObject builds a JSON object for one record, preserving the header
+// column order. Why string values: the table model stores every cell as a
+// string, so emitting strings keeps output lossless (e.g. "007" stays "007")
+// and consistent with the other text formats. Why a manual builder: encoding's
+// map marshaling sorts keys alphabetically, which would drop column order.
+func (t *Table) rowToJSONObject(record Record) ([]byte, error) {
+	var b bytes.Buffer
+	b.WriteByte('{')
+	for i, h := range t.Header() {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		key, err := json.Marshal(h)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode column name %q: %w", h, err)
+		}
+		b.Write(key)
+		b.WriteByte(':')
+
+		var val string
+		if i < len(record) {
+			val = record[i]
+		}
+		value, err := json.Marshal(val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode value for column %q: %w", h, err)
+		}
+		b.Write(value)
+	}
+	b.WriteByte('}')
+	return b.Bytes(), nil
+}
+
+// printJSON prints all records as a JSON array of objects. An empty result set
+// prints "[]" so consumers always receive valid JSON.
+func (t *Table) printJSON(out io.Writer) error {
+	if len(t.Records()) == 0 {
+		_, err := fmt.Fprintln(out, "[]")
+		return err
+	}
+	if _, err := fmt.Fprintln(out, "["); err != nil {
+		return err
+	}
+	for i, record := range t.Records() {
+		obj, err := t.rowToJSONObject(record)
+		if err != nil {
+			return err
+		}
+		sep := ""
+		if i < len(t.Records())-1 {
+			sep = ","
+		}
+		if _, err := fmt.Fprintf(out, "  %s%s\n", obj, sep); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintln(out, "]")
+	return err
+}
+
+// printNDJSON prints one JSON object per line (newline-delimited JSON). An empty
+// result set prints nothing — the empty NDJSON stream.
+func (t *Table) printNDJSON(out io.Writer) error {
+	for _, record := range t.Records() {
+		obj, err := t.rowToJSONObject(record)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "%s\n", obj); err != nil {
+			return err
+		}
+	}
+	return nil
 }

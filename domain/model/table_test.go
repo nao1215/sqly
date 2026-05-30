@@ -101,6 +101,16 @@ func TestPrintModeString(t *testing.T) {
 			want: "excel",
 		},
 		{
+			name: "json mode",
+			p:    PrintModeJSON,
+			want: "json",
+		},
+		{
+			name: "ndjson mode",
+			p:    PrintModeNDJSON,
+			want: "ndjson",
+		},
+		{
 			name: "unknown mode",
 			p:    100, // not defined
 			want: "unknown",
@@ -326,6 +336,71 @@ aaa:777	bbb:888	ccc:999
 111,222,333
 444,555,666
 777,888,999
+`,
+		},
+		{
+			name: "print json",
+			fields: fields{
+				Name:   "valid_table",
+				Header: Header{"aaa", "bbb", "ccc"},
+				Records: []Record{
+					{"111", "222", "333"},
+					{"444", "555", "666"},
+				},
+			},
+			args: args{PrintModeJSON},
+			wantOut: `[
+  {"aaa":"111","bbb":"222","ccc":"333"},
+  {"aaa":"444","bbb":"555","ccc":"666"}
+]
+`,
+		},
+		{
+			name: "print json with no records",
+			fields: fields{
+				Name:    "empty_table",
+				Header:  Header{"aaa", "bbb"},
+				Records: []Record{},
+			},
+			args:    args{PrintModeJSON},
+			wantOut: "[]\n",
+		},
+		{
+			name: "print ndjson",
+			fields: fields{
+				Name:   "valid_table",
+				Header: Header{"aaa", "bbb", "ccc"},
+				Records: []Record{
+					{"111", "222", "333"},
+					{"444", "555", "666"},
+				},
+			},
+			args: args{PrintModeNDJSON},
+			wantOut: `{"aaa":"111","bbb":"222","ccc":"333"}
+{"aaa":"444","bbb":"555","ccc":"666"}
+`,
+		},
+		{
+			name: "print ndjson with no records",
+			fields: fields{
+				Name:    "empty_table",
+				Header:  Header{"aaa", "bbb"},
+				Records: []Record{},
+			},
+			args:    args{PrintModeNDJSON},
+			wantOut: "",
+		},
+		{
+			name: "print ndjson escapes special characters",
+			fields: fields{
+				Name:   "valid_table",
+				Header: Header{"name", "note"},
+				Records: []Record{
+					{`a"b`, "c\td"},
+				},
+			},
+			args: args{PrintModeNDJSON},
+			wantOut: `{"name":"a\"b","note":"c\td"}
 `,
 		},
 		{

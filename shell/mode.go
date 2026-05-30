@@ -18,6 +18,8 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 		fmt.Fprintln(config.Stdout, "  csv")
 		fmt.Fprintln(config.Stdout, "  tsv")
 		fmt.Fprintln(config.Stdout, "  ltsv")
+		fmt.Fprintln(config.Stdout, "  json")
+		fmt.Fprintln(config.Stdout, "  ndjson")
 		fmt.Fprintln(config.Stdout, "  excel ※ active only when executing .dump, otherwise same as csv mode")
 		return nil
 	}

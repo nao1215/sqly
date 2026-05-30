@@ -95,6 +95,28 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("user set --json option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--json"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if arg.Output.Mode != model.PrintModeJSON {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeJSON)
+		}
+	})
+
+	t.Run("user set --ndjson option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--ndjson"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if arg.Output.Mode != model.PrintModeNDJSON {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeNDJSON)
+		}
+	})
+
 	t.Run("default print mode", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly"})
 		if err != nil {

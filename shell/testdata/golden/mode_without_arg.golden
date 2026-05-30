@@ -6,4 +6,6 @@
   csv
   tsv
   ltsv
+  json
+  ndjson
   excel ※ active only when executing .dump, otherwise same as csv mode
