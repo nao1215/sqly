@@ -15,6 +15,10 @@
 * **Session Usecase Boundaries**: Split the monolithic database usecase into focused `QueryUsecase`, `ImportUsecase`, and `MetadataUsecase` interfaces so each shell command depends only on the capability it uses. Behavior is unchanged.
 * **In-Process Shell Helpers**: `.ls` and `.clear` no longer shell out to `ls`/`dir`/`clear`/`cls`. `.ls` lists entries sorted with a trailing `/` on directories for output stable across operating systems; `.clear` uses ANSI escapes. This avoids stalls in headless environments.
 
+### Testing
+* **shellspec Binary E2E**: Added shellspec end-to-end tests that drive the built binary (flags, piped stdin, exit codes) on Linux and macOS, run in CI via `make test-e2e`.
+* **Property-Based and Metamorphic Tests**: Added `testing/quick` properties for JSON/NDJSON round-trips, `splitArgs` quoting, `trimGaps`/`normalizeDumpExt`/`SanitizeForSQL` invariants, and shell-level metamorphic relations (COUNT vs rows, ORDER BY permutation, format invariance, dump/reimport round-trip).
+
 ## [v0.15.0](https://github.com/nao1215/sqly/compare/v0.14.2...v0.15.0) (2026-03-22)
 
 ### New Features

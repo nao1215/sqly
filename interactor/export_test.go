@@ -1,8 +1,10 @@
 package interactor
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -191,5 +193,76 @@ func TestExportInteractor_DumpTable_InvalidPath(t *testing.T) {
 	err := exp.DumpTable("/nonexistent/directory/file.csv", table, model.ExportCSV)
 	if err == nil {
 		t.Fatal("Expected error when dumping to invalid path")
+	}
+}
+
+func TestExportInteractor_DumpTable_JSON(t *testing.T) {
+	t.Parallel()
+
+	exp := newTestExportInteractor()
+	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+		model.NewRecord([]string{"John", "25"}),
+		model.NewRecord([]string{"Jane", "30"}),
+	})
+
+	outputFile := filepath.Join(t.TempDir(), "output.json")
+	if err := exp.DumpTable(outputFile, table, model.ExportJSON); err != nil {
+		t.Fatalf("DumpTable JSON failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test file with controlled path
+	if err != nil {
+		t.Fatalf("Failed to read output file: %v", err)
+	}
+
+	// Metamorphic check: the written JSON parses back to the original rows.
+	var got []map[string]string
+	if err := json.Unmarshal(content, &got); err != nil {
+		t.Fatalf("dumped file is not valid JSON: %v\n%s", err, content)
+	}
+	want := []map[string]string{
+		{"name": "John", "age": "25"},
+		{"name": "Jane", "age": "30"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("JSON round-trip mismatch:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
+	t.Parallel()
+
+	exp := newTestExportInteractor()
+	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+		model.NewRecord([]string{"John", "25"}),
+		model.NewRecord([]string{"Jane", "30"}),
+	})
+
+	outputFile := filepath.Join(t.TempDir(), "output.ndjson")
+	if err := exp.DumpTable(outputFile, table, model.ExportNDJSON); err != nil {
+		t.Fatalf("DumpTable NDJSON failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test file with controlled path
+	if err != nil {
+		t.Fatalf("Failed to read output file: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(string(content), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 NDJSON lines, got %d: %s", len(lines), content)
+	}
+	want := []map[string]string{
+		{"name": "John", "age": "25"},
+		{"name": "Jane", "age": "30"},
+	}
+	for i, line := range lines {
+		var got map[string]string
+		if err := json.Unmarshal([]byte(line), &got); err != nil {
+			t.Fatalf("NDJSON line %d invalid: %v", i, err)
+		}
+		if !reflect.DeepEqual(got, want[i]) {
+			t.Errorf("NDJSON line %d mismatch: got=%v want=%v", i, got, want[i])
+		}
 	}
 }
