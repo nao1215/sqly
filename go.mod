@@ -9,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.15
-	github.com/nao1215/filesql v0.12.0
+	github.com/nao1215/filesql v0.12.2
 	github.com/nao1215/prompt v0.0.4
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
