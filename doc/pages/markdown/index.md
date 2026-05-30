@@ -1,6 +1,6 @@
 ## What is sqly?
 
-The `sqly` command is a command-line tool for executing SQL queries on CSV/TSV/LTSV/JSON files and Microsoft Excel™. `sqly` is written in Golang and supports cross-platform usage. Similar tools include [harelba/q](https://github.com/harelba/q), [dinedal/textql](https://github.com/dinedal/textql), [noborus/trdsql](https://github.com/noborus/trdsql), and [mithrandie/csvq](https://github.com/mithrandie/csvq).
+The `sqly` command is a command-line tool for executing SQL queries on CSV, TSV, LTSV, JSON, JSONL, Parquet, Microsoft Excel, ACH, and Fedwire files, including their compressed variants. `sqly` is written in Golang and supports cross-platform usage. Similar tools include [harelba/q](https://github.com/harelba/q), [dinedal/textql](https://github.com/dinedal/textql), [noborus/trdsql](https://github.com/noborus/trdsql), and [mithrandie/csvq](https://github.com/mithrandie/csvq).
 
 One of the unique strengths of `sqly` is that it allows you to interactively build SQL queries using the `sqly shell`. You can interactively execute SQL with SQL completion and command history. Of course, you can also execute SQL without running the `sqly-shell`. Since `sqly` uses SQLite3 to execute SQL, the SQL syntax is equivalent to SQLite3.
 

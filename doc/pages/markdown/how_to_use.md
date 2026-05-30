@@ -2,17 +2,17 @@
 
 If no SQL query is specified with the `--sql` option, sqly will start the sqly shell. sqly determines the file type to be loaded from the extension when the shell starts and automatically begins importing it into the SQLite3 in-memory database. Multiple files can be loaded simultaneously. The table names will be the file names (without extensions) or the Excel sheet names. If an SQL query is specified with the `--sql` option, the SQL query result will be displayed in the terminal and sqly will exit without starting the sqly shell.
 
-sqly allows you to change the display mode of SQL results with options. By default, the output is in table format. The output format can be changed to csv (`--csv`), excel (`--excel`), json (`--json`), ltsv (`--ltsv`), markdown (`--markdown`), or tsv (`--tsv`). Since the output mode can be changed while the sqly shell is running, it is easy to execute `sqly sample.csv` and then change settings or execute SQL queries within the sqly shell.
+sqly allows you to change the display mode of SQL results with options. By default, the output is in table format. The output format can be changed to csv (`--csv`), tsv (`--tsv`), ltsv (`--ltsv`), markdown (`--markdown`), json (`--json`), or ndjson (`--ndjson`). Excel (`--excel`) and Parquet (`--parquet`) are export-only: they render as csv on screen and write a file only through `.dump` or `--output`. Since the output mode can be changed while the sqly shell is running, it is easy to execute `sqly sample.csv` and then change settings or execute SQL queries within the sqly shell.
 
 
 ### sqly options
 
 ```shell
 $ sqly --help
-sqly - execute SQL against CSV/TSV/LTSV/JSON with shell (v0.10.0)
+sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire with shell
 
 [Usage]
-  sqly [OPTIONS] [FILE_PATH]
+  sqly [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]
 
 [Example]
   - run sqly shell
@@ -23,10 +23,12 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON with shell (v0.10.0)
 [OPTIONS]
   -c, --csv             change output format to csv (default: table)
   -e, --excel           change output format to excel (default: table)
-  -j, --json            change output format to json (default: table)
   -l, --ltsv            change output format to ltsv (default: table)
   -m, --markdown        change output format to markdown table (default: table)
   -t, --tsv             change output format to tsv (default: table)
+  -j, --json            change output format to json (default: table)
+  -n, --ndjson          change output format to ndjson (default: table)
+  -p, --parquet         export results as parquet (export-only; use with --output or .dump)
   -S, --sheet string    excel sheet name you want to import
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option

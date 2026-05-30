@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.16.0](https://github.com/nao1215/sqly/compare/v0.15.0...v0.16.0) (2026-05-30)
 
 ### New Features
 * Parquet Export: Export query results to Apache Parquet via `--parquet`, `.mode parquet`, `.dump`, and `--output`. Like Excel, it is export-only: on-screen it renders as CSV, and writes the file through filesql. Exporting an empty result errors because Parquet needs at least one row to infer its schema.
