@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### New Features
-* Parquet Export: Export query results to Apache Parquet via `--parquet`, `.mode parquet`, `.dump`, and `--output`. Like Excel, it is export-only: on screen it renders as CSV, and writes the file through filesql. Exporting an empty result errors because Parquet needs at least one row to infer its schema.
+* Parquet Export: Export query results to Apache Parquet via `--parquet`, `.mode parquet`, `.dump`, and `--output`. Like Excel, it is export-only: on-screen it renders as CSV, and writes the file through filesql. Exporting an empty result errors because Parquet needs at least one row to infer its schema.
 * Schema Inspection Commands: `.schema TABLE_NAME` prints the `CREATE TABLE` statement and `.describe TABLE_NAME` lists each column's position, name, type, nullability, default, and primary-key flag. Both work for CSV/TSV/LTSV/JSON, Excel, ACH, and Fedwire tables, and emit structured output in `.mode json`/`.mode ndjson`.
 * JSON and NDJSON Output: Render query results as JSON or newline-delimited JSON via `--json`/`--ndjson`, `.mode json`/`.mode ndjson` in the shell, and `.dump`/`--output` for files. Values are emitted as strings like the other text formats; an empty result is `[]` for JSON and an empty stream for NDJSON.
 * Non-TTY Batch Mode: When stdin is piped or redirected, sqly reads SQL and helper commands from stdin line by line. A failed command exits non-zero, so batch runs are scriptable (e.g. `echo 'SELECT * FROM sample' | sqly sample.csv`).

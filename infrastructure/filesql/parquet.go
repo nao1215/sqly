@@ -11,6 +11,7 @@ import (
 	libfilesql "github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
 	infra "github.com/nao1215/sqly/infrastructure"
+	_ "modernc.org/sqlite" // register the "sqlite" driver used for the staging DB
 )
 
 // DumpTableToParquet writes a single table to a Parquet file at filePath.
@@ -49,10 +50,20 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	if _, err = db.ExecContext(ctx, infra.GenerateCreateTableStatement(table)); err != nil {
 		return fmt.Errorf("create staging table: %w", err)
 	}
+	// Insert in a single transaction; one implicit transaction per row is slow
+	// for large exports.
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin staging transaction: %w", err)
+	}
 	for _, record := range table.Records() {
-		if _, err = db.ExecContext(ctx, infra.GenerateInsertStatement(table.Name(), record)); err != nil {
+		if _, err = tx.ExecContext(ctx, infra.GenerateInsertStatement(table.Name(), record)); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("insert into staging table: %w", err)
 		}
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit staging transaction: %w", err)
 	}
 
 	outDir := filepath.Join(tmpDir, "out")
