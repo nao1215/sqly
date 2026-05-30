@@ -29,17 +29,19 @@ var (
 )
 
 const (
-	importCommand = ".import"
-	cdCommand     = ".cd"
-	clearCommand  = ".clear"
-	dumpCommand   = ".dump"
-	exitCommand   = ".exit"
-	headerCommand = ".header"
-	helpCommand   = ".help"
-	lsCommand     = ".ls"
-	modeCommand   = ".mode"
-	tablesCommand = ".tables"
-	pwdCommand    = ".pwd"
+	importCommand   = ".import"
+	cdCommand       = ".cd"
+	clearCommand    = ".clear"
+	dumpCommand     = ".dump"
+	exitCommand     = ".exit"
+	headerCommand   = ".header"
+	helpCommand     = ".help"
+	lsCommand       = ".ls"
+	modeCommand     = ".mode"
+	tablesCommand   = ".tables"
+	pwdCommand      = ".pwd"
+	schemaCommand   = ".schema"
+	describeCommand = ".describe"
 
 	msgImportableFile = "Importable file"
 )

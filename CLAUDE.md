@@ -67,7 +67,7 @@ sqly follows Clean Architecture principles with dependency injection via Google 
 - **Remove duplicate code**: Check for and remove unnecessary duplicate code after completing work
 - **Error handling**: Use `errors.Is` and `errors.As` for error interface equality checks. Never omit error handling
 - **Documentation comments**: Write documentation comments to help users understand code usage
-- **Update README**: When adding features, update all localized README files (ja/ko/ru/zh-cn/es/fr)
+- **Update docs**: When adding features, update the English `README.md` and the GitHub Pages docs under `doc/pages/markdown/`. Localized READMEs have been removed; do not add new ones. Avoid bold and emoji in documentation.
 
 ## Testing Guidelines
 - **Readable Test Code**: Avoid excessive optimization (DRY) and aim for easily understandable tests

@@ -6,14 +6,17 @@ The sqly-shell has the following helper commands:
 ```shell
 sqly:~/github/github.com/nao1215/sqly(table)$ .help
         .cd: change directory
+     .clear: clear terminal screen
+  .describe: print column information of a table
       .dump: dump db table to file in a format according to output mode (default: csv)
       .exit: exit sqly
     .header: print table header
       .help: print help message
-    .import: import file(s)
+    .import: import file(s) and/or directory(ies)
         .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory
+    .schema: print CREATE TABLE statement of a table
     .tables: print tables
 ```
 
@@ -23,6 +26,20 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
 sqly:~/github/github.com/nao1215/sqly(table)$ .cd
 sqly:~(table)$ .cd Desktop
 sqly:Desktop(table)$ 
+```
+
+### describe command
+
+Print one row per column (position, name, type, nullability, default, primary-key flag) for a table. Works for every imported format. In `.mode json` the output is a structured JSON array.
+
+```shell
+sqly:~/data(table)$ .describe user
++-----+------------+---------+---------+------------+----+
+| cid |    name    |  type   | notnull | dflt_value | pk |
++-----+------------+---------+---------+------------+----+
+|   0 | user_name  | TEXT    |       0 |            |  0 |
+|   1 | identifier | INTEGER |       0 |            |  0 |
++-----+------------+---------+---------+------------+----+
 ```
 
 ### dump command
@@ -72,13 +89,21 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .import
 
 ### ls command
 
-ls command call the `ls` command or `dir` command in the shell.
+List directory contents (sorted, with a trailing `/` on directories). It runs in-process rather than calling the external `ls`/`dir`, so output is identical on every OS.
 
 ```shell
 sqly:~/github/github.com/nao1215/sqly/di(table)$ .ls
-合計 8
--rw-rw-r-- 1 nao nao  661  2月  3 13:09 wire.go
--rw-rw-r-- 1 nao nao 2292  2月  7 10:40 wire_gen.go
+wire.go
+wire_gen.go
+```
+
+### schema command
+
+Print the `CREATE TABLE` statement of a table. Works for every imported format. In `.mode json` the output is a structured `{table, schema}` object.
+
+```shell
+sqly:~/data(table)$ .schema user
+CREATE TABLE "user" ("user_name" TEXT, "identifier" INTEGER, "first_name" TEXT, "last_name" TEXT)
 ```
 
 ### mode command
@@ -94,6 +119,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .mode
   tsv
   ltsv
   json
+  ndjson
   excel ※ active only when executing .dump, otherwise same as csv mode
 ```
 
