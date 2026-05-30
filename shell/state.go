@@ -31,7 +31,12 @@ func newState(arg *config.Arg) (*state, error) {
 // shortCWD return short current working directory.
 // If current working directory is home directory, return "~".
 func (s *state) shortCWD() string {
-	home := os.Getenv("HOME")
+	// Resolve home cross-platform (os.UserHomeDir uses %USERPROFILE% on Windows,
+	// where $HOME is usually unset). Skip abbreviation if it cannot be resolved.
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return s.cwd
+	}
 	if s.cwd == home {
 		return "~"
 	}

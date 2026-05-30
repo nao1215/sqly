@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
+	"path/filepath"
+	"sort"
 
 	"github.com/nao1215/sqly/config"
 )
@@ -15,36 +15,49 @@ import (
 // If there is no argument, list the files and directories in the current directory.
 // If there is one argument, list the files and directories in the specified directory.
 // If there are multiple arguments, return an error.
+//
+// Listing is done in-process rather than shelling out to ls/dir. Why: external
+// binaries differ per platform (ls -l vs dir /q) and produce inconsistent
+// output. Entries are sorted by name and directories carry a trailing "/" so
+// the result is deterministic across supported operating systems.
 func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error {
-	path, err := func() (string, error) {
-		if len(argv) == 0 {
-			return ".", nil
-		}
-		if len(argv) > 1 {
-			return "", errors.New("too many arguments")
-		}
-		return argv[0], nil
-	}()
+	if len(argv) > 1 {
+		return errors.New("too many arguments")
+	}
+	path := "."
+	if len(argv) == 1 {
+		path = argv[0]
+	}
+
+	info, err := os.Stat(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("no such file or directory: %s", path)
+		}
 		return err
 	}
 
-	if err := func() error {
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return fmt.Errorf("no such file or directory: %s", path)
-		}
+	// A non-directory argument lists just that entry, mirroring `ls FILE`.
+	if !info.IsDir() {
+		fmt.Fprintln(config.Stdout, filepath.Base(path))
+		return nil
+	}
 
-		var cmd *exec.Cmd
-		if runtime.GOOS == config.Windows {
-			cmd = exec.CommandContext(context.Background(), "cmd", "/c", "dir", "/q", path) // #nosec G204
-		} else {
-			cmd = exec.CommandContext(context.Background(), "ls", "-l", path) // #nosec G204
-		}
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	}(); err != nil {
+	entries, err := os.ReadDir(path)
+	if err != nil {
 		return err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			name += "/"
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Fprintln(config.Stdout, name)
 	}
 	return nil
 }

@@ -221,6 +221,71 @@ func TestCommandList_lsCommand(t *testing.T) {
 	}
 }
 
+func TestCommandList_lsCommand_Output(t *testing.T) {
+	// Regression for #236: .ls must list directory contents in-process with
+	// deterministic, OS-independent output instead of shelling out to ls/dir.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "b.csv"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.csv"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	commandList := NewCommands()
+
+	backup := config.Stdout
+	defer func() { config.Stdout = backup }()
+	var buf bytes.Buffer
+	config.Stdout = &buf
+
+	if err := commandList.lsCommand(context.Background(), &Shell{}, []string{dir}); err != nil {
+		t.Fatalf("lsCommand returned error: %v", err)
+	}
+
+	got := buf.String()
+	want := "a.csv\nb.csv\nsub/\n"
+	if got != want {
+		t.Fatalf("lsCommand output = %q, want %q", got, want)
+	}
+}
+
+func TestCommandList_cdCommand_StoresAbsolutePath(t *testing.T) {
+	// Regression for #236: .cd must store a normalized absolute path so the
+	// prompt stays correct after a relative move.
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	shell := newBoundaryTestShell(t, Usecases{})
+	commandList := NewCommands()
+
+	if err := commandList.cdCommand(context.Background(), shell, []string{"sub"}); err != nil {
+		t.Fatalf("cdCommand returned error: %v", err)
+	}
+
+	if !filepath.IsAbs(shell.state.cwd) {
+		t.Fatalf("state.cwd = %q, want an absolute path", shell.state.cwd)
+	}
+	wantResolved, err := filepath.EvalSymlinks(sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotResolved, err := filepath.EvalSymlinks(shell.state.cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotResolved != wantResolved {
+		t.Fatalf("state.cwd resolved = %q, want %q", gotResolved, wantResolved)
+	}
+}
+
 func TestShell_getFilePathCompletions_errorHandling(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
