@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/repository"
 )
 
 func TestSqlite3RepositoryCreateTable(t *testing.T) {
@@ -139,6 +140,26 @@ func TestExtractTableName(t *testing.T) {
 				query: "SELECT * FROM `sample_table`",
 			},
 			want: "sample_table",
+		},
+		{
+			name: "lower-case from keyword",
+			args: args{query: "select id from people"},
+			want: "people",
+		},
+		{
+			name: "explain select",
+			args: args{query: "EXPLAIN SELECT * FROM logs"},
+			want: "logs",
+		},
+		{
+			name: "no from clause returns empty",
+			args: args{query: "SELECT 1"},
+			want: "",
+		},
+		{
+			name: "empty query returns empty",
+			args: args{query: ""},
+			want: "",
 		},
 	}
 	for _, tt := range tests {
@@ -279,4 +300,59 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 			t.Errorf("Expected 'data' table, got %s", tables[0].Name())
 		}
 	})
+}
+
+func newSampleRepo(t *testing.T) repository.SQLite3Repository {
+	t.Helper()
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+
+	r := NewSQLite3Repository(memoryDB)
+	table := model.NewTable("sample", model.Header{"id", "name"}, []model.Record{
+		{"1", "alice"},
+		{"2", "bob"},
+	})
+	if err := r.CreateTable(context.Background(), table); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Insert(context.Background(), table); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func TestSqlite3Repository_Query_InvalidSQLReturnsError(t *testing.T) {
+	r := newSampleRepo(t)
+	if _, err := r.Query(context.Background(), "SELECT * FROM no_such_table"); err == nil {
+		t.Error("expected error for query against missing table, got nil")
+	}
+}
+
+func TestSqlite3Repository_Exec_UpdateReturnsAffectedRows(t *testing.T) {
+	r := newSampleRepo(t)
+	affected, err := r.Exec(context.Background(), "UPDATE sample SET name = 'carol' WHERE id = '1'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected != 1 {
+		t.Errorf("affected rows = %d, want 1", affected)
+	}
+}
+
+func TestSqlite3Repository_Exec_InvalidStatementReturnsError(t *testing.T) {
+	r := newSampleRepo(t)
+	if _, err := r.Exec(context.Background(), "UPDATE no_such_table SET x = 1"); err == nil {
+		t.Error("expected error for exec against missing table, got nil")
+	}
+}
+
+func TestSqlite3Repository_CreateTable_InvalidTableReturnsError(t *testing.T) {
+	r := newSampleRepo(t)
+	// An empty table (no name/header/records) fails Valid() before any SQL runs.
+	if err := r.CreateTable(context.Background(), model.NewTable("", model.Header{}, []model.Record{})); err == nil {
+		t.Error("expected error for invalid table, got nil")
+	}
 }
