@@ -1,5 +1,5 @@
 [Usage]
-  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet SHEET_NAME]
+  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet NAME | --sheet=NAME]
 
   - Quote arguments that contain spaces: .import "my data.csv" or --sheet "Q1 Sales"
 

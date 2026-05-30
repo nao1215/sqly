@@ -106,8 +106,23 @@ When standard input is not a terminal (piped or redirected), sqly reads SQL quer
 
 ```shell
 $ echo "SELECT * FROM user LIMIT 1" | sqly testdata/user.csv
++-----------+------------+------------+-----------+
+| user_name | identifier | first_name | last_name |
++-----------+------------+------------+-----------+
+| booker12  |          1 | Rachel     | Booker    |
++-----------+------------+------------+-----------+
 
 $ printf '.tables\nSELECT COUNT(*) FROM user\n' | sqly testdata/user.csv
++------------+
+| TABLE NAME |
++------------+
+| user       |
++------------+
++----------+
+| COUNT(*) |
++----------+
+|        3 |
++----------+
 ```
 
 ### Directory import
