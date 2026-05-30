@@ -90,6 +90,10 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
 			m.String(), model.PrintModeExcel.String())
 		m.PrintMode = model.PrintModeExcel
+	case model.PrintModeParquet.String():
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
+			m.String(), model.PrintModeParquet.String())
+		m.PrintMode = model.PrintModeParquet
 	default:
 		return fmt.Errorf("invalid output mode: %s", modeName)
 	}

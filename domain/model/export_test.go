@@ -17,6 +17,7 @@ func TestExportFormat_String(t *testing.T) {
 		{name: "excel", ef: ExportExcel, want: "excel"},
 		{name: "json", ef: ExportJSON, want: "json"},
 		{name: "ndjson", ef: ExportNDJSON, want: "ndjson"},
+		{name: "parquet", ef: ExportParquet, want: "parquet"},
 		{name: "unknown defaults to csv", ef: ExportFormat(99), want: "csv"},
 	}
 	for _, tt := range tests {
@@ -44,6 +45,7 @@ func TestExportFormat_Extension(t *testing.T) {
 		{name: "excel", ef: ExportExcel, want: ".xlsx"},
 		{name: "json", ef: ExportJSON, want: ".json"},
 		{name: "ndjson", ef: ExportNDJSON, want: ".ndjson"},
+		{name: "parquet", ef: ExportParquet, want: ".parquet"},
 		{name: "unknown defaults to .csv", ef: ExportFormat(99), want: ".csv"},
 	}
 	for _, tt := range tests {
@@ -72,6 +74,7 @@ func TestExportFormatFromPrintMode(t *testing.T) {
 		{name: "excel", mode: PrintModeExcel, want: ExportExcel},
 		{name: "json", mode: PrintModeJSON, want: ExportJSON},
 		{name: "ndjson", mode: PrintModeNDJSON, want: ExportNDJSON},
+		{name: "parquet", mode: PrintModeParquet, want: ExportParquet},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

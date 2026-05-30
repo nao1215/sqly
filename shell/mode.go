@@ -21,6 +21,7 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 		fmt.Fprintln(config.Stdout, "  json")
 		fmt.Fprintln(config.Stdout, "  ndjson")
 		fmt.Fprintln(config.Stdout, "  excel ※ active only when executing .dump, otherwise same as csv mode")
+		fmt.Fprintln(config.Stdout, "  parquet ※ active only when executing .dump, otherwise same as csv mode")
 		return nil
 	}
 	return s.state.mode.changeOutputModeIfNeeded(argv[0])

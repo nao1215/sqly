@@ -57,6 +57,7 @@ type outputFlag struct {
 	markdown bool
 	json     bool
 	ndjson   bool
+	parquet  bool
 }
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
@@ -79,6 +80,7 @@ func NewArg(args []string) (*Arg, error) {
 	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
 	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
 	flag.BoolVarP(&oFlag.ndjson, "ndjson", "n", false, "change output format to ndjson (default: table)")
+	flag.BoolVarP(&oFlag.parquet, "parquet", "p", false, "export results as parquet (export-only; use with --output or .dump)")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
@@ -118,6 +120,8 @@ func newOutput(filePath string, of outputFlag) *Output {
 		output.Mode = model.PrintModeJSON
 	case of.ndjson:
 		output.Mode = model.PrintModeNDJSON
+	case of.parquet:
+		output.Mode = model.PrintModeParquet
 	default:
 		output.Mode = model.PrintModeTable
 	}

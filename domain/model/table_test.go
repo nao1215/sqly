@@ -111,6 +111,11 @@ func TestPrintModeString(t *testing.T) {
 			want: "ndjson",
 		},
 		{
+			name: "parquet mode",
+			p:    PrintModeParquet,
+			want: "parquet",
+		},
+		{
 			name: "unknown mode",
 			p:    100, // not defined
 			want: "unknown",
