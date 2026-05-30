@@ -391,7 +391,7 @@ aaa:777	bbb:888	ccc:999
 			wantOut: "",
 		},
 		{
-			name: "print json escapes special characters",
+			name: "print ndjson escapes special characters",
 			fields: fields{
 				Name:   "valid_table",
 				Header: Header{"name", "note"},
