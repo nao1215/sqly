@@ -1,0 +1,40 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellspec:
+    name: shellspec (binary e2e)
+
+    strategy:
+      matrix:
+        os:
+          - "ubuntu-latest"
+          - "macos-latest"
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install shellspec
+        run: |
+          curl -fsSL https://git.io/shellspec | sh -s 0.28.1 --yes
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build sqly
+        run: make build
+
+      - name: Run shellspec end-to-end tests
+        run: shellspec --shell sh

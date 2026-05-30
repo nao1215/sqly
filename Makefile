@@ -1,4 +1,4 @@
-.PHONY: build test clean vet fmt chkfmt
+.PHONY: build test test-e2e clean vet fmt chkfmt
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
@@ -27,6 +27,9 @@ clean: ## Clean project
 test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverpkg=./... -coverprofile=cover.out
 	$(GO_TOOL) cover -html=cover.out -o cover.html
+
+test-e2e: build ## Run shellspec end-to-end tests against the built binary
+	shellspec --shell sh
 
 bench: ## Start benchmark
 	env GOOS=$(GOOS) go test -bench=BenchmarkImport100000Records -benchmem
