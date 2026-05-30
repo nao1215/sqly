@@ -33,14 +33,20 @@ Describe 'sqly shell helper commands'
   End
 
   Describe '.import with a quoted path containing a space'
-    setup() { printf 'id,name\n1,foo\n' > '/tmp/sqly_e2e space.csv'; }
-    cleanup() { rm -f '/tmp/sqly_e2e space.csv'; }
+    # Use a unique directory so concurrent runs cannot collide; the spaced
+    # filename inside it is what the quoting must handle.
+    setup() {
+      IMPORT_DIR="$(mktemp -d)"
+      export IMPORT_DIR
+      printf 'id,name\n1,foo\n' > "$IMPORT_DIR/sqly_e2e space.csv"
+    }
+    cleanup() { rm -rf "${IMPORT_DIR:-}"; }
     Before 'setup'
     After 'cleanup'
 
     It 'imports the file as a single argument'
-      Data
-        #|.import "/tmp/sqly_e2e space.csv"
+      Data:expand
+        #|.import "$IMPORT_DIR/sqly_e2e space.csv"
         #|.tables
       End
       When run sqly

@@ -30,7 +30,7 @@ jobs:
 
       - name: Install shellspec
         run: |
-          curl -fsSL https://git.io/shellspec | sh -s -- --yes
+          curl -fsSL https://git.io/shellspec | sh -s 0.28.1 --yes
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Build sqly
