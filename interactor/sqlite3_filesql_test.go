@@ -174,3 +174,58 @@ func TestSQLite3Interactor_GetTableNameFromFilePath(t *testing.T) {
 		}
 	}
 }
+
+// TestSQLite3Interactor_LoadFiles_PreservesFilesqlSchema locks the integration
+// model for issue #244: filesql detects column types, and sqly copies the exact
+// CREATE TABLE into the shared DB, so the detected types survive. This is the
+// schema fidelity that .schema/.describe (#238) and export/write-back (#241,
+// #242) depend on.
+func TestSQLite3Interactor_LoadFiles_PreservesFilesqlSchema(t *testing.T) {
+	t.Parallel()
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open shared DB: %v", err)
+	}
+	defer func() { _ = sharedDB.Close() }()
+
+	si := &SQLite3Interactor{r: nil, sql: NewSQL(), adapter: filesql.NewFileSQLAdapter(sharedDB)}
+
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "typed.csv")
+	if err := os.WriteFile(csvPath, []byte("id,price,name\n1,9.99,apple\n2,3.50,pear\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	if err := si.LoadFiles(ctx, csvPath); err != nil {
+		t.Fatalf("LoadFiles: %v", err)
+	}
+
+	rows, err := sharedDB.QueryContext(ctx, "PRAGMA table_info('typed')")
+	if err != nil {
+		t.Fatalf("PRAGMA table_info: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	got := map[string]string{}
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, colType string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notnull, &dflt, &pk); err != nil {
+			t.Fatal(err)
+		}
+		got[name] = colType
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]string{"id": "INTEGER", "price": "REAL", "name": "TEXT"}
+	for col, wantType := range want {
+		if got[col] != wantType {
+			t.Errorf("column %q type = %q, want %q (filesql schema not preserved in shared DB)", col, got[col], wantType)
+		}
+	}
+}
