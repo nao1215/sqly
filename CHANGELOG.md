@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+* **Shell Prompt Session**: Reuse a single `sqly-shell` prompt across interactive commands so multiline SQL, history preload, and completion state no longer depend on per-command prompt teardown workarounds.
+
 ### Refactoring
 * **Session Usecase Boundaries**: Split the monolithic database usecase into focused `QueryUsecase`, `ImportUsecase`, and `MetadataUsecase` interfaces so each shell command depends only on the capability it uses. Behavior is unchanged.
 

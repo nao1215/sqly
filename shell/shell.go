@@ -45,12 +45,22 @@ const (
 // Shell is main class of the sqly command.
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
-	argument *config.Arg
-	config   *config.Config
-	commands CommandList
-	usecases Usecases
-	state    *state
+	argument  *config.Arg
+	config    *config.Config
+	commands  CommandList
+	usecases  Usecases
+	state     *state
+	newPrompt promptFactory
 }
+
+type promptSession interface {
+	AddHistory(string)
+	Close() error
+	Run() (string, error)
+	SetPrefix(string)
+}
+
+type promptFactory func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error)
 
 // NewShell return *Shell.
 func NewShell(
@@ -69,6 +79,17 @@ func NewShell(
 		commands: cmds,
 		usecases: usecases,
 		state:    state,
+		newPrompt: func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+			const historySize = 100
+
+			return prompt.New(
+				prefix,
+				prompt.WithCompleter(completer),
+				prompt.WithMemoryHistory(historySize),
+				prompt.WithTheme(prompt.ThemeNightOwl),
+				prompt.WithMultiline(true),
+			)
+		},
 	}, nil
 }
 
@@ -102,8 +123,14 @@ func (s *Shell) Run(ctx context.Context) error {
 // This function receive user input (it's SQL query or helper command) and
 // request the usecase layer to process it.
 func (s *Shell) communicate(ctx context.Context) error {
+	p, err := s.newPromptSession(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = p.Close() }()
+
 	for {
-		input, err := s.prompt(ctx)
+		input, err := s.prompt(p)
 		if err != nil {
 			return err
 		}
@@ -115,6 +142,26 @@ func (s *Shell) communicate(ctx context.Context) error {
 			continue
 		}
 	}
+}
+
+func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
+	p, err := s.newPrompt(s.promptPrefix(), func(d prompt.Document) []prompt.Suggestion {
+		return s.completerNew(ctx, d.Text)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	histories, err := s.usecases.history.List(ctx)
+	if err != nil {
+		_ = p.Close()
+		return nil, err
+	}
+	for _, h := range histories.ToStringList() {
+		p.AddHistory(h)
+	}
+
+	return p, nil
 }
 
 // init store CSV data to in-memory DB and create table for sqly history.
@@ -139,43 +186,13 @@ func (s *Shell) printWelcomeMessage() {
 }
 
 // printPrompt print "sqly>" prompt and getting user input
-func (s *Shell) prompt(ctx context.Context) (string, error) {
-	histories, err := s.usecases.history.List(ctx)
-	if err != nil {
-		return "", err
-	}
+func (s *Shell) prompt(p promptSession) (string, error) {
+	p.SetPrefix(s.promptPrefix())
+	return p.Run()
+}
 
-	const historySize = 100
-	p, err := prompt.New(
-		fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String()),
-		prompt.WithCompleter(func(d prompt.Document) []prompt.Suggestion {
-			return s.completerNew(ctx, d.Text)
-		}),
-		prompt.WithMemoryHistory(historySize),
-		prompt.WithTheme(prompt.ThemeNightOwl),
-		prompt.WithMultiline(true),
-	)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = p.Close() }()
-
-	// Add existing history entries to the prompt
-	for _, h := range histories.ToStringList() {
-		p.AddHistory(h)
-	}
-
-	result, err := p.Run()
-	if err != nil {
-		return "", err
-	}
-
-	// The new prompt library seems to output an extra newline after input.
-	// We need to move the cursor up one line to eliminate this extra space.
-	fmt.Print("\033[1A") // Move cursor up one line
-
-	// Trim any trailing newlines or whitespace that might be added by the prompt library
-	return strings.TrimSpace(result), nil
+func (s *Shell) promptPrefix() string {
+	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String())
 }
 
 // Suggest is a local struct to maintain compatibility with old code structure

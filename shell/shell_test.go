@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/golden"
@@ -1164,6 +1166,203 @@ func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg s
 
 	execErr := f(context.Background(), arg)
 	return buffer.Bytes(), execErr
+}
+
+type fakePromptSession struct {
+	results         []string
+	addedHistories  []string
+	prefixes        []string
+	closeCalls      int
+	runCalls        int
+	initialPrefix   string
+	capturedSuggest []prompt.Suggestion
+}
+
+func (f *fakePromptSession) AddHistory(history string) {
+	f.addedHistories = append(f.addedHistories, history)
+}
+
+func (f *fakePromptSession) Close() error {
+	f.closeCalls++
+	return nil
+}
+
+func (f *fakePromptSession) Run() (string, error) {
+	if f.runCalls >= len(f.results) {
+		return "", io.EOF
+	}
+
+	result := f.results[f.runCalls]
+	f.runCalls++
+	return result, nil
+}
+
+func (f *fakePromptSession) SetPrefix(prefix string) {
+	f.prefixes = append(f.prefixes, prefix)
+}
+
+func captureOSStdout(t *testing.T, f func()) string {
+	t.Helper()
+
+	backupStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		os.Stdout = backupStdout
+	}()
+
+	os.Stdout = writer
+	f()
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func hasPromptSuggestion(suggestions []prompt.Suggestion, text string) bool {
+	for _, suggestion := range suggestions {
+		if suggestion.Text == text {
+			return true
+		}
+	}
+	return false
+}
+
+func TestShellCommunicate_ReusesPromptSessionForMultilineSQL(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if err := shell.recordUserRequest(context.Background(), "SELECT 0 AS n"); err != nil {
+		t.Fatal(err)
+	}
+
+	fakePrompt := &fakePromptSession{
+		results: []string{
+			"SELECT 1 AS n\nUNION ALL\nSELECT 2 AS n",
+			".exit",
+		},
+	}
+	factoryCalls := 0
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		factoryCalls++
+		fakePrompt.initialPrefix = prefix
+		return fakePrompt, nil
+	}
+
+	backupStdout := config.Stdout
+	defer func() {
+		config.Stdout = backupStdout
+	}()
+
+	var queryOutput bytes.Buffer
+	config.Stdout = &queryOutput
+
+	terminalOutput := captureOSStdout(t, func() {
+		if err := shell.communicate(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if factoryCalls != 1 {
+		t.Fatalf("prompt factory called %d times, want 1", factoryCalls)
+	}
+	if fakePrompt.closeCalls != 1 {
+		t.Fatalf("prompt close calls = %d, want 1", fakePrompt.closeCalls)
+	}
+	if fakePrompt.runCalls != 2 {
+		t.Fatalf("prompt run calls = %d, want 2", fakePrompt.runCalls)
+	}
+	if len(fakePrompt.addedHistories) != 1 || fakePrompt.addedHistories[0] != "SELECT 0 AS n" {
+		t.Fatalf("preloaded histories = %#v, want only persisted history", fakePrompt.addedHistories)
+	}
+	if strings.Contains(terminalOutput, "\x1b[1A") {
+		t.Fatalf("terminal output contains removed cursor workaround: %q", terminalOutput)
+	}
+	if !strings.Contains(queryOutput.String(), "1") || !strings.Contains(queryOutput.String(), "2") {
+		t.Fatalf("multiline SQL output missing expected rows: %q", queryOutput.String())
+	}
+}
+
+func TestShellCommunicate_PreloadsHistoryAndCompletion(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if err := shell.recordUserRequest(context.Background(), "SELECT 9 AS n"); err != nil {
+		t.Fatal(err)
+	}
+
+	fakePrompt := &fakePromptSession{results: []string{".exit"}}
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		fakePrompt.initialPrefix = prefix
+		fakePrompt.capturedSuggest = completer(prompt.Document{
+			Text:           "SEL",
+			CursorPosition: 3,
+		})
+		return fakePrompt, nil
+	}
+
+	if err := shell.communicate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(fakePrompt.initialPrefix, "(table)") {
+		t.Fatalf("initial prefix = %q, want table mode prompt", fakePrompt.initialPrefix)
+	}
+	if len(fakePrompt.addedHistories) != 1 || fakePrompt.addedHistories[0] != "SELECT 9 AS n" {
+		t.Fatalf("preloaded histories = %#v, want persisted command", fakePrompt.addedHistories)
+	}
+	if !hasPromptSuggestion(fakePrompt.capturedSuggest, "SELECT") {
+		t.Fatalf("captured suggestions = %#v, want SELECT completion", fakePrompt.capturedSuggest)
+	}
+}
+
+func TestShellCommunicate_RefreshesPromptPrefixBetweenRuns(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	fakePrompt := &fakePromptSession{
+		results: []string{
+			".mode csv",
+			".exit",
+		},
+	}
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		fakePrompt.initialPrefix = prefix
+		return fakePrompt, nil
+	}
+
+	if err := shell.communicate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(fakePrompt.prefixes) != 2 {
+		t.Fatalf("prompt prefixes = %#v, want 2 prompt updates", fakePrompt.prefixes)
+	}
+	if !strings.Contains(fakePrompt.prefixes[0], "(table)") {
+		t.Fatalf("first prefix = %q, want table mode", fakePrompt.prefixes[0])
+	}
+	if !strings.Contains(fakePrompt.prefixes[1], "(csv)") {
+		t.Fatalf("second prefix = %q, want csv mode", fakePrompt.prefixes[1])
+	}
 }
 
 func TestTrimGaps(t *testing.T) {
