@@ -15,9 +15,17 @@ func (c CommandList) cdCommand(_ context.Context, s *Shell, argv []string) error
 		return errors.New("too many arguments")
 	}
 
-	target := os.Getenv("HOME")
+	var target string
 	if len(argv) == 1 {
 		target = argv[0]
+	} else {
+		// Resolve the home directory cross-platform. os.UserHomeDir reads
+		// %USERPROFILE% on Windows, where $HOME is usually unset.
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		target = home
 	}
 
 	if err := os.Chdir(target); err != nil {

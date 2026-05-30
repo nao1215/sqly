@@ -8,7 +8,7 @@
 
 ### Bug Fixes
 * **Shell Prompt Session**: Reuse a single `sqly-shell` prompt across interactive commands so multiline SQL, history preload, and completion state no longer depend on per-command prompt teardown workarounds.
-* **`.cd` Prompt Path**: Store the normalized absolute path after a directory change so the prompt stays correct after relative moves such as `.cd ..`.
+* **`.cd` Prompt Path**: Store the normalized absolute path after a directory change so the prompt stays correct after relative moves such as `.cd ..`. Argument-less `.cd` now resolves the home directory via `os.UserHomeDir`, fixing it on Windows where `$HOME` is usually unset.
 
 ### Refactoring
 * **Session Usecase Boundaries**: Split the monolithic database usecase into focused `QueryUsecase`, `ImportUsecase`, and `MetadataUsecase` interfaces so each shell command depends only on the capability it uses. Behavior is unchanged.
