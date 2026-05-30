@@ -29,6 +29,24 @@ Here is a high-level overview of the Clean Architecture for the sqly project:
                                                  +------------------+
 ```
 
+### filesql session integration
+
+sqly reads files through the [filesql](https://github.com/nao1215/filesql) library and then runs SQL on a single shared in-memory SQLite database that lives for the whole session.
+
+On import, `filesql.OpenContext` loads the files into a temporary SQLite database with automatic column-type detection. sqly then copies each table into the shared database by executing the exact `CREATE TABLE` statement taken from filesql's `sqlite_master` and bulk-inserting the rows, and closes the temporary database. Copying the verbatim `CREATE TABLE` keeps filesql's detected types, so the shared database has full schema fidelity.
+
+sqly keeps this synchronization boundary rather than querying a filesql-owned database directly because it needs one long-lived session that all commands share: command history, repeated imports, cross-file JOINs, and last-wins overwrite on re-import. Schema fidelity lets features build on the upstream schema without format-specific workarounds: `.schema` and `.describe` read the shared database's real `sqlite_master` and `PRAGMA table_info`, and round-trip export and additional formats reuse filesql at import time.
+
+```text
+files --> filesql.OpenContext --> temporary SQLite DB
+                                        |
+                       copy CREATE TABLE + rows (verbatim schema)
+                                        v
+                              shared in-memory SQLite DB --> SQL, .schema, .describe, .dump
+```
+
+ACH and Fedwire imports have a deterministic cleanup path. `filesql.OpenContext` registers ACH/Fedwire table sets in global registries used for round-trip dump. sqly copies the data into the shared database and does not retain those registries, so after each import it unregisters them, scoped to the base names of the `.ach`/`.fed` files, using `defer` so cleanup runs even on partial failure. This keeps long-running shells leak-free and makes repeated imports produce identical tables.
+
 ### Directory structure
 
 ```shell
