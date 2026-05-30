@@ -1275,7 +1275,7 @@ func TestShellCommunicate_ReusesPromptSessionForMultilineSQL(t *testing.T) {
 		},
 	}
 	factoryCalls := 0
-	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
 		factoryCalls++
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
