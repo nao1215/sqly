@@ -53,7 +53,11 @@ func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format
 	case model.ExportExcel:
 		return e.excelRepo.Dump(filepath.Clean(filePath), table)
 	case model.ExportMarkdown:
-		return e.dumpMarkdown(filePath, table)
+		return e.dumpViaPrint(filePath, table, model.PrintModeMarkdownTable)
+	case model.ExportJSON:
+		return e.dumpViaPrint(filePath, table, model.PrintModeJSON)
+	case model.ExportNDJSON:
+		return e.dumpViaPrint(filePath, table, model.PrintModeNDJSON)
 	default:
 		return e.dumpWithFile(filePath, table, e.csvRepo.Dump)
 	}
@@ -76,17 +80,19 @@ func (e *exportInteractor) dumpWithFile(filePath string, table *model.Table, dum
 	return nil
 }
 
-// dumpMarkdown writes table data to file in Markdown table format.
-func (e *exportInteractor) dumpMarkdown(filePath string, table *model.Table) (err error) {
+// dumpViaPrint writes table data to file using Table.Print for formats whose
+// file output matches their display rendering (Markdown, JSON, NDJSON). This
+// reuses the rendering implementation instead of a separate repository.
+func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, mode model.PrintMode) (err error) {
 	f, err := e.fileRepo.Create(filepath.Clean(filePath))
 	if err != nil {
-		return fmt.Errorf("create markdown file %q: %w", filePath, err)
+		return fmt.Errorf("create output file %q: %w", filePath, err)
 	}
 	defer func() {
 		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close markdown file %q: %w", filePath, cerr)
+			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
 		}
 	}()
 
-	return table.Print(f, model.PrintModeMarkdownTable)
+	return table.Print(f, mode)
 }

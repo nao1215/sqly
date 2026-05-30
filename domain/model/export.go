@@ -16,6 +16,10 @@ const (
 	ExportMarkdown
 	// ExportExcel exports data as XLSX
 	ExportExcel
+	// ExportJSON exports data as a JSON array of objects
+	ExportJSON
+	// ExportNDJSON exports data as newline-delimited JSON
+	ExportNDJSON
 )
 
 // String returns the string representation of the ExportFormat.
@@ -31,6 +35,10 @@ func (e ExportFormat) String() string {
 		return formatMarkdown
 	case ExportExcel:
 		return formatExcel
+	case ExportJSON:
+		return formatJSON
+	case ExportNDJSON:
+		return formatNDJSON
 	}
 	return formatCSV
 }
@@ -48,6 +56,10 @@ func (e ExportFormat) Extension() string {
 		return ExtMarkdown
 	case ExportExcel:
 		return ExtExcel
+	case ExportJSON:
+		return ExtJSON
+	case ExportNDJSON:
+		return ExtNDJSON
 	}
 	return ExtCSV
 }
@@ -66,6 +78,10 @@ func ExportFormatFromPrintMode(m PrintMode) ExportFormat {
 		return ExportMarkdown
 	case PrintModeExcel:
 		return ExportExcel
+	case PrintModeJSON:
+		return ExportJSON
+	case PrintModeNDJSON:
+		return ExportNDJSON
 	default:
 		return ExportCSV
 	}

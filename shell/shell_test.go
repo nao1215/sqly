@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -1849,6 +1850,68 @@ func TestShellRunBatch_QuotedSheetArgument(t *testing.T) {
 	}
 	if !strings.Contains(string(got), "my_data") {
 		t.Fatalf("batch output missing imported table from spaced path: %q", string(got))
+	}
+}
+
+func TestShellRun_JSONOutputFromCLI(t *testing.T) {
+	// Regression for #237: --json renders query results as a JSON array that
+	// decodes with the expected column names and values.
+	shell, cleanup, err := newShell(t, []string{"sqly", "--json", "--sql", "SELECT actor FROM actor ORDER BY actor ASC LIMIT 2", filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	got := getStdoutForRunFunc(t, shell.Run)
+
+	var rows []map[string]string
+	if err := json.Unmarshal(got, &rows); err != nil {
+		t.Fatalf("output is not valid JSON array: %v\noutput: %s", err, got)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2: %s", len(rows), got)
+	}
+	if _, ok := rows[0]["actor"]; !ok {
+		t.Fatalf("row missing 'actor' column: %#v", rows[0])
+	}
+	if rows[0]["actor"] != "Adam Sandler" {
+		t.Fatalf("rows[0].actor = %q, want %q", rows[0]["actor"], "Adam Sandler")
+	}
+}
+
+func TestShellExec_NDJSONModeSwitch(t *testing.T) {
+	// Regression for #237: .mode ndjson makes shell query output emit one JSON
+	// object per line.
+	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := getExecStdOutput(t, shell.exec, ".mode ndjson"); err != nil {
+		t.Fatalf(".mode ndjson failed: %v", err)
+	}
+
+	out, err := getExecStdOutput(t, shell.exec, "SELECT actor FROM actor ORDER BY actor ASC LIMIT 2")
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %d NDJSON lines, want 2: %s", len(lines), out)
+	}
+	for _, line := range lines {
+		var row map[string]string
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			t.Fatalf("NDJSON line is not valid JSON: %v\nline: %s", err, line)
+		}
+		if _, ok := row["actor"]; !ok {
+			t.Fatalf("NDJSON line missing 'actor' column: %s", line)
+		}
 	}
 }
 

@@ -80,6 +80,12 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	case model.PrintModeLTSV.String():
 		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeLTSV.String())
 		m.PrintMode = model.PrintModeLTSV
+	case model.PrintModeJSON.String():
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeJSON.String())
+		m.PrintMode = model.PrintModeJSON
+	case model.PrintModeNDJSON.String():
+		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeNDJSON.String())
+		m.PrintMode = model.PrintModeNDJSON
 	case model.PrintModeExcel.String():
 		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
 			m.String(), model.PrintModeExcel.String())

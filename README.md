@@ -165,6 +165,8 @@ The sqly output sql query results in following formats:
 - CSV format (--csv option)
 - TSV format (--tsv option)
 - LTSV format (--ltsv option)
+- JSON format (--json option)
+- NDJSON format (--ndjson option)
 
 ```shell
 $ sqly --sql "SELECT * FROM user LIMIT 2" --csv testdata/user.csv 
@@ -172,6 +174,22 @@ user_name,identifier,first_name,last_name
 booker12,1,Rachel,Booker
 jenkins46,2,Mary,Jenkins
 ```
+
+JSON and NDJSON are easy to consume from scripts and tools. Values are emitted as strings.
+
+```shell
+$ sqly --sql "SELECT user_name, identifier FROM user LIMIT 2" --json testdata/user.csv
+[
+  {"user_name":"booker12","identifier":"1"},
+  {"user_name":"jenkins46","identifier":"2"}
+]
+
+$ sqly --sql "SELECT user_name, identifier FROM user LIMIT 2" --ndjson testdata/user.csv
+{"user_name":"booker12","identifier":"1"}
+{"user_name":"jenkins46","identifier":"2"}
+```
+
+In the shell, switch with `.mode json` or `.mode ndjson`. `.dump` writes the current mode to a file (`.json`/`.ndjson`).
 
 ### Run sqly shell
 The sqly shell starts when you run the sqly command without the --sql option. When you execute sqly command with file path, the sqly-shell starts after importing the file into the SQLite3 in-memory database.  

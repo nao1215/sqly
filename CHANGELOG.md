@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### New Features
+* **JSON and NDJSON Output**: Render query results as JSON or newline-delimited JSON via `--json`/`--ndjson`, `.mode json`/`.mode ndjson` in the shell, and `.dump`/`--output` for files. Values are emitted as strings like the other text formats; an empty result is `[]` for JSON and an empty stream for NDJSON.
 * **Non-TTY Batch Mode**: When stdin is piped or redirected, sqly reads SQL and helper commands from stdin line by line. A failed command exits non-zero, so batch runs are scriptable (e.g. `echo 'SELECT * FROM sample' | sqly sample.csv`).
 * **Quoted Helper-Command Arguments**: Helper commands honor single quotes, double quotes, and backslash-escaped whitespace, so file paths and `--sheet` values can contain spaces (e.g. `.import "my data.csv"`, `.import --sheet "Q1 Sales" report.xlsx`). The separated `--sheet NAME` form is now accepted alongside `--sheet=NAME`.
 

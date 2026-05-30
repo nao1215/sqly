@@ -359,6 +359,8 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "csv", Description: "sqly command argument: csv output format"},
 		{Text: "tsv", Description: "sqly command argument: tsv output format"},
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
+		{Text: "json", Description: "sqly command argument: json output format"},
+		{Text: "ndjson", Description: "sqly command argument: ndjson output format"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 	}
 

@@ -55,6 +55,8 @@ type outputFlag struct {
 	ltsv     bool
 	excel    bool
 	markdown bool
+	json     bool
+	ndjson   bool
 }
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
@@ -75,6 +77,8 @@ func NewArg(args []string) (*Arg, error) {
 	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
 	flag.BoolVarP(&oFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
 	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
+	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
+	flag.BoolVarP(&oFlag.ndjson, "ndjson", "n", false, "change output format to ndjson (default: table)")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
@@ -110,6 +114,10 @@ func newOutput(filePath string, of outputFlag) *Output {
 		output.Mode = model.PrintModeLTSV
 	case of.markdown:
 		output.Mode = model.PrintModeMarkdownTable
+	case of.json:
+		output.Mode = model.PrintModeJSON
+	case of.ndjson:
+		output.Mode = model.PrintModeNDJSON
 	default:
 		output.Mode = model.PrintModeTable
 	}
