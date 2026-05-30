@@ -88,8 +88,8 @@ github.com/nao1215/fileparser v0.5.1 h1:cbig0/kfl0HoPsrdK7VGvfj15iMnwknKWv3u/4i0
 github.com/nao1215/fileparser v0.5.1/go.mod h1:u/OKOYKZ2VJ+PHyQ9lNP3FuCTelJjP3YRlQEoKsFBJ4=
 github.com/nao1215/filesql v0.12.2 h1:+Us9bArJZ00L7gKLVeeGZhgomYRxRlQA9O97po4F9hI=
 github.com/nao1215/filesql v0.12.2/go.mod h1:T4HUV3foansrZFV/uQAoKisWPgv3W3LBSGjJg9PMGP0=
-github.com/nao1215/prompt v0.0.4 h1:NnqExDcQ+oyc1OlPcGmcKiCLNsTPhMKaP/zUaJPstk8=
-github.com/nao1215/prompt v0.0.4/go.mod h1:UqCLZ1fyxwWhEBTLAVvRVIzW8Tyl74o4Du0e0gQrWN4=
+github.com/nao1215/prompt v0.0.5 h1:W3B7rgrotlpxheJW9IMYTbfNZCXNm1lEHx1Gu8rpMzw=
+github.com/nao1215/prompt v0.0.5/go.mod h1:UqCLZ1fyxwWhEBTLAVvRVIzW8Tyl74o4Du0e0gQrWN4=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 h1:zrbMGy9YXpIeTnGj4EljqMiZsIcE09mmF8XsD5AYOJc=
