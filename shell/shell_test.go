@@ -1364,7 +1364,7 @@ func TestShellCommunicate_RefreshesPromptPrefixBetweenRuns(t *testing.T) {
 			".exit",
 		},
 	}
-	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
 	}
@@ -1395,7 +1395,7 @@ func TestShellCommunicate_LogsPromptCloseError(t *testing.T) {
 		results:  []string{".exit"},
 		closeErr: errors.New("prompt close failed"),
 	}
-	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
 		return fakePrompt, nil
 	}
 
@@ -1429,7 +1429,7 @@ func TestShellNewPromptSession_JoinsCloseErrorOnHistoryFailure(t *testing.T) {
 	listErr := errors.New("history list failed")
 	closeErr := errors.New("prompt close failed")
 	fakePrompt := &fakePromptSession{closeErr: closeErr}
-	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
 		return fakePrompt, nil
 	}
 	shell.usecases.history = historyUsecaseStub{listErr: listErr}
