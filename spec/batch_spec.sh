@@ -95,6 +95,37 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'booker12'
     End
 
+    It 'ignores a semicolon inside a leading line comment (#299)'
+      Data
+        #|-- comment ;
+        #|SELECT 'v' AS x;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'v'
+    End
+
+    It 'ignores a semicolon inside a block comment (#299)'
+      Data
+        #|/* comment ; */
+        #|SELECT 'v' AS x;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'v'
+    End
+
+    It 'ignores a semicolon inside a trailing line comment (#299)'
+      Data
+        #|SELECT 'first' AS x; -- trailing ; comment
+        #|SELECT 'second' AS y;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'first'
+      The output should include 'second'
+    End
+
     It 'does not split on a semicolon inside a bracket-quoted identifier (#314)'
       Data
         #|SELECT 'v' AS [a;b];

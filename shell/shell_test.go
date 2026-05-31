@@ -2011,6 +2011,33 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
+	t.Run("semicolon inside a line comment does not split (#299)", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "-- comment ;\nSELECT 'v' AS x;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "v") {
+			t.Fatalf("line comment with a semicolon split the statement: %q", got)
+		}
+	})
+
+	t.Run("semicolon inside a block comment does not split (#299)", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "/* comment ; */\nSELECT 'v' AS x;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "v") {
+			t.Fatalf("block comment with a semicolon split the statement: %q", got)
+		}
+	})
+
+	t.Run("semicolon inside a trailing line comment does not split (#299)", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT 'first' AS x; -- trailing ; comment\nSELECT 'second' AS y;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "first") || !strings.Contains(got, "second") {
+			t.Fatalf("trailing comment with a semicolon split a statement: %q", got)
+		}
+	})
+
 	t.Run("statement opening with a comment still runs", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "-- header comment\nSELECT actor FROM actor ORDER BY actor LIMIT 1;\n")
 		defer cleanup()
