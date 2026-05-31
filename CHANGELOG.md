@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v0.19.0](https://github.com/nao1215/sqly/compare/v0.18.0...v0.19.0) (2026-06-01)
+
+### New Features
+* DML RETURNING Support: `INSERT`, `UPDATE`, and `DELETE` statements with a `RETURNING` clause now print the returned rows instead of only an affected-row count, and those rows can be exported with `--output` (#363, #368).
+
+### Bug Fixes
+* Explicit Empty Flag Values Rejected: `--output`, `--sql-file`, `--save-dir`, and `--stdin` now reject an explicit empty value instead of treating the flag as absent (#349, #350, #352, #353). `.import` likewise rejects an empty `--sheet`, in both the `--sheet ""` and `--sheet=` forms (#354, #355).
+* Comment-Only SQL Files Rejected: A `--sql-file` that contains only comments now fails like an empty file, since it has no executable SQL (#351).
+* Conflicting Output Mode Flags Rejected: Passing more than one output mode flag (for example `--csv --json`) now fails instead of applying an undocumented precedence (#365).
+* Output For Non-Rowset DML: `--output` is now rejected for a DML statement that produces no rows (an `INSERT`/`UPDATE`/`DELETE` without `RETURNING`), instead of being silently ignored (#364).
+* Save Flags With sql-file On A Terminal: `--save` and `--save-dir` now work with `--sql-file` even when stdin is a terminal (#366, #367).
+* Stdin Routing: `--sql-file` now rejects non-empty piped stdin instead of silently dropping it, pointing at `--stdin` for dataset input (#373). A `--stdin` dataset run with no query now fails instead of importing and discarding the data (#374).
+* UTF-8 BOM In Scripts: A leading UTF-8 BOM is now stripped from `--sql-file` scripts and batch stdin, so BOM-prefixed files from Windows editors and export tools parse like plain UTF-8 (#369).
+* Sheet Flag On Unreadable Directories: `--sheet` validation now surfaces the real directory access error instead of misclassifying an unreadable directory as a non-Excel input (#356).
+* Multi-Workbook Sheet Filter: In a multi-workbook or directory import, a workbook that lacks the requested `--sheet` is now skipped instead of failing the whole import, so matching workbooks still load. The run fails only when no workbook contains the sheet (#378).
+* Directory Import Provenance: Directory imports now record each table's source file even when the basename is sanitized or the file yields several tables (Excel, ACH, Fedwire), so `--inspect` reports the file rather than the directory path (#357, #358).
+* Directory Import Collisions: Two files in a directory tree that map to the same table name (duplicate basenames from different subdirectories, or sanitized-name collisions) are now rejected instead of one silently overwriting the other (#359, #360).
+* Directory Re-Import: Re-importing a directory that overwrites an existing table is now reported as a successful overwrite instead of `No supported files found`, and the table's source is re-pointed to the directory file so `.save --force` can no longer write the directory rows back into the original source file (#361, #362).
+* Write-Back Safety: `--save-dir` now rejects a destination that resolves to the source file (#370) or already exists in the destination directory (#372), and validates all targets before writing any, so a failure leaves no partial output (#377). `--output` now rejects a destination that aliases an imported source file (#371). A read-only query no longer triggers write-back under `--save`/`--save-dir` (#376), and a run that fails during write-back no longer prints a DML success count to stdout (#375).
+
 ## [v0.18.0](https://github.com/nao1215/sqly/compare/v0.17.0...v0.18.0) (2026-05-31)
 
 ### Bug Fixes
