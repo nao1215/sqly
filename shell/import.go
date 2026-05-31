@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	// maxDirectoryDepth is the maximum directory depth to prevent deep traversal.
-	maxDirectoryDepth = 10
 	// sheetFlag is the .import flag selecting a single Excel sheet. It accepts
 	// both the separated form "--sheet NAME" and the joined form "--sheet=NAME".
 	sheetFlag = "--sheet"
@@ -434,20 +432,19 @@ func validatePath(path string) (string, error) {
 	// Clean the path to resolve any ".." or "." components
 	cleanPath := filepath.Clean(path)
 
-	// Check directory depth to prevent deep traversal
-	pathParts := strings.Split(cleanPath, string(filepath.Separator))
-	if len(pathParts) > maxDirectoryDepth {
-		return "", fmt.Errorf("path exceeds maximum directory depth of %d: %s", maxDirectoryDepth, path)
-	}
+	// No directory-depth limit: sqly is a local CLI run with the user's own
+	// permissions, so legitimate deeply nested workspace paths must import. Ref
+	// #316.
 
-	// Check for dangerous patterns that could indicate path traversal attacks
-	// These are the most common patterns used in path traversal attacks
+	// Check for dangerous patterns that could indicate path traversal attacks.
+	// URL-encoded sequences (..%2f, ..%5c) are intentionally NOT matched: the
+	// filesystem never URL-decodes a path, so those bytes only ever appear in a
+	// legitimate literal filename, and matching them rejected real files. Ref
+	// #317.
 	dangerousPatterns := []string{
 		"../../../",    // Multiple levels up
 		"..\\..\\..\\", // Windows path traversal
 		"....//",       // Double encoding attempts
-		"..%2f",        // URL encoded path traversal
-		"..%5c",        // URL encoded backslash
 	}
 
 	for _, pattern := range dangerousPatterns {
