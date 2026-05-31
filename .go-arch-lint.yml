@@ -4,6 +4,11 @@ workdir: .
 excludeFiles:
   - "^.*_test\\.go$"
   - "^.*\/test\/.*$"
+  # work/ is a gitignored local scratch directory (see /work in .gitignore) used
+  # for replace-based library checkouts. go-arch-lint v1.13+ walks the whole
+  # project tree, including gitignored dirs, so exclude it to avoid flagging
+  # those files as "not attached to any component".
+  - "^.*\/work\/.*$"
 
 vendors:
   color: { in: github.com/fatih/color } 
