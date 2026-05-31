@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Import Failure Handling: When an explicitly requested input fails to import, non-interactive runs now exit non-zero instead of continuing on the partially imported subset. This covers query mode (`--sql`/`--sql-file`), `--inspect`, and the batch `.import` command (which also stops later commands). Import diagnostics now always go to stderr, so stdout stays reserved for query results and the `--inspect` JSON report. The interactive shell still starts after a partial import, with a warning, since the loaded tables remain usable.
 * Batch Fail-Fast: Batch mode (piped stdin and `--sql-file`) now stops at the first failed statement or helper command instead of continuing. Later statements no longer run, so their output cannot leak into a pipeline the process then reports as failed, and side-effecting commands such as `.save` and `.dump` placed after a failure no longer execute. The run still exits non-zero.
 * Empty Batch No Write-Back: An empty batch (for example empty piped stdin) no longer triggers `--save`/`--save-dir` write-back. With nothing executed, source files are left untouched and the run is a no-op.
 * Sheet Flag Validation For Directories And Empty Values: `--sheet` is now rejected when a directory input contains no Excel files, and when it is given an explicit empty value (`--sheet ""`). Both previously slipped past validation and were silently ignored. This applies to the CLI flag and the `.import` command.

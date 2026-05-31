@@ -26,8 +26,7 @@ Describe 'sqly CLI surface'
     It 'fails on a non-existent file'
       When run sqly --sql "SELECT 1" testdata/does_not_exist.csv
       The status should be failure
-      The output should include 'does not exist'
-      The stderr should be present
+      The stderr should include 'does not exist'
     End
 
     It 'fails on invalid SQL with --sql'

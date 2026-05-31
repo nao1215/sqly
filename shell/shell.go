@@ -163,7 +163,15 @@ func (s *Shell) Run(ctx context.Context) error {
 	}
 
 	if err := s.init(ctx); err != nil {
-		return err
+		// A partial import (some inputs loaded, some failed) keeps the loaded
+		// tables usable, so the interactive shell still starts after a warning.
+		// Non-interactive modes (--sql, --sql-file, --inspect, batch) treat it as
+		// a hard failure so automation sees a non-zero exit. Ref #297, #300, #302.
+		if errors.Is(err, errPartialImport) && s.startsInteractiveShell() {
+			fmt.Fprintf(config.Stderr, "%v\n", err)
+		} else {
+			return err
+		}
 	}
 
 	// --inspect is a non-interactive discovery path: after import it prints a
@@ -283,6 +291,13 @@ func (s *Shell) disableHistory(err error) {
 	}
 	s.historyEnabled = false
 	fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_DB_PATH to a writable path to enable it.\n", err)
+}
+
+// startsInteractiveShell reports whether this run will open the interactive
+// prompt: a terminal with no non-interactive action requested (--inspect,
+// --sql, --sql-file). Batch mode (non-TTY) and those flags are non-interactive.
+func (s *Shell) startsInteractiveShell() bool {
+	return s.isTTY() && !s.argument.InspectFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
 }
 
 // init store CSV data to in-memory DB and create table for sqly history.

@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -120,7 +121,8 @@ func TestShell_importDirectory_dependsOnImportUsecase(t *testing.T) {
 		imported bool
 		err      error
 	)
-	out := captureStdout(t, func() {
+	// Import progress goes to stderr (#306), so capture stderr here.
+	out := captureStderr(t, func() {
 		imported, err = s.importDirectory(context.Background(), dir, "fixtures", "")
 	})
 	if err != nil {
@@ -559,10 +561,12 @@ func TestImportCommand_PartialSuccess(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// One valid file + one missing file → partial success (no error returned)
+	// One valid file + one missing file → partial failure. The valid table is
+	// still loaded, but importCommand returns errPartialImport so non-interactive
+	// runs exit non-zero (#297). The loaded table remains queryable.
 	err = s.commands.importCommand(ctx, s, []string{csvPath, "missing.csv"})
-	if err != nil {
-		t.Errorf("expected nil error for partial success, got: %v", err)
+	if !errors.Is(err, errPartialImport) {
+		t.Errorf("expected errPartialImport for partial failure, got: %v", err)
 	}
 }
 
