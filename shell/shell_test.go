@@ -2406,6 +2406,71 @@ func TestShellRun_SQLFile(t *testing.T) {
 	})
 }
 
+func TestShellValidateSheetFlag(t *testing.T) {
+	// Regression for #287: --sheet only affects Excel imports, so it must be
+	// rejected when no input can be an Excel file instead of being silently
+	// ignored.
+	t.Run("rejects --sheet when the only input is a non-Excel file", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err == nil {
+			t.Fatal("validateSheetFlag returned nil for a non-Excel input, want error")
+		}
+	})
+
+	t.Run("rejects --sheet for a stdin dataset", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sheet", "A test"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err == nil {
+			t.Fatal("validateSheetFlag returned nil for a stdin dataset, want error")
+		}
+	})
+
+	t.Run("allows --sheet for an Excel input", func(t *testing.T) {
+		xlsx := filepath.Join(t.TempDir(), "book.xlsx")
+		if err := os.WriteFile(xlsx, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", xlsx})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err != nil {
+			t.Fatalf("validateSheetFlag returned error for an Excel input: %v", err)
+		}
+	})
+
+	t.Run("allows --sheet for a directory input that may contain Excel files", func(t *testing.T) {
+		dir := t.TempDir()
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err != nil {
+			t.Fatalf("validateSheetFlag returned error for a directory input: %v", err)
+		}
+	})
+
+	t.Run("allows an unset --sheet", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err != nil {
+			t.Fatalf("validateSheetFlag returned error when --sheet is unset: %v", err)
+		}
+	})
+}
+
 func TestShellRun_HistoryUnavailable(t *testing.T) {
 	// Regression for #262: non-interactive runs must succeed even when the
 	// history DB cannot be created or written (e.g. read-only config dir).

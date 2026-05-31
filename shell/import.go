@@ -23,6 +23,27 @@ const (
 	sheetFlagAssign = sheetFlag + "="
 )
 
+// validateSheetFlag rejects the CLI --sheet option when no input can be an
+// Excel file. --sheet selects a single Excel sheet and is silently ignored for
+// other formats, so a typo (or pairing it with --stdin) would otherwise pass
+// unnoticed. A directory input is allowed because it may contain Excel files,
+// and a path that cannot be stat'd is left for the import step to report.
+func (s *Shell) validateSheetFlag() error {
+	if s.argument.SheetName == "" {
+		return nil
+	}
+	for _, path := range s.argument.FilePaths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil //nolint:nilerr // a bad path is reported by the import step, not here
+		}
+		if info.IsDir() || s.usecases.importer.IsExcelFile(path) {
+			return nil
+		}
+	}
+	return errors.New("--sheet is only valid for Excel (.xlsx) inputs")
+}
+
 // importCommand imports files into the in-memory database.
 // Each file/directory is loaded individually so that same-name tables from
 // different directories are overwritten (last-wins) rather than failing,

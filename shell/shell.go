@@ -129,6 +129,12 @@ func (s *Shell) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// --sheet only affects Excel imports; reject it up front when no input can
+	// be an Excel file so a typo is not silently ignored.
+	if err := s.validateSheetFlag(); err != nil {
+		return err
+	}
+
 	// --sql and --sql-file both supply a non-interactive query; accepting both
 	// would be ambiguous. Read and validate the SQL file before importing so a
 	// bad path fails fast without spending time on the import.
