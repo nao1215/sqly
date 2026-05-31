@@ -17,6 +17,9 @@ func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []strin
 		fmt.Fprintln(config.Stdout, "  .describe TABLE_NAME")
 		return nil
 	}
+	if len(argv) > 1 {
+		return fmt.Errorf(".describe accepts a single table name, got %d arguments", len(argv))
+	}
 	tableName := argv[0]
 
 	cols, err := s.tableColumns(ctx, tableName)

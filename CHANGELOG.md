@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Helper Commands Reject Extra Arguments: `.schema`, `.describe`, `.header`, `.mode`, `.tables`, and `.help` now reject unexpected trailing arguments with a clear error instead of silently ignoring them, so typos no longer pass unnoticed.
 * Output Requires SQL: `--output` is now rejected with a clear error when no `--sql` query is supplied (including batch stdin, `--sql-file`, and interactive runs), instead of being silently ignored while the command still exits successfully. `--output` is only honored by the single-result `--sql` path.
 * Empty Command Arguments Rejected: `.save ""`, `.dump TABLE ""`, and `.import ""` now fail with a clear error instead of being reinterpreted. `.save ""` no longer behaves like an in-place save (which bypassed `--force`), `.dump TABLE ""` no longer writes a file named `.csv`, and `.import ""` no longer imports the current working directory.
 * Stdin Dataset Source And Name Safety: `--inspect` now reports a stable `stdin` source for a piped `--stdin` dataset instead of leaking the ephemeral staging temp path. `--save`/`--save-dir` reject a stdin-backed table up front instead of failing late while trying to write to a deleted temp file. `--stdin-name` is validated and rejects empty or path-like values, so it can no longer stage files outside the temp directory.
