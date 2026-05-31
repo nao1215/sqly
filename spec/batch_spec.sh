@@ -26,15 +26,15 @@ Describe 'sqly batch mode (piped stdin)'
     The output should include '{"user_name":"booker12"}'
   End
 
-  It 'exits non-zero and names the failing line on error'
+  It 'exits non-zero and names the failing statement on error'
     Data
-      #|SELECT user_name FROM user ORDER BY identifier LIMIT 1
-      #|SELECT * FROM no_such_table
+      #|SELECT user_name FROM user ORDER BY identifier LIMIT 1;
+      #|SELECT * FROM no_such_table;
     End
     When run sqly testdata/user.csv
     The status should be failure
     The output should include 'booker12'
-    The stderr should include 'batch line 2 failed'
+    The stderr should include 'batch statement 2 failed'
     The stderr should include 'no_such_table'
   End
 
@@ -45,5 +45,62 @@ Describe 'sqly batch mode (piped stdin)'
     End
     When run sqly testdata/user.csv
     The status should be success
+  End
+
+  It 'still exits non-zero when a failure precedes .exit'
+    Data
+      #|SELECT * FROM no_such_table;
+      #|.exit
+    End
+    When run sqly testdata/user.csv
+    The status should be failure
+    The stderr should include 'no_such_table'
+  End
+
+  Describe 'multiline statements (#263)'
+    It 'runs a multiline SELECT terminated by a semicolon'
+      Data
+        #|SELECT user_name
+        #|FROM user
+        #|ORDER BY identifier
+        #|LIMIT 1;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'booker12'
+    End
+
+    It 'runs a multiline WITH (CTE) query'
+      Data
+        #|WITH x AS (
+        #|  SELECT user_name FROM user ORDER BY identifier LIMIT 1
+        #|)
+        #|SELECT * FROM x;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'booker12'
+    End
+
+    It 'runs multiple statements and helper commands in one payload'
+      Data
+        #|.tables
+        #|SELECT COUNT(*) AS c FROM user;
+        #|SELECT user_name FROM user ORDER BY identifier LIMIT 1;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'TABLE NAME'
+      The output should include 'booker12'
+    End
+
+    It 'reports an error for incomplete SQL'
+      Data
+        #|SELECT * FROM (
+      End
+      When run sqly testdata/user.csv
+      The status should be failure
+      The stderr should include 'batch statement'
+    End
   End
 End

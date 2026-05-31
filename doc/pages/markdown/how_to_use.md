@@ -63,6 +63,14 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
+### Batch mode: pipe commands via stdin
+
+When stdin is not a terminal (piped or redirected), sqly reads SQL statements and helper commands from stdin instead of starting the shell. SQL statements end at a top-level `;` and may span multiple lines, so formatted queries and CTEs work; separate multiple statements with `;`. Helper commands such as `.tables` are single-line. A single trailing statement without `;` still runs. A failed statement makes sqly exit non-zero.
+
+```shell
+$ printf 'WITH x AS (\n  SELECT user_name FROM user\n)\nSELECT * FROM x;\n' | sqly testdata/user.csv
+```
+
 ### Pipe data into sqly: --stdin option
 
 By default piped stdin is read as SQL and helper commands (batch mode). Use `--stdin <format>` to treat stdin as an input dataset instead. The format is given explicitly (`csv`, `tsv`, `ltsv`, `json`, or `jsonl`) because a pipe has no filename to detect it from. The table defaults to `stdin`; override it with `--stdin-name`. Piped data can be joined with file and directory arguments.

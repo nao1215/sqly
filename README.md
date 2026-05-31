@@ -100,7 +100,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### Batch mode: pipe commands via stdin
-When standard input is not a terminal (piped or redirected), sqly reads SQL queries and shell commands from stdin, one per line, instead of starting the interactive shell. A failed command makes sqly exit non-zero, so batch runs are scriptable.
+When standard input is not a terminal (piped or redirected), sqly reads SQL statements and shell commands from stdin instead of starting the interactive shell. SQL statements end at a top-level `;` and may span multiple lines (separate multiple statements with `;`); helper commands such as `.tables` are single-line. A single trailing statement without `;` still runs. A failed statement makes sqly exit non-zero, so batch runs are scriptable.
 
 ```shell
 $ echo "SELECT * FROM user LIMIT 1" | sqly testdata/user.csv
@@ -121,6 +121,9 @@ $ printf '.tables\nSELECT COUNT(*) FROM user\n' | sqly testdata/user.csv
 +----------+
 |        3 |
 +----------+
+
+# Multiline SQL terminated by ;
+$ printf 'WITH x AS (\n  SELECT user_name FROM user\n)\nSELECT * FROM x;\n' | sqly testdata/user.csv
 ```
 
 ### Pipe data into sqly: --stdin option
