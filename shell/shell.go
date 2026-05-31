@@ -70,6 +70,11 @@ type Shell struct {
 	// It is populated on every import and used by the --inspect report and by
 	// write-back (.save) to map a table back to its source file.
 	tableSources map[string]string
+	// dirImported marks tables that came from a directory import. Their
+	// tableSources entry may point at the per-file source (for --inspect
+	// provenance), but write-back still rejects them because a directory import
+	// is not a single editable source the session owns. Ref #326, #261.
+	dirImported map[string]bool
 }
 
 type promptSession interface {

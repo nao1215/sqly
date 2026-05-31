@@ -270,10 +270,59 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 	remainingNames := diffTableNames(tablesNow, existingTables)
 
-	s.recordTableSources(remainingNames, displayPath)
+	// Record each table's real source file when it can be matched to a file in
+	// the directory, so --inspect reports per-file provenance instead of the
+	// directory path (#326). Tables that cannot be matched (filesql sanitized the
+	// name, or the candidate is ambiguous) fall back to the directory path. Every
+	// table is marked as a directory import so write-back still rejects it.
+	fileSources := s.directoryTableFileSources(cleanPath)
+	for _, name := range remainingNames {
+		source := displayPath
+		if file, ok := fileSources[name]; ok {
+			source = file
+		}
+		s.recordTableSources([]string{name}, source)
+		s.markDirImported(name)
+	}
 
 	fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
 	return true, nil
+}
+
+// directoryTableFileSources walks dir and maps a candidate table name (the file
+// base name with compression and format extensions stripped) to its file path.
+// A name produced by more than one file is omitted as ambiguous, so the caller
+// falls back to the directory path rather than guessing.
+func (s *Shell) directoryTableFileSources(dir string) map[string]string {
+	candidates := map[string][]string{}
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil //nolint:nilerr // skip unreadable entries; import reports real errors
+		}
+		if !s.usecases.importer.IsSupportedFile(path) {
+			return nil
+		}
+		if name := baseTableName(path); name != "" {
+			candidates[name] = append(candidates[name], path)
+		}
+		return nil
+	})
+	result := make(map[string]string, len(candidates))
+	for name, paths := range candidates {
+		if len(paths) == 1 {
+			result[name] = paths[0]
+		}
+	}
+	return result
+}
+
+// markDirImported records that a table came from a directory import, so
+// write-back can reject it even when its source points at a single file.
+func (s *Shell) markDirImported(name string) {
+	if s.dirImported == nil {
+		s.dirImported = make(map[string]bool)
+	}
+	s.dirImported[name] = true
 }
 
 // importFile loads a single file into the database, applying --sheet filtering for Excel.

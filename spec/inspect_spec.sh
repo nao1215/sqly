@@ -34,6 +34,9 @@ Describe 'sqly --inspect (#259)'
     The line 1 should equal '{'
     The output should include '"name": "a"'
     The output should include '"name": "b"'
+    # Each table reports its real source file, not the directory path (#326).
+    The output should include '/a.csv'
+    The output should include '/b.csv'
     The stderr should include 'Successfully imported'
     rm -rf "$work_dir"
   End

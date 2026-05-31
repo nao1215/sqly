@@ -222,10 +222,35 @@ func TestInspect_Directory(t *testing.T) {
 	if len(report.Tables) != 2 {
 		t.Fatalf("expected 2 tables from directory, got %d", len(report.Tables))
 	}
+	// Each table reports its real source file, not the directory path. Ref #326.
+	want := map[string]string{
+		"one": filepath.Join(sub, "one.csv"),
+		"two": filepath.Join(sub, "two.csv"),
+	}
 	for _, tbl := range report.Tables {
-		if tbl.Source != sub {
-			t.Errorf("table %q source = %q, want directory %q", tbl.Name, tbl.Source, sub)
+		if tbl.Source != want[tbl.Name] {
+			t.Errorf("table %q source = %q, want file %q", tbl.Name, tbl.Source, want[tbl.Name])
 		}
+	}
+}
+
+func TestWriteBack_RejectsDirectoryImport(t *testing.T) {
+	// Regression for #261/#326: a directory-imported table reports its per-file
+	// source in --inspect, but write-back must still reject it.
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	writeCSV(t, dir, "one.csv", "a\n1\n")
+	if err := shell.commands.importCommand(context.Background(), shell, []string{dir}); err != nil {
+		t.Fatalf("directory import failed: %v", err)
+	}
+
+	if err := shell.writeBack(context.Background(), t.TempDir()); err == nil {
+		t.Fatal("write-back of a directory-imported table returned nil, want rejection")
 	}
 }
 

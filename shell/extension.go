@@ -44,3 +44,31 @@ func getFileTypeFromPath(filePath string) string {
 	}
 	return name[pos:]
 }
+
+// baseTableName returns the file base name with compression and format
+// extensions removed. It is the candidate table name a file maps to before
+// filesql sanitizes it, used to match a directory-imported table back to its
+// source file for the --inspect report.
+func baseTableName(filePath string) string {
+	name := filepath.Base(filePath)
+
+	compressedExtensions := []string{".gz", ".bz2", ".xz", ".zst", ".z", ".snappy", ".s2", ".lz4"}
+	for {
+		found := false
+		for _, compExt := range compressedExtensions {
+			if before, ok := strings.CutSuffix(name, compExt); ok {
+				name = before
+				found = true
+				break
+			}
+		}
+		if !found {
+			break
+		}
+	}
+
+	if pos := strings.LastIndex(name, "."); pos > 0 {
+		name = name[:pos]
+	}
+	return name
+}
