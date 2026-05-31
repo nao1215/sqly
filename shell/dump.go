@@ -18,8 +18,10 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		fmt.Fprintln(config.Stdout, "[Usage]")
 		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
 		fmt.Fprintln(config.Stdout, "[Note]")
-		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
-		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
+		fmt.Fprintln(config.Stdout, "  The format comes from .mode. When .mode is table, it is inferred from the")
+		fmt.Fprintln(config.Stdout, "  file extension (e.g. .tsv, .parquet), falling back to CSV when unknown.")
+		fmt.Fprintln(config.Stdout, "  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).")
+		fmt.Fprintln(config.Stdout, "  A .mode that disagrees with the extension is rejected instead of normalizing.")
 		fmt.Fprintln(config.Stdout, "  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.")
 		return nil
 	}

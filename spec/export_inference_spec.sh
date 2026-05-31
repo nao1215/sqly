@@ -19,7 +19,7 @@ Describe 'sqly export format inference (#260)'
       rm -rf "$out_dir"
     End
 
-    It 'infers ndjson with gzip and round-trips the compressed file'
+    It 'infers ndjson with gzip and writes a compressed file'
       out_dir=$(mktemp -d)
       export out_dir
       When run sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.ndjson.gz"
@@ -29,6 +29,7 @@ Describe 'sqly export format inference (#260)'
       The contents of file "$out_dir/result.ndjson.gz" should not include 'booker12'
       rm -rf "$out_dir"
     End
+
 
     It 're-imports a gzip-compressed csv it wrote'
       out_dir=$(mktemp -d)
