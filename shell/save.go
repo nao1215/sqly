@@ -62,6 +62,21 @@ func (s *Shell) validateSaveFlags() error {
 	return nil
 }
 
+// saveRequested reports whether a non-interactive save flag (--save or
+// --save-dir) is set.
+func (s *Shell) saveRequested() bool {
+	return s.argument.SaveInPlace || s.argument.SaveDir != ""
+}
+
+// saveDestDir returns the write-back destination directory: the --save-dir value,
+// or "" for an in-place --save.
+func (s *Shell) saveDestDir() string {
+	if s.argument.SaveDir != "" {
+		return s.argument.SaveDir
+	}
+	return ""
+}
+
 // maybeSave runs write-back after a non-interactive run when a save flag is set.
 func (s *Shell) maybeSave(ctx context.Context) error {
 	switch {
@@ -72,6 +87,37 @@ func (s *Shell) maybeSave(ctx context.Context) error {
 	default:
 		return nil
 	}
+}
+
+// preflightSave validates write-back before the SQL runs, so a run that cannot
+// persist fails before any query output reaches stdout (#375) and before any
+// file is written (#370, #372, #377). It is a no-op when no save flag is set or
+// when the SQL is read-only, because a read-only run skips write-back (#376).
+func (s *Shell) preflightSave(ctx context.Context, script string) error {
+	if !s.saveRequested() || !scriptModifiesData(script) {
+		return nil
+	}
+	_, err := s.planWriteBack(ctx, s.saveDestDir())
+	return err
+}
+
+// finishNonInteractive runs write-back after a non-interactive run, but only when
+// a save flag is set and the executed SQL modified data. A read-only run leaves
+// the imported tables unchanged, so write-back is skipped to avoid rewriting
+// source files. Ref #376.
+func (s *Shell) finishNonInteractive(ctx context.Context, script string) error {
+	if !s.saveRequested() || !scriptModifiesData(script) {
+		return nil
+	}
+	return s.maybeSave(ctx)
+}
+
+// writeTarget is a resolved write-back destination for one table.
+type writeTarget struct {
+	table  string
+	dest   string
+	format model.ExportFormat
+	comp   model.Compression
 }
 
 // writeBack persists the current tables to files. When destDir is empty the
@@ -87,12 +133,25 @@ func (s *Shell) maybeSave(ctx context.Context) error {
 // formats are rejected with a clear error before anything is written, so a
 // session is never partially saved.
 func (s *Shell) writeBack(ctx context.Context, destDir string) error {
+	targets, err := s.planWriteBack(ctx, destDir)
+	if err != nil {
+		return err
+	}
+	return s.executeWriteBack(ctx, destDir, targets)
+}
+
+// planWriteBack validates that every current table can be written and returns the
+// resolved write targets. It reports all problems at once and writes nothing, so
+// a session is never partially saved (Ref #377). For --save-dir it also rejects a
+// destination that resolves to the source file (Ref #370) and a destination that
+// already exists (Ref #372).
+func (s *Shell) planWriteBack(ctx context.Context, destDir string) ([]writeTarget, error) {
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list tables: %w", err)
+		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
 	if len(tables) == 0 {
-		return errors.New("no tables to save")
+		return nil, errors.New("no tables to save")
 	}
 
 	// Count how many tables map to each source so multi-table sources (Excel,
@@ -104,13 +163,7 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 		}
 	}
 
-	type target struct {
-		table  string
-		dest   string
-		format model.ExportFormat
-		comp   model.Compression
-	}
-	var targets []target
+	var targets []writeTarget
 	var problems []string
 	// Detect destination collisions so two tables never silently overwrite the
 	// same output file (defensive: same-name files already collapse to one table
@@ -152,19 +205,43 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 		dest := source
 		if destDir != "" {
 			dest = filepath.Join(destDir, filepath.Base(source))
+			// A --save-dir destination that resolves to the source file would
+			// overwrite it in place without --force, defeating the "originals
+			// untouched" contract. Ref #370.
+			if sameFilePath(dest, source) {
+				problems = append(problems, fmt.Sprintf("%s: --save-dir destination %s is the source file; use --save --force to overwrite it in place", name, dest))
+				continue
+			}
+			// Refuse to overwrite a pre-existing destination so --save-dir never
+			// silently clobbers an unrelated file. Ref #372, #377. An in-place
+			// --save intentionally overwrites its own source, so this check is
+			// scoped to --save-dir.
+			if info, statErr := os.Stat(dest); statErr == nil {
+				if info.IsDir() {
+					problems = append(problems, fmt.Sprintf("%s: destination %s is an existing directory", name, dest))
+				} else {
+					problems = append(problems, fmt.Sprintf("%s: destination %s already exists; remove it or choose another --save-dir", name, dest))
+				}
+				continue
+			}
 		}
 		if prev, ok := plannedDest[dest]; ok {
 			problems = append(problems, fmt.Sprintf("%s: destination %s collides with table %s", name, dest, prev))
 			continue
 		}
 		plannedDest[dest] = name
-		targets = append(targets, target{table: name, dest: dest, format: format, comp: comp})
+		targets = append(targets, writeTarget{table: name, dest: dest, format: format, comp: comp})
 	}
 
 	if len(problems) > 0 {
-		return fmt.Errorf("cannot save session:\n  - %s", strings.Join(problems, "\n  - "))
+		return nil, fmt.Errorf("cannot save session:\n  - %s", strings.Join(problems, "\n  - "))
 	}
+	return targets, nil
+}
 
+// executeWriteBack writes the planned targets to disk. Callers run planWriteBack
+// first, so by this point every target has been validated.
+func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []writeTarget) error {
 	if destDir != "" {
 		if err := os.MkdirAll(destDir, 0o750); err != nil {
 			return fmt.Errorf("failed to create save directory %q: %w", destDir, err)
@@ -184,6 +261,18 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 		fmt.Fprintf(config.Stderr, "Saved %s to %s\n", tgt.table, tgt.dest)
 	}
 	return nil
+}
+
+// sameFilePath reports whether two paths resolve to the same file location,
+// comparing cleaned absolute paths so a --save-dir pointed at the source's own
+// directory is recognized as the source file.
+func sameFilePath(a, b string) bool {
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA == nil && errB == nil {
+		return filepath.Clean(absA) == filepath.Clean(absB)
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // writableExportTarget reports whether a source path can be written back, and

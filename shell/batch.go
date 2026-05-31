@@ -21,13 +21,6 @@ const maxBatchLineBytes = 10 * 1024 * 1024
 // and --sql-file scripts so BOM-prefixed files parse like plain UTF-8. Ref #369.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
-// runBatch executes SQL statements and helper commands read from stdin until
-// EOF. It is used when sqly runs without a TTY (piped stdin), where the
-// interactive prompt cannot start.
-func (s *Shell) runBatch(ctx context.Context) (ranAny bool, err error) {
-	return s.runBatchReader(ctx, s.stdin)
-}
-
 // runBatchReader executes SQL statements and helper commands read from r. It is
 // shared by batch stdin mode and --sql-file so both follow identical
 // statement-splitting and error reporting; --sql-file passes a file reader
@@ -217,6 +210,85 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 		}
 	}
 	return stmts, string(runes[start:])
+}
+
+// scriptModifiesData reports whether a SQL script contains a data-modifying
+// keyword (INSERT, UPDATE, DELETE, REPLACE) as a whole-word token outside string
+// literals, quoted identifiers, and comments. It lets a non-interactive run skip
+// write-back for a read-only script, so a SELECT under --save/--save-dir does not
+// rewrite source files. Ref #376. Whole-token matching avoids false positives on
+// identifiers like "update_log", and quote-awareness avoids matching keywords in
+// literal values.
+func scriptModifiesData(script string) bool {
+	runes := []rune(script)
+	var (
+		inSingle, inDouble            bool
+		inBacktick, inBracket         bool
+		inLineComment, inBlockComment bool
+	)
+	isWordRune := func(r rune) bool {
+		return r == '_' ||
+			(r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9')
+	}
+	for i := 0; i < len(runes); i++ {
+		c := runes[i]
+		switch {
+		case inLineComment:
+			if c == '\n' {
+				inLineComment = false
+			}
+		case inBlockComment:
+			if c == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+		case inSingle:
+			if c == '\'' {
+				inSingle = false
+			}
+		case inDouble:
+			if c == '"' {
+				inDouble = false
+			}
+		case inBacktick:
+			if c == '`' {
+				inBacktick = false
+			}
+		case inBracket:
+			if c == ']' {
+				inBracket = false
+			}
+		default:
+			switch {
+			case c == '\'':
+				inSingle = true
+			case c == '"':
+				inDouble = true
+			case c == '`':
+				inBacktick = true
+			case c == '[':
+				inBracket = true
+			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
+				inLineComment = true
+				i++
+			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
+				inBlockComment = true
+				i++
+			case isWordRune(c):
+				start := i
+				for i+1 < len(runes) && isWordRune(runes[i+1]) {
+					i++
+				}
+				switch strings.ToUpper(string(runes[start : i+1])) {
+				case "INSERT", "UPDATE", "DELETE", "REPLACE":
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // readSQLFile reads the SQL script at path for --sql-file. It returns a clear

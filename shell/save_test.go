@@ -134,7 +134,9 @@ func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT 1", "--save", "--force", jsonPath})
+	// A modifying statement triggers write-back (a read-only query would skip it,
+	// Ref #376), so the unsupported-source rejection is exercised.
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "DELETE FROM data WHERE 1=0", "--save", "--force", jsonPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,6 +144,164 @@ func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 
 	if err := shell.Run(context.Background()); err == nil {
 		t.Fatal("expected an error saving back to a JSON source, got nil")
+	}
+}
+
+func TestWriteBack_SaveDirRejectsSourceParent(t *testing.T) {
+	// --save-dir pointed at the source's own directory resolves the destination to
+	// the source file, which would overwrite it in place without --force. Reject
+	// it and leave the source untouched. Ref #370.
+	dir := t.TempDir()
+	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+	orig, _ := os.ReadFile(src) //nolint:gosec // test path
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "UPDATE user SET first_name='P' WHERE identifier=1", "--save-dir", dir, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr == nil {
+		t.Fatal("expected an error when --save-dir resolves to the source file, got nil")
+	}
+	after, _ := os.ReadFile(src) //nolint:gosec // test path
+	if string(after) != string(orig) {
+		t.Errorf("source file was overwritten:\n got %q\nwant %q", after, orig)
+	}
+}
+
+func TestWriteBack_OutputRejectsSourceAlias(t *testing.T) {
+	// --output that aliases an imported source file would destroy the dataset
+	// without --save --force. Reject it and leave the source untouched. Ref #371.
+	dir := t.TempDir()
+	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+	orig, _ := os.ReadFile(src) //nolint:gosec // test path
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT * FROM user WHERE identifier=1", "--output", src, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	runErr := shell.Run(context.Background())
+	if runErr == nil {
+		t.Fatal("expected an error when --output aliases the source file, got nil")
+	}
+	if !strings.Contains(runErr.Error(), "--output") {
+		t.Errorf("error = %q, want it to mention --output", runErr)
+	}
+	after, _ := os.ReadFile(src) //nolint:gosec // test path
+	if string(after) != string(orig) {
+		t.Errorf("source file was overwritten by --output:\n got %q\nwant %q", after, orig)
+	}
+}
+
+func TestWriteBack_SaveDirRejectsExistingDestination(t *testing.T) {
+	// --save-dir must not silently overwrite a pre-existing file in the
+	// destination directory. Ref #372.
+	dir := t.TempDir()
+	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+	out := filepath.Join(dir, "out")
+	if err := os.MkdirAll(out, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := "PRE-EXISTING\n"
+	dest := filepath.Join(out, "user.csv")
+	if err := os.WriteFile(dest, []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "UPDATE user SET first_name='Q' WHERE identifier=1", "--save-dir", out, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr == nil {
+		t.Fatal("expected an error when --save-dir destination already exists, got nil")
+	}
+	after, _ := os.ReadFile(dest) //nolint:gosec // test path
+	if string(after) != sentinel {
+		t.Errorf("pre-existing destination was overwritten:\n got %q\nwant %q", after, sentinel)
+	}
+}
+
+func TestWriteBack_FailedWriteBackKeepsStdoutClean(t *testing.T) {
+	// When a run ultimately fails during write-back, stdout must stay free of the
+	// DML success count so scripts do not treat it as partially successful. Ref
+	// #375.
+	dir := t.TempDir()
+	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+	xlsx := filepath.Join(dir, "sample.xlsx")
+	copyTestFile(t, "sample.xlsx", xlsx)
+	out := filepath.Join(dir, "out")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "UPDATE user SET first_name='X' WHERE identifier=1", "--save-dir", out, src, xlsx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	stdout, runErr := getStdoutForErr(t, shell.Run)
+	if runErr == nil {
+		t.Fatal("expected the run to fail because the xlsx source cannot be written back, got nil")
+	}
+	if strings.Contains(string(stdout), "affected") {
+		t.Errorf("stdout leaked a success count on a failed run: %q", stdout)
+	}
+}
+
+func TestWriteBack_ReadOnlyQuerySkipsWriteBack(t *testing.T) {
+	// A read-only query under --save --force must not rewrite the source file. Ref
+	// #376.
+	dir := t.TempDir()
+	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+	orig, _ := os.ReadFile(src) //nolint:gosec // test path
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT * FROM user WHERE identifier=1", "--save", "--force", src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr != nil {
+		t.Fatalf("read-only query with --save --force should succeed without writing: %v", runErr)
+	}
+	after, _ := os.ReadFile(src) //nolint:gosec // test path
+	if string(after) != string(orig) {
+		t.Errorf("read-only query rewrote the source file:\n got %q\nwant %q", after, orig)
+	}
+}
+
+func TestWriteBack_SaveDirIsAllOrNothing(t *testing.T) {
+	// --save-dir must validate every target before writing any, so one bad target
+	// cannot leave partial output behind. Ref #377.
+	dir := t.TempDir()
+	idSrc := writeCSV(t, dir, "identifier.csv", "identifier\n1\n2\n")
+	userSrc := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+	out := filepath.Join(dir, "out")
+	// A directory at out/user.csv makes the user table unwritable.
+	if err := os.MkdirAll(filepath.Join(out, "user.csv"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "DELETE FROM identifier WHERE 1=0", "--save-dir", out, idSrc, userSrc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr == nil {
+		t.Fatal("expected an error when one --save-dir target is unwritable, got nil")
+	}
+	if _, statErr := os.Stat(filepath.Join(out, "identifier.csv")); statErr == nil {
+		t.Error("identifier.csv was written despite the run failing; --save-dir must be all-or-nothing")
 	}
 }
 
