@@ -141,6 +141,14 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// --output is only honored by the --sql path (a single result written to one
+	// file). Without --sql (no query, batch stdin, --sql-file, or interactive)
+	// the flag was silently ignored, so reject it instead of looking successful.
+	// Ref #318, #319.
+	if s.argument.Output.FilePath != "" && s.argument.Query == "" {
+		return errors.New("--output requires --sql")
+	}
+
 	// Reject an --output destination that is an existing directory before import,
 	// so it is not silently rewritten to a sibling file.
 	if err := ensureNotDirectory(s.argument.Output.FilePath); err != nil {

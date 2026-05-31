@@ -2630,6 +2630,53 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 	}
 }
 
+func TestShellRun_OutputRequiresSQL(t *testing.T) {
+	// Regression for #318/#319: --output is honored only with --sql, so it must
+	// be rejected (not silently ignored) on the batch and no-query paths.
+	t.Run("rejects --output with batch stdin and no --sql", func(t *testing.T) {
+		out := filepath.Join(t.TempDir(), "o.csv")
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output", out, filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("SELECT id FROM sample LIMIT 1\n")
+
+		runErr := shell.Run(context.Background())
+		if runErr == nil {
+			t.Fatal("Run returned nil for --output without --sql, want error")
+		}
+		if !strings.Contains(runErr.Error(), "--output") {
+			t.Fatalf("error = %q, want it to mention --output", runErr.Error())
+		}
+		if _, statErr := os.Stat(out); statErr == nil {
+			t.Fatalf("output file %q was created", out)
+		}
+	})
+
+	t.Run("allows --output with --sql", func(t *testing.T) {
+		out := filepath.Join(t.TempDir(), "o.csv")
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", out, filepath.Join("testdata", "sample.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		config.Stderr = &bytes.Buffer{}
+
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run with --sql and --output failed: %v", err)
+		}
+		if _, statErr := os.Stat(out); statErr != nil {
+			t.Fatalf("output file %q was not created: %v", out, statErr)
+		}
+	})
+}
+
 func TestCommandsRejectEmptyArgs(t *testing.T) {
 	// Regression for #323/#324/#325: empty quoted arguments must be rejected, not
 	// reinterpreted as in-place save, a ".csv" file, or the current directory.
