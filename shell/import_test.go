@@ -547,6 +547,31 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 	}
 }
 
+func TestImportCommand_TableNameCollision(t *testing.T) {
+	// Regression for #286: two inputs that sanitize to the same table name must
+	// fail instead of one silently overwriting the other.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "a-b.csv")
+	second := filepath.Join(dir, "a_b.csv")
+	if err := os.WriteFile(first, []byte("id,name\n1,A\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("id,name\n2,B\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.commands.importCommand(context.Background(), s, []string{first, second})
+	if err == nil {
+		t.Fatal("importing two inputs with colliding sanitized names returned nil, want error")
+	}
+}
+
 func TestImportCommand_PartialSuccess(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

@@ -308,7 +308,17 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	if err != nil {
 		return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
 	}
-	s.recordTableSources(diffTableNames(after, existingTables), displayPath)
+
+	// A successful import that produced no new table means this file's table
+	// name collided with one already imported in this session (for example
+	// "a-b.csv" and "a_b.csv" both sanitize to "a_b"). filesql overwrote the
+	// earlier table in memory, which would leave the first file's source mapped
+	// to the second file's rows. Fail instead of silently overwriting. Ref #286.
+	newNames := diffTableNames(after, existingTables)
+	if len(newNames) == 0 {
+		return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
+	}
+	s.recordTableSources(newNames, displayPath)
 
 	return nil
 }
