@@ -18,11 +18,17 @@ type HistoryDB *sql.DB
 
 // NewInMemDB create *sql.DB for SQLite3. SQLite3 store data in memory.
 // The return function is the function to close the DB.
+//
+// The pool is pinned to a single connection because SQLite ":memory:" is private
+// per connection: a second connection would see an empty database. This also lets
+// filesql stream imported files directly into this database (filesql.LoadInto)
+// instead of building a separate database and copying every row across.
 func NewInMemDB() (MemoryDB, func(), error) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		return nil, nil, err
 	}
+	db.SetMaxOpenConns(1)
 	return MemoryDB(db), func() { _ = db.Close() }, nil // #nosec G104
 }
 

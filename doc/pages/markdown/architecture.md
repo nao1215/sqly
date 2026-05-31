@@ -31,21 +31,17 @@ Here is a high-level overview of the Clean Architecture for the sqly project:
 
 ### filesql session integration
 
-sqly reads files through the [filesql](https://github.com/nao1215/filesql) library and then runs SQL on a single shared in-memory SQLite database that lives for the whole session.
+sqly reads files through the [filesql](https://github.com/nao1215/filesql) library and runs SQL on a single shared in-memory SQLite database that lives for the whole session.
 
-On import, `filesql.OpenContext` loads the files into a temporary SQLite database with automatic column-type detection. sqly then copies each table into the shared database by executing the exact `CREATE TABLE` statement taken from filesql's `sqlite_master` and bulk-inserting the rows, and closes the temporary database. Copying the verbatim `CREATE TABLE` keeps filesql's detected types, so the shared database has full schema fidelity.
+On import, sqly streams the files directly into the shared database with `filesql.LoadInto`, which loads each file as a table (with filesql's automatic column-type detection) and replaces a same-named table so re-import is last-wins. Because the data lands in the session database in one pass, there is no separate filesql database and no table-by-table row copy. The pool is pinned to one connection, since SQLite `:memory:` is private per connection.
 
-sqly keeps this synchronization boundary rather than querying a filesql-owned database directly because it needs one long-lived session that all commands share: command history, repeated imports, cross-file JOINs, and last-wins overwrite on re-import. Schema fidelity lets features build on the upstream schema without format-specific workarounds: `.schema` and `.describe` read the shared database's real `sqlite_master` and `PRAGMA table_info`, and round-trip export and additional formats reuse filesql at import time.
+Earlier sqly opened a temporary filesql database and copied every table into the shared one. That preserved schema fidelity but inserted every row twice and held the data in memory twice; for a 100k-row CSV that made imports about 2.5x slower and roughly doubled peak memory. `LoadInto` (filesql v0.13.0) removes that boundary: the shared database still backs one long-lived session, so command history, repeated imports, cross-file JOINs, last-wins overwrite, `.schema`/`.describe` (real `sqlite_master` and `PRAGMA table_info`), `--inspect`, and export keep working, now without the copy overhead.
 
 ```text
-files --> filesql.OpenContext --> temporary SQLite DB
-                                        |
-                       copy CREATE TABLE + rows (verbatim schema)
-                                        v
-                              shared in-memory SQLite DB --> SQL, .schema, .describe, .dump
+files --> filesql.LoadInto --> shared in-memory SQLite DB --> SQL, .schema, .describe, --inspect, .dump
 ```
 
-ACH and Fedwire imports have a deterministic cleanup path. `filesql.OpenContext` registers ACH/Fedwire table sets in global registries used for round-trip dump. sqly copies the data into the shared database and does not retain those registries, so after each import it unregisters them, scoped to the base names of the `.ach`/`.fed` files, using `defer` so cleanup runs even on partial failure. This keeps long-running shells leak-free and makes repeated imports produce identical tables.
+ACH and Fedwire imports have a deterministic cleanup path. Loading registers ACH/Fedwire table sets in global registries used for round-trip dump. sqly holds the data in the shared database and does not retain those registries, so after each import it unregisters them, scoped to the base names of the `.ach`/`.fed` files, using `defer` so cleanup runs even on partial failure. This keeps long-running shells leak-free and makes repeated imports produce identical tables.
 
 ### Directory structure
 

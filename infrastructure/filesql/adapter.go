@@ -10,15 +10,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
 )
-
-var validTableName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 const (
 	opQuery      = "query"
@@ -58,21 +55,14 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	}
 
 	// Identify ACH/Fedwire base names from input paths (not table names) so we
-	// can clean up the filesql global registry. We must do this before OpenContext
-	// and defer the cleanup so it runs even if table copying fails.
+	// can clean up the filesql global registry. We must do this before loading
+	// and defer the cleanup so it runs even if loading fails.
 	achBaseNames, wireBaseNames := collectRegistryBaseNames(filePaths)
 
-	// Use filesql to load files into temporary database, then copy to shared database
-	tmpDB, err := filesql.OpenContext(ctx, filePaths...)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tmpDB.Close() }()
-
 	// Clean up filesql global registries for ACH/Fedwire TableSets.
-	// filesql.OpenContext registers TableSets in global maps for DumpACH/DumpFedWire,
-	// but sqly copies data to its own shared DB and does not use round-trip export.
-	// Using defer ensures cleanup even if table copying fails partway through.
+	// Loading registers TableSets in global maps for DumpACH/DumpFedWire, but sqly
+	// holds the data in its own session DB and does not use round-trip export.
+	// Using defer ensures cleanup even if loading fails partway through.
 	defer func() {
 		for _, baseName := range achBaseNames {
 			filesql.UnregisterACHTableSet(baseName)
@@ -82,31 +72,11 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}()
 
-	// Get actual table names from the temporary database created by filesql
-	rows, err := tmpDB.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-	if err != nil {
-		return fmt.Errorf("failed to get table names from filesql database: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var tableNames []string
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			return fmt.Errorf("failed to scan table name: %w", err)
-		}
-		tableNames = append(tableNames, tableName)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating table names: %w", err)
-	}
-
-	// Copy tables from temporary filesql database to shared database
-	for _, tableName := range tableNames {
-		if err := f.copyTableToSharedDB(ctx, tmpDB, tableName); err != nil {
-			return fmt.Errorf("failed to copy table %s: %w", tableName, err)
-		}
+	// Stream the files directly into the shared session database. filesql's
+	// LoadInto replaces a same-named table (last-wins), matching sqly's import
+	// semantics, and avoids the previous temporary-database-plus-row-copy path.
+	if err := filesql.LoadInto(ctx, f.sharedDB, filePaths...); err != nil {
+		return err
 	}
 
 	return nil
@@ -166,164 +136,6 @@ func addACHOrWireBaseName(path string, seen map[string]bool, achOut, wireOut *[]
 			*wireOut = append(*wireOut, baseName)
 		}
 	}
-}
-
-// copyTableToSharedDB copies a table from source database to shared database using bulk insert optimization
-func (f *FileSQLAdapter) copyTableToSharedDB(ctx context.Context, sourceDB *sql.DB, tableName string) error {
-	if !validTableName.MatchString(tableName) {
-		return fmt.Errorf("invalid table name: %q", tableName)
-	}
-
-	// Drop existing table if it exists to avoid conflicts
-	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query
-	dropSQL := "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName) // #nosec G202
-	if _, err := f.sharedDB.ExecContext(ctx, dropSQL); err != nil {
-		return fmt.Errorf("failed to drop existing table %s: %w", tableName, err)
-	}
-
-	// Use manual approach to preserve filesql's automatic type detection
-	return f.copyTableManually(ctx, sourceDB, tableName)
-}
-
-// copyTableManually performs manual table copy with proper type preservation
-func (f *FileSQLAdapter) copyTableManually(ctx context.Context, sourceDB *sql.DB, tableName string) error {
-	if !validTableName.MatchString(tableName) {
-		return fmt.Errorf("invalid table name: %q", tableName)
-	}
-	// Get the original CREATE TABLE statement from filesql database
-	var createTableSQL string
-	err := sourceDB.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&createTableSQL)
-	if err != nil {
-		return fmt.Errorf("failed to get table schema for %s: %w", tableName, err)
-	}
-
-	// Create table with same schema in shared database (preserves filesql's type detection)
-	if _, err := f.sharedDB.ExecContext(ctx, createTableSQL); err != nil {
-		return fmt.Errorf("failed to create table %s: %w", tableName, err)
-	}
-
-	// Get column names for data copying
-	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query, go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
-	rows, err := sourceDB.QueryContext(ctx, "PRAGMA table_info("+QuoteIdentifier(tableName)+")")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var columns []string
-	for rows.Next() {
-		var cid int
-		var name, dataType string
-		var notNull int
-		var defaultValue sql.NullString
-		var pk int
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return err
-		}
-		// Validate column name is not empty or whitespace-only
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("table %s contains empty or whitespace-only column name at position %d", tableName, cid)
-		}
-		columns = append(columns, name)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("failed to read columns for table %s: %w", tableName, err)
-	}
-
-	if len(columns) == 0 {
-		return fmt.Errorf("table %s has no columns", tableName)
-	}
-
-	// Quote column names to handle reserved keywords and special characters
-	quotedColumns := make([]string, len(columns))
-	for i, col := range columns {
-		quotedColumns[i] = QuoteIdentifier(col)
-	}
-	quotedTableName := QuoteIdentifier(tableName)
-
-	// Begin transaction for bulk insert optimization
-	tx, err := f.sharedDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }() // Will be no-op if tx.Commit() succeeds
-
-	// Copy data from source to shared database
-	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query
-	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(quotedColumns, ", "), quotedTableName) // #nosec G201
-	// nosemgrep: go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
-	sourceRows, err := sourceDB.QueryContext(ctx, selectSQL)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = sourceRows.Close() }()
-
-	// Prepare insert statement with transaction
-	placeholders := make([]string, len(columns))
-	for i := range placeholders {
-		placeholders[i] = "?"
-	}
-	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", // #nosec G201
-		quotedTableName, strings.Join(quotedColumns, ", "), strings.Join(placeholders, ", "))
-	stmt, err := tx.PrepareContext(ctx, insertSQL)
-	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %w", err)
-	}
-	defer func() { _ = stmt.Close() }()
-
-	// Bulk insert with batching for optimal performance
-	const batchSize = 1000
-	rowCount := 0
-
-	for sourceRows.Next() {
-		values := make([]any, len(columns))
-		valuePtrs := make([]any, len(columns))
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		if err := sourceRows.Scan(valuePtrs...); err != nil {
-			return fmt.Errorf("failed to scan row %d: %w", rowCount+1, err)
-		}
-
-		if _, err := stmt.ExecContext(ctx, values...); err != nil {
-			return fmt.Errorf("failed to insert row %d: %w", rowCount+1, err)
-		}
-
-		rowCount++
-
-		// Commit batch every batchSize rows for very large datasets
-		if rowCount%batchSize == 0 {
-			if err := tx.Commit(); err != nil {
-				return fmt.Errorf("failed to commit batch at row %d: %w", rowCount, err)
-			}
-
-			// Begin new transaction for next batch
-			if tx, err = f.sharedDB.BeginTx(ctx, nil); err != nil {
-				return fmt.Errorf("failed to begin new transaction at row %d: %w", rowCount, err)
-			}
-			defer func() { _ = tx.Rollback() }()
-
-			// Re-prepare statement for new transaction
-			if stmt, err = tx.PrepareContext(ctx, insertSQL); err != nil {
-				return fmt.Errorf("failed to re-prepare statement at row %d: %w", rowCount, err)
-			}
-			defer func() { _ = stmt.Close() }()
-		}
-	}
-
-	// Check for errors during iteration
-	if err := sourceRows.Err(); err != nil {
-		return fmt.Errorf("error during row iteration: %w", err)
-	}
-
-	// Commit final transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit final transaction: %w", err)
-	}
-
-	return nil
 }
 
 // Query executes SQL query and returns Table model
