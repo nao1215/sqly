@@ -511,6 +511,18 @@ func captureStdout(t *testing.T, f func()) string {
 	return buf.String()
 }
 
+// captureStderr captures what f writes to config.Stderr. File-output status
+// messages (--output, .dump, .save) go to stderr to keep stdout data-only.
+func captureStderr(t *testing.T, f func()) string {
+	t.Helper()
+	backup := config.Stderr
+	defer func() { config.Stderr = backup }()
+	var buf bytes.Buffer
+	config.Stderr = &buf
+	f()
+	return buf.String()
+}
+
 // TestCommandList_tablesCommand_dependsOnMetadataUsecase verifies that .tables
 // is satisfied by a MetadataUsecase mock alone: given two table names, it lists
 // both.
@@ -628,15 +640,16 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 		export:   exporter,
 	})
 
-	out := captureStdout(t, func() {
+	// The dump status line is control-plane output and goes to stderr (#309).
+	out := captureStderr(t, func() {
 		if err := NewCommands().dumpCommand(context.Background(), s, []string{"users", outputPath}); err != nil {
 			t.Fatalf("dumpCommand returned error: %v", err)
 		}
 	})
 	if !strings.Contains(out, "dump `") || !strings.Contains(out, "table to") {
-		t.Fatalf("output %q does not describe dump execution", out)
+		t.Fatalf("stderr %q does not describe dump execution", out)
 	}
 	if !strings.Contains(out, normalizedPath) {
-		t.Fatalf("output %q does not include normalized csv path %q", out, normalizedPath)
+		t.Fatalf("stderr %q does not include normalized csv path %q", out, normalizedPath)
 	}
 }

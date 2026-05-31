@@ -66,7 +66,7 @@ Describe 'sqly metamorphic relations'
     check_roundtrip() {
       dir=$(mktemp -d)
       out="$dir/rt.csv"
-      printf '.dump user %s\n' "$out" | sqly testdata/user.csv >/dev/null
+      printf '.dump user %s\n' "$out" | sqly testdata/user.csv >/dev/null 2>&1
       original=$(sqly --csv --sql "SELECT * FROM user ORDER BY identifier" testdata/user.csv)
       reimported=$(sqly --csv --sql "SELECT * FROM rt ORDER BY identifier" "$out")
       rm -rf "$dir"

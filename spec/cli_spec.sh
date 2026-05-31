@@ -52,7 +52,7 @@ Describe 'sqly CLI surface'
       export out_dir
       When run sqly --json --output "$out_dir/result.json" --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv
       The status should be success
-      The output should include 'result.json'
+      The stderr should include 'result.json'
       The path "$out_dir/result.json" should be file
       The contents of file "$out_dir/result.json" should include '"user_name":"booker12"'
       rm -rf "$out_dir"
@@ -65,6 +65,7 @@ Describe 'sqly CLI surface'
       export out_dir
       When run sqly --json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.json"
       The status should be success
+      The stderr should include 'result.json'
       The output should not include 'path does not exist'
       The path "$out_dir/result.json" should be file
       The contents of file "$out_dir/result.json" should include '"user_name":"booker12"'

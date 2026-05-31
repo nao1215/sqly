@@ -22,7 +22,8 @@ Describe 'sqly write-back (#261)'
   It 'writes to --save-dir without modifying the source'
     When run sqly --sql "UPDATE u SET first_name = 'CHANGED' WHERE identifier = 1" "$WORK/u.csv" --save-dir "$WORK/out"
     The status should be success
-    The output should include 'Saved u to'
+    The output should include 'affected'
+    The stderr should include 'Saved u to'
     The contents of file "$WORK/u.csv" should not include 'CHANGED'
     The contents of file "$WORK/out/u.csv" should include 'CHANGED'
   End
@@ -37,13 +38,14 @@ Describe 'sqly write-back (#261)'
   It 'overwrites the source in place with --save --force'
     When run sqly --sql "DELETE FROM u WHERE identifier > 1" "$WORK/u.csv" --save --force
     The status should be success
-    The output should include 'Saved u to'
+    The output should include 'affected'
+    The stderr should include 'Saved u to'
     # Re-import the rewritten file: only one row remains.
     rm -rf "$WORK/out"
   End
 
   It 're-imports a file rewritten in place (round-trip)'
-    sqly --sql "DELETE FROM u WHERE identifier > 1" "$WORK/u.csv" --save --force
+    sqly --sql "DELETE FROM u WHERE identifier > 1" "$WORK/u.csv" --save --force >/dev/null 2>&1
     When run sqly --csv --sql "SELECT COUNT(*) AS c FROM u" "$WORK/u.csv"
     The status should be success
     The line 2 should equal '1'
@@ -51,7 +53,7 @@ Describe 'sqly write-back (#261)'
 
   It 'preserves gzip compression on in-place save'
     gzip -c testdata/user.csv > "$WORK/c.csv.gz"
-    sqly --sql "UPDATE c SET first_name = 'GZ' WHERE identifier = 1" "$WORK/c.csv.gz" --save --force
+    sqly --sql "UPDATE c SET first_name = 'GZ' WHERE identifier = 1" "$WORK/c.csv.gz" --save --force >/dev/null 2>&1
     When run sqly --csv --sql "SELECT first_name FROM c WHERE identifier = 1" "$WORK/c.csv.gz"
     The status should be success
     The line 2 should equal 'GZ'
@@ -64,7 +66,8 @@ Describe 'sqly write-back (#261)'
     End
     When run sqly "$WORK/u.csv"
     The status should be success
-    The output should include 'Saved u to'
+    The output should include 'affected'
+    The stderr should include 'Saved u to'
     The contents of file "$WORK/u.csv" should include 'BATCH'
   End
 End

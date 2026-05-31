@@ -63,7 +63,9 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
 	}
-	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
+	// .dump writes data to a file, so its status line is control-plane output
+	// and goes to stderr, keeping stdout free of non-data noise.
+	fmt.Fprintf(config.Stderr, "dump `%s` table to %s (mode=%s)\n",
 		color.CyanString(argv[0]), color.HiCyanString(filePath), exportFmt.String())
 
 	return nil

@@ -19,7 +19,7 @@ Describe 'sqly excel export (#296)'
   It 'writes a non-executable .xlsx with --output'
     When run sqly --excel --output "$OUT_DIR/out.xlsx" --sql "SELECT * FROM user LIMIT 1" testdata/user.csv
     The status should be success
-    The output should include 'output mode=excel'
+    The stderr should include 'output mode=excel'
     The path "$OUT_DIR/out.xlsx" should be file
     The path "$OUT_DIR/out.xlsx" should not be executable
   End
@@ -31,8 +31,7 @@ Describe 'sqly excel export (#296)'
     End
     When run sqly testdata/user.csv
     The status should be success
-    The output should include 'mode=excel'
-    The stderr should include 'Change output mode'
+    The stderr should include 'mode=excel'
     The path "$OUT_DIR/dump.xlsx" should be file
     The path "$OUT_DIR/dump.xlsx" should not be executable
   End

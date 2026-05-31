@@ -49,7 +49,7 @@ Describe 'sqly parquet export'
       export out_dir
       When run sqly --parquet --output "$out_dir/q.parquet" --sql "SELECT user_name FROM user LIMIT 2" testdata/user.csv
       The status should be success
-      The output should include 'q.parquet'
+      The stderr should include 'q.parquet'
       The path "$out_dir/q.parquet" should be file
       rm -rf "$out_dir"
     End

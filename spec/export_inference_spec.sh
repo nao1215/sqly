@@ -14,7 +14,7 @@ Describe 'sqly export format inference (#260)'
       export out_dir
       When run sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.parquet"
       The status should be success
-      The output should include 'output mode=parquet'
+      The stderr should include 'output mode=parquet'
       The path "$out_dir/result.parquet" should be file
       rm -rf "$out_dir"
     End
@@ -24,7 +24,7 @@ Describe 'sqly export format inference (#260)'
       export out_dir
       When run sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.ndjson.gz"
       The status should be success
-      The output should include 'output mode=ndjson'
+      The stderr should include 'output mode=ndjson'
       The path "$out_dir/result.ndjson.gz" should be file
       The contents of file "$out_dir/result.ndjson.gz" should not include 'booker12'
       rm -rf "$out_dir"
@@ -34,7 +34,7 @@ Describe 'sqly export format inference (#260)'
     It 're-imports a gzip-compressed csv it wrote'
       out_dir=$(mktemp -d)
       export out_dir
-      sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.csv.gz"
+      sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.csv.gz" >/dev/null 2>&1
       When run sqly --csv --sql "SELECT user_name FROM result LIMIT 1" "$out_dir/result.csv.gz"
       The status should be success
       The line 1 should equal 'user_name'
@@ -49,7 +49,7 @@ Describe 'sqly export format inference (#260)'
       export out_dir
       When run sqly --sql "SELECT user_name FROM user LIMIT 1" testdata/user.csv --output "$out_dir/out.unknown"
       The status should be success
-      The output should include "$out_dir/out.unknown"
+      The stderr should include "$out_dir/out.unknown"
       The path "$out_dir/out.unknown" should be file
       The path "$out_dir/out.csv" should not be exist
       rm -rf "$out_dir"
@@ -119,7 +119,7 @@ Describe 'sqly export format inference (#260)'
       End
       When run sqly testdata/user.csv
       The status should be success
-      The output should include 'mode=tsv'
+      The stderr should include 'mode=tsv'
       The path "$out_dir/dump.tsv" should be file
       rm -rf "$out_dir"
     End
@@ -131,7 +131,7 @@ Describe 'sqly export format inference (#260)'
       export out_dir
       When run sqly --json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.json"
       The status should be success
-      The output should include 'output mode=json'
+      The stderr should include 'output mode=json'
       The path "$out_dir/result.json" should be file
       The contents of file "$out_dir/result.json" should include '"user_name":"booker12"'
       rm -rf "$out_dir"
