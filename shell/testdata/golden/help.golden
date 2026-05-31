@@ -30,6 +30,9 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -s, --sql string          sql query you want to execute
   -o, --output string       destination path for SQL results specified in --sql option
   -i, --inspect             print a JSON report of imported tables (schema, row counts, sample rows) and exit
+      --save                after the run, write each table back over its source file (requires --force)
+      --save-dir string     after the run, write each table into this directory (originals untouched)
+      --force               allow --save to overwrite source files in place
   -h, --help                print help message
   -v, --version             print sqly version
 

@@ -44,6 +44,15 @@ type Arg struct {
 	// imported tables (names, source mapping, columns, row counts, and sample
 	// rows) and exits without starting the shell.
 	InspectFlag bool
+	// SaveInPlace, when true, writes each table back over its source file after
+	// the run (for --save). It overwrites source files, so it requires Force.
+	SaveInPlace bool
+	// SaveDir, when non-empty, writes each table into this directory after the
+	// run (for --save-dir), preserving each source's format and compression and
+	// leaving the original source files untouched.
+	SaveDir string
+	// Force allows the destructive in-place overwrite of SaveInPlace.
+	Force bool
 	// Usage message
 	Usage string
 	// SheetName is excel sheet name that is imported into the DB.
@@ -102,6 +111,9 @@ func NewArg(args []string) (*Arg, error) {
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
+	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
+	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
+	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print sqly version")
 	if err := flag.Parse(args[1:]); err != nil {
@@ -116,6 +128,7 @@ func NewArg(args []string) (*Arg, error) {
 	arg.StdinFormat = *stdinFormat
 	arg.StdinTableName = *stdinName
 	arg.Query = *query
+	arg.SaveDir = *saveDir
 
 	return arg, nil
 }

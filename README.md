@@ -122,6 +122,16 @@ $ sqly --inspect testdata/user.csv
 }
 ```
 
+### Write changes back to files: --save and --save-dir
+A session is in-memory only by default: `UPDATE`/`INSERT`/`DELETE` change the loaded tables but never touch the files. Persist changes with explicit, opt-in flags. `--save-dir DIR` writes each table into DIR after the run, preserving each source's format, compression, and file name, and leaves the originals untouched. `--save` overwrites the source files in place and requires `--force`. In the interactive shell, `.save DIR` and `.save --force` do the same.
+
+```shell
+$ sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out testdata/user.csv
+$ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force testdata/user.csv
+```
+
+Only tables that map one to one to a single csv, tsv, ltsv, or parquet source are written, with the source's compression (for example `.csv.gz`) preserved. Tables created by SQL, tables from a directory import, and multi-table sources (Excel, ACH, Fedwire) are rejected with a clear error before anything is written.
+
 ### Batch mode: pipe commands via stdin
 When standard input is not a terminal (piped or redirected), sqly reads SQL statements and shell commands from stdin instead of starting the interactive shell. SQL statements end at a top-level `;` and may span multiple lines (separate multiple statements with `;`); helper commands such as `.tables` are single-line. A single trailing statement without `;` still runs. A failed statement makes sqly exit non-zero, so batch runs are scriptable.
 

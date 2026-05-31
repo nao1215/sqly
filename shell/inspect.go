@@ -95,7 +95,7 @@ func (s *Shell) inspectTable(ctx context.Context, name string) (inspectTable, er
 
 	return inspectTable{
 		Name:       name,
-		Source:     s.inspectSources[name],
+		Source:     s.tableSources[name],
 		RowCount:   rowCount,
 		Columns:    columns,
 		SampleRows: sample,

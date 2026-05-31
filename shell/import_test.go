@@ -145,6 +145,8 @@ func TestShell_importFile_excelSheetFiltering_dependsOnImportAndQueryUsecases(t 
 
 	gomock.InOrder(
 		importer.EXPECT().IsSupportedFile(filePath).Return(true),
+		// Source tracking records the table-to-file mapping with a before/after diff.
+		importer.EXPECT().GetTableNames(gomock.Any()).Return(nil, nil),
 		importer.EXPECT().LoadFiles(gomock.Any(), filePath).Return(nil),
 		importer.EXPECT().IsExcelFile(filePath).Return(true),
 		importer.EXPECT().GetTableNameFromFilePath(filePath).Return("report"),
@@ -155,6 +157,9 @@ func TestShell_importFile_excelSheetFiltering_dependsOnImportAndQueryUsecases(t 
 		importer.EXPECT().SanitizeForSQL("Summary").Return("Summary"),
 		importer.EXPECT().QuoteIdentifier("report_Details").Return(`"report_Details"`),
 		query.EXPECT().Exec(gomock.Any(), `DROP TABLE IF EXISTS "report_Details"`).Return(int64(0), nil),
+		importer.EXPECT().GetTableNames(gomock.Any()).Return([]*model.Table{
+			model.NewTable("report_Summary", nil, nil),
+		}, nil),
 	)
 
 	s := newBoundaryTestShell(t, Usecases{

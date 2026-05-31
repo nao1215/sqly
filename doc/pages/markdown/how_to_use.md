@@ -37,6 +37,9 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
+      --save                after the run, write each table back over its source file (requires --force)
+      --save-dir string     after the run, write each table into this directory (originals untouched)
+      --force               allow --save to overwrite source files in place
   -h, --help            print help message
   -v, --version         print sqly version
 
@@ -91,6 +94,26 @@ $ sqly --inspect testdata/user.csv
 ```
 
 Multi-table sources map several tables to one source path: Excel sheets and ACH/Fedwire files.
+
+### Write changes back to files: --save and --save-dir
+
+By default a session is in-memory only: DML such as `UPDATE`, `INSERT`, and `DELETE` changes the loaded tables but never touches the files. Persist changes with explicit, opt-in flags.
+
+`--save-dir DIR` writes each table into DIR after the run, preserving each source's format and compression and the source file name. The original files are not modified.
+
+```shell
+$ sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out testdata/user.csv
+```
+
+`--save` overwrites the source files in place. Because it is destructive, it requires `--force`.
+
+```shell
+$ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force testdata/user.csv
+```
+
+In the interactive shell, `.save DIR` writes to a directory and `.save --force` overwrites the sources.
+
+The save flags apply after `--sql` and batch runs. Only tables that map one to one to a single csv, tsv, ltsv, or parquet source are written, and the source's compression (for example `.csv.gz`) is preserved. Tables created by SQL, tables imported from a directory, and multi-table sources (Excel, ACH, Fedwire) are rejected with a clear error before anything is written, so a session is never partially saved.
 
 ### Batch mode: pipe commands via stdin
 

@@ -170,9 +170,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 	remainingNames := diffTableNames(tablesNow, existingTables)
 
-	if s.argument.InspectFlag {
-		s.recordInspectSources(remainingNames, displayPath)
-	}
+	s.recordTableSources(remainingNames, displayPath)
 
 	fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
 	return true, nil
@@ -184,17 +182,13 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
 	}
 
-	// Capture which tables this file creates so --inspect can map them to their
-	// source. The before/after diff is only computed when inspecting, so normal
-	// imports keep their single-load cost.
-	var existingTables map[string]struct{}
-	if s.argument.InspectFlag {
-		before, err := s.usecases.importer.GetTableNames(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get table names before importing %s: %w", displayPath, err)
-		}
-		existingTables = tableNameSet(before)
+	// Capture which tables this file creates so --inspect and write-back (.save)
+	// can map them back to their source path.
+	before, err := s.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names before importing %s: %w", displayPath, err)
 	}
+	existingTables := tableNameSet(before)
 
 	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
@@ -210,25 +204,25 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 		}
 	}
 
-	if s.argument.InspectFlag {
-		after, err := s.usecases.importer.GetTableNames(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
-		}
-		s.recordInspectSources(diffTableNames(after, existingTables), displayPath)
+	after, err := s.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
 	}
+	s.recordTableSources(diffTableNames(after, existingTables), displayPath)
 
 	return nil
 }
 
-// recordInspectSources remembers which source path produced each table name so
-// the --inspect report can show the source-to-table mapping.
-func (s *Shell) recordInspectSources(tableNames []string, source string) {
-	if s.inspectSources == nil {
-		s.inspectSources = make(map[string]string)
+// recordTableSources remembers which source path produced each table name, so
+// the --inspect report and write-back (.save) can map a table back to its
+// source. For directory imports the source is the directory; write-back rejects
+// those because it cannot tell which file in the directory owns the table.
+func (s *Shell) recordTableSources(tableNames []string, source string) {
+	if s.tableSources == nil {
+		s.tableSources = make(map[string]string)
 	}
 	for _, name := range tableNames {
-		s.inspectSources[name] = source
+		s.tableSources[name] = source
 	}
 }
 
