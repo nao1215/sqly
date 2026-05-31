@@ -128,6 +128,29 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("user set --stdin and --stdin-name options", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", "piped"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.StdinFormat != "csv" {
+			t.Errorf("StdinFormat = %q, want csv", arg.StdinFormat)
+		}
+		if arg.StdinTableName != "piped" {
+			t.Errorf("StdinTableName = %q, want piped", arg.StdinTableName)
+		}
+	})
+
+	t.Run("stdin table name defaults to stdin", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--stdin", "csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.StdinTableName != "stdin" {
+			t.Errorf("StdinTableName = %q, want stdin", arg.StdinTableName)
+		}
+	})
+
 	t.Run("default print mode", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly"})
 		if err != nil {

@@ -123,6 +123,21 @@ $ printf '.tables\nSELECT COUNT(*) FROM user\n' | sqly testdata/user.csv
 +----------+
 ```
 
+### Pipe data into sqly: --stdin option
+By default piped stdin is read as SQL and shell commands (batch mode above). Use `--stdin <format>` to treat stdin as an input dataset instead. The format is given explicitly (`csv`, `tsv`, `ltsv`, `json`, or `jsonl`) because a pipe has no filename to detect it from. The table defaults to `stdin`; override it with `--stdin-name`. Piped data can be joined with file and directory arguments.
+
+```shell
+$ cat testdata/user.csv | sqly --stdin csv --sql "SELECT user_name FROM stdin LIMIT 1"
++-----------+
+| user_name |
++-----------+
+| booker12  |
++-----------+
+
+# Join piped stdin with a file
+$ cat testdata/user.csv | sqly --stdin csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" testdata/identifier.csv
+```
+
 ### Directory import
 You can import entire directories containing supported files. The sqly automatically detects all supported files (CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire, including compressed versions) in the directory recursively and imports them:
 

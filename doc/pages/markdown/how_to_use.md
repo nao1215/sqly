@@ -30,6 +30,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -n, --ndjson          change output format to ndjson (default: table)
   -p, --parquet         export results as parquet (export-only; use with --output or .dump)
   -S, --sheet string    excel sheet name you want to import
+      --stdin string    treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
+      --stdin-name string   table name for the --stdin dataset (default "stdin")
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option
   -h, --help            print help message
@@ -59,6 +61,19 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 | jenkins46 | manager   |
 | smith79   | neet      |
 +-----------+-----------+
+```
+
+### Pipe data into sqly: --stdin option
+
+By default piped stdin is read as SQL and helper commands (batch mode). Use `--stdin <format>` to treat stdin as an input dataset instead. The format is given explicitly (`csv`, `tsv`, `ltsv`, `json`, or `jsonl`) because a pipe has no filename to detect it from. The table defaults to `stdin`; override it with `--stdin-name`. Piped data can be joined with file and directory arguments.
+
+```shell
+$ cat testdata/user.csv | sqly --stdin csv --sql "SELECT user_name FROM stdin LIMIT 1"
++-----------+
+| user_name |
++-----------+
+| booker12  |
++-----------+
 ```
 
 ### Change output format
