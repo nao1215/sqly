@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+* Excel Export Permissions: Exported `.xlsx` files are now created without executable bits (mode 0600), matching CSV, TSV, LTSV, and Parquet outputs. excelize's `SaveAs` created them as 0777, so they were left executable.
+
 ### New Features
 * Inspect Sample Control: `--inspect-sample N` sets how many sample rows `--inspect` includes per table (default 5). `--inspect-sample 0` produces a schema-only report, which keeps the output small for wide or multi-table sources such as Fedwire.
 * SQL File Input: `--sql-file PATH` runs SQL loaded from a file for non-interactive runs. Because the query no longer comes from stdin, `--stdin <format>` can pipe a dataset while the query comes from the file (`cat data.csv | sqly --stdin csv --sql-file query.sql`). The file supports multiline statements and multiple statements separated by `;`, using the same splitting rules as batch stdin mode, and a leading header comment is allowed. It cannot be combined with `--sql`, and missing, unreadable, or empty files fail with a clear error.
