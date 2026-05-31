@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.18.0](https://github.com/nao1215/sqly/compare/v0.17.0...v0.18.0) (2026-05-31)
 
 ### Bug Fixes
 * Inspect Per-File Source For Directories: `--inspect` now reports each table's real source file for directory imports, instead of the directory path for every table, restoring file-level provenance. Tables whose names cannot be matched to a single file fall back to the directory path, and directory-imported tables are still rejected by write-back.
