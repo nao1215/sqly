@@ -118,6 +118,17 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		}
 		return table, 0, nil
 	case si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]):
+		// A RETURNING clause turns INSERT/UPDATE/DELETE into a rowset-producing
+		// statement. Run it through the query path so the returned rows are
+		// captured and can be printed or exported, instead of being discarded as a
+		// bare affected-row count. Ref #363, #368.
+		if hasReturningClause(statement) {
+			table, err := si.Query(ctx, statement)
+			if err != nil {
+				return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
+			}
+			return table, 0, nil
+		}
 		affectedRows, err := si.r.Exec(ctx, statement)
 		if err != nil {
 			return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))

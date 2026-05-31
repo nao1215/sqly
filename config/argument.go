@@ -93,6 +93,32 @@ type outputFlag struct {
 	parquet  bool
 }
 
+// selectedNames returns the names of the output mode flags that are set. More
+// than one means the user passed conflicting mode flags, which NewArg rejects
+// instead of silently applying a precedence. Ref #365.
+func (of outputFlag) selectedNames() []string {
+	flags := []struct {
+		name string
+		set  bool
+	}{
+		{"--csv", of.csv},
+		{"--tsv", of.tsv},
+		{"--ltsv", of.ltsv},
+		{"--excel", of.excel},
+		{"--markdown", of.markdown},
+		{"--json", of.json},
+		{"--ndjson", of.ndjson},
+		{"--parquet", of.parquet},
+	}
+	var names []string
+	for _, f := range flags {
+		if f.set {
+			names = append(names, f.name)
+		}
+	}
+	return names
+}
+
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 // NOTE: Adding options directly to the pflag package results in a double
 // option definition error when NewArg() is called multiple times.
@@ -168,6 +194,13 @@ func NewArg(args []string) (*Arg, error) {
 		if err := validateStdinName(*stdinName); err != nil {
 			return nil, err
 		}
+	}
+
+	// Reject conflicting output mode flags (e.g. --csv --json) instead of
+	// silently applying an internal precedence, which would discard the other
+	// flags without warning. Ref #365.
+	if names := oFlag.selectedNames(); len(names) > 1 {
+		return nil, fmt.Errorf("conflicting output mode flags: %s; choose one", strings.Join(names, ", "))
 	}
 
 	arg.Usage = usage(flag)
@@ -256,7 +289,7 @@ func newOutput(filePath string, of outputFlag) *Output {
 
 // NeedsOutputToFile whether the data needs to be output to the file
 func (a *Arg) NeedsOutputToFile() bool {
-	return a.Output.FilePath != "" && a.Query != ""
+	return a != nil && a.Output != nil && a.Output.FilePath != "" && a.Query != ""
 }
 
 // usage return usage message.

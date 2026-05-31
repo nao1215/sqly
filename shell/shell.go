@@ -687,6 +687,12 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		return err
 	}
 	if table == nil {
+		// --output is only meaningful for a statement that produces a rowset. An
+		// INSERT/UPDATE/DELETE without RETURNING produces only an affected-row
+		// count, so reject --output instead of silently ignoring it. Ref #364.
+		if s.argument.NeedsOutputToFile() {
+			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
+		}
 		fmt.Fprintf(config.Stdout, "affected is %d row(s)\n", affectedRows)
 		return nil
 	}

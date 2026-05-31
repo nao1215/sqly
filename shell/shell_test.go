@@ -2652,6 +2652,60 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 	}
 }
 
+func TestShellRun_OutputRejectedForNonRowsetDML(t *testing.T) {
+	// Regression for #364: --output for an UPDATE/DELETE without RETURNING must be
+	// rejected, not silently ignored, and no output file is created.
+	work := t.TempDir()
+	src := filepath.Join(work, "u.csv")
+	copyTestFile(t, "user.csv", src)
+	out := filepath.Join(work, "out.csv")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "UPDATE u SET first_name='X' WHERE identifier=1", "--output", out, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	runErr := shell.Run(context.Background())
+	if runErr == nil {
+		t.Fatal("Run returned nil for --output with a non-rowset UPDATE, want error")
+	}
+	if !strings.Contains(runErr.Error(), "--output") {
+		t.Fatalf("error = %q, want it to mention --output", runErr.Error())
+	}
+	if _, statErr := os.Stat(out); statErr == nil {
+		t.Fatalf("an output file %q was created for a non-rowset DML", out)
+	}
+}
+
+func TestShellRun_OutputExportsReturningRows(t *testing.T) {
+	// Regression for #368: a DML statement with RETURNING must create the output
+	// file with the returned rows.
+	work := t.TempDir()
+	src := filepath.Join(work, "u.csv")
+	copyTestFile(t, "user.csv", src)
+	out := filepath.Join(work, "out.csv")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name", "--output", out, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr != nil {
+		t.Fatalf("Run with RETURNING and --output failed: %v", runErr)
+	}
+	data, statErr := os.ReadFile(out)
+	if statErr != nil {
+		t.Fatalf("expected output file %q to be created: %v", out, statErr)
+	}
+	if !strings.Contains(string(data), "X") {
+		t.Errorf("output file does not contain the returned row: %q", data)
+	}
+}
+
 func TestHelperCommandsRejectExtraArgs(t *testing.T) {
 	// Regression for #327: helper commands must reject unexpected extra
 	// arguments instead of silently ignoring them.

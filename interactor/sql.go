@@ -103,6 +103,85 @@ func contains(list []string, v string) bool {
 	return slices.Contains(list, v)
 }
 
+// hasReturningClause reports whether a DML statement contains a RETURNING
+// keyword outside of string literals, quoted identifiers, and comments. SQLite's
+// RETURNING turns an INSERT/UPDATE/DELETE into a rowset-producing statement, so
+// the caller runs such a statement through the query path. The scan ignores
+// quoted regions so a literal value like 'returning' is not mistaken for the
+// clause.
+func hasReturningClause(stmt string) bool {
+	runes := []rune(stmt)
+	var (
+		inSingle, inDouble            bool
+		inBacktick, inBracket         bool
+		inLineComment, inBlockComment bool
+	)
+	isWordRune := func(r rune) bool {
+		return r == '_' ||
+			(r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9')
+	}
+	for i := 0; i < len(runes); i++ {
+		c := runes[i]
+		switch {
+		case inLineComment:
+			if c == '\n' {
+				inLineComment = false
+			}
+		case inBlockComment:
+			if c == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+		case inSingle:
+			if c == '\'' {
+				inSingle = false
+			}
+		case inDouble:
+			if c == '"' {
+				inDouble = false
+			}
+		case inBacktick:
+			if c == '`' {
+				inBacktick = false
+			}
+		case inBracket:
+			if c == ']' {
+				inBracket = false
+			}
+		default:
+			switch {
+			case c == '\'':
+				inSingle = true
+			case c == '"':
+				inDouble = true
+			case c == '`':
+				inBacktick = true
+			case c == '[':
+				inBracket = true
+			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
+				inLineComment = true
+				i++
+			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
+				inBlockComment = true
+				i++
+			case isWordRune(c):
+				// Read a whole identifier token and compare it to RETURNING, so the
+				// match respects word boundaries (e.g. "RETURNING_AT" does not match).
+				start := i
+				for i+1 < len(runes) && isWordRune(runes[i+1]) {
+					i++
+				}
+				if strings.EqualFold(string(runes[start:i+1]), "RETURNING") {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // trimWordGaps trims extra spaces between words in a string.
 func trimWordGaps(s string) string {
 	return strings.Join(strings.Fields(s), " ")

@@ -327,6 +327,54 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		}
 	})
 
+	t.Run("DML with RETURNING routes to Query and returns rows (#363)", func(t *testing.T) {
+		t.Parallel()
+		for _, statement := range []string{
+			"UPDATE test SET name = 'X' WHERE id = 1 RETURNING id, name",
+			"INSERT INTO test (id, name) VALUES (2, 'Y') RETURNING id",
+			"DELETE FROM test WHERE id = 1 returning id",
+		} {
+			ctrl := gomock.NewController(t)
+			repo := infrastructure.NewMockSQLite3Repository(ctrl)
+			want := model.NewTable("", model.Header{"id"}, []model.Record{{"1"}})
+			// A RETURNING statement must go through Query (which captures the
+			// rowset), never the affected-count-only Exec path.
+			repo.EXPECT().Query(gomock.Any(), statement).Return(want, nil)
+
+			interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
+			got, affected, err := interactor.ExecSQL(context.Background(), statement)
+			if err != nil {
+				t.Fatalf("ExecSQL(%q) error: %v", statement, err)
+			}
+			if got == nil {
+				t.Fatalf("ExecSQL(%q) returned a nil table; RETURNING rows were discarded", statement)
+			}
+			if affected != 0 {
+				t.Errorf("ExecSQL(%q) affected = %d, want 0 for a rowset result", statement, affected)
+			}
+		}
+	})
+
+	t.Run("DML without RETURNING still uses Exec", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		statement := "UPDATE test SET name = 'returning' WHERE id = 1"
+		repo.EXPECT().Exec(gomock.Any(), statement).Return(int64(1), nil)
+
+		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
+		table, affected, err := interactor.ExecSQL(context.Background(), statement)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if table != nil {
+			t.Error("expected a nil table for a non-RETURNING UPDATE")
+		}
+		if affected != 1 {
+			t.Errorf("affected = %d, want 1", affected)
+		}
+	})
+
 	t.Run("execute statement failed", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)

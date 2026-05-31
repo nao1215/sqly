@@ -283,6 +283,24 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("conflicting output mode flags are rejected (#365)", func(t *testing.T) {
+		for _, args := range [][]string{
+			{"sqly", "--csv", "--json", "--sql", "SELECT 1 AS x"},
+			{"sqly", "--tsv", "--json", "--sql", "SELECT 1 AS x"},
+			{"sqly", "--csv", "--tsv", "--ltsv"},
+		} {
+			if _, err := NewArg(args); err == nil {
+				t.Errorf("NewArg(%v) = nil error, want a conflict error", args[1:])
+			}
+		}
+	})
+
+	t.Run("a single output mode flag is accepted (#365)", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--json", "--sql", "SELECT 1 AS x"}); err != nil {
+			t.Errorf("NewArg with a single output mode flag returned an error: %v", err)
+		}
+	})
+
 	t.Run("--inspect sets the inspect flag (#259)", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--inspect", "testdata/user.csv"})
 		if err != nil {
