@@ -9,7 +9,8 @@ var ErrEmptyArg = errors.New("argument is empty")
 // would otherwise be indistinguishable from the flag being absent.
 var errEmptySheet = errors.New("--sheet requires a non-empty sheet name")
 
-// errInvalidStdinName is returned when --stdin-name is empty or contains path
-// separators, which would otherwise produce odd staging file names or escape
-// the temp directory.
-var errInvalidStdinName = errors.New("--stdin-name must be non-empty and must not contain path separators")
+// errInvalidStdinName is returned when --stdin-name is not a valid table
+// identifier (empty, path-like, or containing characters that filesql would
+// sanitize), which would otherwise stage odd files or leave the advertised
+// table name unqueryable.
+var errInvalidStdinName = errors.New("--stdin-name must be a valid table name: letters, digits, and underscores only, not starting with a digit")
