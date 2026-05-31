@@ -20,6 +20,10 @@ var (
 	Stderr = colorable.NewColorableStderr()
 )
 
+// defaultInspectSample is the number of sample rows --inspect includes per
+// table unless --inspect-sample overrides it.
+const defaultInspectSample = 5
+
 // Output is configuration for output data to file.
 type Output struct {
 	// FilePath is output destination path
@@ -44,6 +48,10 @@ type Arg struct {
 	// imported tables (names, source mapping, columns, row counts, and sample
 	// rows) and exits without starting the shell.
 	InspectFlag bool
+	// InspectSample caps how many sample rows each --inspect table includes.
+	// 0 means schema-only (no sample rows), which keeps the report small for
+	// wide or multi-table sources.
+	InspectSample int
 	// SaveInPlace, when true, writes each table back over its source file after
 	// the run (for --save). It overwrites source files, so it requires Force.
 	SaveInPlace bool
@@ -111,6 +119,7 @@ func NewArg(args []string) (*Arg, error) {
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
+	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "rows to include per table in --inspect (0 for schema only)")
 	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
 	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
 	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
@@ -129,6 +138,7 @@ func NewArg(args []string) (*Arg, error) {
 	arg.StdinTableName = *stdinName
 	arg.Query = *query
 	arg.SaveDir = *saveDir
+	arg.InspectSample = *inspectSample
 
 	return arg, nil
 }

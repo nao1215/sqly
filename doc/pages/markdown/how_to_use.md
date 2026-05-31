@@ -37,6 +37,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -s, --sql string      sql query you want to execute
   -o, --output string   destination path for SQL results specified in --sql option
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
+      --inspect-sample int  rows to include per table in --inspect (0 for schema only) (default 5)
       --save                after the run, write each table back over its source file (requires --force)
       --save-dir string     after the run, write each table into this directory (originals untouched)
       --force               allow --save to overwrite source files in place
@@ -94,6 +95,12 @@ $ sqly --inspect testdata/user.csv
 ```
 
 Multi-table sources map several tables to one source path: Excel sheets and ACH/Fedwire files.
+
+`--inspect-sample N` controls how many sample rows each table includes (default 5). Use `--inspect-sample 0` for a schema-only report, which avoids printing a large sample for wide sources such as Fedwire.
+
+```shell
+$ sqly --inspect --inspect-sample 0 testdata/customer-transfer.fed
+```
 
 ### Write changes back to files: --save and --save-dir
 

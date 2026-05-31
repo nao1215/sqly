@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### New Features
+* Inspect Sample Control: `--inspect-sample N` sets how many sample rows `--inspect` includes per table (default 5). `--inspect-sample 0` produces a schema-only report, which keeps the output small for wide or multi-table sources such as Fedwire.
+
 ## [v0.17.0](https://github.com/nao1215/sqly/compare/v0.16.0...v0.17.0) (2026-05-31)
 
 ### Performance
