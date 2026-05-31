@@ -47,6 +47,7 @@ func (s *Shell) runBatch(ctx context.Context) error {
 	}
 
 	var pending strings.Builder
+scan:
 	for scanner.Scan() {
 		line := scanner.Text()
 		// At a statement boundary, a dot-command is a complete single-line
@@ -59,7 +60,7 @@ func (s *Shell) runBatch(ctx context.Context) error {
 			if strings.HasPrefix(trimmed, ".") {
 				run(trimmed)
 				if exited {
-					return nil
+					break scan
 				}
 				continue
 			}
@@ -73,19 +74,19 @@ func (s *Shell) runBatch(ctx context.Context) error {
 		for _, stmt := range stmts {
 			run(stmt)
 			if exited {
-				return nil
+				break scan
 			}
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to read batch input: %w", err)
-	}
 
-	// Execute any trailing statement that was not terminated by ";".
-	if leftover := strings.TrimSpace(pending.String()); leftover != "" {
-		run(leftover)
-		if exited {
-			return nil
+	// On ".exit", stop reading but still report any earlier failure below.
+	if !exited {
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("failed to read batch input: %w", err)
+		}
+		// Execute any trailing statement that was not terminated by ";".
+		if leftover := strings.TrimSpace(pending.String()); leftover != "" {
+			run(leftover)
 		}
 	}
 

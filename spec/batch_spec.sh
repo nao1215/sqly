@@ -47,6 +47,16 @@ Describe 'sqly batch mode (piped stdin)'
     The status should be success
   End
 
+  It 'still exits non-zero when a failure precedes .exit'
+    Data
+      #|SELECT * FROM no_such_table;
+      #|.exit
+    End
+    When run sqly testdata/user.csv
+    The status should be failure
+    The stderr should include 'no_such_table'
+  End
+
   Describe 'multiline statements (#263)'
     It 'runs a multiline SELECT terminated by a semicolon'
       Data

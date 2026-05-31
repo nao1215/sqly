@@ -1903,6 +1903,27 @@ func TestShellRunBatch_ExitStopsEarly(t *testing.T) {
 	}
 }
 
+func TestShellRunBatch_ExitPreservesEarlierFailure(t *testing.T) {
+	// .exit stops processing but must not mask an earlier failure: the process
+	// still exits non-zero so scripted runs detect the error.
+	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("SELECT * FROM no_such_table;\n.exit\n")
+
+	backupStderr := config.Stderr
+	defer func() { config.Stderr = backupStderr }()
+	config.Stderr = &bytes.Buffer{}
+
+	if err := shell.Run(context.Background()); err == nil {
+		t.Fatal("batch Run returned nil after a failure preceding .exit, want non-nil")
+	}
+}
+
 func TestShellRunBatch_QuotedSheetArgument(t *testing.T) {
 	// End-to-end: a quoted --sheet value with a space is parsed as one argument.
 	shell, cleanup, err := newShell(t, []string{"sqly"})
