@@ -182,7 +182,32 @@ func validateStdinName(name string) error {
 	if strings.ContainsAny(name, `/\`) {
 		return errInvalidStdinName
 	}
+	// Require a bare-identifier name so the advertised --stdin-name is the exact
+	// queryable table name. Otherwise filesql sanitizes spaces and dashes (e.g.
+	// "my data" -> "my_data"), leaving the name the user gave unusable. Ref #289.
+	if !isValidTableIdentifier(name) {
+		return errInvalidStdinName
+	}
 	return nil
+}
+
+// isValidTableIdentifier reports whether name is a bare SQL identifier: ASCII
+// letters, digits, and underscores, not starting with a digit. Such a name is
+// imported and queryable verbatim, with no sanitization.
+func isValidTableIdentifier(name string) bool {
+	for i, r := range name {
+		switch {
+		case r == '_':
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return name != ""
 }
 
 // newOutput retur *Output

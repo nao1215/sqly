@@ -232,6 +232,16 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("non-identifier --stdin-name values are rejected (#289)", func(t *testing.T) {
+		// These would be sanitized by filesql, leaving the advertised name
+		// unqueryable, so they are rejected up front.
+		for _, name := range []string{"my data", "2023-data", "a-b", "weird!"} {
+			if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", name}); err == nil {
+				t.Errorf("NewArg accepted non-identifier --stdin-name %q, want error", name)
+			}
+		}
+	})
+
 	t.Run("a normal --stdin-name is accepted (#305)", func(t *testing.T) {
 		if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", "people"}); err != nil {
 			t.Errorf("NewArg rejected a valid --stdin-name: %v", err)

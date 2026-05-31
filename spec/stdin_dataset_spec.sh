@@ -92,6 +92,16 @@ Describe 'sqly --stdin dataset'
       The stderr should include 'stdin'
     End
 
+    It 'rejects a non-identifier --stdin-name so the name stays queryable (#289)'
+      Data
+        #|id,name
+        #|1,alice
+      End
+      When run sqly --stdin csv --stdin-name "my data" --sql 'SELECT * FROM "my data"'
+      The status should be failure
+      The stderr should include 'stdin-name'
+    End
+
     It 'rejects a path-like --stdin-name (#305)'
       Data
         #|a
