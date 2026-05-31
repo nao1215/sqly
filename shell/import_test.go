@@ -631,7 +631,11 @@ func TestValidatePath_Import(t *testing.T) {
 		{"normal path", "testdata/sample.csv", false, false},
 		{"relative path", "./foo/bar.csv", false, false},
 		{"path traversal", "../../../etc/passwd", true, false},
-		{"url encoded traversal", "..%2f..%2fetc/passwd", true, false},
+		// A literal filename containing "..%2f" is not traversal: the filesystem
+		// never URL-decodes it, so it must be accepted. Ref #317.
+		{"literal ..%2f filename", "data/..%2fuser.csv", false, false},
+		// Deep paths must import regardless of nesting depth. Ref #316.
+		{"deep path", "a/b/c/d/e/f/g/h/i/j/k/user.csv", false, false},
 		{"system dir /etc", "/etc/hosts", true, true},
 		{"system dir /proc", "/proc/cpuinfo", true, true},
 	}
