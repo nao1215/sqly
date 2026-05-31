@@ -43,4 +43,27 @@ Describe 'sqly --inspect (#259)'
     The status should be failure
     The stderr should include 'no tables to inspect'
   End
+
+  It 'emits a schema-only report with --inspect-sample 0'
+    When run sqly --inspect --inspect-sample 0 testdata/user.csv
+    The status should be success
+    The line 1 should equal '{'
+    The output should include '"name": "user"'
+    The output should include '"user_name"'
+    The output should include '"sample_rows": []'
+    The output should not include 'booker12'
+  End
+
+  It 'limits sample rows with --inspect-sample'
+    When run sqly --inspect --inspect-sample 1 testdata/user.csv
+    The status should be success
+    The output should include 'booker12'
+    The output should not include 'jenkins46'
+  End
+
+  It 'rejects a negative --inspect-sample'
+    When run sqly --inspect --inspect-sample -1 testdata/user.csv
+    The status should be failure
+    The stderr should include 'inspect-sample'
+  End
 End

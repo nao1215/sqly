@@ -106,6 +106,55 @@ func TestInspect_SampleRowsAreLimited(t *testing.T) {
 	}
 }
 
+func TestInspect_SampleRowCountIsConfigurable(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "nums.csv", "id\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+
+	report := runInspectJSON(t, []string{"sqly", "--inspect", "--inspect-sample", "2", csv})
+
+	if len(report.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(report.Tables))
+	}
+	if got := len(report.Tables[0].SampleRows); got != 2 {
+		t.Errorf("sample_rows = %d, want 2", got)
+	}
+}
+
+func TestInspect_SchemaOnlyWithZeroSample(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\nBob,25\n")
+
+	report := runInspectJSON(t, []string{"sqly", "--inspect", "--inspect-sample", "0", csv})
+
+	if len(report.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(report.Tables))
+	}
+	tbl := report.Tables[0]
+	// Schema and counts are still present; only the sample is suppressed.
+	if len(tbl.Columns) != 2 {
+		t.Errorf("columns = %d, want 2 (schema must remain)", len(tbl.Columns))
+	}
+	if tbl.RowCount != 2 {
+		t.Errorf("row_count = %d, want 2", tbl.RowCount)
+	}
+	if len(tbl.SampleRows) != 0 {
+		t.Errorf("sample_rows = %d, want 0 (schema only)", len(tbl.SampleRows))
+	}
+}
+
+func TestInspect_NegativeSampleErrors(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "x.csv", "a\n1\n")
+	shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--inspect-sample", "-1", csv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.Run(context.Background()); err == nil {
+		t.Fatal("expected an error for a negative --inspect-sample, got nil")
+	}
+}
+
 func TestInspect_MultipleFileArgs(t *testing.T) {
 	dir := t.TempDir()
 	a := writeCSV(t, dir, "a.csv", "x\n1\n")

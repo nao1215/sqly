@@ -100,7 +100,7 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 ```
 
 ### Inspect tables: --inspect option
-`--inspect` imports the given files and directories and prints a JSON report of every table, then exits without starting the shell. The report lists each table name, its source path, the column schema, the row count, and a small sample of rows. It gives scripts and LLMs a non-interactive equivalent of `.tables`, `.schema`, and `.describe`. Import progress goes to stderr, so stdout carries only the JSON. Excel sheets and ACH/Fedwire files map several tables to one source path.
+`--inspect` imports the given files and directories and prints a JSON report of every table, then exits without starting the shell. The report lists each table name, its source path, the column schema, the row count, and a small sample of rows. It gives scripts and LLMs a non-interactive equivalent of `.tables`, `.schema`, and `.describe`. Import progress goes to stderr, so stdout carries only the JSON. Excel sheets and ACH/Fedwire files map several tables to one source path. `--inspect-sample N` sets how many sample rows each table includes (default 5); `--inspect-sample 0` produces a schema-only report for wide or multi-table sources.
 
 ```shell
 $ sqly --inspect testdata/user.csv

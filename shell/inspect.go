@@ -13,10 +13,6 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-// inspectSampleLimit caps how many sample rows the report includes per table.
-// A small sample is enough to convey shape and values for query authoring.
-const inspectSampleLimit = 5
-
 // inspectColumn describes one column in the inspect report.
 type inspectColumn struct {
 	Name       string `json:"name"`
@@ -44,6 +40,11 @@ type inspectReport struct {
 // the non-interactive discovery path for scripts and LLMs, so JSON is the
 // primary contract and the report is written to stdout.
 func (s *Shell) runInspect(ctx context.Context) error {
+	sampleLimit := s.argument.InspectSample
+	if sampleLimit < 0 {
+		return fmt.Errorf("--inspect-sample must be 0 or greater, got %d", sampleLimit)
+	}
+
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list tables: %w", err)
@@ -61,7 +62,7 @@ func (s *Shell) runInspect(ctx context.Context) error {
 
 	report := inspectReport{Tables: make([]inspectTable, 0, len(names))}
 	for _, name := range names {
-		entry, err := s.inspectTable(ctx, name)
+		entry, err := s.inspectTable(ctx, name, sampleLimit)
 		if err != nil {
 			return err
 		}
@@ -76,8 +77,9 @@ func (s *Shell) runInspect(ctx context.Context) error {
 	return nil
 }
 
-// inspectTable builds the report entry for a single table.
-func (s *Shell) inspectTable(ctx context.Context, name string) (inspectTable, error) {
+// inspectTable builds the report entry for a single table. sampleLimit caps the
+// sample rows; 0 means schema-only.
+func (s *Shell) inspectTable(ctx context.Context, name string, sampleLimit int) (inspectTable, error) {
 	columns, err := s.inspectColumns(ctx, name)
 	if err != nil {
 		return inspectTable{}, err
@@ -88,7 +90,7 @@ func (s *Shell) inspectTable(ctx context.Context, name string) (inspectTable, er
 		return inspectTable{}, err
 	}
 
-	sample, err := s.inspectSample(ctx, name)
+	sample, err := s.inspectSample(ctx, name, sampleLimit)
 	if err != nil {
 		return inspectTable{}, err
 	}
@@ -149,12 +151,15 @@ func (s *Shell) inspectRowCount(ctx context.Context, name string) (int64, error)
 	return count, nil
 }
 
-// inspectSample returns up to inspectSampleLimit rows rendered as a JSON array,
-// reusing the table JSON renderer so the sample matches sqly's query JSON
-// (ordered keys, string values).
-func (s *Shell) inspectSample(ctx context.Context, name string) (json.RawMessage, error) {
+// inspectSample returns up to limit rows rendered as a JSON array, reusing the
+// table JSON renderer so the sample matches sqly's query JSON (ordered keys,
+// string values). A limit of 0 returns an empty array without querying.
+func (s *Shell) inspectSample(ctx context.Context, name string, limit int) (json.RawMessage, error) {
+	if limit == 0 {
+		return json.RawMessage("[]"), nil
+	}
 	quoted := s.usecases.importer.QuoteIdentifier(name)
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", quoted, inspectSampleLimit)
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", quoted, limit)
 	table, err := s.usecases.query.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sample rows of %s: %w", name, err)
