@@ -35,6 +35,30 @@ type inspectReport struct {
 	Tables []inspectTable `json:"tables"`
 }
 
+// validateInspectFlags rejects --inspect combined with other effectful flags.
+// --inspect is a self-contained discovery path that imports inputs, prints a
+// JSON report, and exits, so flags that ask for a different action (--sql,
+// --sql-file) or a side effect (--output, --save, --save-dir) would otherwise be
+// silently discarded. Failing fast keeps the contract explicit for scripts.
+func (s *Shell) validateInspectFlags() error {
+	if !s.argument.InspectFlag {
+		return nil
+	}
+	switch {
+	case s.argument.Query != "":
+		return errors.New("--inspect cannot be combined with --sql")
+	case s.argument.SQLFilePath != "":
+		return errors.New("--inspect cannot be combined with --sql-file")
+	case s.argument.Output.FilePath != "":
+		return errors.New("--inspect cannot be combined with --output")
+	case s.argument.SaveInPlace:
+		return errors.New("--inspect cannot be combined with --save")
+	case s.argument.SaveDir != "":
+		return errors.New("--inspect cannot be combined with --save-dir")
+	}
+	return nil
+}
+
 // runInspect prints a machine-readable JSON report of the imported tables:
 // names, source mapping, columns, row counts, and a small sample of rows. It is
 // the non-interactive discovery path for scripts and LLMs, so JSON is the

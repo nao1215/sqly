@@ -135,6 +135,12 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// --inspect is self-contained; reject conflicting action/side-effect flags
+	// up front instead of silently discarding them.
+	if err := s.validateInspectFlags(); err != nil {
+		return err
+	}
+
 	// --sql and --sql-file both supply a non-interactive query; accepting both
 	// would be ambiguous. Read and validate the SQL file before importing so a
 	// bad path fails fast without spending time on the import.
