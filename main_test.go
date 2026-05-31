@@ -70,6 +70,20 @@ func Test_run(t *testing.T) {
 		g.Assert(t, "excel_to_csv", got)
 	})
 
+	t.Run("--sql-file runs a multiline query loaded from a file (#281)", func(t *testing.T) {
+		sqlPath := filepath.Join(t.TempDir(), "query.sql")
+		query := "-- top actor by name\nSELECT actor\nFROM actor\nORDER BY actor ASC\nLIMIT 1;\n"
+		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"sqly", "--csv", "--sql-file", sqlPath, "testdata/actor.csv"}
+		got := getStdoutForRunFunc(t, run, args)
+
+		g := golden.New(t,
+			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
+		g.Assert(t, "sql_file_multiline", got)
+	})
+
 	t.Run("Treat numbers as numeric types; support numerical sorting", func(t *testing.T) {
 		// SELECT * FROM numeric ORDER BY id
 		// [Previously Result]

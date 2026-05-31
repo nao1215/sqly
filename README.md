@@ -99,6 +99,24 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
+### Load SQL from a file: --sql-file option
+`--sql-file PATH` runs SQL read from a file instead of from `--sql` or stdin. The file may contain multiple statements separated by `;`, and a statement may span multiple lines, following the same rules as batch stdin mode; a leading header comment is allowed. It cannot be combined with `--sql`, and a missing, unreadable, or empty file fails with a clear error.
+
+Because the query comes from a file, stdin is free to carry a dataset. Combine it with `--stdin <format>` to join piped data:
+
+```shell
+$ cat testdata/user.csv | sqly --stdin csv --sql-file join.sql testdata/identifier.csv
+```
+
+where `join.sql` holds:
+
+```sql
+SELECT s.user_name, i.position
+FROM stdin s
+JOIN identifier i ON s.identifier = i.id
+ORDER BY s.identifier;
+```
+
 ### Inspect tables: --inspect option
 `--inspect` imports the given files and directories and prints a JSON report of every table, then exits without starting the shell. The report lists each table name, its source path, the column schema, the row count, and a small sample of rows. It gives scripts and LLMs a non-interactive equivalent of `.tables`, `.schema`, and `.describe`. Import progress goes to stderr, so stdout carries only the JSON. Excel sheets and ACH/Fedwire files map several tables to one source path. `--inspect-sample N` sets how many sample rows each table includes (default 5); `--inspect-sample 0` produces a schema-only report for wide or multi-table sources.
 

@@ -1877,6 +1877,15 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
+	t.Run("statement opening with a comment still runs", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "-- header comment\nSELECT actor FROM actor ORDER BY actor LIMIT 1;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "Adam Sandler") {
+			t.Fatalf("comment-led statement did not run: %q", got)
+		}
+	})
+
 	t.Run("incomplete SQL returns an error", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "SELECT actor FROM (\n")
 		defer cleanup()
@@ -2263,6 +2272,136 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "piped") {
 			t.Fatalf("error = %q, want it to mention piped stdin", err.Error())
+		}
+	})
+}
+
+func TestShellRun_SQLFile(t *testing.T) {
+	// Regression for #281: --sql-file loads SQL from a file for non-interactive
+	// runs, freeing stdin to carry a piped dataset.
+	t.Run("runs a multiline SQL file against a file input", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "query.sql")
+		query := "-- pick the first actor\nSELECT actor\nFROM actor\nORDER BY actor\nLIMIT 1;\n"
+		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "Adam Sandler") {
+			t.Fatalf("multiline SQL file did not execute: %q", got)
+		}
+	})
+
+	t.Run("runs multiple statements from a SQL file in order", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "query.sql")
+		if err := os.WriteFile(sqlPath, []byte("SELECT 'first' AS x;\nSELECT 'second' AS x;\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if strings.Index(got, "first") > strings.Index(got, "second") {
+			t.Fatalf("SQL file statements not executed in order: %q", got)
+		}
+	})
+
+	t.Run("runs a --stdin csv dataset joined with a SQL file query", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "join.sql")
+		idPath := filepath.Join(dir, "identifier.csv")
+		if err := os.WriteFile(idPath, []byte("id,position\n1,dev\n2,manager\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		query := "SELECT s.name, i.position\nFROM stdin s\nJOIN identifier i ON s.id = i.id\nORDER BY s.id;\n"
+		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--csv", "--sql-file", sqlPath, idPath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("id,name\n1,alice\n2,bob\n")
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "alice") || !strings.Contains(got, "dev") {
+			t.Fatalf("stdin dataset joined with SQL file did not produce expected rows: %q", got)
+		}
+	})
+
+	t.Run("rejects --sql and --sql-file together", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "query.sql")
+		if err := os.WriteFile(sqlPath, []byte("SELECT 1;\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT 1", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("--sql with --sql-file returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "--sql-file") {
+			t.Fatalf("error = %q, want it to mention --sql-file", err.Error())
+		}
+	})
+
+	t.Run("returns an error for a missing SQL file", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "no_such.sql")
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", missing, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("missing --sql-file returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "sql-file") {
+			t.Fatalf("error = %q, want it to mention sql-file", err.Error())
+		}
+	})
+
+	t.Run("returns an error for an empty SQL file", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "empty.sql")
+		if err := os.WriteFile(sqlPath, []byte("   \n\t\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("empty --sql-file returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "empty") {
+			t.Fatalf("error = %q, want it to mention an empty file", err.Error())
 		}
 	})
 }

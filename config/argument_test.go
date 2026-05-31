@@ -201,6 +201,29 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("--sql-file sets the SQL file path (#281)", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--sql-file", "query.sql", "testdata/user.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.SQLFilePath != "query.sql" {
+			t.Errorf("SQLFilePath = %q, want %q", arg.SQLFilePath, "query.sql")
+		}
+		if diff := cmp.Diff([]string{"testdata/user.csv"}, arg.FilePaths); diff != "" {
+			t.Errorf("FilePaths mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("sql file path defaults to empty (#281)", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "testdata/user.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.SQLFilePath != "" {
+			t.Errorf("SQLFilePath = %q, want empty", arg.SQLFilePath)
+		}
+	})
+
 	t.Run("--inspect sets the inspect flag (#259)", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--inspect", "testdata/user.csv"})
 		if err != nil {
