@@ -55,4 +55,27 @@ func TestExcelRepositoryDump(t *testing.T) {
 			t.Fatalf("differs: (-got +want)\n%s", diff)
 		}
 	})
+
+	t.Run("dumped excel file is not executable (#296)", func(t *testing.T) {
+		t.Parallel()
+
+		r := NewExcelRepository()
+		table := model.NewTable(
+			"test_sheet",
+			model.Header{"id", "name"},
+			[]model.Record{{"1", "Gina"}},
+		)
+		tempFilePath := filepath.Join(t.TempDir(), "perms.xlsx")
+		if err := r.Dump(tempFilePath, table); err != nil {
+			t.Fatal(err)
+		}
+
+		info, err := os.Stat(tempFilePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode&0o111 != 0 {
+			t.Errorf("excel export mode = %o, want no executable bits", mode)
+		}
+	})
 }

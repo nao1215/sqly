@@ -7,6 +7,11 @@ import (
 	"github.com/nao1215/sqly/domain/repository"
 )
 
+// defaultFilePerm is the permission for files sqly writes. It is non-executable
+// (0600) so exports are treated as ordinary data files, consistent across CSV,
+// TSV, LTSV, Parquet, and Excel outputs.
+const defaultFilePerm = 0o600
+
 // _ interface implementation check
 var _ repository.FileRepository = (*fileRepository)(nil)
 
@@ -22,6 +27,5 @@ func NewFileRepository() repository.FileRepository {
 // shorter content (for example saving a smaller table over its source, or a
 // compressed export) does not leave stale trailing bytes that corrupt the file.
 func (fr *fileRepository) Create(path string) (*os.File, error) {
-	const defaultFilePerm = 0o600
 	return os.OpenFile(filepath.Clean(path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, defaultFilePerm)
 }

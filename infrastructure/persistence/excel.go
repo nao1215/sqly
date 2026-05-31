@@ -3,6 +3,7 @@ package persistence
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -50,5 +51,12 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 			return err
 		}
 	}
-	return f.SaveAs(excelFilePath)
+	if err := f.SaveAs(excelFilePath); err != nil {
+		return err
+	}
+	// excelize's SaveAs creates the file with os.ModePerm (0777), which leaves
+	// the export executable. Reset to the same non-executable mode as other
+	// outputs so .xlsx files are plain data files. Why not pass excelize
+	// Options: SaveAs hard-codes the mode and ignores a permissions option.
+	return os.Chmod(excelFilePath, defaultFilePerm)
 }
