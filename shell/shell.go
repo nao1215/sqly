@@ -61,6 +61,10 @@ type Shell struct {
 	// isTTY reports whether stdin is an interactive terminal. When false, Run
 	// reads commands from stdin in batch mode instead of starting the prompt.
 	isTTY func() bool
+	// historyEnabled is true while command history can be persisted. It is
+	// disabled for the session if the history DB cannot be created or written,
+	// so automation does not fail on a read-only config location.
+	historyEnabled bool
 }
 
 type promptSession interface {
@@ -100,8 +104,9 @@ func NewShell(
 				prompt.WithMultiline(true),
 			)
 		},
-		stdin: os.Stdin,
-		isTTY: config.IsInputFromTTY,
+		stdin:          os.Stdin,
+		isTTY:          config.IsInputFromTTY,
+		historyEnabled: true,
 	}, nil
 }
 
@@ -174,15 +179,19 @@ func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 		return nil, err
 	}
 
-	histories, err := s.usecases.history.List(ctx)
-	if err != nil {
-		if errClose := p.Close(); errClose != nil {
-			return nil, errors.Join(err, fmt.Errorf("failed to close prompt session: %w", errClose))
+	// Preload persisted history only when it is available; the prompt still
+	// keeps in-session history when persistence is disabled.
+	if s.historyEnabled {
+		histories, err := s.usecases.history.List(ctx)
+		if err != nil {
+			if errClose := p.Close(); errClose != nil {
+				return nil, errors.Join(err, fmt.Errorf("failed to close prompt session: %w", errClose))
+			}
+			return nil, err
 		}
-		return nil, err
-	}
-	for _, h := range histories.ToStringList() {
-		p.AddHistory(h)
+		for _, h := range histories.ToStringList() {
+			p.AddHistory(h)
+		}
 	}
 
 	return p, nil
@@ -190,8 +199,12 @@ func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init(ctx context.Context) error {
+	// History is best-effort: a read-only or unwritable history DB (CI,
+	// sandboxes, containers) must not block the requested query or command.
+	// Disable history for the session and warn instead of failing.
 	if err := s.usecases.history.CreateTable(ctx); err != nil {
-		return fmt.Errorf("failed to create table for sqly history: %w", err)
+		s.historyEnabled = false
+		fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_DB_PATH to a writable path to enable it.\n", err)
 	}
 
 	paths := s.argument.FilePaths
@@ -499,8 +512,12 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 		return nil // user only input enter, space tab
 	}
 
-	if err := s.recordUserRequest(ctx, req); err != nil {
-		return err
+	// Skip history persistence when it is disabled so a read-only history DB
+	// cannot fail the requested command.
+	if s.historyEnabled {
+		if err := s.recordUserRequest(ctx, req); err != nil {
+			return err
+		}
 	}
 
 	if s.commands.hasCmd(argv[0]) {

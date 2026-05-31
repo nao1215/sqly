@@ -76,6 +76,10 @@ $ cat testdata/user.csv | sqly --stdin csv --sql "SELECT user_name FROM stdin LI
 +-----------+
 ```
 
+### Command history
+
+The sqly shell persists command history to a SQLite database under the config directory. History is best-effort: if that database cannot be created or written (for example a read-only config directory in CI or a container), sqly disables history for the session with a warning and still runs the requested query or command. Set `SQLY_HISTORY_DB_PATH` to choose a writable location.
+
 ### Change output format
 
 ```shell

@@ -1242,16 +1242,18 @@ func hasPromptSuggestion(suggestions []prompt.Suggestion, text string) bool {
 }
 
 type historyUsecaseStub struct {
-	histories model.Histories
-	listErr   error
+	histories      model.Histories
+	listErr        error
+	createTableErr error
+	createErr      error
 }
 
 func (h historyUsecaseStub) CreateTable(context.Context) error {
-	return nil
+	return h.createTableErr
 }
 
 func (h historyUsecaseStub) Create(context.Context, model.History) error {
-	return nil
+	return h.createErr
 }
 
 func (h historyUsecaseStub) List(context.Context) (model.Histories, error) {
@@ -2165,6 +2167,50 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "piped") {
 			t.Fatalf("error = %q, want it to mention piped stdin", err.Error())
+		}
+	})
+}
+
+func TestShellRun_HistoryUnavailable(t *testing.T) {
+	// Regression for #262: non-interactive runs must succeed even when the
+	// history DB cannot be created or written (e.g. read-only config dir).
+	readonlyErr := errors.New("attempt to write a readonly database")
+
+	t.Run("--sql succeeds when history table cannot be created", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT actor FROM actor ORDER BY actor LIMIT 1", filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.usecases.history = historyUsecaseStub{createTableErr: readonlyErr}
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "actor") {
+			t.Fatalf("--sql output missing result under read-only history: %q", got)
+		}
+	})
+
+	t.Run("batch mode succeeds and warns when history is unwritable", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.usecases.history = historyUsecaseStub{createTableErr: readonlyErr, createErr: readonlyErr}
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("SELECT actor FROM actor ORDER BY actor LIMIT 1\n")
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		var stderr bytes.Buffer
+		config.Stderr = &stderr
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "actor") {
+			t.Fatalf("batch output missing result under unwritable history: %q", got)
+		}
+		if !strings.Contains(stderr.String(), "history") {
+			t.Fatalf("expected a history-disabled warning on stderr, got: %q", stderr.String())
 		}
 	})
 }
