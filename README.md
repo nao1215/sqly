@@ -285,6 +285,15 @@ $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
 $ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 ```
 
+The format and compression are inferred from the `--output` path when no output mode flag is given, so the extension alone selects the writer. The same inference applies to the shell `.dump` command.
+
+```shell
+$ sqly --sql "SELECT * FROM user" --output result.parquet testdata/user.csv
+$ sqly --sql "SELECT * FROM user" --output result.ndjson.gz testdata/user.csv
+```
+
+Text and JSON formats support `.gz`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4`. An explicit mode flag that disagrees with the path extension is rejected, as are `.bz2` and compression on Parquet or Excel.
+
 ### Key Binding for sqly-shell
 |Key Binding	|Description|
 |:--|:--|

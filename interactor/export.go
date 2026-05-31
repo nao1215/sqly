@@ -2,7 +2,7 @@ package interactor
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
@@ -42,51 +42,54 @@ func NewExportInteractor(
 	}
 }
 
-// DumpTable exports a table to a file in the specified format.
-func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format model.ExportFormat) error {
+// DumpTable exports a table to a file in the specified format. Text and JSON
+// formats honor the compression codec; Excel and Parquet are binary container
+// formats and ignore it (callers reject compression for them upstream).
+func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression) error {
 	switch format {
 	case model.ExportCSV:
-		return e.dumpWithFile(filePath, table, e.csvRepo.Dump)
+		return e.dumpWithFile(filePath, table, compression, e.csvRepo.Dump)
 	case model.ExportTSV:
-		return e.dumpWithFile(filePath, table, e.tsvRepo.Dump)
+		return e.dumpWithFile(filePath, table, compression, e.tsvRepo.Dump)
 	case model.ExportLTSV:
-		return e.dumpWithFile(filePath, table, e.ltsvRepo.Dump)
+		return e.dumpWithFile(filePath, table, compression, e.ltsvRepo.Dump)
 	case model.ExportExcel:
 		return e.excelRepo.Dump(filepath.Clean(filePath), table)
 	case model.ExportMarkdown:
-		return e.dumpViaPrint(filePath, table, model.PrintModeMarkdownTable)
+		return e.dumpViaPrint(filePath, table, compression, model.PrintModeMarkdownTable)
 	case model.ExportJSON:
-		return e.dumpViaPrint(filePath, table, model.PrintModeJSON)
+		return e.dumpViaPrint(filePath, table, compression, model.PrintModeJSON)
 	case model.ExportNDJSON:
-		return e.dumpViaPrint(filePath, table, model.PrintModeNDJSON)
+		return e.dumpViaPrint(filePath, table, compression, model.PrintModeNDJSON)
 	case model.ExportParquet:
 		return filesql.DumpTableToParquet(filepath.Clean(filePath), table)
 	default:
-		return e.dumpWithFile(filePath, table, e.csvRepo.Dump)
+		return e.dumpWithFile(filePath, table, compression, e.csvRepo.Dump)
 	}
 }
 
-// dumpWithFile creates a file and writes table data using the provided dump function.
-func (e *exportInteractor) dumpWithFile(filePath string, table *model.Table, dumpFunc func(*os.File, *model.Table) error) (err error) {
-	f, err := e.fileRepo.Create(filepath.Clean(filePath))
-	if err != nil {
-		return fmt.Errorf("create output file %q: %w", filePath, err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
-		}
-	}()
-	if err = dumpFunc(f, table); err != nil {
-		return fmt.Errorf("dump to %q: %w", filePath, err)
-	}
-	return nil
+// dumpWithFile creates a file and writes table data using the provided dump
+// function, wrapping the destination in a compression codec when requested.
+func (e *exportInteractor) dumpWithFile(filePath string, table *model.Table, compression model.Compression, dumpFunc func(io.Writer, *model.Table) error) (err error) {
+	return e.withCompressedWriter(filePath, compression, func(w io.Writer) error {
+		return dumpFunc(w, table)
+	})
 }
 
 // dumpViaPrint writes table data to file using Table.Print for formats whose
 // file output matches their display rendering (Markdown, JSON, NDJSON). This
 // reuses the rendering implementation instead of a separate repository.
-func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, mode model.PrintMode) (err error) {
+func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, compression model.Compression, mode model.PrintMode) (err error) {
+	return e.withCompressedWriter(filePath, compression, func(w io.Writer) error {
+		return table.Print(w, mode)
+	})
+}
+
+// withCompressedWriter opens filePath, optionally wraps it in a compression
+// codec, and passes the resulting writer to write. The codec is finalized before
+// the file is closed (deferred close runs in reverse order), so all buffered
+// compressed bytes reach disk.
+func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
 	f, err := e.fileRepo.Create(filepath.Clean(filePath))
 	if err != nil {
 		return fmt.Errorf("create output file %q: %w", filePath, err)
@@ -97,5 +100,18 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, mod
 		}
 	}()
 
-	return table.Print(f, mode)
+	w, closeComp, err := filesql.NewCompressingWriter(f, compression)
+	if err != nil {
+		return fmt.Errorf("init compression for %q: %w", filePath, err)
+	}
+	defer func() {
+		if cerr := closeComp(); cerr != nil && err == nil {
+			err = fmt.Errorf("finalize compression for %q: %w", filePath, cerr)
+		}
+	}()
+
+	if err = write(w); err != nil {
+		return fmt.Errorf("dump to %q: %w", filePath, err)
+	}
+	return nil
 }

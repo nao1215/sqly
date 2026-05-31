@@ -556,11 +556,18 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	return nil
 }
 
-// outputToFile output table data to file.
+// outputToFile output table data to file. The export format and compression are
+// resolved from both the chosen output mode and the destination path, so a path
+// like "result.parquet" or "out.ndjson.gz" is honored even without a mode flag.
 func (s *Shell) outputToFile(table *model.Table) error {
-	exportFmt := model.ExportFormatFromPrintMode(s.state.mode.PrintMode)
-	filePath := normalizeDumpExt(s.argument.Output.FilePath, exportFmt)
-	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
+	mode := s.state.mode.PrintMode
+	explicit := model.ExportFormatFromPrintMode(mode)
+	exportFmt, compression, err := model.ResolveOutputTarget(s.argument.Output.FilePath, explicit, mode != model.PrintModeTable)
+	if err != nil {
+		return err
+	}
+	filePath := model.BuildOutputPath(s.argument.Output.FilePath, exportFmt, compression)
+	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",

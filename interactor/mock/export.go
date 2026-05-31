@@ -41,17 +41,17 @@ func (m *MockExportUsecase) EXPECT() *MockExportUsecaseMockRecorder {
 }
 
 // DumpTable mocks base method.
-func (m *MockExportUsecase) DumpTable(filePath string, table *model.Table, format model.ExportFormat) error {
+func (m *MockExportUsecase) DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpTable", filePath, table, format)
+	ret := m.ctrl.Call(m, "DumpTable", filePath, table, format, compression)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DumpTable indicates an expected call of DumpTable.
-func (mr *MockExportUsecaseMockRecorder) DumpTable(filePath, table, format any) *MockExportUsecaseDumpTableCall {
+func (mr *MockExportUsecaseMockRecorder) DumpTable(filePath, table, format, compression any) *MockExportUsecaseDumpTableCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTable", reflect.TypeOf((*MockExportUsecase)(nil).DumpTable), filePath, table, format)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTable", reflect.TypeOf((*MockExportUsecase)(nil).DumpTable), filePath, table, format, compression)
 	return &MockExportUsecaseDumpTableCall{Call: call}
 }
 
@@ -67,13 +67,13 @@ func (c *MockExportUsecaseDumpTableCall) Return(arg0 error) *MockExportUsecaseDu
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockExportUsecaseDumpTableCall) Do(f func(string, *model.Table, model.ExportFormat) error) *MockExportUsecaseDumpTableCall {
+func (c *MockExportUsecaseDumpTableCall) Do(f func(string, *model.Table, model.ExportFormat, model.Compression) error) *MockExportUsecaseDumpTableCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockExportUsecaseDumpTableCall) DoAndReturn(f func(string, *model.Table, model.ExportFormat) error) *MockExportUsecaseDumpTableCall {
+func (c *MockExportUsecaseDumpTableCall) DoAndReturn(f func(string, *model.Table, model.ExportFormat, model.Compression) error) *MockExportUsecaseDumpTableCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
