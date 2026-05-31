@@ -25,4 +25,19 @@ Describe 'sqly --sheet validation (#287)'
     The status should be success
     The output should include 'name'
   End
+
+  It 'rejects an explicit empty --sheet (#313)'
+    When run sqly --inspect --sheet "" testdata/user.csv
+    The status should be failure
+    The stderr should include 'sheet'
+  End
+
+  It 'rejects --sheet for a directory with no Excel files (#312)'
+    work=$(mktemp -d)
+    cp testdata/user.csv "$work/u.csv"
+    When run sqly --inspect --sheet anything "$work"
+    The status should be failure
+    The stderr should include '--sheet'
+    rm -rf "$work"
+  End
 End
