@@ -1142,10 +1142,10 @@ func getStdoutForRunFunc(t *testing.T, f func(ctx context.Context) error) []byte
 	return buffer.Bytes()
 }
 
-// getStdoutForErr captures stdout while running f and ignores its returned
-// error. Used when the error is expected (e.g. a fail-fast batch run) and the
-// test asserts on what did or did not reach stdout.
-func getStdoutForErr(t *testing.T, f func(ctx context.Context) error) []byte {
+// getStdoutForErr captures stdout while running f and returns both the captured
+// bytes and f's error. Used when the error is expected (e.g. a fail-fast batch
+// run) so the test can assert both the error and what reached stdout.
+func getStdoutForErr(t *testing.T, f func(ctx context.Context) error) ([]byte, error) {
 	t.Helper()
 	backupColorStdout := config.Stdout
 	defer func() {
@@ -1155,8 +1155,8 @@ func getStdoutForErr(t *testing.T, f func(ctx context.Context) error) []byte {
 	var buffer bytes.Buffer
 	config.Stdout = &buffer
 
-	_ = f(context.Background())
-	return buffer.Bytes()
+	err := f(context.Background())
+	return buffer.Bytes(), err
 }
 
 func getStdout(t *testing.T, f func()) []byte {
@@ -1865,9 +1865,12 @@ func TestShellRunBatch_FailFast(t *testing.T) {
 		defer func() { config.Stderr = backupStderr }()
 		config.Stderr = &bytes.Buffer{}
 
-		got := string(getStdoutForErr(t, shell.Run))
-		if strings.Contains(got, "later") {
-			t.Fatalf("later statement ran after a failure: %q", got)
+		out, runErr := getStdoutForErr(t, shell.Run)
+		if runErr == nil {
+			t.Fatal("fail-fast batch returned nil error, want non-nil")
+		}
+		if strings.Contains(string(out), "later") {
+			t.Fatalf("later statement ran after a failure: %q", string(out))
 		}
 	})
 
@@ -1884,9 +1887,12 @@ func TestShellRunBatch_FailFast(t *testing.T) {
 		defer func() { config.Stderr = backupStderr }()
 		config.Stderr = &bytes.Buffer{}
 
-		got := string(getStdoutForErr(t, shell.Run))
-		if strings.Contains(got, "later") {
-			t.Fatalf("later statement ran after a helper-command failure: %q", got)
+		out, runErr := getStdoutForErr(t, shell.Run)
+		if runErr == nil {
+			t.Fatal("fail-fast batch returned nil error, want non-nil")
+		}
+		if strings.Contains(string(out), "later") {
+			t.Fatalf("later statement ran after a helper-command failure: %q", string(out))
 		}
 	})
 }
