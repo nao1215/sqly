@@ -44,6 +44,11 @@ type Arg struct {
 	Usage string
 	// SheetName is excel sheet name that is imported into the DB.
 	SheetName string
+	// StdinFormat, when non-empty, makes sqly read stdin as an input dataset of
+	// this format (csv|tsv|ltsv|json|jsonl) instead of as SQL/helper commands.
+	StdinFormat string
+	// StdinTableName is the table name for the --stdin dataset (default: stdin).
+	StdinTableName string
 	// Version print version message
 	Version func()
 }
@@ -82,6 +87,8 @@ func NewArg(args []string) (*Arg, error) {
 	flag.BoolVarP(&oFlag.ndjson, "ndjson", "n", false, "change output format to ndjson (default: table)")
 	flag.BoolVarP(&oFlag.parquet, "parquet", "p", false, "export results as parquet (export-only; use with --output or .dump)")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
+	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
+	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
@@ -95,6 +102,8 @@ func NewArg(args []string) (*Arg, error) {
 	arg.Output = newOutput(*output, oFlag)
 	arg.FilePaths = flag.Args()
 	arg.SheetName = *sheetName
+	arg.StdinFormat = *stdinFormat
+	arg.StdinTableName = *stdinName
 	arg.Query = *query
 
 	return arg, nil

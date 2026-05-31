@@ -193,11 +193,72 @@ func (s *Shell) init(ctx context.Context) error {
 	if err := s.usecases.history.CreateTable(ctx); err != nil {
 		return fmt.Errorf("failed to create table for sqly history: %w", err)
 	}
-	if len(s.argument.FilePaths) == 0 {
-		return nil
+
+	paths := s.argument.FilePaths
+	// When --stdin is set, stage piped stdin as a dataset file and import it
+	// alongside the file/directory arguments so it can be queried and joined.
+	if s.argument.StdinFormat != "" {
+		stdinPath, cleanup, err := s.stageStdinDataset()
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		paths = append([]string{stdinPath}, paths...)
 	}
 
-	return s.commands.importCommand(ctx, s, s.argument.FilePaths)
+	if len(paths) == 0 {
+		return nil
+	}
+	return s.commands.importCommand(ctx, s, paths)
+}
+
+// stdinFormatExtensions maps the --stdin format names to file extensions. The
+// format-name keys intentionally repeat strings used by unrelated features
+// (completion, mode names), so goconst is suppressed here.
+//
+//nolint:goconst // format-name registry keys
+var stdinFormatExtensions = map[string]string{
+	"csv":   model.ExtCSV,
+	"tsv":   model.ExtTSV,
+	"ltsv":  model.ExtLTSV,
+	"json":  model.ExtJSON,
+	"jsonl": ".jsonl",
+}
+
+// stageStdinDataset reads all of stdin into a temporary file named after the
+// stdin table so filesql imports it like a normal file. Why a temp file:
+// filesql loads by path, and staging keeps the import path identical to file
+// arguments (including table naming and joins). The returned cleanup removes the
+// temp directory; it is safe to call after import because the data is already
+// copied into the shared database.
+func (s *Shell) stageStdinDataset() (string, func(), error) {
+	ext, ok := stdinFormatExtensions[s.argument.StdinFormat]
+	if !ok {
+		return "", nil, fmt.Errorf("unsupported --stdin format %q (supported: csv, tsv, ltsv, json, jsonl)", s.argument.StdinFormat)
+	}
+
+	dir, err := os.MkdirTemp("", "sqly-stdin-")
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp dir for stdin data: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+
+	path := filepath.Join(dir, s.argument.StdinTableName+ext)
+	f, err := os.Create(path) //nolint:gosec // path is a sqly-generated temp path
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("create stdin staging file: %w", err)
+	}
+	if _, err := io.Copy(f, s.stdin); err != nil {
+		_ = f.Close()
+		cleanup()
+		return "", nil, fmt.Errorf("read stdin data: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("close stdin staging file: %w", err)
+	}
+	return path, cleanup, nil
 }
 
 // printWelcomeMessage print version and help information.

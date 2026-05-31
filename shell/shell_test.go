@@ -2076,6 +2076,81 @@ func TestShell_buildCreateStatement(t *testing.T) {
 	}
 }
 
+func TestShellRun_StdinDataset(t *testing.T) {
+	// Regression for #258: --stdin treats piped stdin as an input dataset.
+	t.Run("queries piped CSV through the default stdin table", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("id,name\n1,alice\n2,bob\n")
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "alice") || !strings.Contains(got, "bob") {
+			t.Fatalf("stdin dataset query output missing rows: %q", got)
+		}
+	})
+
+	t.Run("overrides the stdin table name", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--stdin-name", "people", "--csv", "--sql", "SELECT COUNT(*) AS c FROM people"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("id,name\n1,alice\n2,bob\n3,carol\n")
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "3") {
+			t.Fatalf("expected count 3 from overridden table, got: %q", got)
+		}
+	})
+
+	t.Run("joins piped stdin with a file argument", func(t *testing.T) {
+		dir := t.TempDir()
+		idPath := filepath.Join(dir, "identifier.csv")
+		if err := os.WriteFile(idPath, []byte("id,position\n1,dev\n2,manager\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{
+			"sqly", "--stdin", "csv", "--csv",
+			"--sql", "SELECT s.name, i.position FROM stdin s JOIN identifier i ON s.id = i.id ORDER BY s.id",
+			idPath,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("id,name\n1,alice\n2,bob\n")
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "alice") || !strings.Contains(got, "dev") {
+			t.Fatalf("join of stdin with file did not produce expected rows: %q", got)
+		}
+	})
+
+	t.Run("invalid stdin format returns a clear error", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "xml", "--sql", "SELECT 1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("a,b\n1,2\n")
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("invalid --stdin format returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "stdin") {
+			t.Fatalf("error = %q, want it to mention stdin", err.Error())
+		}
+	})
+}
+
 func TestShell_shortCWD(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
