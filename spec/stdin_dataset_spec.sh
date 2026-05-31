@@ -69,6 +69,41 @@ Describe 'sqly --stdin dataset'
     End
   End
 
+  Describe 'stdin dataset robustness'
+    It 'reports a stable stdin source in --inspect, not a temp path (#290)'
+      Data
+        #|id,name
+        #|1,alice
+      End
+      When run sqly --stdin csv --inspect
+      The status should be success
+      The output should include '"source": "stdin"'
+      The output should not include 'sqly-stdin-'
+    End
+
+    It 'rejects --save --force for a stdin-backed table (#291)'
+      Data
+        #|id,name
+        #|1,alice
+      End
+      When run sqly --stdin csv --sql "UPDATE stdin SET name = 'x'" --save --force
+      The status should be failure
+      The output should include 'affected'
+      The stderr should include 'stdin'
+    End
+
+    It 'rejects a path-like --stdin-name (#305)'
+      Data
+        #|a
+        #|1
+      End
+      When run sqly --stdin csv --stdin-name "../escaped" --sql "SELECT 1"
+      The status should be failure
+      The stderr should include 'stdin-name'
+      The path /tmp/escaped.csv should not be exist
+    End
+  End
+
   Describe 'error handling'
     It 'reports a clear error for an unsupported stdin format'
       Data

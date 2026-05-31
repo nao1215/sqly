@@ -2400,6 +2400,46 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 	})
 
+	t.Run("inspect reports a stable stdin source, not a temp path (#290)", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--stdin", "csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("id,name\n1,alice\n")
+
+		out := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(out, `"source": "stdin"`) {
+			t.Fatalf("inspect did not report a stable stdin source: %q", out)
+		}
+		if strings.Contains(out, "sqly-stdin-") {
+			t.Fatalf("inspect leaked a temp path in the source: %q", out)
+		}
+	})
+
+	t.Run("save is rejected for a stdin-backed table (#291)", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sql", "UPDATE stdin SET name = 'x'", "--save", "--force"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("id,name\n1,alice\n")
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		config.Stderr = &bytes.Buffer{}
+
+		runErr := shell.Run(context.Background())
+		if runErr == nil {
+			t.Fatal("save of a stdin-backed table returned nil, want error")
+		}
+		if !strings.Contains(runErr.Error(), "stdin") {
+			t.Fatalf("error = %q, want it to mention stdin", runErr.Error())
+		}
+	})
+
 	t.Run("invalid stdin format returns a clear error", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "xml", "--sql", "SELECT 1"})
 		if err != nil {

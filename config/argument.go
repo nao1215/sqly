@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
@@ -143,6 +144,16 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, errEmptySheet
 	}
 
+	// Validate --stdin-name so it cannot be empty or contain path separators.
+	// The name becomes a staging filename; a value like "" or "../escaped" would
+	// otherwise create odd hidden files or write outside the temp directory. Ref
+	// #305. Only meaningful with --stdin, so validate only when staging applies.
+	if *stdinFormat != "" {
+		if err := validateStdinName(*stdinName); err != nil {
+			return nil, err
+		}
+	}
+
 	arg.Usage = usage(flag)
 	arg.Version = version
 	arg.Output = newOutput(*output, oFlag)
@@ -156,6 +167,22 @@ func NewArg(args []string) (*Arg, error) {
 	arg.InspectSample = *inspectSample
 
 	return arg, nil
+}
+
+// validateStdinName rejects a --stdin-name that is empty or path-like. The name
+// is used as a staging file name, so path separators or "."/".." could escape
+// the temp directory or create surprising files. Ref #305.
+func validateStdinName(name string) error {
+	if name == "" {
+		return errInvalidStdinName
+	}
+	if name == "." || name == ".." {
+		return errInvalidStdinName
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return errInvalidStdinName
+	}
+	return nil
 }
 
 // newOutput retur *Output
