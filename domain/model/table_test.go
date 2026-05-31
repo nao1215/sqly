@@ -450,6 +450,39 @@ aaa:777	bbb:888	ccc:999
 	}
 }
 
+func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
+	t.Parallel()
+	// Regression for #328/#329: a SQL NULL must render as JSON null, distinct
+	// from an empty string. The null mask marks column 0 (n) as NULL; column 1
+	// (e) is a real empty string.
+	tbl := NewTable("t", Header{"n", "e", "x"}, []Record{{"", "", "1"}})
+	tbl.SetNulls([][]bool{{true, false, false}})
+
+	t.Run("json emits null for a NULL cell", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		if err := tbl.Print(out, PrintModeJSON); err != nil {
+			t.Fatal(err)
+		}
+		want := "[\n  {\"n\":null,\"e\":\"\",\"x\":\"1\"}\n]\n"
+		if diff := cmp.Diff(out.String(), want); diff != "" {
+			t.Errorf("value is mismatch (-got +want):\n%s", diff)
+		}
+	})
+
+	t.Run("ndjson emits null for a NULL cell", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		if err := tbl.Print(out, PrintModeNDJSON); err != nil {
+			t.Fatal(err)
+		}
+		want := "{\"n\":null,\"e\":\"\",\"x\":\"1\"}\n"
+		if diff := cmp.Diff(out.String(), want); diff != "" {
+			t.Errorf("value is mismatch (-got +want):\n%s", diff)
+		}
+	})
+}
+
 func TestTableEqual(t *testing.T) {
 	t.Parallel()
 

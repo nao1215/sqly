@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* JSON/NDJSON Preserve NULL: `--json` and `--ndjson` now emit a SQL `NULL` as JSON `null` instead of collapsing it to an empty string, so `NULL` and `''` are distinguishable in machine-readable output. Query results carry per-cell NULL information (a NULL scans as a nil byte slice, an empty string as a non-nil empty one); text formats are unchanged.
 * Stdin Name Must Be Queryable: `--stdin-name` now requires a valid table identifier (letters, digits, and underscores, not starting with a digit) and rejects values such as `my data` or `2023-data` up front. Previously such names were silently sanitized (`my data` became `my_data`), leaving the advertised name unusable in SQL.
 * Table-Name Collision Detection: When two inputs sanitize to the same table name (for example `a-b.csv` and `a_b.csv`, both becoming `a_b`), sqly now fails with a clear collision error instead of letting the later import silently overwrite the earlier one while keeping the first file's source metadata.
 * Input Path Validation False Positives: Input path validation no longer rejects legitimate paths. The arbitrary 10-level directory-depth limit is removed, so deeply nested workspace paths import (#316), and the URL-encoded traversal patterns (`..%2f`, `..%5c`) are no longer matched, so a real filename that merely contains those bytes is accepted (#317). sqly runs locally with the user's own permissions, so these web-style traversal checks only produced false rejections.
