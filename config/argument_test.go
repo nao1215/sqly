@@ -255,6 +255,52 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit empty --output is rejected (#349)", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1 AS x", "--output", ""})
+		if err == nil {
+			t.Fatal("expected an error for an explicit empty --output, got nil")
+		}
+	})
+
+	t.Run("explicit empty --sql-file is rejected (#350)", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--sql-file", ""})
+		if err == nil {
+			t.Fatal("expected an error for an explicit empty --sql-file, got nil")
+		}
+	})
+
+	t.Run("explicit empty --save-dir is rejected (#352)", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1", "--save-dir", "", "testdata/user.csv"})
+		if err == nil {
+			t.Fatal("expected an error for an explicit empty --save-dir, got nil")
+		}
+	})
+
+	t.Run("explicit empty --stdin is rejected (#353)", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--stdin", "", "--sql", "SELECT 1 AS x"})
+		if err == nil {
+			t.Fatal("expected an error for an explicit empty --stdin, got nil")
+		}
+	})
+
+	t.Run("conflicting output mode flags are rejected (#365)", func(t *testing.T) {
+		for _, args := range [][]string{
+			{"sqly", "--csv", "--json", "--sql", "SELECT 1 AS x"},
+			{"sqly", "--tsv", "--json", "--sql", "SELECT 1 AS x"},
+			{"sqly", "--csv", "--tsv", "--ltsv"},
+		} {
+			if _, err := NewArg(args); err == nil {
+				t.Errorf("NewArg(%v) = nil error, want a conflict error", args[1:])
+			}
+		}
+	})
+
+	t.Run("a single output mode flag is accepted (#365)", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--json", "--sql", "SELECT 1 AS x"}); err != nil {
+			t.Errorf("NewArg with a single output mode flag returned an error: %v", err)
+		}
+	})
+
 	t.Run("--inspect sets the inspect flag (#259)", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--inspect", "testdata/user.csv"})
 		if err != nil {

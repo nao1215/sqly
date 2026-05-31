@@ -81,6 +81,19 @@ type Arg struct {
 	Version func()
 }
 
+// Output mode flag names, shared by the flag registration and the conflict
+// check so the strings are defined once. Ref #365.
+const (
+	outCSV      = "csv"
+	outTSV      = "tsv"
+	outLTSV     = "ltsv"
+	outExcel    = "excel"
+	outMarkdown = "markdown"
+	outJSON     = "json"
+	outNDJSON   = "ndjson"
+	outParquet  = "parquet"
+)
+
 // outputFlag is a structure for managing output format options.
 type outputFlag struct {
 	csv      bool
@@ -91,6 +104,32 @@ type outputFlag struct {
 	json     bool
 	ndjson   bool
 	parquet  bool
+}
+
+// selectedNames returns the names of the output mode flags that are set. More
+// than one means the user passed conflicting mode flags, which NewArg rejects
+// instead of silently applying a precedence. Ref #365.
+func (of outputFlag) selectedNames() []string {
+	flags := []struct {
+		name string
+		set  bool
+	}{
+		{outCSV, of.csv},
+		{outTSV, of.tsv},
+		{outLTSV, of.ltsv},
+		{outExcel, of.excel},
+		{outMarkdown, of.markdown},
+		{outJSON, of.json},
+		{outNDJSON, of.ndjson},
+		{outParquet, of.parquet},
+	}
+	var names []string
+	for _, f := range flags {
+		if f.set {
+			names = append(names, "--"+f.name)
+		}
+	}
+	return names
 }
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
@@ -112,14 +151,14 @@ func NewArg(args []string) (*Arg, error) {
 	// that fail with "path does not exist". Interspersed parsing instead applies
 	// the flag, and an unknown flag fails fast with a clear parse error. Ref #264.
 	flag.SetInterspersed(true)
-	flag.BoolVarP(&oFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
-	flag.BoolVarP(&oFlag.excel, "excel", "e", false, "change output format to excel (default: table)")
-	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
-	flag.BoolVarP(&oFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
-	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
-	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
-	flag.BoolVarP(&oFlag.ndjson, "ndjson", "n", false, "change output format to ndjson (default: table)")
-	flag.BoolVarP(&oFlag.parquet, "parquet", "p", false, "export results as parquet (export-only; use with --output or .dump)")
+	flag.BoolVarP(&oFlag.csv, outCSV, "c", false, "change output format to csv (default: table)")
+	flag.BoolVarP(&oFlag.excel, outExcel, "e", false, "change output format to excel (default: table)")
+	flag.BoolVarP(&oFlag.ltsv, outLTSV, "l", false, "change output format to ltsv (default: table)")
+	flag.BoolVarP(&oFlag.markdown, outMarkdown, "m", false, "change output format to markdown table (default: table)")
+	flag.BoolVarP(&oFlag.tsv, outTSV, "t", false, "change output format to tsv (default: table)")
+	flag.BoolVarP(&oFlag.json, outJSON, "j", false, "change output format to json (default: table)")
+	flag.BoolVarP(&oFlag.ndjson, outNDJSON, "n", false, "change output format to ndjson (default: table)")
+	flag.BoolVarP(&oFlag.parquet, outParquet, "p", false, "export results as parquet (export-only; use with --output or .dump)")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
@@ -144,6 +183,22 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, errEmptySheet
 	}
 
+	// Reject other flags given an explicit empty value for the same reason: each
+	// flag's empty string is the "flag absent" sentinel, so an explicit "" would
+	// otherwise be silently ignored. Ref #349, #350, #352, #353.
+	if flag.Changed("output") && *output == "" {
+		return nil, errEmptyOutput
+	}
+	if flag.Changed("sql-file") && *sqlFile == "" {
+		return nil, errEmptySQLFile
+	}
+	if flag.Changed("save-dir") && *saveDir == "" {
+		return nil, errEmptySaveDir
+	}
+	if flag.Changed("stdin") && *stdinFormat == "" {
+		return nil, errEmptyStdin
+	}
+
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
@@ -152,6 +207,13 @@ func NewArg(args []string) (*Arg, error) {
 		if err := validateStdinName(*stdinName); err != nil {
 			return nil, err
 		}
+	}
+
+	// Reject conflicting output mode flags (e.g. --csv --json) instead of
+	// silently applying an internal precedence, which would discard the other
+	// flags without warning. Ref #365.
+	if names := oFlag.selectedNames(); len(names) > 1 {
+		return nil, fmt.Errorf("conflicting output mode flags: %s; choose one", strings.Join(names, ", "))
 	}
 
 	arg.Usage = usage(flag)
@@ -240,7 +302,7 @@ func newOutput(filePath string, of outputFlag) *Output {
 
 // NeedsOutputToFile whether the data needs to be output to the file
 func (a *Arg) NeedsOutputToFile() bool {
-	return a.Output.FilePath != "" && a.Query != ""
+	return a != nil && a.Output != nil && a.Output.FilePath != "" && a.Query != ""
 }
 
 // usage return usage message.

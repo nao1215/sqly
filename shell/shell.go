@@ -3,6 +3,7 @@
 package shell
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -166,6 +167,14 @@ func (s *Shell) Run(ctx context.Context) error {
 	if s.argument.Query != "" && s.argument.SQLFilePath != "" {
 		return errors.New("--sql and --sql-file cannot be used together")
 	}
+	// --stdin stages piped stdin as a dataset, which consumes stdin entirely, so
+	// nothing remains to carry a query. Require an explicit query source;
+	// otherwise the dataset is imported and immediately discarded with a success
+	// exit code. Ref #374.
+	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
+		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
+	}
+
 	var sqlScript string
 	if s.argument.SQLFilePath != "" {
 		script, err := readSQLFile(s.argument.SQLFilePath)
@@ -173,6 +182,14 @@ func (s *Shell) Run(ctx context.Context) error {
 			return err
 		}
 		sqlScript = script
+
+		// --sql-file takes its query from the file, not stdin. Without --stdin to
+		// route piped stdin to a dataset, non-empty piped stdin would be silently
+		// dropped, so reject it and point the user at --stdin. Empty stdin (e.g.
+		// CI redirecting /dev/null) is fine. Ref #373.
+		if s.argument.StdinFormat == "" && !s.isTTY() && s.pipedStdinHasData() {
+			return errors.New("--sql-file does not read SQL from stdin; piped stdin would be ignored. Use --stdin FORMAT to load it as a dataset, or remove the pipe")
+		}
 	}
 
 	if err := s.init(ctx); err != nil {
@@ -199,16 +216,24 @@ func (s *Shell) Run(ctx context.Context) error {
 	}
 
 	if s.argument.Query != "" {
+		// Validate write-back before running, so a run that cannot persist fails
+		// before any query output reaches stdout. Ref #375.
+		if err := s.preflightSave(ctx, s.argument.Query); err != nil {
+			return err
+		}
 		if err := s.execSQL(ctx, s.argument.Query); err != nil {
 			return err
 		}
-		return s.maybeSave(ctx)
+		return s.finishNonInteractive(ctx, s.argument.Query)
 	}
 
 	// --sql-file runs the loaded script with the same statement-splitting and
 	// error reporting as batch stdin mode, so multiline SQL and multiple
 	// statements behave identically whether they arrive from a file or a pipe.
 	if s.argument.SQLFilePath != "" {
+		if err := s.preflightSave(ctx, sqlScript); err != nil {
+			return err
+		}
 		ranAny, err := s.runBatchReader(ctx, strings.NewReader(sqlScript))
 		if err != nil {
 			return err
@@ -216,13 +241,23 @@ func (s *Shell) Run(ctx context.Context) error {
 		if !ranAny {
 			return nil
 		}
-		return s.maybeSave(ctx)
+		return s.finishNonInteractive(ctx, sqlScript)
 	}
 
 	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
-	// initialize, so read SQL and helper commands from stdin in batch mode.
+	// initialize, so read SQL and helper commands from stdin in batch mode. The
+	// whole script is read up front so write-back can be validated before the
+	// first statement runs (#375) and skipped for a read-only script (#376).
 	if !s.isTTY() {
-		ranAny, err := s.runBatch(ctx)
+		data, err := io.ReadAll(s.stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read batch input: %w", err)
+		}
+		batchScript := strings.TrimPrefix(string(data), "\ufeff")
+		if err := s.preflightSave(ctx, batchScript); err != nil {
+			return err
+		}
+		ranAny, err := s.runBatchReader(ctx, strings.NewReader(batchScript))
 		if err != nil {
 			return err
 		}
@@ -231,7 +266,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		if !ranAny {
 			return nil
 		}
-		return s.maybeSave(ctx)
+		return s.finishNonInteractive(ctx, batchScript)
 	}
 
 	// Start shell
@@ -357,6 +392,17 @@ func (s *Shell) init(ctx context.Context) error {
 		s.remapStdinTableSources(stdinAbsPath)
 	}
 	return importErr
+}
+
+// pipedStdinHasData reports whether stdin currently has at least one unread
+// byte. It wraps stdin in a buffered reader and peeks one byte, keeping that
+// byte available for any later reader. It is used to detect a piped payload that
+// would otherwise be silently ignored (e.g. SQL piped into a --sql-file run).
+func (s *Shell) pipedStdinHasData() bool {
+	br := bufio.NewReader(s.stdin)
+	s.stdin = br
+	_, err := br.Peek(1)
+	return err == nil
 }
 
 // stdinTableSource is the synthetic source recorded for tables imported from a
@@ -687,6 +733,12 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		return err
 	}
 	if table == nil {
+		// --output is only meaningful for a statement that produces a rowset. An
+		// INSERT/UPDATE/DELETE without RETURNING produces only an affected-row
+		// count, so reject --output instead of silently ignoring it. Ref #364.
+		if s.argument.NeedsOutputToFile() {
+			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
+		}
 		fmt.Fprintf(config.Stdout, "affected is %d row(s)\n", affectedRows)
 		return nil
 	}
@@ -712,6 +764,12 @@ func (s *Shell) outputToFile(table *model.Table) error {
 		return err
 	}
 	filePath := model.BuildOutputPath(s.argument.Output.FilePath, exportFmt, compression)
+	// Refuse an --output destination that aliases an imported source file. A
+	// destructive source write must go through --save --force, not a one-off
+	// export, so a stray --output cannot silently destroy the dataset. Ref #371.
+	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
+		return fmt.Errorf("--output destination %s is the source file for table %q; use --save --force to overwrite a source", filePath, name)
+	}
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
 	}
@@ -720,6 +778,22 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	fmt.Fprintf(config.Stderr, "Output sql result to %s (output mode=%s)\n",
 		color.HiCyanString(filePath), exportFmt.String())
 	return nil
+}
+
+// outputAliasesImportedSource reports whether path resolves to a file that an
+// imported table was loaded from, returning that table name. It lets --output
+// reject a destination that would overwrite a source dataset. Tables staged from
+// --stdin have no real source file and are skipped.
+func (s *Shell) outputAliasesImportedSource(path string) (string, bool) {
+	for table, src := range s.tableSources {
+		if src == stdinTableSource {
+			continue
+		}
+		if sameFilePath(path, src) {
+			return table, true
+		}
+	}
+	return "", false
 }
 
 // ensureNotDirectory rejects an output destination that already exists as a

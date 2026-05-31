@@ -2605,6 +2605,159 @@ func TestShellRun_SQLFile(t *testing.T) {
 			t.Fatalf("error = %q, want it to mention an empty file", err.Error())
 		}
 	})
+
+	t.Run("returns an error for a comment-only SQL file (#351)", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "comments.sql")
+		if err := os.WriteFile(sqlPath, []byte("-- header only\n/* block */\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("comment-only --sql-file returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "no executable") {
+			t.Fatalf("error = %q, want it to mention no executable SQL", err.Error())
+		}
+	})
+}
+
+func TestValidateSaveFlags_SQLFileAllowedOnTTY(t *testing.T) {
+	// --sql-file is a non-interactive execution path, so --save/--save-dir must be
+	// allowed with it even when stdin is a TTY. Ref #366, #367.
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"save-dir with sql-file (#366)", []string{"sqly", "--sql-file", "q.sql", "--save-dir", "out", "f.csv"}},
+		{"save --force with sql-file (#367)", []string{"sqly", "--sql-file", "q.sql", "--save", "--force", "f.csv"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, cleanup, err := newShell(t, tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			s.isTTY = func() bool { return true }
+
+			if err := s.validateSaveFlags(); err != nil {
+				t.Errorf("validateSaveFlags() = %v, want nil for the --sql-file path", err)
+			}
+		})
+	}
+}
+
+func TestShellRun_SQLFileRejectsPipedStdin(t *testing.T) {
+	// Regression for #373: when --sql-file is used without --stdin, non-empty
+	// piped stdin must be rejected instead of silently discarded.
+	dir := t.TempDir()
+	sqlPath := filepath.Join(dir, "q.sql")
+	if err := os.WriteFile(sqlPath, []byte("SELECT 1 AS x;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("SELECT 999 AS y;\n")
+
+	err = shell.Run(context.Background())
+	if err == nil {
+		t.Fatal("Run returned nil for --sql-file with piped stdin, want error")
+	}
+	if !strings.Contains(err.Error(), "stdin") {
+		t.Fatalf("error = %q, want it to mention stdin", err.Error())
+	}
+}
+
+func TestShellRun_SQLFileWithEmptyStdinIsAllowed(t *testing.T) {
+	// A non-TTY run with empty stdin (e.g. CI redirecting /dev/null) must still
+	// work with --sql-file; only non-empty piped stdin is rejected. Ref #373.
+	dir := t.TempDir()
+	sqlPath := filepath.Join(dir, "q.sql")
+	if err := os.WriteFile(sqlPath, []byte("SELECT 1 AS x;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("")
+
+	out := getStdoutForRunFunc(t, shell.Run)
+	if !strings.Contains(string(out), "1") {
+		t.Fatalf("output %q does not contain the --sql-file result", out)
+	}
+}
+
+func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
+	// Regression for #374: a --stdin dataset run with no query must fail loudly
+	// instead of importing the data and discarding it.
+	shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("id,name\n1,a\n")
+
+	err = shell.Run(context.Background())
+	if err == nil {
+		t.Fatal("Run returned nil for --stdin with no query, want error")
+	}
+	if !strings.Contains(err.Error(), "--stdin") {
+		t.Fatalf("error = %q, want it to mention --stdin", err.Error())
+	}
+}
+
+func TestShellRun_BOMStrippedInSQLFile(t *testing.T) {
+	// Regression for #369: a UTF-8 BOM at the start of a --sql-file script must be
+	// stripped so the first statement parses.
+	dir := t.TempDir()
+	sqlPath := filepath.Join(dir, "q.sql")
+	if err := os.WriteFile(sqlPath, []byte("\ufeffSELECT 2 AS y;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	out := getStdoutForRunFunc(t, shell.Run)
+	if !strings.Contains(string(out), "2") {
+		t.Fatalf("output %q does not contain the BOM-prefixed query result", out)
+	}
+}
+
+func TestShellRun_BOMStrippedInBatchStdin(t *testing.T) {
+	// Regression for #369: a UTF-8 BOM at the start of batch stdin must be
+	// stripped so the first statement parses.
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("\ufeffSELECT 7 AS z;\n")
+
+	out := getStdoutForRunFunc(t, shell.Run)
+	if !strings.Contains(string(out), "7") {
+		t.Fatalf("output %q does not contain the BOM-prefixed query result", out)
+	}
 }
 
 func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
@@ -2627,6 +2780,60 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 	}
 	if _, statErr := os.Stat(dir + ".csv"); statErr == nil {
 		t.Fatalf("a sibling file %q was created", dir+".csv")
+	}
+}
+
+func TestShellRun_OutputRejectedForNonRowsetDML(t *testing.T) {
+	// Regression for #364: --output for an UPDATE/DELETE without RETURNING must be
+	// rejected, not silently ignored, and no output file is created.
+	work := t.TempDir()
+	src := filepath.Join(work, "u.csv")
+	copyTestFile(t, "user.csv", src)
+	out := filepath.Join(work, "out.csv")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "UPDATE u SET first_name='X' WHERE identifier=1", "--output", out, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	runErr := shell.Run(context.Background())
+	if runErr == nil {
+		t.Fatal("Run returned nil for --output with a non-rowset UPDATE, want error")
+	}
+	if !strings.Contains(runErr.Error(), "--output") {
+		t.Fatalf("error = %q, want it to mention --output", runErr.Error())
+	}
+	if _, statErr := os.Stat(out); statErr == nil {
+		t.Fatalf("an output file %q was created for a non-rowset DML", out)
+	}
+}
+
+func TestShellRun_OutputExportsReturningRows(t *testing.T) {
+	// Regression for #368: a DML statement with RETURNING must create the output
+	// file with the returned rows.
+	work := t.TempDir()
+	src := filepath.Join(work, "u.csv")
+	copyTestFile(t, "user.csv", src)
+	out := filepath.Join(work, "out.csv")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name", "--output", out, src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr != nil {
+		t.Fatalf("Run with RETURNING and --output failed: %v", runErr)
+	}
+	data, statErr := os.ReadFile(out) //nolint:gosec // test path
+	if statErr != nil {
+		t.Fatalf("expected output file %q to be created: %v", out, statErr)
+	}
+	if !strings.Contains(string(data), "X") {
+		t.Errorf("output file does not contain the returned row: %q", data)
 	}
 }
 
