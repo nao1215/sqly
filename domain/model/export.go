@@ -231,18 +231,22 @@ func ResolveOutputTarget(path string, explicit ExportFormat, explicitSet bool) (
 		base = strings.TrimSuffix(path, filepath.Ext(path))
 	}
 
-	inferred, hasInferred := ExportFormatFromExtension(filepath.Ext(base))
+	baseExt := filepath.Ext(base)
+	inferred, hasInferred := ExportFormatFromExtension(baseExt)
 
 	var format ExportFormat
 	switch {
 	case explicitSet && hasInferred && explicit != inferred:
 		return 0, CompressionNone, fmt.Errorf("%w: output mode %q does not match destination extension %q",
-			ErrOutputFormatConflict, explicit.String(), filepath.Ext(base))
+			ErrOutputFormatConflict, explicit.String(), baseExt)
 	case explicitSet:
 		format = explicit
 	case hasInferred:
 		format = inferred
 	default:
+		// No extension, or an unknown one: fall back to CSV. The path itself is
+		// preserved by BuildOutputPath (an unknown extension is not rewritten),
+		// so the documented CSV fallback writes to the exact destination given.
 		format = ExportCSV
 	}
 
@@ -266,8 +270,17 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 	if _, ok := CompressionFromExtension(filepath.Ext(path)); ok {
 		base = strings.TrimSuffix(path, filepath.Ext(path))
 	}
-	if !strings.EqualFold(filepath.Ext(base), format.Extension()) {
-		base = strings.TrimSuffix(base, filepath.Ext(base)) + format.Extension()
+	// Append the format extension only when the path has none. Rewrite an
+	// existing extension only when it is a known export extension that differs
+	// from the chosen format; leave an unknown extension untouched so an
+	// explicitly chosen destination path is honored rather than silently changed.
+	baseExt := filepath.Ext(base)
+	_, knownExt := ExportFormatFromExtension(baseExt)
+	switch {
+	case baseExt == "":
+		base += format.Extension()
+	case knownExt && !strings.EqualFold(baseExt, format.Extension()):
+		base = strings.TrimSuffix(base, baseExt) + format.Extension()
 	}
 	return base + comp.Extension()
 }
