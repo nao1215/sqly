@@ -41,6 +41,12 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return fmt.Errorf(".dump does not support Fedwire format output; use csv/tsv/xlsx instead (e.g., .dump %s %s.csv)", tableName, strings.TrimSuffix(userPath, filepath.Ext(userPath)))
 	}
 
+	// Reject a directory destination before doing any work, so it is not
+	// silently rewritten to a sibling file (e.g. "dir" -> "dir.csv").
+	if err := ensureNotDirectory(userPath); err != nil {
+		return err
+	}
+
 	table, err := s.usecases.metadata.List(ctx, tableName)
 	if err != nil {
 		return err

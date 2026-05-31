@@ -56,6 +56,31 @@ Describe 'sqly export format inference (#260)'
     End
   End
 
+  Describe 'directory destinations are rejected (#303)'
+    It 'rejects --output to an existing directory'
+      out_dir=$(mktemp -d)
+      export out_dir
+      When run sqly --sql "SELECT id FROM user LIMIT 1" testdata/user.csv --output "$out_dir"
+      The status should be failure
+      The stderr should include 'directory'
+      The path "$out_dir.csv" should not be exist
+      rm -rf "$out_dir"
+    End
+
+    It 'rejects .dump to an existing directory'
+      out_dir=$(mktemp -d)
+      export out_dir
+      Data:expand
+        #|.dump user ${out_dir}
+      End
+      When run sqly testdata/user.csv
+      The status should be failure
+      The stderr should include 'directory'
+      The path "$out_dir.csv" should not be exist
+      rm -rf "$out_dir"
+    End
+  End
+
   Describe 'conflicts and unsupported combinations'
     It 'errors when an explicit mode flag disagrees with the path extension'
       out_dir=$(mktemp -d)

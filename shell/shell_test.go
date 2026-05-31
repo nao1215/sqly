@@ -2406,6 +2406,29 @@ func TestShellRun_SQLFile(t *testing.T) {
 	})
 }
 
+func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
+	// Regression for #303: --output to an existing directory must be rejected,
+	// not rewritten to a sibling .csv file.
+	dir := t.TempDir()
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", dir, filepath.Join("testdata", "sample.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	runErr := shell.Run(context.Background())
+	if runErr == nil {
+		t.Fatal("Run returned nil for --output to a directory, want error")
+	}
+	if !strings.Contains(runErr.Error(), "directory") {
+		t.Fatalf("error = %q, want it to mention a directory", runErr.Error())
+	}
+	if _, statErr := os.Stat(dir + ".csv"); statErr == nil {
+		t.Fatalf("a sibling file %q was created", dir+".csv")
+	}
+}
+
 func TestShellValidateSheetFlag(t *testing.T) {
 	// Regression for #287: --sheet only affects Excel imports, so it must be
 	// rejected when no input can be an Excel file instead of being silently
