@@ -159,7 +159,9 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 		if err := s.usecases.export.DumpTable(tgt.dest, table, tgt.format, tgt.comp); err != nil {
 			return fmt.Errorf("failed to save table %s to %s: %w", tgt.table, tgt.dest, err)
 		}
-		fmt.Fprintf(config.Stdout, "Saved %s to %s\n", tgt.table, tgt.dest)
+		// Write-back is a file-output operation; its confirmation is control-plane
+		// output and goes to stderr so stdout stays free of non-data noise.
+		fmt.Fprintf(config.Stderr, "Saved %s to %s\n", tgt.table, tgt.dest)
 	}
 	return nil
 }

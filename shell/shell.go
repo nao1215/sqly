@@ -649,7 +649,9 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
 	}
-	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
+	// Status for a file-output operation is control-plane information; the data
+	// went to the file, so keep stdout empty and report progress on stderr.
+	fmt.Fprintf(config.Stderr, "Output sql result to %s (output mode=%s)\n",
 		color.HiCyanString(filePath), exportFmt.String())
 	return nil
 }
