@@ -1894,6 +1894,24 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
+	t.Run("semicolon inside a bracket-quoted identifier does not split (#314)", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT 'v' AS [a;b];\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "v") || !strings.Contains(got, "a;b") {
+			t.Fatalf("bracket-quoted identifier was split: %q", got)
+		}
+	})
+
+	t.Run("semicolon inside a backtick-quoted identifier does not split (#315)", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT 'v' AS `a;b`;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "v") || !strings.Contains(got, "a;b") {
+			t.Fatalf("backtick-quoted identifier was split: %q", got)
+		}
+	})
+
 	t.Run("statement opening with a comment still runs", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "-- header comment\nSELECT actor FROM actor ORDER BY actor LIMIT 1;\n")
 		defer cleanup()
