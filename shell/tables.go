@@ -13,7 +13,10 @@ import (
 )
 
 // tablesCommand print all tables name in DB.
-func (c CommandList) tablesCommand(ctx context.Context, s *Shell, _ []string) error {
+func (c CommandList) tablesCommand(ctx context.Context, s *Shell, argv []string) error {
+	if len(argv) > 0 {
+		return fmt.Errorf(".tables takes no arguments, got %d", len(argv))
+	}
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		return err

@@ -24,5 +24,8 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 		fmt.Fprintln(config.Stdout, "  parquet ※ active only when executing .dump, otherwise same as csv mode")
 		return nil
 	}
+	if len(argv) > 1 {
+		return fmt.Errorf(".mode accepts a single mode name, got %d arguments", len(argv))
+	}
 	return s.state.mode.changeOutputModeIfNeeded(argv[0])
 }

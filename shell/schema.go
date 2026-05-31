@@ -22,6 +22,9 @@ func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string)
 		fmt.Fprintln(config.Stdout, "  .schema TABLE_NAME")
 		return nil
 	}
+	if len(argv) > 1 {
+		return fmt.Errorf(".schema accepts a single table name, got %d arguments", len(argv))
+	}
 	tableName := argv[0]
 
 	createSQL, err := s.tableCreateStatement(ctx, tableName)

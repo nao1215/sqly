@@ -2630,6 +2630,40 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 	}
 }
 
+func TestHelperCommandsRejectExtraArgs(t *testing.T) {
+	// Regression for #327: helper commands must reject unexpected extra
+	// arguments instead of silently ignoring them.
+	cases := []struct {
+		name string
+		run  func(*Shell) error
+	}{
+		{".schema", func(s *Shell) error {
+			return s.commands.schemaCommand(context.Background(), s, []string{"user", "extra"})
+		}},
+		{".describe", func(s *Shell) error {
+			return s.commands.describeCommand(context.Background(), s, []string{"user", "extra"})
+		}},
+		{".header", func(s *Shell) error {
+			return s.commands.headerCommand(context.Background(), s, []string{"user", "extra"})
+		}},
+		{".mode", func(s *Shell) error { return s.commands.modeCommand(context.Background(), s, []string{"csv", "extra"}) }},
+		{".tables", func(s *Shell) error { return s.commands.tablesCommand(context.Background(), s, []string{"extra"}) }},
+		{".help", func(s *Shell) error { return s.commands.helpCommand(context.Background(), s, []string{"extra"}) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+" rejects an extra argument", func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			if err := tc.run(shell); err == nil {
+				t.Fatalf("%s ignored an extra argument, want error", tc.name)
+			}
+		})
+	}
+}
+
 func TestShellRun_OutputRequiresSQL(t *testing.T) {
 	// Regression for #318/#319: --output is honored only with --sql, so it must
 	// be rejected (not silently ignored) on the batch and no-query paths.
