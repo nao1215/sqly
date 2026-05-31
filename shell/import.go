@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,16 +33,73 @@ func (s *Shell) validateSheetFlag() error {
 	if s.argument.SheetName == "" {
 		return nil
 	}
-	for _, path := range s.argument.FilePaths {
-		info, err := os.Stat(path)
-		if err != nil {
-			return nil //nolint:nilerr // a bad path is reported by the import step, not here
-		}
-		if info.IsDir() || s.usecases.importer.IsExcelFile(path) {
-			return nil
-		}
+	if s.sheetAppliesTo(s.argument.FilePaths) {
+		return nil
 	}
 	return errors.New("--sheet is only valid for Excel (.xlsx) inputs")
+}
+
+// sheetAppliesTo reports whether --sheet can affect any of the given input
+// paths: a path is meaningful for --sheet when it is an Excel file or a
+// directory that contains at least one Excel file. A path that cannot be stat'd
+// is treated as applicable so the import step reports the real path error
+// instead of this validation misattributing it to --sheet.
+func (s *Shell) sheetAppliesTo(paths []string) bool {
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return true
+		}
+		if info.IsDir() {
+			if s.dirContainsExcel(path) {
+				return true
+			}
+			continue
+		}
+		if s.usecases.importer.IsExcelFile(path) {
+			return true
+		}
+	}
+	return false
+}
+
+// dirContainsExcel reports whether dir contains at least one Excel file,
+// searched recursively. Walk errors are ignored: a directory that cannot be
+// traversed simply yields no Excel match, and the import step surfaces the real
+// error.
+func (s *Shell) dirContainsExcel(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || found {
+			return nil //nolint:nilerr // skip unreadable entries; import reports real errors
+		}
+		if !d.IsDir() && s.usecases.importer.IsExcelFile(path) {
+			found = true
+		}
+		return nil
+	})
+	return found
+}
+
+// importPaths returns the file/directory arguments from a .import argv,
+// excluding the --sheet flag and its value in both the separated and joined
+// forms. It mirrors the flag handling in importCommand's main loop.
+func importPaths(argv []string) []string {
+	var paths []string
+	for i := 0; i < len(argv); i++ {
+		a := argv[i]
+		if a == sheetFlag {
+			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
+				i++ // skip the separated sheet value
+			}
+			continue
+		}
+		if strings.HasPrefix(a, sheetFlagAssign) {
+			continue
+		}
+		paths = append(paths, a)
+	}
+	return paths
 }
 
 // importCommand imports files into the in-memory database.
@@ -57,6 +115,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	sheetName := s.argument.SheetName
 	if sheetName == "" {
 		sheetName = extractSheetNameFromArgs(argv)
+	}
+
+	// Reject --sheet when none of the inputs is an Excel file (or a directory
+	// containing one), so the flag is not silently ignored. Ref #312.
+	if sheetName != "" && !s.sheetAppliesTo(importPaths(argv)) {
+		return errors.New("--sheet is only valid for Excel (.xlsx) inputs")
 	}
 
 	var errorMessages []string

@@ -2505,15 +2505,33 @@ func TestShellValidateSheetFlag(t *testing.T) {
 		}
 	})
 
-	t.Run("allows --sheet for a directory input that may contain Excel files", func(t *testing.T) {
+	t.Run("allows --sheet for a directory that contains an Excel file", func(t *testing.T) {
 		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "book.xlsx"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", dir})
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer cleanup()
 		if err := shell.validateSheetFlag(); err != nil {
-			t.Fatalf("validateSheetFlag returned error for a directory input: %v", err)
+			t.Fatalf("validateSheetFlag returned error for a directory with an Excel file: %v", err)
+		}
+	})
+
+	t.Run("rejects --sheet for a directory with no Excel files (#312)", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "u.csv"), []byte("a\n1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err == nil {
+			t.Fatal("validateSheetFlag returned nil for a directory without Excel files, want error")
 		}
 	})
 

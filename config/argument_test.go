@@ -224,6 +224,13 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit empty --sheet is rejected (#313)", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--sheet", "", "testdata/user.csv"})
+		if err == nil {
+			t.Fatal("expected an error for an explicit empty --sheet, got nil")
+		}
+	})
+
 	t.Run("--inspect sets the inspect flag (#259)", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--inspect", "testdata/user.csv"})
 		if err != nil {

@@ -136,6 +136,13 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, err
 	}
 
+	// An explicit empty --sheet ("--sheet \"\"") is a mistake: the empty string
+	// is the "no sheet selected" sentinel, so accepting it would silently behave
+	// like the flag was never passed. Reject it so the error is visible. Ref #313.
+	if flag.Changed("sheet") && *sheetName == "" {
+		return nil, errEmptySheet
+	}
+
 	arg.Usage = usage(flag)
 	arg.Version = version
 	arg.Output = newOutput(*output, oFlag)
