@@ -3,6 +3,7 @@
 package shell
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -166,6 +167,14 @@ func (s *Shell) Run(ctx context.Context) error {
 	if s.argument.Query != "" && s.argument.SQLFilePath != "" {
 		return errors.New("--sql and --sql-file cannot be used together")
 	}
+	// --stdin stages piped stdin as a dataset, which consumes stdin entirely, so
+	// nothing remains to carry a query. Require an explicit query source;
+	// otherwise the dataset is imported and immediately discarded with a success
+	// exit code. Ref #374.
+	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
+		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
+	}
+
 	var sqlScript string
 	if s.argument.SQLFilePath != "" {
 		script, err := readSQLFile(s.argument.SQLFilePath)
@@ -173,6 +182,14 @@ func (s *Shell) Run(ctx context.Context) error {
 			return err
 		}
 		sqlScript = script
+
+		// --sql-file takes its query from the file, not stdin. Without --stdin to
+		// route piped stdin to a dataset, non-empty piped stdin would be silently
+		// dropped, so reject it and point the user at --stdin. Empty stdin (e.g.
+		// CI redirecting /dev/null) is fine. Ref #373.
+		if s.argument.StdinFormat == "" && !s.isTTY() && s.pipedStdinHasData() {
+			return errors.New("--sql-file does not read SQL from stdin; piped stdin would be ignored. Use --stdin FORMAT to load it as a dataset, or remove the pipe")
+		}
 	}
 
 	if err := s.init(ctx); err != nil {
@@ -357,6 +374,17 @@ func (s *Shell) init(ctx context.Context) error {
 		s.remapStdinTableSources(stdinAbsPath)
 	}
 	return importErr
+}
+
+// pipedStdinHasData reports whether stdin currently has at least one unread
+// byte. It wraps stdin in a buffered reader and peeks one byte, keeping that
+// byte available for any later reader. It is used to detect a piped payload that
+// would otherwise be silently ignored (e.g. SQL piped into a --sql-file run).
+func (s *Shell) pipedStdinHasData() bool {
+	br := bufio.NewReader(s.stdin)
+	s.stdin = br
+	_, err := br.Peek(1)
+	return err == nil
 }
 
 // stdinTableSource is the synthetic source recorded for tables imported from a

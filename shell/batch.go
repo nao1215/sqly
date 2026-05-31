@@ -2,6 +2,7 @@ package shell
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,10 @@ import (
 // maxBatchLineBytes caps a single batch input line, preventing unbounded memory
 // growth on input without newlines.
 const maxBatchLineBytes = 10 * 1024 * 1024
+
+// utf8BOM is the UTF-8 byte order mark stripped from the start of batch input
+// and --sql-file scripts so BOM-prefixed files parse like plain UTF-8. Ref #369.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 // runBatch executes SQL statements and helper commands read from stdin until
 // EOF. It is used when sqly runs without a TTY (piped stdin), where the
@@ -41,7 +46,13 @@ func (s *Shell) runBatch(ctx context.Context) (ranAny bool, err error) {
 // was executed, so callers can skip post-run side effects (e.g. --save
 // write-back) for an empty batch (Ref #330).
 func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, err error) {
-	scanner := bufio.NewScanner(r)
+	// Strip a leading UTF-8 BOM so a BOM-prefixed batch stream (common from
+	// Windows editors and export tools) parses the same as plain UTF-8. Ref #369.
+	br := bufio.NewReader(r)
+	if prefix, perr := br.Peek(len(utf8BOM)); perr == nil && bytes.Equal(prefix, utf8BOM) {
+		_, _ = br.Discard(len(utf8BOM))
+	}
+	scanner := bufio.NewScanner(br)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxBatchLineBytes)
 
 	stmtNo := 0
@@ -217,7 +228,9 @@ func readSQLFile(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read --sql-file %q: %w", path, err)
 	}
-	content := string(data)
+	// Strip a leading UTF-8 BOM so a BOM-prefixed script (common from Windows
+	// editors and export tools) parses the same as plain UTF-8. Ref #369.
+	content := strings.TrimPrefix(string(data), "\ufeff")
 	if strings.TrimSpace(content) == "" {
 		return "", fmt.Errorf("--sql-file %q is empty", path)
 	}

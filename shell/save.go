@@ -52,8 +52,12 @@ func (s *Shell) validateSaveFlags() error {
 	if s.argument.SaveInPlace && !s.argument.Force {
 		return errors.New("--save overwrites source files; pass --force to confirm, or use --save-dir DIR to write elsewhere")
 	}
-	if s.argument.Query == "" && s.isTTY() {
-		return errors.New("--save/--save-dir require --sql or piped input; use the .save command in the interactive shell")
+	// --sql-file is a non-interactive execution path just like --sql and piped
+	// input, so it may carry write-back even when stdin is a TTY. Reject the save
+	// flags only for a genuinely interactive run with no query source. Ref #366,
+	// #367.
+	if s.argument.Query == "" && s.argument.SQLFilePath == "" && s.isTTY() {
+		return errors.New("--save/--save-dir require --sql, --sql-file, or piped input; use the .save command in the interactive shell")
 	}
 	return nil
 }
