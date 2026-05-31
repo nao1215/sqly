@@ -88,7 +88,9 @@ Describe 'sqly --stdin dataset'
       End
       When run sqly --stdin csv --sql "UPDATE stdin SET name = 'x'" --save --force
       The status should be failure
-      The output should include 'affected'
+      # Write-back is validated before the query runs, so the run fails before any
+      # DML success count reaches stdout (#375).
+      The output should not include 'affected'
       The stderr should include 'stdin'
     End
 
