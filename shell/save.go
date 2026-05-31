@@ -115,6 +115,10 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 			problems = append(problems, name+": not loaded from a file")
 			continue
 		}
+		if source == stdinTableSource {
+			problems = append(problems, name+": came from --stdin and has no source file to write back to")
+			continue
+		}
 		if info, statErr := os.Stat(source); statErr == nil && info.IsDir() {
 			problems = append(problems, fmt.Sprintf("%s: came from a directory import (%s)", name, source))
 			continue

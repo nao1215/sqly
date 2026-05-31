@@ -310,6 +310,7 @@ func (s *Shell) init(ctx context.Context) error {
 	}
 
 	paths := s.argument.FilePaths
+	stdinAbsPath := ""
 	// When --stdin is set, stage piped stdin as a dataset file and import it
 	// alongside the file/directory arguments so it can be queried and joined.
 	if s.argument.StdinFormat != "" {
@@ -323,13 +324,40 @@ func (s *Shell) init(ctx context.Context) error {
 			return err
 		}
 		defer cleanup()
+		if abs, err := filepath.Abs(stdinPath); err == nil {
+			stdinAbsPath = abs
+		} else {
+			stdinAbsPath = stdinPath
+		}
 		paths = append([]string{stdinPath}, paths...)
 	}
 
 	if len(paths) == 0 {
 		return nil
 	}
-	return s.commands.importCommand(ctx, s, paths)
+	importErr := s.commands.importCommand(ctx, s, paths)
+	// Re-point any stdin-derived table's source from the ephemeral temp path to
+	// a stable "stdin" marker, so --inspect does not leak the temp path (#290)
+	// and write-back can reject stdin-backed tables instead of writing to a
+	// deleted temp file (#291).
+	if stdinAbsPath != "" {
+		s.remapStdinTableSources(stdinAbsPath)
+	}
+	return importErr
+}
+
+// stdinTableSource is the synthetic source recorded for tables imported from a
+// piped --stdin dataset, in place of the ephemeral staging temp path.
+const stdinTableSource = "stdin"
+
+// remapStdinTableSources replaces the recorded source of any table staged from
+// stdin (its temp path) with the stable stdinTableSource marker.
+func (s *Shell) remapStdinTableSources(stdinAbsPath string) {
+	for name, src := range s.tableSources {
+		if src == stdinAbsPath {
+			s.tableSources[name] = stdinTableSource
+		}
+	}
 }
 
 // stdinFormatExtensions maps the --stdin format names to file extensions. The

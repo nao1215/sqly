@@ -224,6 +224,20 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid --stdin-name values are rejected (#305)", func(t *testing.T) {
+		for _, name := range []string{"", ".", "..", "a/b", "../escaped", `a\b`} {
+			if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", name}); err == nil {
+				t.Errorf("NewArg accepted invalid --stdin-name %q, want error", name)
+			}
+		}
+	})
+
+	t.Run("a normal --stdin-name is accepted (#305)", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", "people"}); err != nil {
+			t.Errorf("NewArg rejected a valid --stdin-name: %v", err)
+		}
+	})
+
 	t.Run("explicit empty --sheet is rejected (#313)", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--sheet", "", "testdata/user.csv"})
 		if err == nil {
