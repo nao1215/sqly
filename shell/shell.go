@@ -198,6 +198,11 @@ func (s *Shell) init(ctx context.Context) error {
 	// When --stdin is set, stage piped stdin as a dataset file and import it
 	// alongside the file/directory arguments so it can be queried and joined.
 	if s.argument.StdinFormat != "" {
+		// stageStdinDataset reads stdin to EOF; on a terminal that would hang
+		// waiting for the user. --stdin is only meaningful with piped input.
+		if s.isTTY() {
+			return errors.New("--stdin requires piped or redirected stdin")
+		}
 		stdinPath, cleanup, err := s.stageStdinDataset()
 		if err != nil {
 			return err
@@ -222,7 +227,7 @@ var stdinFormatExtensions = map[string]string{
 	"tsv":   model.ExtTSV,
 	"ltsv":  model.ExtLTSV,
 	"json":  model.ExtJSON,
-	"jsonl": ".jsonl",
+	"jsonl": model.ExtJSONL,
 }
 
 // stageStdinDataset reads all of stdin into a temporary file named after the

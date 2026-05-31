@@ -2149,6 +2149,24 @@ func TestShellRun_StdinDataset(t *testing.T) {
 			t.Fatalf("error = %q, want it to mention stdin", err.Error())
 		}
 	})
+
+	t.Run("rejects --stdin on an interactive terminal", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sql", "SELECT 1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		// A terminal would make the stdin read block forever; reject early.
+		shell.isTTY = func() bool { return true }
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("--stdin on a TTY returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "piped") {
+			t.Fatalf("error = %q, want it to mention piped stdin", err.Error())
+		}
+	})
 }
 
 func TestShell_shortCWD(t *testing.T) {

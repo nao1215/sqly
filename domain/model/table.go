@@ -68,6 +68,7 @@ const (
 	ExtMarkdown = ".md"
 	ExtExcel    = ".xlsx"
 	ExtJSON     = ".json"
+	ExtJSONL    = ".jsonl"
 	ExtNDJSON   = ".ndjson"
 	ExtParquet  = ".parquet"
 )

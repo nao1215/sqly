@@ -33,6 +33,16 @@ Describe 'sqly --stdin dataset'
       The output should include '1'
     End
 
+    It 'queries piped JSONL data stored in a data column'
+      Data
+        #|{"id":1,"name":"alice"}
+        #|{"id":2,"name":"bob"}
+      End
+      When run sqly --stdin jsonl --csv --sql "SELECT COUNT(*) AS c FROM stdin"
+      The status should be success
+      The output should include '2'
+    End
+
     It 'overrides the stdin table name with --stdin-name'
       Data
         #|id,name
