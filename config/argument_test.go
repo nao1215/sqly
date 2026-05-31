@@ -201,6 +201,29 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("--inspect sets the inspect flag (#259)", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--inspect", "testdata/user.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !arg.InspectFlag {
+			t.Errorf("InspectFlag = false, want true")
+		}
+		if diff := cmp.Diff([]string{"testdata/user.csv"}, arg.FilePaths); diff != "" {
+			t.Errorf("FilePaths mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("inspect flag defaults to false (#259)", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "testdata/user.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.InspectFlag {
+			t.Errorf("InspectFlag = true, want false")
+		}
+	})
+
 	t.Run("default print mode", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly"})
 		if err != nil {

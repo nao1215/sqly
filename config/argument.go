@@ -40,6 +40,10 @@ type Arg struct {
 	VersionFlag bool
 	// Query is SQL query (for --sql option)
 	Query string
+	// InspectFlag, when true, prints a machine-readable JSON report of the
+	// imported tables (names, source mapping, columns, row counts, and sample
+	// rows) and exits without starting the shell.
+	InspectFlag bool
 	// Usage message
 	Usage string
 	// SheetName is excel sheet name that is imported into the DB.
@@ -97,6 +101,7 @@ func NewArg(args []string) (*Arg, error) {
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
+	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
 	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print sqly version")
 	if err := flag.Parse(args[1:]); err != nil {

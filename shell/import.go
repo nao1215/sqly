@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,13 +95,14 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	}
 
 	if len(errorMessages) > 0 {
+		statusOut := s.importStatusWriter()
 		if successCount > 0 {
-			fmt.Fprintf(config.Stdout, "\nImport completed with %d successful import(s) and %d error(s):\n", successCount, len(errorMessages))
+			fmt.Fprintf(statusOut, "\nImport completed with %d successful import(s) and %d error(s):\n", successCount, len(errorMessages))
 		} else {
-			fmt.Fprintf(config.Stdout, "\nImport failed with %d error(s):\n", len(errorMessages))
+			fmt.Fprintf(statusOut, "\nImport failed with %d error(s):\n", len(errorMessages))
 		}
 		for _, errMsg := range errorMessages {
-			fmt.Fprintf(config.Stdout, "  - %s\n", errMsg)
+			fmt.Fprintf(statusOut, "  - %s\n", errMsg)
 		}
 		if successCount == 0 {
 			return errors.New("all import attempts failed")
@@ -133,7 +135,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	newTableNames := diffTableNames(tablesAfter, existingTables)
 
 	if len(newTableNames) == 0 {
-		fmt.Fprintf(config.Stdout, "No supported files found in directory %s\n", displayPath)
+		fmt.Fprintf(s.importStatusWriter(), "No supported files found in directory %s\n", displayPath)
 		return false, nil
 	}
 
@@ -168,7 +170,11 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 	remainingNames := diffTableNames(tablesNow, existingTables)
 
-	fmt.Fprintf(config.Stdout, "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
+	if s.argument.InspectFlag {
+		s.recordInspectSources(remainingNames, displayPath)
+	}
+
+	fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
 	return true, nil
 }
 
@@ -176,6 +182,18 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
 	if !s.usecases.importer.IsSupportedFile(cleanPath) {
 		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
+	}
+
+	// Capture which tables this file creates so --inspect can map them to their
+	// source. The before/after diff is only computed when inspecting, so normal
+	// imports keep their single-load cost.
+	var existingTables map[string]struct{}
+	if s.argument.InspectFlag {
+		before, err := s.usecases.importer.GetTableNames(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get table names before importing %s: %w", displayPath, err)
+		}
+		existingTables = tableNameSet(before)
 	}
 
 	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
@@ -192,7 +210,35 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 		}
 	}
 
+	if s.argument.InspectFlag {
+		after, err := s.usecases.importer.GetTableNames(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
+		}
+		s.recordInspectSources(diffTableNames(after, existingTables), displayPath)
+	}
+
 	return nil
+}
+
+// recordInspectSources remembers which source path produced each table name so
+// the --inspect report can show the source-to-table mapping.
+func (s *Shell) recordInspectSources(tableNames []string, source string) {
+	if s.inspectSources == nil {
+		s.inspectSources = make(map[string]string)
+	}
+	for _, name := range tableNames {
+		s.inspectSources[name] = source
+	}
+}
+
+// importStatusWriter selects where import progress messages go. Under --inspect,
+// stdout must carry only the JSON report, so progress is sent to stderr instead.
+func (s *Shell) importStatusWriter() io.Writer {
+	if s.argument.InspectFlag {
+		return config.Stderr
+	}
+	return config.Stdout
 }
 
 // filterExcelSheets keeps only the requested sheet from a specific Excel file,
