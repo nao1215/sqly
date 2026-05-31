@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"testing/quick"
-
-	"github.com/nao1215/sqly/domain/model"
 )
 
 func shellQuickConfig() *quick.Config {
@@ -90,27 +88,6 @@ func TestTrimGaps_IdempotentProperty(t *testing.T) {
 	property := func(s string) bool {
 		once := trimGaps(s)
 		return trimGaps(once) == once
-	}
-	if err := quick.Check(property, shellQuickConfig()); err != nil {
-		t.Error(err)
-	}
-}
-
-// TestNormalizeDumpExt_Property asserts the normalized path always ends with the
-// format extension and that normalization is idempotent.
-func TestNormalizeDumpExt_Property(t *testing.T) {
-	formats := []model.ExportFormat{
-		model.ExportCSV, model.ExportTSV, model.ExportLTSV,
-		model.ExportMarkdown, model.ExportExcel, model.ExportJSON, model.ExportNDJSON,
-	}
-	property := func(base string, idx uint8) bool {
-		ef := formats[int(idx)%len(formats)]
-		path := base + ".tmp"
-		got := normalizeDumpExt(path, ef)
-		if !strings.HasSuffix(got, ef.Extension()) {
-			return false
-		}
-		return normalizeDumpExt(got, ef) == got
 	}
 	if err := quick.Check(property, shellQuickConfig()); err != nil {
 		t.Error(err)

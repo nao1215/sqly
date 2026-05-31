@@ -2,7 +2,7 @@ package persistence
 
 import (
 	"encoding/csv"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
@@ -20,8 +20,8 @@ func NewLTSVRepository() repository.LTSVRepository {
 	return &ltsvRepository{}
 }
 
-// Dump write contents of DB table to LTSV file
-func (lr *ltsvRepository) Dump(f *os.File, table *model.Table) error {
+// Dump write contents of DB table to an LTSV writer
+func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
 	w := csv.NewWriter(f)
 	w.Comma = '\t'
 

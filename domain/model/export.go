@@ -1,5 +1,20 @@
 package model
 
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+)
+
+// ErrOutputFormatConflict is returned when an explicit output mode and the
+// destination path extension name different formats.
+var ErrOutputFormatConflict = errors.New("output format conflicts with destination path")
+
+// ErrCompressionUnsupported is returned when a requested compression cannot be
+// written for the chosen format (binary formats, or bzip2 which has no writer).
+var ErrCompressionUnsupported = errors.New("compression is not supported for this output")
+
 // ExportFormat represents a file export format, separate from display modes.
 // This allows adding new export targets (e.g. Parquet, compressed formats)
 // without modifying the terminal display mode enum.
@@ -68,6 +83,193 @@ func (e ExportFormat) Extension() string {
 		return ExtParquet
 	}
 	return ExtCSV
+}
+
+// SupportsCompression reports whether output of this format can be wrapped in a
+// compression codec. Binary container formats (Parquet, Excel) carry their own
+// encoding and are not wrapped, so they return false.
+func (e ExportFormat) SupportsCompression() bool {
+	switch e {
+	case ExportParquet, ExportExcel:
+		return false
+	default:
+		return true
+	}
+}
+
+// ExportFormatFromExtension maps a base file extension (e.g. ".csv") to an
+// ExportFormat. The bool is false when the extension is not a known export
+// format, so callers can fall back instead of guessing. Matching is
+// case-insensitive. ".jsonl" maps to NDJSON since JSON Lines is newline-delimited.
+func ExportFormatFromExtension(ext string) (ExportFormat, bool) {
+	switch strings.ToLower(ext) {
+	case ExtCSV:
+		return ExportCSV, true
+	case ExtTSV:
+		return ExportTSV, true
+	case ExtLTSV:
+		return ExportLTSV, true
+	case ExtMarkdown:
+		return ExportMarkdown, true
+	case ExtExcel:
+		return ExportExcel, true
+	case ExtJSON:
+		return ExportJSON, true
+	case ExtNDJSON, ExtJSONL:
+		return ExportNDJSON, true
+	case ExtParquet:
+		return ExportParquet, true
+	default:
+		return ExportCSV, false
+	}
+}
+
+// Compression represents an output compression codec wrapped around a text or
+// JSON export. It is kept separate from filesql's compression type so the
+// domain layer stays free of infrastructure dependencies; the filesql adapter
+// maps these values when creating the writer.
+type Compression uint
+
+const (
+	// CompressionNone writes the format uncompressed.
+	CompressionNone Compression = iota
+	// CompressionGzip writes gzip (.gz).
+	CompressionGzip
+	// CompressionBzip2 names bzip2 (.bz2). It is read-only; writing is rejected.
+	CompressionBzip2
+	// CompressionXz writes xz (.xz).
+	CompressionXz
+	// CompressionZstd writes zstd (.zst).
+	CompressionZstd
+	// CompressionZlib writes zlib (.z).
+	CompressionZlib
+	// CompressionSnappy writes snappy (.snappy).
+	CompressionSnappy
+	// CompressionS2 writes s2 (.s2).
+	CompressionS2
+	// CompressionLz4 writes lz4 (.lz4).
+	CompressionLz4
+)
+
+// Compression file extension constants.
+const (
+	ExtGzip   = ".gz"
+	ExtBzip2  = ".bz2"
+	ExtXz     = ".xz"
+	ExtZstd   = ".zst"
+	ExtZlib   = ".z"
+	ExtSnappy = ".snappy"
+	ExtS2     = ".s2"
+	ExtLz4    = ".lz4"
+)
+
+// Extension returns the file extension for the compression, or "" for none.
+func (c Compression) Extension() string {
+	switch c {
+	case CompressionGzip:
+		return ExtGzip
+	case CompressionBzip2:
+		return ExtBzip2
+	case CompressionXz:
+		return ExtXz
+	case CompressionZstd:
+		return ExtZstd
+	case CompressionZlib:
+		return ExtZlib
+	case CompressionSnappy:
+		return ExtSnappy
+	case CompressionS2:
+		return ExtS2
+	case CompressionLz4:
+		return ExtLz4
+	default:
+		return ""
+	}
+}
+
+// CompressionFromExtension maps a compression extension (e.g. ".gz") to a
+// Compression. The bool is false when the extension is not a known compression.
+// Matching is case-insensitive.
+func CompressionFromExtension(ext string) (Compression, bool) {
+	switch strings.ToLower(ext) {
+	case ExtGzip:
+		return CompressionGzip, true
+	case ExtBzip2:
+		return CompressionBzip2, true
+	case ExtXz:
+		return CompressionXz, true
+	case ExtZstd:
+		return CompressionZstd, true
+	case ExtZlib:
+		return CompressionZlib, true
+	case ExtSnappy:
+		return CompressionSnappy, true
+	case ExtS2:
+		return CompressionS2, true
+	case ExtLz4:
+		return CompressionLz4, true
+	default:
+		return CompressionNone, false
+	}
+}
+
+// ResolveOutputTarget determines the export format and compression for a
+// destination path. explicit is the format chosen by a mode flag or .mode, and
+// explicitSet is false when the user gave no format (table/default), in which
+// case the format is inferred from the path so requests like "result.parquet"
+// or "out.ndjson.gz" do the obvious thing.
+//
+// When an explicit format and the path extension disagree, it returns
+// ErrOutputFormatConflict rather than silently writing a surprising format.
+// Compression on a binary format, or bzip2 (no writer), returns
+// ErrCompressionUnsupported.
+func ResolveOutputTarget(path string, explicit ExportFormat, explicitSet bool) (ExportFormat, Compression, error) {
+	comp := CompressionNone
+	base := path
+	if c, ok := CompressionFromExtension(filepath.Ext(path)); ok {
+		comp = c
+		base = strings.TrimSuffix(path, filepath.Ext(path))
+	}
+
+	inferred, hasInferred := ExportFormatFromExtension(filepath.Ext(base))
+
+	var format ExportFormat
+	switch {
+	case explicitSet && hasInferred && explicit != inferred:
+		return 0, CompressionNone, fmt.Errorf("%w: output mode %q does not match destination extension %q",
+			ErrOutputFormatConflict, explicit.String(), filepath.Ext(base))
+	case explicitSet:
+		format = explicit
+	case hasInferred:
+		format = inferred
+	default:
+		format = ExportCSV
+	}
+
+	if comp != CompressionNone {
+		if !format.SupportsCompression() {
+			return 0, CompressionNone, fmt.Errorf("%w: %s output cannot be compressed",
+				ErrCompressionUnsupported, format.String())
+		}
+		if comp == CompressionBzip2 {
+			return 0, CompressionNone, fmt.Errorf("%w: bzip2 output cannot be written", ErrCompressionUnsupported)
+		}
+	}
+	return format, comp, nil
+}
+
+// BuildOutputPath returns the destination path with the format's extension and
+// any compression extension applied, so the written file name matches what was
+// actually produced (e.g. "result" with NDJSON+gzip becomes "result.ndjson.gz").
+func BuildOutputPath(path string, format ExportFormat, comp Compression) string {
+	base := path
+	if _, ok := CompressionFromExtension(filepath.Ext(path)); ok {
+		base = strings.TrimSuffix(path, filepath.Ext(path))
+	}
+	if !strings.EqualFold(filepath.Ext(base), format.Extension()) {
+		base = strings.TrimSuffix(base, filepath.Ext(base)) + format.Extension()
+	}
+	return base + comp.Extension()
 }
 
 // ExportFormatFromPrintMode converts a PrintMode to an ExportFormat.

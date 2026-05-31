@@ -18,8 +18,10 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		fmt.Fprintln(config.Stdout, "[Usage]")
 		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
 		fmt.Fprintln(config.Stdout, "[Note]")
-		fmt.Fprintln(config.Stdout, "  Output will be in the format specified in .mode.")
-		fmt.Fprintln(config.Stdout, "  table mode is not available in .dump. If mode is table, .dump output CSV file.")
+		fmt.Fprintln(config.Stdout, "  The format comes from .mode. When .mode is table, it is inferred from the")
+		fmt.Fprintln(config.Stdout, "  file extension (e.g. .tsv, .parquet), falling back to CSV when unknown.")
+		fmt.Fprintln(config.Stdout, "  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).")
+		fmt.Fprintln(config.Stdout, "  A .mode that disagrees with the extension is rejected instead of normalizing.")
 		fmt.Fprintln(config.Stdout, "  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.")
 		return nil
 	}
@@ -43,22 +45,19 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return err
 	}
 
-	exportFmt := model.ExportFormatFromPrintMode(s.state.mode.PrintMode)
-	filePath := normalizeDumpExt(userPath, exportFmt)
-	if err := s.usecases.export.DumpTable(filePath, table, exportFmt); err != nil {
+	// The current .mode sets the format unless it is table; otherwise the format
+	// (and any compression) is inferred from the destination path.
+	mode := s.state.mode.PrintMode
+	exportFmt, compression, err := model.ResolveOutputTarget(userPath, model.ExportFormatFromPrintMode(mode), mode != model.PrintModeTable)
+	if err != nil {
+		return err
+	}
+	filePath := model.BuildOutputPath(userPath, exportFmt, compression)
+	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
 	}
 	fmt.Fprintf(config.Stdout, "dump `%s` table to %s (mode=%s)\n",
 		color.CyanString(argv[0]), color.HiCyanString(filePath), exportFmt.String())
 
 	return nil
-}
-
-// normalizeDumpExt normalizes the output file extension based on the export format
-func normalizeDumpExt(path string, ef model.ExportFormat) string {
-	ext := ef.Extension()
-	if filepath.Ext(path) == ext {
-		return path
-	}
-	return strings.TrimSuffix(path, filepath.Ext(path)) + ext
 }

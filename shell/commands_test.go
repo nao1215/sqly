@@ -530,11 +530,11 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 	exporter := mock.NewMockExportUsecase(ctrl)
 
 	outputPath := filepath.Join(t.TempDir(), "report.out")
-	normalizedPath := normalizeDumpExt(outputPath, model.ExportCSV)
+	normalizedPath := model.BuildOutputPath(outputPath, model.ExportCSV, model.CompressionNone)
 	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
 
 	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
-	exporter.EXPECT().DumpTable(normalizedPath, table, model.ExportCSV).Return(nil)
+	exporter.EXPECT().DumpTable(normalizedPath, table, model.ExportCSV, model.CompressionNone).Return(nil)
 
 	s := newBoundaryTestShell(t, Usecases{
 		metadata: metadata,

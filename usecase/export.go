@@ -10,6 +10,8 @@ import (
 
 // ExportUsecase handles exporting table data to files in various formats.
 type ExportUsecase interface {
-	// DumpTable exports a table to a file in the specified format.
-	DumpTable(filePath string, table *model.Table, format model.ExportFormat) error
+	// DumpTable exports a table to a file in the specified format, optionally
+	// wrapping text and JSON output in a compression codec. Pass
+	// model.CompressionNone to write uncompressed.
+	DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression) error
 }

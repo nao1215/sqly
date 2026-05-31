@@ -1,7 +1,9 @@
 package interactor
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -38,7 +40,7 @@ func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.csv")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportCSV); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportCSV, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable CSV failed: %v", err)
 	}
 
@@ -68,7 +70,7 @@ func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.tsv")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportTSV); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportTSV, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable TSV failed: %v", err)
 	}
 
@@ -94,7 +96,7 @@ func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.ltsv")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportLTSV); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportLTSV, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable LTSV failed: %v", err)
 	}
 
@@ -120,7 +122,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.xlsx")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportExcel); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportExcel, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable Excel failed: %v", err)
 	}
 
@@ -153,7 +155,7 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.md")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportMarkdown); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportMarkdown, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable Markdown failed: %v", err)
 	}
 
@@ -178,7 +180,7 @@ func TestExportInteractor_DumpTable_DefaultFormat(t *testing.T) {
 	outputFile := filepath.Join(tempDir, "output.txt")
 
 	// Use an invalid format value to trigger default (CSV) path
-	if err := exp.DumpTable(outputFile, table, model.ExportFormat(99)); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportFormat(99), model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable default format failed: %v", err)
 	}
 }
@@ -190,7 +192,7 @@ func TestExportInteractor_DumpTable_InvalidPath(t *testing.T) {
 
 	table := model.NewTable("test", model.NewHeader([]string{"id"}), nil)
 
-	err := exp.DumpTable("/nonexistent/directory/file.csv", table, model.ExportCSV)
+	err := exp.DumpTable("/nonexistent/directory/file.csv", table, model.ExportCSV, model.CompressionNone)
 	if err == nil {
 		t.Fatal("Expected error when dumping to invalid path")
 	}
@@ -206,7 +208,7 @@ func TestExportInteractor_DumpTable_JSON(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.json")
-	if err := exp.DumpTable(outputFile, table, model.ExportJSON); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportJSON, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable JSON failed: %v", err)
 	}
 
@@ -229,6 +231,74 @@ func TestExportInteractor_DumpTable_JSON(t *testing.T) {
 	}
 }
 
+// readGzip reads and gunzips a file, returning its decompressed contents.
+func readGzip(t *testing.T, path string) string {
+	t.Helper()
+	f, err := os.Open(path) //nolint:gosec // test file with controlled path
+	if err != nil {
+		t.Fatalf("open %q: %v", path, err)
+	}
+	defer func() { _ = f.Close() }()
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("gzip reader for %q: %v", path, err)
+	}
+	defer func() { _ = gr.Close() }()
+	data, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("read gzip %q: %v", path, err)
+	}
+	return string(data)
+}
+
+func TestExportInteractor_DumpTable_CSV_Gzip(t *testing.T) {
+	t.Parallel()
+
+	exp := newTestExportInteractor()
+	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+		model.NewRecord([]string{"John", "25"}),
+	})
+
+	outputFile := filepath.Join(t.TempDir(), "output.csv.gz")
+	if err := exp.DumpTable(outputFile, table, model.ExportCSV, model.CompressionGzip); err != nil {
+		t.Fatalf("DumpTable CSV gzip failed: %v", err)
+	}
+
+	// Metamorphic check: gunzipping yields the same CSV the uncompressed path writes.
+	content := readGzip(t, outputFile)
+	if !strings.Contains(content, "name,age") || !strings.Contains(content, "John,25") {
+		t.Errorf("gzip CSV round-trip mismatch: %s", content)
+	}
+}
+
+func TestExportInteractor_DumpTable_NDJSON_Gzip(t *testing.T) {
+	t.Parallel()
+
+	exp := newTestExportInteractor()
+	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+		model.NewRecord([]string{"John", "25"}),
+		model.NewRecord([]string{"Jane", "30"}),
+	})
+
+	outputFile := filepath.Join(t.TempDir(), "output.ndjson.gz")
+	if err := exp.DumpTable(outputFile, table, model.ExportNDJSON, model.CompressionGzip); err != nil {
+		t.Fatalf("DumpTable NDJSON gzip failed: %v", err)
+	}
+
+	content := readGzip(t, outputFile)
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 NDJSON lines, got %d: %s", len(lines), content)
+	}
+	var got map[string]string
+	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
+		t.Fatalf("NDJSON gzip line invalid: %v", err)
+	}
+	if !reflect.DeepEqual(got, map[string]string{"name": "John", "age": "25"}) {
+		t.Errorf("NDJSON gzip round-trip mismatch: %v", got)
+	}
+}
+
 func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 	t.Parallel()
 
@@ -239,7 +309,7 @@ func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson")
-	if err := exp.DumpTable(outputFile, table, model.ExportNDJSON); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportNDJSON, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable NDJSON failed: %v", err)
 	}
 

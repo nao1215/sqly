@@ -2,7 +2,7 @@ package persistence
 
 import (
 	"encoding/csv"
-	"os"
+	"io"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -23,8 +23,8 @@ func NewTSVRepository() repository.TSVRepository {
 	return &delimitedRepository{delimiter: '\t'}
 }
 
-// Dump write contents of DB table to a delimited file
-func (dr *delimitedRepository) Dump(f *os.File, table *model.Table) error {
+// Dump write contents of DB table to a delimited writer
+func (dr *delimitedRepository) Dump(f io.Writer, table *model.Table) error {
 	w := csv.NewWriter(f)
 	w.Comma = dr.delimiter
 

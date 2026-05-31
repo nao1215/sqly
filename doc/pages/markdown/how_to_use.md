@@ -144,3 +144,14 @@ The sqly can save SQL execution results to the file using the --output option. T
 ```shell
 $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv 
 ```
+
+### Infer export format and compression from the output path
+
+When no output mode flag is given, sqly infers the export format and compression from the `--output` path extension, and the shell `.dump` command applies the same rules.
+
+```shell
+$ sqly --sql "SELECT * FROM user" --output result.parquet testdata/user.csv
+$ sqly --sql "SELECT * FROM user" --output result.ndjson.gz testdata/user.csv
+```
+
+Text and JSON formats (csv, tsv, ltsv, json, ndjson, markdown) support the compression wrappers `.gz`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4`. An explicit mode flag that disagrees with the path extension is rejected instead of writing a surprising format. Bzip2 output and compression on Parquet or Excel are rejected with a clear error.
