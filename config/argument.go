@@ -144,6 +144,22 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, errEmptySheet
 	}
 
+	// Reject other flags given an explicit empty value for the same reason: each
+	// flag's empty string is the "flag absent" sentinel, so an explicit "" would
+	// otherwise be silently ignored. Ref #349, #350, #352, #353.
+	if flag.Changed("output") && *output == "" {
+		return nil, errEmptyOutput
+	}
+	if flag.Changed("sql-file") && *sqlFile == "" {
+		return nil, errEmptySQLFile
+	}
+	if flag.Changed("save-dir") && *saveDir == "" {
+		return nil, errEmptySaveDir
+	}
+	if flag.Changed("stdin") && *stdinFormat == "" {
+		return nil, errEmptyStdin
+	}
+
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
