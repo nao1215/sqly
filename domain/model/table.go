@@ -128,6 +128,12 @@ type Table struct {
 	header Header
 	// Records is table records.
 	records []Record
+	// nulls optionally marks which cells are SQL NULL (as opposed to an empty
+	// string), indexed as nulls[row][col]. It is set only for query results,
+	// where the distinction is known, and is consulted by JSON/NDJSON output so a
+	// NULL is emitted as JSON null. nil means "no NULL information"; text formats
+	// ignore it and render every cell as a string.
+	nulls [][]bool
 }
 
 // NewTable create new Table.
@@ -141,6 +147,18 @@ func NewTable(
 		header:  header,
 		records: records,
 	}
+}
+
+// SetNulls records which cells are SQL NULL, indexed as nulls[row][col]. It is
+// used by query results so JSON/NDJSON output can emit a NULL as JSON null
+// rather than an empty string. Other output formats ignore it.
+func (t *Table) SetNulls(nulls [][]bool) {
+	t.nulls = nulls
+}
+
+// isNull reports whether the cell at (row, col) is a known SQL NULL.
+func (t *Table) isNull(row, col int) bool {
+	return row < len(t.nulls) && col < len(t.nulls[row]) && t.nulls[row][col]
 }
 
 // Name return table name.
@@ -388,7 +406,7 @@ func (t *Table) printExcel(out io.Writer) {
 // string, so emitting strings keeps output lossless (e.g. "007" stays "007")
 // and consistent with the other text formats. Why a manual builder: encoding's
 // map marshaling sorts keys alphabetically, which would drop column order.
-func (t *Table) rowToJSONObject(record Record) ([]byte, error) {
+func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
 	for i, h := range t.Header() {
@@ -401,6 +419,13 @@ func (t *Table) rowToJSONObject(record Record) ([]byte, error) {
 		}
 		b.Write(key)
 		b.WriteByte(':')
+
+		// Emit a SQL NULL as JSON null so it is distinguishable from an empty
+		// string in machine-readable output.
+		if t.isNull(row, i) {
+			b.WriteString("null")
+			continue
+		}
 
 		var val string
 		if i < len(record) {
@@ -427,7 +452,7 @@ func (t *Table) printJSON(out io.Writer) error {
 		return err
 	}
 	for i, record := range t.Records() {
-		obj, err := t.rowToJSONObject(record)
+		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {
 			return err
 		}
@@ -446,8 +471,8 @@ func (t *Table) printJSON(out io.Writer) error {
 // printNDJSON prints one JSON object per line (newline-delimited JSON). An empty
 // result set prints nothing — the empty NDJSON stream.
 func (t *Table) printNDJSON(out io.Writer) error {
-	for _, record := range t.Records() {
-		obj, err := t.rowToJSONObject(record)
+	for i, record := range t.Records() {
+		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {
 			return err
 		}

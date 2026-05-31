@@ -140,17 +140,27 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	}
 
 	records := []model.Record{}
+	// nulls tracks which cells were SQL NULL. With a *[]byte scan target a NULL
+	// yields a nil slice, while an empty string yields a non-nil empty slice, so
+	// the two are distinguishable here even though both render as "".
+	nulls := [][]bool{}
 	for rows.Next() {
 		result := make([]string, len(header))
+		rowNulls := make([]bool, len(header))
 		err := rows.Scan(scanDest...)
 		if err != nil {
 			return nil, err
 		}
 
 		for i, raw := range rawResult {
+			if raw == nil {
+				rowNulls[i] = true
+				continue
+			}
 			result[i] = string(raw)
 		}
 		records = append(records, result)
+		nulls = append(nulls, rowNulls)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err
@@ -158,7 +168,9 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return model.NewTable(extractTableName(query), header, records), nil
+	table := model.NewTable(extractTableName(query), header, records)
+	table.SetNulls(nulls)
+	return table, nil
 }
 
 // extractTableName extract table name from query.
