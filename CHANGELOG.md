@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Inspect Flag Conflicts: `--inspect` now rejects conflicting action and side-effecting flags (`--sql`, `--sql-file`, `--output`, `--save`, `--save-dir`) with a clear error instead of silently discarding them.
 * Excel Export Permissions: Exported `.xlsx` files are now created without executable bits (mode 0600), matching CSV, TSV, LTSV, and Parquet outputs. excelize's `SaveAs` created them as 0777, so they were left executable.
 * Sheet Flag Validation: `--sheet` is now rejected with a clear error when no input can be an Excel file (for example a single CSV input or a `--stdin` dataset), instead of being silently ignored. Directory inputs are still accepted because they may contain Excel files.
 

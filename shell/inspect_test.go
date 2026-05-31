@@ -56,6 +56,37 @@ func writeCSV(t *testing.T, dir, name, content string) string {
 	return path
 }
 
+func TestInspect_RejectsConflictingFlags(t *testing.T) {
+	// Regression for #288: --inspect must reject other effectful flags instead
+	// of silently discarding them.
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"with --sql", []string{"sqly", "--inspect", "--sql", "SELECT 1", csv}},
+		{"with --output", []string{"sqly", "--inspect", "--output", filepath.Join(dir, "out.csv"), csv}},
+		{"with --save-dir", []string{"sqly", "--inspect", "--save-dir", dir, csv}},
+		{"with --save --force", []string{"sqly", "--inspect", "--save", "--force", csv}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			shell.isTTY = func() bool { return true }
+
+			if err := shell.Run(context.Background()); err == nil {
+				t.Fatalf("Run returned nil for --inspect %s, want a conflict error", tc.name)
+			}
+		})
+	}
+}
+
 func TestInspect_SingleFile(t *testing.T) {
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\nBob,25\n")
