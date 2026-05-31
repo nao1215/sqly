@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.17.0](https://github.com/nao1215/sqly/compare/v0.16.0...v0.17.0) (2026-05-31)
+
 ### Performance
 * Faster Imports: Files are streamed directly into the session database with filesql's `LoadInto` instead of being loaded into a temporary database and copied table by table. A 100k-row CSV import is about 2.5x faster and uses roughly half the peak memory. Behavior is unchanged (last-wins overwrite, cross-file JOINs, `.schema`/`.describe`/`--inspect`, and export all work as before).
 
