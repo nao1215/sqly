@@ -572,6 +572,28 @@ func TestImportCommand_TableNameCollision(t *testing.T) {
 	}
 }
 
+func TestImportCommand_ReimportSameFileIsNotACollision(t *testing.T) {
+	// Re-importing the same source path is a harmless last-wins overwrite, not a
+	// collision; it must not be rejected by the #286 collision check.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	path := filepath.Join(t.TempDir(), "data.csv")
+	if err := os.WriteFile(path, []byte("id,name\n1,A\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.commands.importCommand(context.Background(), s, []string{path}); err != nil {
+		t.Fatalf("first import failed: %v", err)
+	}
+	if err := s.commands.importCommand(context.Background(), s, []string{path}); err != nil {
+		t.Fatalf("re-import of the same file was rejected: %v", err)
+	}
+}
+
 func TestImportCommand_PartialSuccess(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

@@ -314,13 +314,37 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// "a-b.csv" and "a_b.csv" both sanitize to "a_b"). filesql overwrote the
 	// earlier table in memory, which would leave the first file's source mapped
 	// to the second file's rows. Fail instead of silently overwriting. Ref #286.
+	//
+	// A re-import of the same source path is harmless (last-wins), so only reject
+	// when this file's path is not already a recorded source: that means a
+	// different input produced the same sanitized name.
 	newNames := diffTableNames(after, existingTables)
 	if len(newNames) == 0 {
+		if s.isRecordedSource(displayPath) {
+			return nil
+		}
 		return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
 	}
 	s.recordTableSources(newNames, displayPath)
 
 	return nil
+}
+
+// isRecordedSource reports whether path (resolved to an absolute path, matching
+// recordTableSources) is already the source of an imported table. It lets a
+// re-import of the same file be treated as a harmless last-wins overwrite rather
+// than a table-name collision.
+func (s *Shell) isRecordedSource(path string) bool {
+	abs := path
+	if a, err := filepath.Abs(path); err == nil {
+		abs = a
+	}
+	for _, src := range s.tableSources {
+		if src == abs {
+			return true
+		}
+	}
+	return false
 }
 
 // recordTableSources remembers which source path produced each table name, so
