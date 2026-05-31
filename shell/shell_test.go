@@ -1795,7 +1795,7 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	defer cleanup()
 
 	shell.isTTY = func() bool { return false }
-	shell.stdin = strings.NewReader("SELECT 1\nSELECT * FROM no_such_table\n")
+	shell.stdin = strings.NewReader("SELECT 1;\nSELECT * FROM no_such_table;\n")
 
 	backupStderr := config.Stderr
 	defer func() { config.Stderr = backupStderr }()
@@ -1805,13 +1805,87 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	if err := shell.Run(context.Background()); err == nil {
 		t.Fatal("batch Run returned nil error for failing command, want non-nil")
 	}
-	// The failing line is the second input line; stderr must identify it.
-	if !strings.Contains(stderr.String(), "batch line 2 failed") {
-		t.Fatalf("stderr = %q, want it to name the failing line number", stderr.String())
+	// The second statement fails; stderr must identify it by statement index.
+	if !strings.Contains(stderr.String(), "batch statement 2 failed") {
+		t.Fatalf("stderr = %q, want it to name the failing statement index", stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "no_such_table") {
-		t.Fatalf("stderr = %q, want it to include the failing line content", stderr.String())
+		t.Fatalf("stderr = %q, want it to include the failing statement content", stderr.String())
 	}
+}
+
+func TestShellRunBatch_MultilineStatements(t *testing.T) {
+	// Regression for #263: batch mode parses statements, so SQL can span lines.
+	newBatchShell := func(t *testing.T, stdin string) (*Shell, func()) {
+		t.Helper()
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader(stdin)
+		return shell, cleanup
+	}
+
+	t.Run("multiline SELECT terminated by semicolon", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT actor\nFROM actor\nORDER BY actor\nLIMIT 1;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "Adam Sandler") {
+			t.Fatalf("multiline SELECT did not execute: %q", got)
+		}
+	})
+
+	t.Run("multiline WITH (CTE) query", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "WITH x AS (\n  SELECT actor FROM actor ORDER BY actor LIMIT 1\n)\nSELECT * FROM x;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "Adam Sandler") {
+			t.Fatalf("multiline WITH did not execute: %q", got)
+		}
+	})
+
+	t.Run("multiple statements execute in order", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT 'first' AS x;\nSELECT 'second' AS x;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if strings.Index(got, "first") > strings.Index(got, "second") {
+			t.Fatalf("statements not executed in order: %q", got)
+		}
+	})
+
+	t.Run("helper command and SQL coexist", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, ".tables\nSELECT actor FROM actor ORDER BY actor LIMIT 1;\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "TABLE NAME") || !strings.Contains(got, "Adam Sandler") {
+			t.Fatalf("helper + SQL did not both run: %q", got)
+		}
+	})
+
+	t.Run("single statement without a terminator still runs", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT actor FROM actor ORDER BY actor LIMIT 1\n")
+		defer cleanup()
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "Adam Sandler") {
+			t.Fatalf("unterminated single statement did not run: %q", got)
+		}
+	})
+
+	t.Run("incomplete SQL returns an error", func(t *testing.T) {
+		shell, cleanup := newBatchShell(t, "SELECT actor FROM (\n")
+		defer cleanup()
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		config.Stderr = &bytes.Buffer{}
+		if err := shell.Run(context.Background()); err == nil {
+			t.Fatal("incomplete SQL returned nil error, want error")
+		}
+	})
 }
 
 func TestShellRunBatch_ExitStopsEarly(t *testing.T) {

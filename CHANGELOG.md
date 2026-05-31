@@ -6,6 +6,7 @@
 * History Storage Tolerance: Non-interactive runs (`--sql` and batch mode) no longer fail when the history database cannot be created or written (for example, a read-only config directory in CI or containers). History is disabled for the session with a warning, and the requested command still runs. Point `SQLY_HISTORY_DB_PATH` at a writable path to re-enable it.
 
 ### New Features
+* Multiline SQL in Batch Mode: Piped stdin is now parsed into statements instead of one statement per line, so SQL (including CTEs) can span multiple lines. A statement ends at a top-level `;`; separate multiple statements with `;`. Helper commands stay single-line, and a single trailing statement without `;` still runs. Errors report the statement index.
 * Stdin Dataset Input: `--stdin <format>` (csv|tsv|ltsv|json|jsonl) imports piped stdin as a dataset instead of reading it as SQL/helper commands, so sqly works in Unix pipelines (e.g. `cat users.csv | sqly --stdin csv --sql "SELECT * FROM stdin"`). The table defaults to `stdin` and is overridable with `--stdin-name`; piped data can be joined with file and directory arguments. Without `--stdin`, non-TTY batch mode is unchanged.
 
 ## [v0.16.0](https://github.com/nao1215/sqly/compare/v0.15.0...v0.16.0) (2026-05-30)
