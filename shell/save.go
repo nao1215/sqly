@@ -103,6 +103,10 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 	}
 	var targets []target
 	var problems []string
+	// Detect destination collisions so two tables never silently overwrite the
+	// same output file (defensive: same-name files already collapse to one table
+	// at import, but a future rename could break that assumption).
+	plannedDest := make(map[string]string)
 
 	for _, t := range tables {
 		name := t.Name()
@@ -129,6 +133,11 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 		if destDir != "" {
 			dest = filepath.Join(destDir, filepath.Base(source))
 		}
+		if prev, ok := plannedDest[dest]; ok {
+			problems = append(problems, fmt.Sprintf("%s: destination %s collides with table %s", name, dest, prev))
+			continue
+		}
+		plannedDest[dest] = name
 		targets = append(targets, target{table: name, dest: dest, format: format, comp: comp})
 	}
 

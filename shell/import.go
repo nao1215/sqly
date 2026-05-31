@@ -215,9 +215,14 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 
 // recordTableSources remembers which source path produced each table name, so
 // the --inspect report and write-back (.save) can map a table back to its
-// source. For directory imports the source is the directory; write-back rejects
-// those because it cannot tell which file in the directory owns the table.
+// source. The source is resolved to an absolute path so write-back still targets
+// the right file after the shell changes directory with .cd. For directory
+// imports the source is the directory; write-back rejects those because it
+// cannot tell which file in the directory owns the table.
 func (s *Shell) recordTableSources(tableNames []string, source string) {
+	if abs, err := filepath.Abs(source); err == nil {
+		source = abs
+	}
 	if s.tableSources == nil {
 		s.tableSources = make(map[string]string)
 	}

@@ -12,7 +12,7 @@ Describe 'sqly --inspect (#259)'
     The status should be success
     The line 1 should equal '{'
     The output should include '"name": "user"'
-    The output should include '"source": "testdata/user.csv"'
+    The output should include 'testdata/user.csv'
     The output should include '"row_count": 3'
     The output should include '"user_name"'
   End
@@ -21,7 +21,7 @@ Describe 'sqly --inspect (#259)'
     When run sqly --inspect testdata/ppd-debit.ach
     The status should be success
     The output should include '"name": "ppd_debit_entries"'
-    The output should include '"source": "testdata/ppd-debit.ach"'
+    The output should include 'ppd-debit.ach'
   End
 
   It 'keeps stdout as pure JSON for a directory and sends progress to stderr'
