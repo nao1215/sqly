@@ -43,6 +43,19 @@ Describe 'sqly export format inference (#260)'
     End
   End
 
+  Describe 'unknown extension honors the exact path (#292)'
+    It 'writes the CSV fallback to the requested path without rewriting it'
+      out_dir=$(mktemp -d)
+      export out_dir
+      When run sqly --sql "SELECT user_name FROM user LIMIT 1" testdata/user.csv --output "$out_dir/out.unknown"
+      The status should be success
+      The output should include "$out_dir/out.unknown"
+      The path "$out_dir/out.unknown" should be file
+      The path "$out_dir/out.csv" should not be exist
+      rm -rf "$out_dir"
+    End
+  End
+
   Describe 'conflicts and unsupported combinations'
     It 'errors when an explicit mode flag disagrees with the path extension'
       out_dir=$(mktemp -d)

@@ -221,10 +221,18 @@ func TestResolveOutputTarget(t *testing.T) {
 			wantComp:    CompressionNone,
 		},
 		{
-			name:       "unknown extension with no flag defaults to csv",
+			name:       "unknown extension with no flag falls back to csv (#292)",
 			path:       "result.txt",
 			wantFormat: ExportCSV,
 			wantComp:   CompressionNone,
+		},
+		{
+			name:        "unknown extension with an explicit format is kept (#292)",
+			path:        "result.txt",
+			explicit:    ExportCSV,
+			explicitSet: true,
+			wantFormat:  ExportCSV,
+			wantComp:    CompressionNone,
 		},
 		{
 			name:    "compression on parquet is rejected",
@@ -284,6 +292,8 @@ func TestBuildOutputPath(t *testing.T) {
 		{name: "rebuilds base and appends gzip", path: "result.gz", format: ExportCSV, comp: CompressionGzip, want: "result.csv.gz"},
 		{name: "replaces mismatched extension", path: "data.json", format: ExportNDJSON, comp: CompressionNone, want: "data.ndjson"},
 		{name: "keeps ndjson.zst path", path: "out.ndjson.zst", format: ExportNDJSON, comp: CompressionZstd, want: "out.ndjson.zst"},
+		{name: "honors an unknown extension (#292)", path: "out.txt", format: ExportCSV, comp: CompressionNone, want: "out.txt"},
+		{name: "honors an unknown extension with compression (#292)", path: "out.txt.gz", format: ExportCSV, comp: CompressionGzip, want: "out.txt.gz"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -314,7 +324,9 @@ func TestBuildOutputPath_Property(t *testing.T) {
 		if !ef.SupportsCompression() {
 			comp = CompressionNone
 		}
-		path := base + ".tmp"
+		// Use an extensionless path so the format extension is appended. Unknown
+		// extensions are instead honored as-is, which the table tests cover.
+		path := strings.ReplaceAll(base, ".", "_")
 		got := BuildOutputPath(path, ef, comp)
 		if !strings.HasSuffix(got, ef.Extension()+comp.Extension()) {
 			return false
