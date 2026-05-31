@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Batch Fail-Fast: Batch mode (piped stdin and `--sql-file`) now stops at the first failed statement or helper command instead of continuing. Later statements no longer run, so their output cannot leak into a pipeline the process then reports as failed, and side-effecting commands such as `.save` and `.dump` placed after a failure no longer execute. The run still exits non-zero.
+* Empty Batch No Write-Back: An empty batch (for example empty piped stdin) no longer triggers `--save`/`--save-dir` write-back. With nothing executed, source files are left untouched and the run is a no-op.
 * Sheet Flag Validation For Directories And Empty Values: `--sheet` is now rejected when a directory input contains no Excel files, and when it is given an explicit empty value (`--sheet ""`). Both previously slipped past validation and were silently ignored. This applies to the CLI flag and the `.import` command.
 * Batch Identifier Quoting: Batch statement splitting now recognizes SQLite bracket-quoted (`[ ... ]`) and backtick-quoted (`` `...` ``) identifiers, so a semicolon inside them no longer splits a statement. This matches the existing handling of single-quoted strings, double-quoted identifiers, and comments.
 * File-Output Status On Stderr: Status lines for file-output operations (`--output`, `.dump`, and `.save`/`--save`/`--save-dir`) now go to stderr instead of stdout. When all data is written to files, stdout stays empty, matching `--inspect` and letting scripts rely on an empty stdout for success.

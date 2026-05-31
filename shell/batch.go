@@ -19,42 +19,50 @@ const maxBatchLineBytes = 10 * 1024 * 1024
 // runBatch executes SQL statements and helper commands read from stdin until
 // EOF. It is used when sqly runs without a TTY (piped stdin), where the
 // interactive prompt cannot start.
+func (s *Shell) runBatch(ctx context.Context) (ranAny bool, err error) {
+	return s.runBatchReader(ctx, s.stdin)
+}
+
+// runBatchReader executes SQL statements and helper commands read from r. It is
+// shared by batch stdin mode and --sql-file so both follow identical
+// statement-splitting and error reporting; --sql-file passes a file reader
+// instead of stdin, which frees stdin to carry a piped --stdin dataset.
 //
 // Input is parsed into statements, not raw lines, so SQL can span multiple
 // lines (e.g. a formatted CTE). A SQL statement ends at a top-level ";"; helper
 // commands (lines beginning with ".") are single-line. A trailing statement
-// without ";" at EOF still runs, so one-shot queries keep working; incomplete
-// SQL surfaces SQLite's error. Errors are reported to
-// stderr with the statement index and do not stop processing; if any statement
-// failed, runBatch returns an error so the process exits non-zero. A ".exit"
-// command stops early with a success status, mirroring the interactive shell.
-func (s *Shell) runBatch(ctx context.Context) error {
-	return s.runBatchReader(ctx, s.stdin)
-}
-
-// runBatchReader executes SQL statements and helper commands read from r using
-// the same parsing rules as runBatch. It is shared by batch stdin mode and
-// --sql-file so both follow identical statement-splitting and error reporting;
-// --sql-file passes a file reader instead of stdin, which frees stdin to carry
-// a piped --stdin dataset.
-func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) error {
+// without ";" at EOF still runs.
+//
+// Execution is fail-fast: the first failed statement or helper command stops
+// the run and returns an error, so later statements never execute and their
+// output cannot leak into a pipeline that the process then reports as failed
+// (Ref #308). A ".exit" command stops early with success, mirroring the
+// interactive shell. ranAny reports whether at least one statement or command
+// was executed, so callers can skip post-run side effects (e.g. --save
+// write-back) for an empty batch (Ref #330).
+func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, err error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxBatchLineBytes)
 
-	failed := false
 	stmtNo := 0
 	exited := false
+	var failErr error
 
-	run := func(stmt string) {
+	// run executes one statement/command and returns whether to stop the batch
+	// (on failure or ".exit"). The first failure records failErr for the caller.
+	run := func(stmt string) (stop bool) {
 		stmtNo++
+		ranAny = true
 		if err := s.exec(ctx, stmt); err != nil {
 			if errors.Is(err, ErrExitSqly) {
 				exited = true
-				return
+				return true
 			}
 			fmt.Fprintf(config.Stderr, "batch statement %d failed: %q: %v\n", stmtNo, stmt, err)
-			failed = true
+			failErr = errors.New("batch stopped: statement failed")
+			return true
 		}
+		return false
 	}
 
 	var pending strings.Builder
@@ -69,8 +77,7 @@ scan:
 				continue
 			}
 			if strings.HasPrefix(trimmed, ".") {
-				run(trimmed)
-				if exited {
+				if run(trimmed) {
 					break scan
 				}
 				continue
@@ -83,28 +90,24 @@ scan:
 		pending.Reset()
 		pending.WriteString(remainder)
 		for _, stmt := range stmts {
-			run(stmt)
-			if exited {
+			if run(stmt) {
 				break scan
 			}
 		}
 	}
 
-	// On ".exit", stop reading but still report any earlier failure below.
-	if !exited {
+	// On ".exit" or a failure, stop reading. Otherwise run any trailing
+	// statement that was not terminated by ";".
+	if !exited && failErr == nil {
 		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("failed to read batch input: %w", err)
+			return ranAny, fmt.Errorf("failed to read batch input: %w", err)
 		}
-		// Execute any trailing statement that was not terminated by ";".
 		if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
 			run(leftover)
 		}
 	}
 
-	if failed {
-		return errors.New("one or more batch statements failed")
-	}
-	return nil
+	return ranAny, failErr
 }
 
 // stripLeadingSQLComments removes leading line ("--") and block ("/* */")

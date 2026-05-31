@@ -1142,6 +1142,23 @@ func getStdoutForRunFunc(t *testing.T, f func(ctx context.Context) error) []byte
 	return buffer.Bytes()
 }
 
+// getStdoutForErr captures stdout while running f and ignores its returned
+// error. Used when the error is expected (e.g. a fail-fast batch run) and the
+// test asserts on what did or did not reach stdout.
+func getStdoutForErr(t *testing.T, f func(ctx context.Context) error) []byte {
+	t.Helper()
+	backupColorStdout := config.Stdout
+	defer func() {
+		config.Stdout = backupColorStdout
+	}()
+
+	var buffer bytes.Buffer
+	config.Stdout = &buffer
+
+	_ = f(context.Background())
+	return buffer.Bytes()
+}
+
 func getStdout(t *testing.T, f func()) []byte {
 	t.Helper()
 	backupColorStdout := config.Stdout
@@ -1829,6 +1846,82 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "no_such_table") {
 		t.Fatalf("stderr = %q, want it to include the failing statement content", stderr.String())
+	}
+}
+
+func TestShellRunBatch_FailFast(t *testing.T) {
+	// Regression for #308: the first failed statement stops the batch, so later
+	// statements do not run and cannot leak output into a failed pipeline.
+	t.Run("a SQL failure stops a later statement", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("SELECT * FROM no_such_table;\nSELECT 1 AS later;\n")
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		config.Stderr = &bytes.Buffer{}
+
+		got := string(getStdoutForErr(t, shell.Run))
+		if strings.Contains(got, "later") {
+			t.Fatalf("later statement ran after a failure: %q", got)
+		}
+	})
+
+	t.Run("a helper-command failure stops a later statement", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader(".schema no_such_table\nSELECT 1 AS later;\n")
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		config.Stderr = &bytes.Buffer{}
+
+		got := string(getStdoutForErr(t, shell.Run))
+		if strings.Contains(got, "later") {
+			t.Fatalf("later statement ran after a helper-command failure: %q", got)
+		}
+	})
+}
+
+func TestShellRunBatch_EmptyStdinSkipsSave(t *testing.T) {
+	// Regression for #330/#331: empty batch stdin must not trigger --save
+	// write-back, which would rewrite source files even though nothing ran.
+	dir := t.TempDir()
+	src := filepath.Join(dir, "u.csv")
+	original := "id,first_name\n1,Alice\n"
+	if err := os.WriteFile(src, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--save", "--force", src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("")
+
+	backupStderr := config.Stderr
+	defer func() { config.Stderr = backupStderr }()
+	config.Stderr = &bytes.Buffer{}
+
+	if err := shell.Run(context.Background()); err != nil {
+		t.Fatalf("empty batch Run returned error: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Clean(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("source file was rewritten by an empty batch run: got %q, want %q", string(got), original)
 	}
 }
 
