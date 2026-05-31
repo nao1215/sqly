@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+* History Storage Tolerance: Non-interactive runs (`--sql` and batch mode) no longer fail when the history database cannot be created or written (for example, a read-only config directory in CI or containers). History is disabled for the session with a warning, and the requested command still runs. Point `SQLY_HISTORY_DB_PATH` at a writable path to re-enable it.
+
 ### New Features
 * Stdin Dataset Input: `--stdin <format>` (csv|tsv|ltsv|json|jsonl) imports piped stdin as a dataset instead of reading it as SQL/helper commands, so sqly works in Unix pipelines (e.g. `cat users.csv | sqly --stdin csv --sql "SELECT * FROM stdin"`). The table defaults to `stdin` and is overridable with `--stdin-name`; piped data can be joined with file and directory arguments. Without `--stdin`, non-TTY batch mode is unchanged.
 

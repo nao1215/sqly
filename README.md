@@ -227,6 +227,8 @@ sqly:~/github/github.com/nao1215/sqly(table)$
   
 The sqly shell functions similarly to a common SQL client (e.g., `sqlite3` command or `mysql` command). The sqly shell has helper commands that begin with a dot. The sqly-shell also supports command history, and input completion.  
 
+Command history is persisted to a SQLite database under the config directory. History is best-effort: if that database cannot be created or written (for example a read-only config directory in CI or a container), sqly disables history for the session with a warning and still runs the requested query or command. Set `SQLY_HISTORY_DB_PATH` to choose a writable location.
+
 The sqly-shell has the following helper commands:
 
 ```shell
