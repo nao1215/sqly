@@ -44,6 +44,12 @@ type Arg struct {
 	VersionFlag bool
 	// Query is SQL query (for --sql option)
 	Query string
+	// SQLFilePath is the path to a file containing SQL to execute (for
+	// --sql-file). It lets stdin carry a piped dataset (--stdin) while the query
+	// arrives from a file, which a single stdin stream cannot do. It supports
+	// multiline statements with the same splitting rules as batch stdin mode and
+	// cannot be combined with --sql.
+	SQLFilePath string
 	// InspectFlag, when true, prints a machine-readable JSON report of the
 	// imported tables (names, source mapping, columns, row counts, and sample
 	// rows) and exits without starting the shell.
@@ -117,6 +123,7 @@ func NewArg(args []string) (*Arg, error) {
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
+	sqlFile := flag.StringP("sql-file", "f", "", "path to a file with SQL to execute (multiline; cannot be used with --sql)")
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
 	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "rows to include per table in --inspect (0 for schema only)")
@@ -137,6 +144,7 @@ func NewArg(args []string) (*Arg, error) {
 	arg.StdinFormat = *stdinFormat
 	arg.StdinTableName = *stdinName
 	arg.Query = *query
+	arg.SQLFilePath = *sqlFile
 	arg.SaveDir = *saveDir
 	arg.InspectSample = *inspectSample
 
@@ -194,6 +202,8 @@ func usage(flag pflag.FlagSet) string {
 	s += "    sqly file1.csv ./data_dir file2.tsv\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Batch mode: pipe SQL/commands via stdin (no TTY)"))
 	s += "    echo 'SELECT * FROM sample' | sqly ./path/to/sample.csv\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Join a piped dataset (--stdin) with a query loaded from a file"))
+	s += "    cat data.csv | sqly --stdin csv --sql-file query.sql\n"
 	s += "\n"
 	s += "[OPTIONS]\n"
 	s += flag.FlagUsages()

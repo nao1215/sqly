@@ -129,6 +129,21 @@ func (s *Shell) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// --sql and --sql-file both supply a non-interactive query; accepting both
+	// would be ambiguous. Read and validate the SQL file before importing so a
+	// bad path fails fast without spending time on the import.
+	if s.argument.Query != "" && s.argument.SQLFilePath != "" {
+		return errors.New("--sql and --sql-file cannot be used together")
+	}
+	var sqlScript string
+	if s.argument.SQLFilePath != "" {
+		script, err := readSQLFile(s.argument.SQLFilePath)
+		if err != nil {
+			return err
+		}
+		sqlScript = script
+	}
+
 	if err := s.init(ctx); err != nil {
 		return err
 	}
@@ -146,6 +161,16 @@ func (s *Shell) Run(ctx context.Context) error {
 
 	if s.argument.Query != "" {
 		if err := s.execSQL(ctx, s.argument.Query); err != nil {
+			return err
+		}
+		return s.maybeSave(ctx)
+	}
+
+	// --sql-file runs the loaded script with the same statement-splitting and
+	// error reporting as batch stdin mode, so multiline SQL and multiple
+	// statements behave identically whether they arrive from a file or a pipe.
+	if s.argument.SQLFilePath != "" {
+		if err := s.runBatchReader(ctx, strings.NewReader(sqlScript)); err != nil {
 			return err
 		}
 		return s.maybeSave(ctx)

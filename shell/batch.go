@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/nao1215/sqly/config"
@@ -27,7 +29,16 @@ const maxBatchLineBytes = 10 * 1024 * 1024
 // failed, runBatch returns an error so the process exits non-zero. A ".exit"
 // command stops early with a success status, mirroring the interactive shell.
 func (s *Shell) runBatch(ctx context.Context) error {
-	scanner := bufio.NewScanner(s.stdin)
+	return s.runBatchReader(ctx, s.stdin)
+}
+
+// runBatchReader executes SQL statements and helper commands read from r using
+// the same parsing rules as runBatch. It is shared by batch stdin mode and
+// --sql-file so both follow identical statement-splitting and error reporting;
+// --sql-file passes a file reader instead of stdin, which frees stdin to carry
+// a piped --stdin dataset.
+func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) error {
+	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxBatchLineBytes)
 
 	failed := false
@@ -85,7 +96,7 @@ scan:
 			return fmt.Errorf("failed to read batch input: %w", err)
 		}
 		// Execute any trailing statement that was not terminated by ";".
-		if leftover := strings.TrimSpace(pending.String()); leftover != "" {
+		if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
 			run(leftover)
 		}
 	}
@@ -96,10 +107,38 @@ scan:
 	return nil
 }
 
+// stripLeadingSQLComments removes leading line ("--") and block ("/* */")
+// comments and surrounding whitespace from a statement, returning "" when
+// nothing executable remains. sqly classifies a statement by its first token, so
+// a leading comment would otherwise be rejected as "not sql"; SQL files commonly
+// open with a header comment, so this lets them run unchanged.
+func stripLeadingSQLComments(s string) string {
+	for {
+		s = strings.TrimSpace(s)
+		switch {
+		case strings.HasPrefix(s, "--"):
+			i := strings.IndexByte(s, '\n')
+			if i < 0 {
+				return "" // line comment runs to the end of the input
+			}
+			s = s[i+1:]
+		case strings.HasPrefix(s, "/*"):
+			i := strings.Index(s, "*/")
+			if i < 0 {
+				return "" // unterminated block comment, nothing executable
+			}
+			s = s[i+2:]
+		default:
+			return s
+		}
+	}
+}
+
 // splitSQLStatements splits accumulated text into complete statements terminated
 // by a top-level ";" and returns the trailing unterminated remainder. Semicolons
 // inside string literals, identifiers, and comments are ignored so they do not
-// split a statement mid-value.
+// split a statement mid-value. Each returned statement has leading comments
+// stripped so it is classified by its first SQL keyword.
 func splitSQLStatements(s string) (stmts []string, remainder string) {
 	runes := []rune(s)
 	var (
@@ -140,7 +179,7 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 				inBlockComment = true
 				i++
 			case c == ';':
-				if stmt := strings.TrimSpace(string(runes[start:i])); stmt != "" {
+				if stmt := stripLeadingSQLComments(string(runes[start:i])); stmt != "" {
 					stmts = append(stmts, stmt)
 				}
 				start = i + 1
@@ -148,4 +187,19 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 		}
 	}
 	return stmts, string(runes[start:])
+}
+
+// readSQLFile reads the SQL script at path for --sql-file. It returns a clear
+// error for a missing or unreadable file (wrapping the OS error so callers can
+// inspect it with errors.Is) and rejects a file with no SQL, so an empty or
+// whitespace-only script fails loudly instead of running nothing.
+func readSQLFile(path string) (string, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // path is the user-specified --sql-file
+	if err != nil {
+		return "", fmt.Errorf("failed to read --sql-file %q: %w", path, err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return "", fmt.Errorf("--sql-file %q is empty", path)
+	}
+	return string(data), nil
 }

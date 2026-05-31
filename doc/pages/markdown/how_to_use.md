@@ -35,6 +35,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --stdin string    treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
       --stdin-name string   table name for the --stdin dataset (default "stdin")
   -s, --sql string      sql query you want to execute
+  -f, --sql-file string   path to a file with SQL to execute (multiline; cannot be used with --sql)
   -o, --output string   destination path for SQL results specified in --sql option
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
       --inspect-sample int  rows to include per table in --inspect (0 for schema only) (default 5)
@@ -68,6 +69,25 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 | jenkins46 | manager   |
 | smith79   | neet      |
 +-----------+-----------+
+```
+
+### Load SQL from a file: --sql-file option
+
+`--sql-file PATH` runs SQL read from a file instead of from `--sql` or stdin. The file may contain multiple statements separated by `;`, and a statement may span multiple lines, following the same rules as batch stdin mode; a leading header comment is allowed. It cannot be combined with `--sql`, and a missing, unreadable, or empty file fails with a clear error.
+
+Because the query comes from a file, stdin is free to carry a dataset. Combine it with `--stdin <format>` to join piped data:
+
+```shell
+$ cat testdata/user.csv | sqly --stdin csv --sql-file join.sql testdata/identifier.csv
+```
+
+where `join.sql` holds:
+
+```sql
+SELECT s.user_name, i.position
+FROM stdin s
+JOIN identifier i ON s.identifier = i.id
+ORDER BY s.identifier;
 ```
 
 ### Inspect tables: --inspect option
