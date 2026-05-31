@@ -24,6 +24,11 @@ const (
 	sheetFlagAssign = sheetFlag + "="
 )
 
+// errPartialImport is returned when some explicitly requested inputs imported
+// successfully and at least one failed. Callers use errors.Is to decide whether
+// to continue (interactive shell) or fail the run (non-interactive modes).
+var errPartialImport = errors.New("one or more inputs failed to import")
+
 // validateSheetFlag rejects the CLI --sheet option when no input can be an
 // Excel file. --sheet selects a single Excel sheet and is silently ignored for
 // other formats, so a typo (or pairing it with --stdin) would otherwise pass
@@ -192,6 +197,11 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		if successCount == 0 {
 			return errors.New("all import attempts failed")
 		}
+		// An explicitly requested input failed even though others succeeded.
+		// Return a partial-failure error so non-interactive runs exit non-zero
+		// (Ref #297, #300, #302); the interactive shell tolerates it and starts
+		// with the tables that did load.
+		return errPartialImport
 	}
 
 	return nil
@@ -316,13 +326,12 @@ func (s *Shell) recordTableSources(tableNames []string, source string) {
 	}
 }
 
-// importStatusWriter selects where import progress messages go. Under --inspect,
-// stdout must carry only the JSON report, so progress is sent to stderr instead.
+// importStatusWriter returns where import progress and error messages go.
+// Import diagnostics are control-plane output, so they always go to stderr.
+// This keeps stdout reserved for query results and the --inspect JSON report,
+// so machine-readable output is never mixed with import banners. Ref #306.
 func (s *Shell) importStatusWriter() io.Writer {
-	if s.argument.InspectFlag {
-		return config.Stderr
-	}
-	return config.Stdout
+	return config.Stderr
 }
 
 // filterExcelSheets keeps only the requested sheet from a specific Excel file,
