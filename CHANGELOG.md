@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Performance
+* Faster Imports: Files are streamed directly into the session database with filesql's `LoadInto` instead of being loaded into a temporary database and copied table by table. A 100k-row CSV import is about 2.5x faster and uses roughly half the peak memory. Behavior is unchanged (last-wins overwrite, cross-file JOINs, `.schema`/`.describe`/`--inspect`, and export all work as before).
+
+### Dependencies
+* filesql: 0.12.2 to 0.13.0 (adds `LoadInto` for loading files into an existing database).
+
 ### Bug Fixes
 * Runtime History Tolerance: A history database that becomes read-only after startup no longer aborts `--sql`, `--inspect`, or batch runs. The first runtime read or write failure disables history for the rest of the session and warns once, instead of failing the command or retrying on every command. This extends the startup tolerance to the post-initialization path.
 * Flags After Input Paths: Flags placed after file or directory arguments (e.g. `sqly --sql ... data.csv --output out.json`) are now parsed as flags instead of being silently treated as import paths that fail with "path does not exist". An unknown flag in any position fails fast with a clear parse error.
