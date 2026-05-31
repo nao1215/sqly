@@ -16,6 +16,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
         .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory
+      .save: write tables back to files: .save DIR (to a directory) or .save --force (overwrite sources)
     .schema: print CREATE TABLE statement of a table
     .tables: print tables
 ```

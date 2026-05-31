@@ -37,6 +37,7 @@ func NewCommands() CommandList {
 	c[pwdCommand] = command{execute: c.pwdCommand, name: pwdCommand, description: "print current working directory"}
 	c[schemaCommand] = command{execute: c.schemaCommand, name: schemaCommand, description: "print CREATE TABLE statement of a table"}
 	c[describeCommand] = command{execute: c.describeCommand, name: describeCommand, description: "print column information of a table"}
+	c[saveCommand] = command{execute: c.saveCommand, name: saveCommand, description: "write tables back to files: .save DIR (to a directory) or .save --force (overwrite sources)"}
 	return c
 }
 

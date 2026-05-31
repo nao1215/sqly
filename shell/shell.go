@@ -42,6 +42,7 @@ const (
 	pwdCommand      = ".pwd"
 	schemaCommand   = ".schema"
 	describeCommand = ".describe"
+	saveCommand     = ".save"
 
 	msgImportableFile = "Importable file"
 )
@@ -65,10 +66,10 @@ type Shell struct {
 	// disabled for the session if the history DB cannot be created or written,
 	// so automation does not fail on a read-only config location.
 	historyEnabled bool
-	// inspectSources maps an imported table name to the source path it came from.
-	// It is populated during import only when --inspect is set, so the inspect
-	// report can show source-to-table mapping without a second import pass.
-	inspectSources map[string]string
+	// tableSources maps an imported table name to the source path it came from.
+	// It is populated on every import and used by the --inspect report and by
+	// write-back (.save) to map a table back to its source file.
+	tableSources map[string]string
 }
 
 type promptSession interface {
@@ -111,7 +112,7 @@ func NewShell(
 		stdin:          os.Stdin,
 		isTTY:          config.IsInputFromTTY,
 		historyEnabled: true,
-		inspectSources: make(map[string]string),
+		tableSources:   make(map[string]string),
 	}, nil
 }
 
@@ -139,14 +140,24 @@ func (s *Shell) Run(ctx context.Context) error {
 		return s.runInspect(ctx)
 	}
 
+	if err := s.validateSaveFlags(); err != nil {
+		return err
+	}
+
 	if s.argument.Query != "" {
-		return s.execSQL(ctx, s.argument.Query)
+		if err := s.execSQL(ctx, s.argument.Query); err != nil {
+			return err
+		}
+		return s.maybeSave(ctx)
 	}
 
 	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
 	// initialize, so read SQL and helper commands from stdin in batch mode.
 	if !s.isTTY() {
-		return s.runBatch(ctx)
+		if err := s.runBatch(ctx); err != nil {
+			return err
+		}
+		return s.maybeSave(ctx)
 	}
 
 	// Start shell
