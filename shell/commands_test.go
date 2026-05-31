@@ -591,6 +591,26 @@ func TestShell_execSQL_dependsOnQueryUsecase(t *testing.T) {
 	})
 }
 
+func TestCommandList_dumpCommand_RejectsDirectoryTarget(t *testing.T) {
+	// Regression for #303: a directory destination must be rejected, not
+	// rewritten to a sibling .csv file.
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	exporter := mock.NewMockExportUsecase(ctrl)
+	// Neither usecase should be called: the directory is rejected up front.
+
+	dir := t.TempDir()
+	s := newBoundaryTestShell(t, Usecases{metadata: metadata, export: exporter})
+
+	err := NewCommands().dumpCommand(context.Background(), s, []string{"users", dir})
+	if err == nil {
+		t.Fatal("dumpCommand returned nil for a directory destination, want error")
+	}
+	if !strings.Contains(err.Error(), "directory") {
+		t.Fatalf("error = %q, want it to mention a directory", err.Error())
+	}
+}
+
 func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	metadata := mock.NewMockMetadataUsecase(ctrl)

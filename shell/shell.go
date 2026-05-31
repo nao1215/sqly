@@ -141,6 +141,12 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Reject an --output destination that is an existing directory before import,
+	// so it is not silently rewritten to a sibling file.
+	if err := ensureNotDirectory(s.argument.Output.FilePath); err != nil {
+		return err
+	}
+
 	// --sql and --sql-file both supply a non-interactive query; accepting both
 	// would be ambiguous. Read and validate the SQL file before importing so a
 	// bad path fails fast without spending time on the import.
@@ -645,6 +651,21 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	}
 	fmt.Fprintf(config.Stdout, "Output sql result to %s (output mode=%s)\n",
 		color.HiCyanString(filePath), exportFmt.String())
+	return nil
+}
+
+// ensureNotDirectory rejects an output destination that already exists as a
+// directory. Without this check the path gets a format extension appended,
+// silently writing to a sibling file (e.g. "out" -> "out.csv") instead of the
+// directory the user named. A non-existent path is fine; it is created on write.
+func ensureNotDirectory(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil //nolint:nilerr // a missing path is created at write time; other errors surface there
+	}
+	if info.IsDir() {
+		return fmt.Errorf("output destination %q is a directory; specify a file path", path)
+	}
 	return nil
 }
 
