@@ -78,6 +78,12 @@ func NewArg(args []string) (*Arg, error) {
 	arg := &Arg{}
 
 	flag := pflag.FlagSet{}
+	// Parse flags even when they appear after file/directory arguments. A
+	// zero-value pflag.FlagSet disables this, which silently turns a misplaced
+	// flag (e.g. "sqly data.csv --output out") and its value into import paths
+	// that fail with "path does not exist". Interspersed parsing instead applies
+	// the flag, and an unknown flag fails fast with a clear parse error. Ref #264.
+	flag.SetInterspersed(true)
 	flag.BoolVarP(&oFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
 	flag.BoolVarP(&oFlag.excel, "excel", "e", false, "change output format to excel (default: table)")
 	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")

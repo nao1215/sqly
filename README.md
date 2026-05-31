@@ -278,10 +278,11 @@ $ sqly --sql "SELECT * FROM user" --csv testdata/user.csv > test.csv
 
 #### For windows user
 
-The sqly can save SQL execution results to the file using the --output option. The --output option specifies the destination path for SQL results specified in the --sql option.
+The sqly can save SQL execution results to the file using the --output option. The --output option specifies the destination path for SQL results specified in the --sql option. Flags may come before or after the file arguments, so `--output` also works at the end of the command.
 
 ```shell
-$ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv 
+$ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv
+$ sqly --sql "SELECT * FROM user" testdata/user.csv --output=test.csv
 ```
 
 ### Key Binding for sqly-shell

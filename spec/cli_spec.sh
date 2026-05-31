@@ -58,4 +58,31 @@ Describe 'sqly CLI surface'
       rm -rf "$out_dir"
     End
   End
+
+  Describe 'flags after input paths (#264)'
+    It 'applies --output placed after the file path instead of importing it'
+      out_dir=$(mktemp -d)
+      export out_dir
+      When run sqly --json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --output "$out_dir/result.json"
+      The status should be success
+      The output should not include 'path does not exist'
+      The path "$out_dir/result.json" should be file
+      The contents of file "$out_dir/result.json" should include '"user_name":"booker12"'
+      rm -rf "$out_dir"
+    End
+
+    It 'applies an output-mode flag placed after the file path'
+      When run sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv --csv
+      The status should be success
+      The line 1 should equal 'user_name'
+      The output should include 'booker12'
+      The output should not include 'path does not exist'
+    End
+
+    It 'fails fast on an unknown flag after the file path'
+      When run sqly testdata/user.csv --nope
+      The status should be failure
+      The stderr should include 'unknown flag'
+    End
+  End
 End

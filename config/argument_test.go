@@ -151,6 +151,56 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("--output after file path sets output destination, not an import path (#264)", func(t *testing.T) {
+		testFile := filepath.Join(t.TempDir(), "result.csv")
+		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM user", "testdata/user.csv", "--output", testFile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.Output.FilePath != testFile {
+			t.Errorf("Output.FilePath = %q, want %q", arg.Output.FilePath, testFile)
+		}
+		if diff := cmp.Diff([]string{"testdata/user.csv"}, arg.FilePaths); diff != "" {
+			t.Errorf("FilePaths mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("output-mode flag after file path sets mode, not an import path (#264)", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM user", "testdata/user.csv", "--csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.Output.Mode != model.PrintModeCSV {
+			t.Errorf("Output.Mode = %v, want %v", arg.Output.Mode, model.PrintModeCSV)
+		}
+		if diff := cmp.Diff([]string{"testdata/user.csv"}, arg.FilePaths); diff != "" {
+			t.Errorf("FilePaths mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("flags interspersed among file paths are not imported as paths (#264)", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "testdata/user.csv", "--json", "testdata/identifier.csv", "--sql", "SELECT 1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.Output.Mode != model.PrintModeJSON {
+			t.Errorf("Output.Mode = %v, want %v", arg.Output.Mode, model.PrintModeJSON)
+		}
+		if arg.Query != "SELECT 1" {
+			t.Errorf("Query = %q, want %q", arg.Query, "SELECT 1")
+		}
+		if diff := cmp.Diff([]string{"testdata/user.csv", "testdata/identifier.csv"}, arg.FilePaths); diff != "" {
+			t.Errorf("FilePaths mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("unknown flag after file path returns a parse error (#264)", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "testdata/user.csv", "--nope"})
+		if err == nil {
+			t.Fatal("expected a parse error for an unknown flag, got nil")
+		}
+	})
+
 	t.Run("default print mode", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly"})
 		if err != nil {
