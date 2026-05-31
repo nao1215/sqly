@@ -95,6 +95,26 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'booker12'
     End
 
+    It 'does not split on a semicolon inside a bracket-quoted identifier (#314)'
+      Data
+        #|SELECT 'v' AS [a;b];
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'a;b'
+      The output should include 'v'
+    End
+
+    It 'does not split on a semicolon inside a backtick-quoted identifier (#315)'
+      Data
+        #|SELECT 'v' AS `a;b`;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'a;b'
+      The output should include 'v'
+    End
+
     It 'reports an error for incomplete SQL'
       Data
         #|SELECT * FROM (

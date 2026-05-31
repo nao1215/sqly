@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Batch Identifier Quoting: Batch statement splitting now recognizes SQLite bracket-quoted (`[ ... ]`) and backtick-quoted (`` `...` ``) identifiers, so a semicolon inside them no longer splits a statement. This matches the existing handling of single-quoted strings, double-quoted identifiers, and comments.
 * File-Output Status On Stderr: Status lines for file-output operations (`--output`, `.dump`, and `.save`/`--save`/`--save-dir`) now go to stderr instead of stdout. When all data is written to files, stdout stays empty, matching `--inspect` and letting scripts rely on an empty stdout for success.
 * Mode-Change Banner On Stderr: The `.mode` change banner now goes to stderr instead of stdout. In batch mode, switching to `.mode json` or `.mode ndjson` no longer prints a human-readable banner ahead of the machine-readable payload, so stdout stays parseable.
 * Directory Output Targets: `--output` and `.dump` now reject a destination that already exists as a directory with a clear error, instead of silently writing to a sibling file such as `dir.csv`.

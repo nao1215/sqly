@@ -144,6 +144,7 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 	var (
 		start                         int
 		inSingle, inDouble            bool
+		inBacktick, inBracket         bool
 		inLineComment, inBlockComment bool
 	)
 	for i := 0; i < len(runes); i++ {
@@ -166,12 +167,27 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 			if c == '"' {
 				inDouble = false
 			}
+		case inBacktick:
+			// SQLite backtick-quoted identifier; a doubled backtick escapes one,
+			// which this toggle handles since it re-enters on the next backtick.
+			if c == '`' {
+				inBacktick = false
+			}
+		case inBracket:
+			// SQLite bracket-quoted identifier; "]" closes it (brackets do not nest).
+			if c == ']' {
+				inBracket = false
+			}
 		default:
 			switch {
 			case c == '\'':
 				inSingle = true
 			case c == '"':
 				inDouble = true
+			case c == '`':
+				inBacktick = true
+			case c == '[':
+				inBracket = true
 			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
 				inLineComment = true
 				i++
