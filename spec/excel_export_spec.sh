@@ -31,7 +31,8 @@ Describe 'sqly excel export (#296)'
     End
     When run sqly testdata/user.csv
     The status should be success
-    The output should include 'excel'
+    The output should include 'mode=excel'
+    The stderr should include 'Change output mode'
     The path "$OUT_DIR/dump.xlsx" should be file
     The path "$OUT_DIR/dump.xlsx" should not be executable
   End

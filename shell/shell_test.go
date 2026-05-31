@@ -224,7 +224,7 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode table")
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode table")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -245,7 +245,7 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode csv")
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode csv")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -266,7 +266,7 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode markdown")
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode markdown")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -287,7 +287,7 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode tsv")
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode tsv")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -308,7 +308,7 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode ltsv")
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode ltsv")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -329,7 +329,7 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode excel")
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode excel")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1165,6 +1165,23 @@ func getExecStdOutput(t *testing.T, f func(context.Context, string) error, arg s
 
 	var buffer bytes.Buffer
 	config.Stdout = &buffer
+
+	execErr := f(context.Background(), arg)
+	return buffer.Bytes(), execErr
+}
+
+// getExecStdErrOutput runs f and captures what it writes to config.Stderr. Used
+// for status messages (e.g. the .mode change banner) that go to stderr so they
+// do not pollute machine-readable stdout.
+func getExecStdErrOutput(t *testing.T, f func(context.Context, string) error, arg string) ([]byte, error) {
+	t.Helper()
+	backupStderr := config.Stderr
+	defer func() {
+		config.Stderr = backupStderr
+	}()
+
+	var buffer bytes.Buffer
+	config.Stderr = &buffer
 
 	execErr := f(context.Background(), arg)
 	return buffer.Bytes(), execErr

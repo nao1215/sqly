@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Mode-Change Banner On Stderr: The `.mode` change banner now goes to stderr instead of stdout. In batch mode, switching to `.mode json` or `.mode ndjson` no longer prints a human-readable banner ahead of the machine-readable payload, so stdout stays parseable.
 * Directory Output Targets: `--output` and `.dump` now reject a destination that already exists as a directory with a clear error, instead of silently writing to a sibling file such as `dir.csv`.
 * Output Path Preservation: `--output` and `.dump` no longer rewrite a destination with an unknown extension to a sibling `.csv` file. The CSV fallback now writes to the exact path given (for example `--output out.unknown` writes to `out.unknown`), instead of silently creating `out.csv`.
 * Inspect Flag Conflicts: `--inspect` now rejects conflicting action and side-effecting flags (`--sql`, `--sql-file`, `--output`, `--save`, `--save-dir`) with a clear error instead of silently discarding them.
