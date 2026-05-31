@@ -1422,33 +1422,34 @@ func TestShellCommunicate_LogsPromptCloseError(t *testing.T) {
 	}
 }
 
-func TestShellNewPromptSession_JoinsCloseErrorOnHistoryFailure(t *testing.T) {
+func TestShellNewPromptSession_DisablesHistoryOnPreloadFailure(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanup()
 
+	// History preload is best-effort: a read failure must not stop the prompt
+	// from opening. The session continues with history disabled.
 	listErr := errors.New("history list failed")
-	closeErr := errors.New("prompt close failed")
-	fakePrompt := &fakePromptSession{closeErr: closeErr}
+	fakePrompt := &fakePromptSession{}
 	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
 		return fakePrompt, nil
 	}
 	shell.usecases.history = historyUsecaseStub{listErr: listErr}
 
-	_, err = shell.newPromptSession(context.Background())
-	if err == nil {
-		t.Fatal("newPromptSession returned nil error")
+	p, err := shell.newPromptSession(context.Background())
+	if err != nil {
+		t.Fatalf("newPromptSession returned error on best-effort preload failure: %v", err)
 	}
-	if !errors.Is(err, listErr) {
-		t.Fatalf("error %v does not include history list failure", err)
+	if p == nil {
+		t.Fatal("newPromptSession returned a nil prompt")
 	}
-	if !errors.Is(err, closeErr) {
-		t.Fatalf("error %v does not include prompt close failure", err)
+	if shell.historyEnabled {
+		t.Error("historyEnabled should be false after a preload failure")
 	}
-	if fakePrompt.closeCalls != 1 {
-		t.Fatalf("prompt close calls = %d, want 1", fakePrompt.closeCalls)
+	if fakePrompt.closeCalls != 0 {
+		t.Fatalf("prompt close calls = %d, want 0 (prompt must stay open)", fakePrompt.closeCalls)
 	}
 }
 

@@ -192,21 +192,33 @@ func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 	}
 
 	// Preload persisted history only when it is available; the prompt still
-	// keeps in-session history when persistence is disabled.
+	// keeps in-session history when persistence is disabled. On read failure,
+	// stay best-effort: disable history and start the shell anyway instead of
+	// refusing to open the prompt.
 	if s.historyEnabled {
 		histories, err := s.usecases.history.List(ctx)
 		if err != nil {
-			if errClose := p.Close(); errClose != nil {
-				return nil, errors.Join(err, fmt.Errorf("failed to close prompt session: %w", errClose))
+			s.disableHistory(err)
+		} else {
+			for _, h := range histories.ToStringList() {
+				p.AddHistory(h)
 			}
-			return nil, err
-		}
-		for _, h := range histories.ToStringList() {
-			p.AddHistory(h)
 		}
 	}
 
 	return p, nil
+}
+
+// disableHistory turns off history persistence for the rest of the session and
+// warns once. It is called when the history DB cannot be created at startup or a
+// later read/write fails (e.g. the DB became read-only), so history stays
+// best-effort and never aborts the requested --sql, --inspect, or batch command.
+func (s *Shell) disableHistory(err error) {
+	if !s.historyEnabled {
+		return
+	}
+	s.historyEnabled = false
+	fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_DB_PATH to a writable path to enable it.\n", err)
 }
 
 // init store CSV data to in-memory DB and create table for sqly history.
@@ -215,8 +227,7 @@ func (s *Shell) init(ctx context.Context) error {
 	// sandboxes, containers) must not block the requested query or command.
 	// Disable history for the session and warn instead of failing.
 	if err := s.usecases.history.CreateTable(ctx); err != nil {
-		s.historyEnabled = false
-		fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_DB_PATH to a writable path to enable it.\n", err)
+		s.disableHistory(err)
 	}
 
 	paths := s.argument.FilePaths
@@ -525,10 +536,12 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 	}
 
 	// Skip history persistence when it is disabled so a read-only history DB
-	// cannot fail the requested command.
+	// cannot fail the requested command. History is best-effort: a runtime
+	// failure after startup disables history for the rest of the session and
+	// warns, instead of aborting the command.
 	if s.historyEnabled {
 		if err := s.recordUserRequest(ctx, req); err != nil {
-			return err
+			s.disableHistory(err)
 		}
 	}
 

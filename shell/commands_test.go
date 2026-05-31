@@ -35,6 +35,73 @@ func newBoundaryTestShell(t *testing.T, usecases Usecases) *Shell {
 	}
 }
 
+func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	history := mock.NewMockHistoryUsecase(ctrl)
+	query := mock.NewMockQueryUsecase(ctrl)
+
+	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
+		model.NewRecord([]string{"1"}),
+	})
+
+	// First command: the history read succeeds but the write fails as if the DB
+	// became read-only after startup. The query must still run.
+	history.EXPECT().List(gomock.Any()).Return(model.Histories{}, nil)
+	history.EXPECT().Create(gomock.Any(), gomock.Any()).
+		Return(errors.New("attempt to write a readonly database"))
+	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(table, int64(0), nil)
+
+	s := newBoundaryTestShell(t, Usecases{history: history, query: query})
+	s.historyEnabled = true
+
+	_ = captureStdout(t, func() {
+		if err := s.exec(context.Background(), "SELECT 1"); err != nil {
+			t.Fatalf("exec aborted on a best-effort history failure: %v", err)
+		}
+	})
+
+	if s.historyEnabled {
+		t.Error("historyEnabled should be false after a runtime history failure")
+	}
+
+	// Second command: history must not be touched again. No further history
+	// expectations are set, so gomock fails the test if List or Create is called.
+	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 2").Return(table, int64(0), nil)
+	_ = captureStdout(t, func() {
+		if err := s.exec(context.Background(), "SELECT 2"); err != nil {
+			t.Fatalf("second exec errored after history was disabled: %v", err)
+		}
+	})
+}
+
+func TestExec_HistoryReadFailureAlsoDisablesHistory(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	history := mock.NewMockHistoryUsecase(ctrl)
+	query := mock.NewMockQueryUsecase(ctrl)
+
+	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
+		model.NewRecord([]string{"1"}),
+	})
+
+	// The history read itself fails (e.g. the DB file vanished); the command must
+	// still run and history is disabled for the rest of the session.
+	history.EXPECT().List(gomock.Any()).Return(model.Histories{}, errors.New("disk I/O error"))
+	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(table, int64(0), nil)
+
+	s := newBoundaryTestShell(t, Usecases{history: history, query: query})
+	s.historyEnabled = true
+
+	_ = captureStdout(t, func() {
+		if err := s.exec(context.Background(), "SELECT 1"); err != nil {
+			t.Fatalf("exec aborted on a best-effort history read failure: %v", err)
+		}
+	})
+
+	if s.historyEnabled {
+		t.Error("historyEnabled should be false after a runtime history read failure")
+	}
+}
+
 func TestCommandList_cdCommand(t *testing.T) {
 	// Note: Cannot use t.Parallel() because of t.Chdir() and t.Setenv() usage
 	tests := []struct {
