@@ -65,6 +65,10 @@ type Shell struct {
 	// disabled for the session if the history DB cannot be created or written,
 	// so automation does not fail on a read-only config location.
 	historyEnabled bool
+	// inspectSources maps an imported table name to the source path it came from.
+	// It is populated during import only when --inspect is set, so the inspect
+	// report can show source-to-table mapping without a second import pass.
+	inspectSources map[string]string
 }
 
 type promptSession interface {
@@ -107,6 +111,7 @@ func NewShell(
 		stdin:          os.Stdin,
 		isTTY:          config.IsInputFromTTY,
 		historyEnabled: true,
+		inspectSources: make(map[string]string),
 	}, nil
 }
 
@@ -125,6 +130,13 @@ func (s *Shell) Run(ctx context.Context) error {
 
 	if err := s.init(ctx); err != nil {
 		return err
+	}
+
+	// --inspect is a non-interactive discovery path: after import it prints a
+	// JSON report of the loaded tables and exits, so it takes precedence over
+	// --sql and the interactive/batch paths.
+	if s.argument.InspectFlag {
+		return s.runInspect(ctx)
 	}
 
 	if s.argument.Query != "" {

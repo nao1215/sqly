@@ -29,6 +29,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --stdin-name string   table name for the --stdin dataset (default "stdin")
   -s, --sql string          sql query you want to execute
   -o, --output string       destination path for SQL results specified in --sql option
+  -i, --inspect             print a JSON report of imported tables (schema, row counts, sample rows) and exit
   -h, --help                print help message
   -v, --version             print sqly version
 

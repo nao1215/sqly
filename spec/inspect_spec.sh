@@ -1,0 +1,46 @@
+#!/bin/sh
+# shellcheck shell=sh
+#
+# Non-interactive inspect workflow end-to-end tests (#259). Runs the binary with
+# --inspect and checks the machine-readable JSON report and stdout purity.
+
+Describe 'sqly --inspect (#259)'
+  Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
+
+  It 'prints a JSON report for a single file'
+    When run sqly --inspect testdata/user.csv
+    The status should be success
+    The line 1 should equal '{'
+    The output should include '"name": "user"'
+    The output should include '"source": "testdata/user.csv"'
+    The output should include '"row_count": 3'
+    The output should include '"user_name"'
+  End
+
+  It 'maps every table from a multi-table ACH file to its source'
+    When run sqly --inspect testdata/ppd-debit.ach
+    The status should be success
+    The output should include '"name": "ppd_debit_entries"'
+    The output should include '"source": "testdata/ppd-debit.ach"'
+  End
+
+  It 'keeps stdout as pure JSON for a directory and sends progress to stderr'
+    work_dir=$(mktemp -d)
+    export work_dir
+    cp testdata/user.csv "$work_dir/a.csv"
+    cp testdata/identifier.csv "$work_dir/b.csv"
+    When run sqly --inspect "$work_dir"
+    The status should be success
+    The line 1 should equal '{'
+    The output should include '"name": "a"'
+    The output should include '"name": "b"'
+    The stderr should include 'Successfully imported'
+    rm -rf "$work_dir"
+  End
+
+  It 'fails with a clear error when no input is given'
+    When run sqly --inspect
+    The status should be failure
+    The stderr should include 'no tables to inspect'
+  End
+End

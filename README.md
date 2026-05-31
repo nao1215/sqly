@@ -99,6 +99,29 @@ $ sqly --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user
 +-----------+-----------+
 ```
 
+### Inspect tables: --inspect option
+`--inspect` imports the given files and directories and prints a JSON report of every table, then exits without starting the shell. The report lists each table name, its source path, the column schema, the row count, and a small sample of rows. It gives scripts and LLMs a non-interactive equivalent of `.tables`, `.schema`, and `.describe`. Import progress goes to stderr, so stdout carries only the JSON. Excel sheets and ACH/Fedwire files map several tables to one source path.
+
+```shell
+$ sqly --inspect testdata/user.csv
+{
+  "tables": [
+    {
+      "name": "user",
+      "source": "testdata/user.csv",
+      "row_count": 3,
+      "columns": [
+        {"name": "user_name", "type": "TEXT", "nullable": true, "primary_key": false},
+        {"name": "identifier", "type": "INTEGER", "nullable": true, "primary_key": false}
+      ],
+      "sample_rows": [
+        {"user_name": "booker12", "identifier": "1"}
+      ]
+    }
+  ]
+}
+```
+
 ### Batch mode: pipe commands via stdin
 When standard input is not a terminal (piped or redirected), sqly reads SQL statements and shell commands from stdin instead of starting the interactive shell. SQL statements end at a top-level `;` and may span multiple lines (separate multiple statements with `;`); helper commands such as `.tables` are single-line. A single trailing statement without `;` still runs. A failed statement makes sqly exit non-zero, so batch runs are scriptable.
 
