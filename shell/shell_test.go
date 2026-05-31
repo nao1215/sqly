@@ -2828,7 +2828,7 @@ func TestShellRun_OutputExportsReturningRows(t *testing.T) {
 	if runErr := shell.Run(context.Background()); runErr != nil {
 		t.Fatalf("Run with RETURNING and --output failed: %v", runErr)
 	}
-	data, statErr := os.ReadFile(out)
+	data, statErr := os.ReadFile(out) //nolint:gosec // test path
 	if statErr != nil {
 		t.Fatalf("expected output file %q to be created: %v", out, statErr)
 	}

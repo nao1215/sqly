@@ -81,6 +81,19 @@ type Arg struct {
 	Version func()
 }
 
+// Output mode flag names, shared by the flag registration and the conflict
+// check so the strings are defined once. Ref #365.
+const (
+	outCSV      = "csv"
+	outTSV      = "tsv"
+	outLTSV     = "ltsv"
+	outExcel    = "excel"
+	outMarkdown = "markdown"
+	outJSON     = "json"
+	outNDJSON   = "ndjson"
+	outParquet  = "parquet"
+)
+
 // outputFlag is a structure for managing output format options.
 type outputFlag struct {
 	csv      bool
@@ -101,19 +114,19 @@ func (of outputFlag) selectedNames() []string {
 		name string
 		set  bool
 	}{
-		{"--csv", of.csv},
-		{"--tsv", of.tsv},
-		{"--ltsv", of.ltsv},
-		{"--excel", of.excel},
-		{"--markdown", of.markdown},
-		{"--json", of.json},
-		{"--ndjson", of.ndjson},
-		{"--parquet", of.parquet},
+		{outCSV, of.csv},
+		{outTSV, of.tsv},
+		{outLTSV, of.ltsv},
+		{outExcel, of.excel},
+		{outMarkdown, of.markdown},
+		{outJSON, of.json},
+		{outNDJSON, of.ndjson},
+		{outParquet, of.parquet},
 	}
 	var names []string
 	for _, f := range flags {
 		if f.set {
-			names = append(names, f.name)
+			names = append(names, "--"+f.name)
 		}
 	}
 	return names
@@ -138,14 +151,14 @@ func NewArg(args []string) (*Arg, error) {
 	// that fail with "path does not exist". Interspersed parsing instead applies
 	// the flag, and an unknown flag fails fast with a clear parse error. Ref #264.
 	flag.SetInterspersed(true)
-	flag.BoolVarP(&oFlag.csv, "csv", "c", false, "change output format to csv (default: table)")
-	flag.BoolVarP(&oFlag.excel, "excel", "e", false, "change output format to excel (default: table)")
-	flag.BoolVarP(&oFlag.ltsv, "ltsv", "l", false, "change output format to ltsv (default: table)")
-	flag.BoolVarP(&oFlag.markdown, "markdown", "m", false, "change output format to markdown table (default: table)")
-	flag.BoolVarP(&oFlag.tsv, "tsv", "t", false, "change output format to tsv (default: table)")
-	flag.BoolVarP(&oFlag.json, "json", "j", false, "change output format to json (default: table)")
-	flag.BoolVarP(&oFlag.ndjson, "ndjson", "n", false, "change output format to ndjson (default: table)")
-	flag.BoolVarP(&oFlag.parquet, "parquet", "p", false, "export results as parquet (export-only; use with --output or .dump)")
+	flag.BoolVarP(&oFlag.csv, outCSV, "c", false, "change output format to csv (default: table)")
+	flag.BoolVarP(&oFlag.excel, outExcel, "e", false, "change output format to excel (default: table)")
+	flag.BoolVarP(&oFlag.ltsv, outLTSV, "l", false, "change output format to ltsv (default: table)")
+	flag.BoolVarP(&oFlag.markdown, outMarkdown, "m", false, "change output format to markdown table (default: table)")
+	flag.BoolVarP(&oFlag.tsv, outTSV, "t", false, "change output format to tsv (default: table)")
+	flag.BoolVarP(&oFlag.json, outJSON, "j", false, "change output format to json (default: table)")
+	flag.BoolVarP(&oFlag.ndjson, outNDJSON, "n", false, "change output format to ndjson (default: table)")
+	flag.BoolVarP(&oFlag.parquet, outParquet, "p", false, "export results as parquet (export-only; use with --output or .dump)")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")

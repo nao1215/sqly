@@ -83,11 +83,11 @@ func TestImportDirectory_ReimportSameDir_ReportsOverwrite(t *testing.T) {
 // tests that need real Excel/ACH/Fedwire inputs.
 func copyTestFile(t *testing.T, name, dst string) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", name))
+	data, err := os.ReadFile(filepath.Join("testdata", name)) //nolint:gosec // test reads a fixed testdata fixture
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(dst, data, 0o600); err != nil {
+	if err := os.WriteFile(dst, data, 0o600); err != nil { //nolint:gosec // test writes to a temp path
 		t.Fatal(err)
 	}
 }
@@ -255,7 +255,7 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	if err := s.writeBack(ctx, ""); err == nil {
 		t.Error("expected .save --force to be rejected for a directory-imported table (#362)")
 	}
-	after, err := os.ReadFile(orig)
+	after, err := os.ReadFile(orig) //nolint:gosec // test path
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -867,14 +867,14 @@ func TestSheetAppliesTo_UnreadableDirectoryDefersToImport(t *testing.T) {
 
 	parent := t.TempDir()
 	locked := filepath.Join(parent, "locked")
-	if err := os.Mkdir(locked, 0o755); err != nil {
+	if err := os.Mkdir(locked, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(locked, 0o000); err != nil {
 		t.Fatal(err)
 	}
 	// Restore permissions so t.TempDir cleanup can remove the directory.
-	defer func() { _ = os.Chmod(locked, 0o755) }()
+	defer func() { _ = os.Chmod(locked, 0o750) }() //nolint:gosec // restore dir perms for cleanup
 
 	if !s.sheetAppliesTo([]string{locked}) {
 		t.Error("sheetAppliesTo(unreadable dir) = false, want true (defer to import for the real error)")
