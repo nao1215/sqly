@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/nao1215/sqly/config"
@@ -257,92 +258,147 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	return nil
 }
 
-// importDirectory loads all supported files from a directory into the database.
-// Returns imported=true if at least one new table was actually imported, plus
-// the number of workbooks skipped because they lacked the requested --sheet.
-// When sheetName is specified, --sheet filtering is applied per-Excel-file by
-// walking the directory and filtering each Excel file individually; in a
-// multi-workbook import a workbook missing the sheet is skipped, not fatal. Ref
-// #378.
+// importDirectory loads every supported file in a directory into the database,
+// one file at a time, so each table can be mapped back to the exact file that
+// produced it. Returns imported=true when at least one table was loaded or
+// overwritten, plus the number of workbooks skipped because they lacked the
+// requested --sheet (Ref #378).
+//
+// Importing per file (rather than handing the whole directory to filesql) lets
+// importDirectory:
+//   - record each table's real source file even when the basename is sanitized
+//     or the file yields several tables (Excel/ACH/Fedwire), so --inspect reports
+//     per-file provenance (Ref #357, #358);
+//   - reject two files in the tree that map to the same table name instead of
+//     silently overwriting one with the other (Ref #359, #360);
+//   - treat re-importing over an existing table as a reported overwrite, not "no
+//     supported files", and re-point that table's source so write-back targets
+//     the directory file rather than the original (Ref #361, #362).
+//
+// Every imported table is marked as a directory import so write-back still
+// rejects it: a directory is not a single editable source the session owns.
 func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, sheetName string, multiWorkbook bool) (imported bool, skipped int, err error) {
-	tablesBefore, err := s.usecases.importer.GetTableNames(ctx)
+	files, err := s.supportedFilesInDir(cleanPath)
 	if err != nil {
-		return false, 0, fmt.Errorf("failed to get table names before importing directory %s: %w", displayPath, err)
+		return false, 0, fmt.Errorf("failed to scan directory %s: %w", displayPath, err)
 	}
-	existingTables := tableNameSet(tablesBefore)
-
-	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
-		return false, 0, fmt.Errorf("failed to import files from directory %s: %w", displayPath, err)
+	if len(files) == 0 {
+		return false, 0, fmt.Errorf("no supported files found in directory %s", displayPath)
 	}
 
-	tablesAfter, err := s.usecases.importer.GetTableNames(ctx)
-	if err != nil {
-		return false, 0, fmt.Errorf("failed to get table names after importing directory %s: %w", displayPath, err)
-	}
-	newTableNames := diffTableNames(tablesAfter, existingTables)
+	// producedHere maps a table name to the file in this directory import that
+	// produced it, so a later file mapping to the same name is a collision rather
+	// than a silent overwrite. Ref #359, #360.
+	producedHere := make(map[string]string)
+	var importedTables []string
 
-	if len(newTableNames) == 0 {
-		fmt.Fprintf(s.importStatusWriter(), "No supported files found in directory %s\n", displayPath)
-		return false, 0, nil
-	}
-
-	// Apply --sheet filtering per-Excel-file within the directory.
-	// For each Excel file, filterExcelSheets builds candidates from all
-	// current tables matching the file's prefix (nil candidates mode).
-	// This correctly handles both first-import and re-import (overwrite).
-	if sheetName != "" {
-		err := filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if d.IsDir() {
-				return nil
-			}
-			if s.usecases.importer.IsExcelFile(path) {
-				if err := s.filterExcelSheets(ctx, path, sheetName, nil); err != nil {
-					// A workbook in the tree that lacks the sheet is skipped rather
-					// than aborting the whole directory import, so matching workbooks
-					// still load. Ref #378. filterExcelSheets has already dropped this
-					// workbook's tables before returning the not-found error.
-					if multiWorkbook && errors.Is(err, errSheetNotFound) {
-						fmt.Fprintf(s.importStatusWriter(), "Skipped %s: %v\n", path, err)
-						skipped++
-						return nil
-					}
-					return err
-				}
-			}
-			return nil
-		})
+	for _, file := range files {
+		before, err := s.usecases.importer.GetTableNames(ctx)
 		if err != nil {
-			return false, skipped, fmt.Errorf("failed to walk directory %s for sheet filtering: %w", displayPath, err)
+			return false, skipped, fmt.Errorf("failed to get table names before importing %s: %w", file, err)
 		}
+		beforeSet := tableNameSet(before)
+
+		if err := s.usecases.importer.LoadFiles(ctx, file); err != nil {
+			return false, skipped, fmt.Errorf("failed to import file %s from directory %s: %w", file, displayPath, err)
+		}
+
+		// Apply --sheet filtering to Excel workbooks. A workbook that lacks the
+		// requested sheet is skipped in a multi-workbook import (Ref #378);
+		// filterExcelSheets has already dropped its tables before returning.
+		if sheetName != "" && s.usecases.importer.IsExcelFile(file) {
+			if ferr := s.filterExcelSheets(ctx, file, sheetName, nil); ferr != nil {
+				if multiWorkbook && errors.Is(ferr, errSheetNotFound) {
+					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: %v\n", file, ferr)
+					skipped++
+					continue
+				}
+				return false, skipped, ferr
+			}
+		}
+
+		// The tables this file owns are the ones it newly created. When it only
+		// overwrote tables that already existed (a re-import), fall back to the
+		// existing tables whose name matches this file's signature.
+		fileTables := diffTableNames(mustTables(ctx, s), beforeSet)
+		if len(fileTables) == 0 {
+			fileTables = s.tablesMatchingFile(file, beforeSet)
+		}
+
+		for _, name := range fileTables {
+			if prev, ok := producedHere[name]; ok && prev != file {
+				return false, skipped, fmt.Errorf("table-name collision: %s and %s both map to table %q in directory %s; rename a file to disambiguate", prev, file, name, displayPath)
+			}
+		}
+		for _, name := range fileTables {
+			producedHere[name] = file
+			s.recordTableSources([]string{name}, file)
+			s.markDirImported(name)
+		}
+		importedTables = append(importedTables, fileTables...)
 	}
 
-	// Recompute remaining tables after potential sheet filtering may have dropped some.
-	tablesNow, err := s.usecases.importer.GetTableNames(ctx)
+	if len(importedTables) == 0 {
+		// Every supported file was skipped (e.g. all workbooks lacked the --sheet).
+		// The caller turns an all-skipped run into a clear error via skipped.
+		return false, skipped, nil
+	}
+
+	sort.Strings(importedTables)
+	fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(importedTables), displayPath, importedTables)
+	return true, skipped, nil
+}
+
+// mustTables returns the current table names, or nil on error. importDirectory
+// already validated the session by an earlier GetTableNames call in the same
+// loop iteration, so a transient error here degrades to "no new tables" (the
+// overwrite fallback) rather than aborting a successful import.
+func mustTables(ctx context.Context, s *Shell) []*model.Table {
+	tables, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
-		return false, skipped, fmt.Errorf("failed to get table names after sheet filtering for %s: %w", displayPath, err)
+		return nil
 	}
-	remainingNames := diffTableNames(tablesNow, existingTables)
+	return tables
+}
 
-	// Record each table's real source file when it can be matched to a file in
-	// the directory, so --inspect reports per-file provenance instead of the
-	// directory path (#326). Tables that cannot be matched (filesql sanitized the
-	// name, or the candidate is ambiguous) fall back to the directory path. Every
-	// table is marked as a directory import so write-back still rejects it.
-	fileSources := s.directoryTableFileSources(cleanPath)
-	for _, name := range remainingNames {
-		source := displayPath
-		if file, ok := fileSources[name]; ok {
-			source = file
+// supportedFilesInDir returns the supported files under dir in deterministic
+// order. A traversal error (e.g. an unreadable directory) is returned so the
+// caller can surface the real access error.
+func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		s.recordTableSources([]string{name}, source)
-		s.markDirImported(name)
+		if d.IsDir() {
+			return nil
+		}
+		if s.usecases.importer.IsSupportedFile(path) {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
+	sort.Strings(files)
+	return files, nil
+}
 
-	fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(remainingNames), displayPath, remainingNames)
-	return len(remainingNames) > 0, skipped, nil
+// tablesMatchingFile returns the table names in the given set that a file owns by
+// name: the single-table name derived from the path, or any name under its
+// "<base>_" prefix for multi-table formats (Excel sheets, ACH, Fedwire). It is
+// used to identify which existing tables a re-imported file overwrote.
+func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []string {
+	base := s.usecases.importer.GetTableNameFromFilePath(file)
+	prefix := base + "_"
+	var matched []string
+	for name := range names {
+		if name == base || strings.HasPrefix(name, prefix) {
+			matched = append(matched, name)
+		}
+	}
+	return matched
 }
 
 // countExcelWorkbooks counts the Excel workbooks reachable from the given input
@@ -374,33 +430,6 @@ func (s *Shell) countExcelWorkbooks(paths []string) int {
 		}
 	}
 	return count
-}
-
-// directoryTableFileSources walks dir and maps a candidate table name (the file
-// base name with compression and format extensions stripped) to its file path.
-// A name produced by more than one file is omitted as ambiguous, so the caller
-// falls back to the directory path rather than guessing.
-func (s *Shell) directoryTableFileSources(dir string) map[string]string {
-	candidates := map[string][]string{}
-	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil //nolint:nilerr // skip unreadable entries; import reports real errors
-		}
-		if !s.usecases.importer.IsSupportedFile(path) {
-			return nil
-		}
-		if name := baseTableName(path); name != "" {
-			candidates[name] = append(candidates[name], path)
-		}
-		return nil
-	})
-	result := make(map[string]string, len(candidates))
-	for name, paths := range candidates {
-		if len(paths) == 1 {
-			result[name] = paths[0]
-		}
-	}
-	return result
 }
 
 // markDirImported records that a table came from a directory import, so

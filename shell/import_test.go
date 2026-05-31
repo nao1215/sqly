@@ -41,7 +41,7 @@ func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
+func TestImportDirectory_ReimportSameDir_ReportsOverwrite(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
 
 	ctx := context.Background()
 
-	// First import creates the table
+	// First import creates the table.
 	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
 	if err != nil {
 		t.Fatalf("first import: %v", err)
@@ -66,14 +66,201 @@ func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
 		t.Error("expected first import to succeed")
 	}
 
-	// Second import of the same directory overwrites the existing table;
-	// no new tables are added, so it should return false.
+	// Re-importing the same directory overwrites the existing table. The
+	// directory still contains a supported file, so the import is reported as
+	// successful (it overwrote data) rather than as "No supported files". Ref
+	// #361.
 	imported, _, err = s.importDirectory(ctx, dir, dir, "", false)
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}
-	if imported {
-		t.Error("expected imported=false for overwrite-only directory, got true")
+	if !imported {
+		t.Error("expected re-import of a directory with a supported file to report imported=true (#361)")
+	}
+}
+
+// copyTestFile copies a file from shell/testdata into dst for directory-import
+// tests that need real Excel/ACH/Fedwire inputs.
+func copyTestFile(t *testing.T, name, dst string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestImportDirectory_RecordsPerFileSource(t *testing.T) {
+	// Directory --inspect must report each table's real source file, even when
+	// the basename is sanitized (#357) or the file produces multiple tables such
+	// as Excel/ACH/Fedwire (#358). The directory path must never be used as a
+	// table source.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "2023-data.csv"), []byte("id,name\n1,a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	copyTestFile(t, "sample.xlsx", filepath.Join(dir, "sample.xlsx"))
+	copyTestFile(t, "ppd-debit.ach", filepath.Join(dir, "ppd-debit.ach"))
+	copyTestFile(t, "customer-transfer.fed", filepath.Join(dir, "customer-transfer.fed"))
+
+	ctx := context.Background()
+	if _, _, err := s.importDirectory(ctx, dir, dir, "", false); err != nil {
+		t.Fatalf("importDirectory: %v", err)
+	}
+
+	absDir, _ := filepath.Abs(dir)
+	want := map[string]string{
+		"sheet_2023_data":           "2023-data.csv",
+		"sample_test_sheet":         "sample.xlsx",
+		"ppd_debit_file_header":     "ppd-debit.ach",
+		"ppd_debit_batches":         "ppd-debit.ach",
+		"ppd_debit_entries":         "ppd-debit.ach",
+		"customer_transfer_message": "customer-transfer.fed",
+	}
+	for table, file := range want {
+		src, ok := s.tableSources[table]
+		if !ok {
+			t.Errorf("table %q has no recorded source", table)
+			continue
+		}
+		if src == absDir {
+			t.Errorf("table %q source is the directory path, want the file %q", table, file)
+			continue
+		}
+		if !strings.HasSuffix(src, file) {
+			t.Errorf("table %q source = %q, want it to end with %q", table, src, file)
+		}
+	}
+}
+
+func TestImportDirectory_RejectsDuplicateBasenameCollision(t *testing.T) {
+	// Two files that map to the same table name from different subdirectories must
+	// be rejected instead of one silently overwriting the other. Ref #359.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "a"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "b"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a", "user.csv"), []byte("id,name\n1,alpha\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b", "user.csv"), []byte("id,name\n2,beta\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = s.importDirectory(context.Background(), dir, dir, "", false)
+	if err == nil {
+		t.Fatal("expected a collision error for duplicate basenames, got nil")
+	}
+	if !strings.Contains(err.Error(), "collision") {
+		t.Errorf("error = %q, want it to mention a collision", err)
+	}
+}
+
+func TestImportDirectory_RejectsSanitizedCollision(t *testing.T) {
+	// Two files whose names sanitize to the same table name must be rejected. Ref
+	// #360.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a-b.csv"), []byte("id,name\n1,alpha\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a_b.csv"), []byte("id,name\n2,beta\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = s.importDirectory(context.Background(), dir, dir, "", false)
+	if err == nil {
+		t.Fatal("expected a collision error for sanitized-name collision, got nil")
+	}
+	if !strings.Contains(err.Error(), "collision") {
+		t.Errorf("error = %q, want it to mention a collision", err)
+	}
+}
+
+func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *testing.T) {
+	// A directory import that overwrites a table previously loaded from a file
+	// argument must update the table's source to the directory file and mark it as
+	// a directory import, so later .save --force cannot write the directory rows
+	// back into the original file. Ref #361, #362.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Original file argument: a user.csv loaded directly.
+	work := t.TempDir()
+	orig := filepath.Join(work, "user.csv")
+	origData := []byte("user_name,identifier,first_name,last_name\norig1,1,ORIG,One\n")
+	if err := os.WriteFile(orig, origData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.importFile(ctx, orig, orig, ""); err != nil {
+		t.Fatalf("importFile: %v", err)
+	}
+	if s.dirImported["user"] {
+		t.Fatal("user should not be a directory import yet")
+	}
+
+	// Directory whose user.csv overwrites the existing table.
+	dir := filepath.Join(work, "dir")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	dirFile := filepath.Join(dir, "user.csv")
+	if err := os.WriteFile(dirFile, []byte("user_name,identifier,first_name,last_name\nalt1,1,ALT,One\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
+	if err != nil {
+		t.Fatalf("importDirectory re-import: %v", err)
+	}
+	if !imported {
+		t.Error("expected the directory re-import to report imported=true (#361)")
+	}
+	if !s.dirImported["user"] {
+		t.Error("user must be marked as a directory import after re-import (#362)")
+	}
+	absDirFile, _ := filepath.Abs(dirFile)
+	if got := s.tableSources["user"]; got != absDirFile {
+		t.Errorf("user source = %q, want the directory file %q (#362)", got, absDirFile)
+	}
+
+	// .save --force must now refuse to write back, leaving the original untouched.
+	if err := s.writeBack(ctx, ""); err == nil {
+		t.Error("expected .save --force to be rejected for a directory-imported table (#362)")
+	}
+	after, err := os.ReadFile(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(origData) {
+		t.Errorf("original file was overwritten:\n got %q\nwant %q", after, origData)
 	}
 }
 
@@ -95,32 +282,19 @@ func TestImportCommand_EmptyDirDoesNotMaskFileError(t *testing.T) {
 	}
 }
 
-func TestShell_importDirectory_dependsOnImportUsecase(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	importer := mock.NewMockImportUsecase(ctrl)
+func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
 	dir := t.TempDir()
-
-	before := []*model.Table{
-		model.NewTable("users", nil, nil),
-	}
-	after := []*model.Table{
-		model.NewTable("users", nil, nil),
-		model.NewTable("orders", nil, nil),
+	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte("id,total\n1,10\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
-	gomock.InOrder(
-		importer.EXPECT().GetTableNames(gomock.Any()).Return(before, nil),
-		importer.EXPECT().LoadFiles(gomock.Any(), dir).Return(nil),
-		importer.EXPECT().GetTableNames(gomock.Any()).Return(after, nil),
-		importer.EXPECT().GetTableNames(gomock.Any()).Return(after, nil),
-	)
-
-	s := newBoundaryTestShell(t, Usecases{importer: importer})
-
-	var (
-		imported bool
-		err      error
-	)
+	var imported bool
 	// Import progress goes to stderr (#306), so capture stderr here.
 	out := captureStderr(t, func() {
 		imported, _, err = s.importDirectory(context.Background(), dir, "fixtures", "", false)
@@ -136,6 +310,14 @@ func TestShell_importDirectory_dependsOnImportUsecase(t *testing.T) {
 	}
 	if !strings.Contains(out, "orders") {
 		t.Fatalf("output %q does not mention imported table name", out)
+	}
+	// The table maps to its real file, and a directory import is marked so
+	// write-back rejects it.
+	if !s.dirImported["orders"] {
+		t.Error("orders should be marked as a directory import")
+	}
+	if src := s.tableSources["orders"]; !strings.HasSuffix(src, "orders.csv") {
+		t.Errorf("orders source = %q, want it to end with orders.csv", src)
 	}
 }
 
