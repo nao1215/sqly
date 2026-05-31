@@ -217,8 +217,17 @@ func readSQLFile(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read --sql-file %q: %w", path, err)
 	}
-	if strings.TrimSpace(string(data)) == "" {
+	content := string(data)
+	if strings.TrimSpace(content) == "" {
 		return "", fmt.Errorf("--sql-file %q is empty", path)
 	}
-	return string(data), nil
+	// A comment-only script has no executable SQL, which is the same failure as
+	// an empty file: splitting yields no terminated statements and the remainder
+	// strips down to nothing once leading comments are removed. Reject it instead
+	// of silently running nothing. Ref #351.
+	stmts, remainder := splitSQLStatements(content)
+	if len(stmts) == 0 && stripLeadingSQLComments(remainder) == "" {
+		return "", fmt.Errorf("--sql-file %q contains no executable SQL statements", path)
+	}
+	return content, nil
 }

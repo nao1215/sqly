@@ -2605,6 +2605,28 @@ func TestShellRun_SQLFile(t *testing.T) {
 			t.Fatalf("error = %q, want it to mention an empty file", err.Error())
 		}
 	})
+
+	t.Run("returns an error for a comment-only SQL file (#351)", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := filepath.Join(dir, "comments.sql")
+		if err := os.WriteFile(sqlPath, []byte("-- header only\n/* block */\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return true }
+
+		err = shell.Run(context.Background())
+		if err == nil {
+			t.Fatal("comment-only --sql-file returned nil error, want error")
+		}
+		if !strings.Contains(err.Error(), "no executable") {
+			t.Fatalf("error = %q, want it to mention no executable SQL", err.Error())
+		}
+	})
 }
 
 func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {

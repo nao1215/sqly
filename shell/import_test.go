@@ -32,7 +32,7 @@ func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
 
 	// filesql returns an error for empty directories (no supported files found),
 	// so importDirectory propagates the error and returns imported=false.
-	imported, err := s.importDirectory(context.Background(), emptyDir, emptyDir, "")
+	imported, _, err := s.importDirectory(context.Background(), emptyDir, emptyDir, "", false)
 	if err == nil {
 		t.Fatal("expected error for empty directory, got nil")
 	}
@@ -58,7 +58,7 @@ func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
 	ctx := context.Background()
 
 	// First import creates the table
-	imported, err := s.importDirectory(ctx, dir, dir, "")
+	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
 	if err != nil {
 		t.Fatalf("first import: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestImportDirectory_OverwriteOnly_ReturnsNotImported(t *testing.T) {
 
 	// Second import of the same directory overwrites the existing table;
 	// no new tables are added, so it should return false.
-	imported, err = s.importDirectory(ctx, dir, dir, "")
+	imported, _, err = s.importDirectory(ctx, dir, dir, "", false)
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestShell_importDirectory_dependsOnImportUsecase(t *testing.T) {
 	)
 	// Import progress goes to stderr (#306), so capture stderr here.
 	out := captureStderr(t, func() {
-		imported, err = s.importDirectory(context.Background(), dir, "fixtures", "")
+		imported, _, err = s.importDirectory(context.Background(), dir, "fixtures", "", false)
 	})
 	if err != nil {
 		t.Fatalf("importDirectory returned error: %v", err)
@@ -530,7 +530,7 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	imported, err := s.importDirectory(ctx, dir, dir, "")
+	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
 	if err != nil {
 		t.Fatalf("importDirectory: %v", err)
 	}
@@ -661,6 +661,118 @@ func TestImportCommand_MissingSheetValueErrors(t *testing.T) {
 
 			if err := s.commands.importCommand(context.Background(), s, tt.argv); err == nil {
 				t.Errorf("importCommand(%v) = nil error, want missing-value error", tt.argv)
+			}
+		})
+	}
+}
+
+func TestSheetAppliesTo_UnreadableDirectoryDefersToImport(t *testing.T) {
+	// An unreadable directory cannot be proven to lack Excel files, so --sheet
+	// validation must defer to the import step (which reports the real access
+	// error) instead of misclassifying it as a non-Excel input. Ref #356.
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits behave differently on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root can traverse a 0000 directory, so the permission error never occurs")
+	}
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	parent := t.TempDir()
+	locked := filepath.Join(parent, "locked")
+	if err := os.Mkdir(locked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	// Restore permissions so t.TempDir cleanup can remove the directory.
+	defer func() { _ = os.Chmod(locked, 0o755) }()
+
+	if !s.sheetAppliesTo([]string{locked}) {
+		t.Error("sheetAppliesTo(unreadable dir) = false, want true (defer to import for the real error)")
+	}
+}
+
+func TestImportCommand_SheetSkipsWorkbooksMissingSheet(t *testing.T) {
+	// A multi-workbook import with --sheet must skip workbooks that lack the
+	// requested sheet instead of failing the whole import, so matching workbooks
+	// still load. Ref #378.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	s.argument.SheetName = "A test"
+
+	ctx := context.Background()
+	paths := []string{
+		filepath.Join("testdata", "sheet_with_spaces.xlsx"),  // contains "A test"
+		filepath.Join("testdata", "sample.xlsx"),             // lacks "A test"
+		filepath.Join("testdata", "sheet_with_accents.xlsx"), // lacks "A test"
+	}
+	if err := s.commands.importCommand(ctx, s, paths); err != nil {
+		t.Fatalf("importCommand with --sheet across multiple workbooks = %v, want nil (skip non-matching)", err)
+	}
+
+	tables, err := s.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept bool
+	for _, tbl := range tables {
+		if strings.HasPrefix(tbl.Name(), "sheet_with_spaces_") {
+			kept = true
+		}
+		if strings.HasPrefix(tbl.Name(), "sample_") || strings.HasPrefix(tbl.Name(), "sheet_with_accents_") {
+			t.Errorf("table %q from a non-matching workbook should have been dropped", tbl.Name())
+		}
+	}
+	if !kept {
+		t.Errorf("expected a table from sheet_with_spaces.xlsx (the matching workbook), got tables %v", tableNamesOf(tables))
+	}
+}
+
+func tableNamesOf(tables []*model.Table) []string {
+	names := make([]string, 0, len(tables))
+	for _, t := range tables {
+		names = append(names, t.Name())
+	}
+	return names
+}
+
+func TestImportCommand_EmptySheetValueRejected(t *testing.T) {
+	// An explicit empty helper --sheet value (separated "" or joined "--sheet=")
+	// must be rejected instead of silently importing every sheet. The rejection
+	// must happen before file/Excel checks, so it surfaces even for a CSV input.
+	// Ref #354, #355.
+	csv := filepath.Join("testdata", "sample.csv")
+	tests := []struct {
+		name string
+		argv []string
+	}{
+		{"separated empty sheet value (#354)", []string{"--sheet", "", csv}},
+		{"joined empty sheet value (#355)", []string{"--sheet=", csv}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			err = s.commands.importCommand(context.Background(), s, tt.argv)
+			if err == nil {
+				t.Fatalf("importCommand(%v) = nil error, want empty-sheet error", tt.argv)
+			}
+			if !strings.Contains(err.Error(), "sheet") {
+				t.Errorf("importCommand(%v) error = %q, want it to mention the empty sheet value", tt.argv, err)
 			}
 		})
 	}
