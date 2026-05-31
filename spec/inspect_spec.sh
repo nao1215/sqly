@@ -21,7 +21,7 @@ Describe 'sqly --inspect (#259)'
     When run sqly --inspect testdata/ppd-debit.ach
     The status should be success
     The output should include '"name": "ppd_debit_entries"'
-    The output should include 'ppd-debit.ach'
+    The output should include '"source": "testdata/ppd-debit.ach"'
   End
 
   It 'keeps stdout as pure JSON for a directory and sends progress to stderr'
