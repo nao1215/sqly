@@ -24,6 +24,7 @@ Describe 'sqly batch mode (piped stdin)'
     When run sqly testdata/user.csv
     The status should be success
     The output should include '{"user_name":"booker12"}'
+    The stderr should include 'Change output mode'
   End
 
   It 'exits non-zero and names the failing statement on error'

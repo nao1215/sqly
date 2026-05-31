@@ -22,6 +22,7 @@ Describe 'sqly parquet export'
     It 'writes a parquet file that re-imports with the same rows'
       When call check_dump_roundtrip
       The status should be success
+      The stderr should include 'Change output mode'
     End
   End
 
@@ -38,6 +39,7 @@ Describe 'sqly parquet export'
     It 'appends the .parquet extension'
       When call check_extension
       The status should be success
+      The stderr should include 'Change output mode'
     End
   End
 

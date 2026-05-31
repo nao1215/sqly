@@ -38,6 +38,7 @@ Describe 'sqly schema inspection'
       The status should be success
       The output should include '"table":"user"'
       The output should include '"schema":"CREATE TABLE'
+      The stderr should include 'Change output mode'
     End
 
     It 'errors on a missing table'
@@ -89,6 +90,7 @@ Describe 'sqly schema inspection'
       # Pair name and type for the same column so the assertion verifies
       # user_name's own type rather than matching another column's INTEGER.
       The output should include '"name":"user_name","type":"TEXT"'
+      The stderr should include 'Change output mode'
     End
 
     It 'errors on a missing table'

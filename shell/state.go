@@ -59,6 +59,11 @@ func newMode(w io.Writer, m model.PrintMode) *mode {
 
 // changeOutputModeIfNeeded change output mode.
 // modeName is new output mode (e.g. table).
+//
+// The mode-change banner is written to stderr, not stdout. In batch mode a
+// `.mode json`/`.mode ndjson` switch is followed by machine-readable output on
+// stdout, so a banner there would corrupt it; keeping the status message on
+// stderr preserves stdout purity for every mode.
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	if modeName == m.String() {
 		return fmt.Errorf("already %s mode", modeName)
@@ -66,32 +71,32 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 
 	switch modeName {
 	case model.PrintModeTable.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeTable.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeTable.String())
 		m.PrintMode = model.PrintModeTable
 	case model.PrintModeMarkdownTable.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s table\n", m.String(), model.PrintModeMarkdownTable.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s table\n", m.String(), model.PrintModeMarkdownTable.String())
 		m.PrintMode = model.PrintModeMarkdownTable
 	case model.PrintModeCSV.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeCSV.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeCSV.String())
 		m.PrintMode = model.PrintModeCSV
 	case model.PrintModeTSV.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeTSV.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeTSV.String())
 		m.PrintMode = model.PrintModeTSV
 	case model.PrintModeLTSV.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeLTSV.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeLTSV.String())
 		m.PrintMode = model.PrintModeLTSV
 	case model.PrintModeJSON.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeJSON.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeJSON.String())
 		m.PrintMode = model.PrintModeJSON
 	case model.PrintModeNDJSON.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s\n", m.String(), model.PrintModeNDJSON.String())
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeNDJSON.String())
 		m.PrintMode = model.PrintModeNDJSON
 	case model.PrintModeExcel.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
 			m.String(), model.PrintModeExcel.String())
 		m.PrintMode = model.PrintModeExcel
 	case model.PrintModeParquet.String():
-		fmt.Fprintf(config.Stdout, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
+		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
 			m.String(), model.PrintModeParquet.String())
 		m.PrintMode = model.PrintModeParquet
 	default:
