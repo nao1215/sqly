@@ -188,8 +188,12 @@ func (s *Shell) Run(ctx context.Context) error {
 	// error reporting as batch stdin mode, so multiline SQL and multiple
 	// statements behave identically whether they arrive from a file or a pipe.
 	if s.argument.SQLFilePath != "" {
-		if err := s.runBatchReader(ctx, strings.NewReader(sqlScript)); err != nil {
+		ranAny, err := s.runBatchReader(ctx, strings.NewReader(sqlScript))
+		if err != nil {
 			return err
+		}
+		if !ranAny {
+			return nil
 		}
 		return s.maybeSave(ctx)
 	}
@@ -197,8 +201,14 @@ func (s *Shell) Run(ctx context.Context) error {
 	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
 	// initialize, so read SQL and helper commands from stdin in batch mode.
 	if !s.isTTY() {
-		if err := s.runBatch(ctx); err != nil {
+		ranAny, err := s.runBatch(ctx)
+		if err != nil {
 			return err
+		}
+		// Skip write-back when nothing ran (e.g. empty stdin), so an empty batch
+		// does not trigger --save/--save-dir side effects. Ref #330, #331.
+		if !ranAny {
+			return nil
 		}
 		return s.maybeSave(ctx)
 	}
