@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,12 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 
 	tableName := argv[0]
 	userPath := argv[1]
+
+	// Reject an empty destination so `.dump table ""` does not write a file
+	// named ".csv" into the current directory. Ref #324.
+	if strings.TrimSpace(userPath) == "" {
+		return errors.New(".dump requires a non-empty destination path")
+	}
 
 	// Block round-trip export to .ach/.fed format before normalization.
 	// These formats require multi-table coordination that .dump cannot provide.

@@ -2630,6 +2630,43 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 	}
 }
 
+func TestCommandsRejectEmptyArgs(t *testing.T) {
+	// Regression for #323/#324/#325: empty quoted arguments must be rejected, not
+	// reinterpreted as in-place save, a ".csv" file, or the current directory.
+	t.Run(".save empty is rejected and is not an in-place save (#323)", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.commands.saveCommand(context.Background(), shell, []string{""}); err == nil {
+			t.Fatal(`.save "" returned nil, want error`)
+		}
+	})
+
+	t.Run(".dump empty destination is rejected (#324)", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.commands.dumpCommand(context.Background(), shell, []string{"user", ""}); err == nil {
+			t.Fatal(`.dump user "" returned nil, want error`)
+		}
+	})
+
+	t.Run(".import empty path is rejected (#325)", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.commands.importCommand(context.Background(), shell, []string{""}); err == nil {
+			t.Fatal(`.import "" returned nil, want error`)
+		}
+	})
+}
+
 func TestShellValidateSheetFlag(t *testing.T) {
 	// Regression for #287: --sheet only affects Excel imports, so it must be
 	// rejected when no input can be an Excel file instead of being silently
