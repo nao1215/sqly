@@ -147,6 +147,13 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			continue
 		}
 
+		// Reject an empty path so `.import ""` does not silently import the
+		// current working directory. Ref #325.
+		if strings.TrimSpace(path) == "" {
+			errorMessages = append(errorMessages, "empty import path")
+			continue
+		}
+
 		cleanPath, err := validatePath(path)
 		if err != nil {
 			errorMessages = append(errorMessages, fmt.Sprintf("invalid path %s: %v", path, err))

@@ -30,6 +30,11 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	if argv[0] == forceArg {
 		return s.writeBack(ctx, "")
 	}
+	// Reject an empty destination so `.save ""` is not treated as an in-place
+	// save, which would bypass the --force safeguard. Ref #323.
+	if strings.TrimSpace(argv[0]) == "" {
+		return errors.New(".save requires a non-empty directory; use .save --force to overwrite sources in place")
+	}
 	return s.writeBack(ctx, argv[0])
 }
 
