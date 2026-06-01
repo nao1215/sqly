@@ -267,6 +267,46 @@ func TestResolveOutputTarget(t *testing.T) {
 			path:    "fake.xlsx.gz.zst",
 			wantErr: ErrNestedCompression,
 		},
+		{
+			name:    "long-form gzip alias before zstd is a stacked suffix",
+			path:    "fake.parquet.gzip.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form gzip alias before zstd on json is a stacked suffix",
+			path:    "fake.json.gzip.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form gzip alias before zstd on ndjson is a stacked suffix",
+			path:    "fake.ndjson.gzip.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form gzip alias before zstd on markdown is a stacked suffix",
+			path:    "fake.md.gzip.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form gzip alias before zstd on tsv is a stacked suffix",
+			path:    "fake.tsv.gzip.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form gzip alias before zstd on xlsx is a stacked suffix",
+			path:    "fake.xlsx.gzip.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form zstd alias stacked on gz is rejected",
+			path:    "fake.csv.zstd.gz",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "long-form bzip2 alias stacked on zst is rejected",
+			path:    "fake.csv.bzip2.zst",
+			wantErr: ErrNestedCompression,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -398,6 +438,11 @@ func TestIsInputOnlyExtension(t *testing.T) {
 		{"out.ach.gz.zst", true},
 		{"out.fed.gz.zst", true},
 		{"out.ach.gz.gz.gz", true},
+		// A long-form alias such as .gzip must be seen through too, so an ACH or
+		// Fedwire destination cannot hide behind it.
+		{"out.ach.gzip.zst", true},
+		{"out.fed.gzip.zst", true},
+		{"out.ach.bzip2", true},
 		{"out.csv", false},
 		{"out.csv.gz", false},
 		{"out.csv.gz.zst", false},

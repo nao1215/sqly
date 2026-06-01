@@ -315,23 +315,47 @@ func IsInputOnlyExtension(path string) bool {
 	}
 }
 
-// hasNestedCompressionSuffix reports whether path ends in two or more stacked
-// compression suffixes (e.g. "out.csv.gz.zst" or "fake.parquet.gz.zst").
-func hasNestedCompressionSuffix(path string) bool {
-	if _, ok := CompressionFromExtension(filepath.Ext(path)); !ok {
-		return false
+// compressionSuffixAliases maps a long-form compression extension to its canonical
+// short form. sqly writes only the short forms, and filesql reads only those, so an
+// alias is never a writable codec. It is recognized only when detecting
+// stacked suffixes or seeing through compression to the underlying format, so a
+// destination like "out.parquet.gzip.zst" cannot smuggle a masked format past
+// validation by spelling one codec out in full.
+var compressionSuffixAliases = map[string]string{
+	".gzip":  ExtGzip,
+	".zstd":  ExtZstd,
+	".bzip2": ExtBzip2,
+}
+
+// isCompressionSuffix reports whether ext is a compression suffix sqly recognizes
+// for detection, including the long-form aliases (".gzip", ".zstd", ".bzip2"). It
+// is broader than CompressionFromExtension, which admits only writable codecs.
+func isCompressionSuffix(ext string) bool {
+	if _, ok := CompressionFromExtension(ext); ok {
+		return true
 	}
-	inner := strings.TrimSuffix(path, filepath.Ext(path))
-	_, ok := CompressionFromExtension(filepath.Ext(inner))
+	_, ok := compressionSuffixAliases[strings.ToLower(ext)]
 	return ok
 }
 
+// hasNestedCompressionSuffix reports whether path ends in two or more stacked
+// compression suffixes (e.g. "out.csv.gz.zst" or "fake.parquet.gzip.zst"). A
+// long-form alias such as ".gzip" counts, so spelling a codec out in full cannot
+// slip a stacked destination past validation.
+func hasNestedCompressionSuffix(path string) bool {
+	if !isCompressionSuffix(filepath.Ext(path)) {
+		return false
+	}
+	inner := strings.TrimSuffix(path, filepath.Ext(path))
+	return isCompressionSuffix(filepath.Ext(inner))
+}
+
 // stripCompressionSuffixes removes every trailing compression extension from a
-// path (e.g. "out.ach.gz.zst" -> "out.ach"), so a check on the remaining base
-// extension is not fooled by stacked codecs.
+// path (e.g. "out.ach.gzip.zst" -> "out.ach"), so a check on the remaining base
+// extension is not fooled by stacked codecs or a long-form alias.
 func stripCompressionSuffixes(path string) string {
 	for {
-		if _, ok := CompressionFromExtension(filepath.Ext(path)); !ok {
+		if !isCompressionSuffix(filepath.Ext(path)) {
 			return path
 		}
 		path = strings.TrimSuffix(path, filepath.Ext(path))
