@@ -15,6 +15,12 @@ var ErrOutputFormatConflict = errors.New("output format conflicts with destinati
 // written for the chosen format (binary formats, or bzip2 which has no writer).
 var ErrCompressionUnsupported = errors.New("compression is not supported for this output")
 
+// ErrNestedCompression is returned when a destination path stacks more than one
+// trailing compression suffix (e.g. ".csv.gz.zst"). sqly applies only the
+// outermost codec, so accepting such a path would leave the inner suffix lying
+// about the bytes on disk.
+var ErrNestedCompression = errors.New("nested compression suffixes are not supported")
+
 // ExportFormat represents a file export format, separate from display modes.
 // This allows adding new export targets (e.g. Parquet, compressed formats)
 // without modifying the terminal display mode enum.
@@ -224,6 +230,14 @@ func CompressionFromExtension(ext string) (Compression, bool) {
 // Compression on a binary format, or bzip2 (no writer), returns
 // ErrCompressionUnsupported.
 func ResolveOutputTarget(path string, explicit ExportFormat, explicitSet bool) (ExportFormat, Compression, error) {
+	// Reject stacked compression suffixes up front. Only the outermost codec is
+	// applied, so a path like "out.csv.gz.zst" or "fake.parquet.gz.zst" would write
+	// a single-codec file under a name that advertises a different (or binary)
+	// format. Fail instead of producing a mislabeled artifact.
+	if hasNestedCompressionSuffix(path) {
+		return 0, CompressionNone, fmt.Errorf("%w: %q stacks multiple codecs; use a single compression suffix", ErrNestedCompression, path)
+	}
+
 	comp := CompressionNone
 	base := path
 	if c, ok := CompressionFromExtension(filepath.Ext(path)); ok {
@@ -291,7 +305,7 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 // compression suffixes are stripped first, so a path that hides the extension
 // behind several codecs (".ach.gz.zst", ".fed.gz.zst") is detected too. It lets
 // --output and .dump reject these destinations instead of silently writing CSV
-// bytes to a misleading path. Ref #421, #422, #459, #460.
+// bytes to a misleading path.
 func IsInputOnlyExtension(path string) bool {
 	switch strings.ToLower(filepath.Ext(stripCompressionSuffixes(path))) {
 	case ".ach", ".fed":
@@ -301,9 +315,20 @@ func IsInputOnlyExtension(path string) bool {
 	}
 }
 
+// hasNestedCompressionSuffix reports whether path ends in two or more stacked
+// compression suffixes (e.g. "out.csv.gz.zst" or "fake.parquet.gz.zst").
+func hasNestedCompressionSuffix(path string) bool {
+	if _, ok := CompressionFromExtension(filepath.Ext(path)); !ok {
+		return false
+	}
+	inner := strings.TrimSuffix(path, filepath.Ext(path))
+	_, ok := CompressionFromExtension(filepath.Ext(inner))
+	return ok
+}
+
 // stripCompressionSuffixes removes every trailing compression extension from a
 // path (e.g. "out.ach.gz.zst" -> "out.ach"), so a check on the remaining base
-// extension is not fooled by stacked codecs. Ref #459, #460.
+// extension is not fooled by stacked codecs.
 func stripCompressionSuffixes(path string) string {
 	for {
 		if _, ok := CompressionFromExtension(filepath.Ext(path)); !ok {

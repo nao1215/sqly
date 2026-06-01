@@ -1562,7 +1562,7 @@ func BenchmarkAdapterLoadFiles(b *testing.B) {
 
 // TestFileSQLAdapter_EmptyJSONLikeInputs verifies that an empty JSON array and an
 // empty JSONL file import as zero-row tables (with filesql's "data" column)
-// instead of failing as an empty data source. Ref #388, #389.
+// instead of failing as an empty data source.
 func TestFileSQLAdapter_EmptyJSONLikeInputs(t *testing.T) {
 	t.Parallel()
 
@@ -1639,7 +1639,7 @@ func gzipFile(t *testing.T, path string, data []byte) {
 // TestFileSQLAdapter_EmptyCompressedJSONLike verifies that an empty compressed
 // JSON array (.json.gz) and an empty compressed JSONL file (.jsonl.gz) import as a
 // zero-row table with the single "data" column, matching the uncompressed empty
-// inputs. Ref #452, #453.
+// inputs.
 func TestFileSQLAdapter_EmptyCompressedJSONLike(t *testing.T) {
 	t.Parallel()
 
@@ -1694,7 +1694,7 @@ func TestFileSQLAdapter_EmptyCompressedJSONLike(t *testing.T) {
 
 // TestFileSQLAdapter_LTSVDuplicateLabelsRejected verifies that an LTSV input whose
 // row repeats a label is rejected rather than silently keeping only the last
-// value. Ref #467.
+// value.
 func TestFileSQLAdapter_LTSVDuplicateLabelsRejected(t *testing.T) {
 	t.Parallel()
 

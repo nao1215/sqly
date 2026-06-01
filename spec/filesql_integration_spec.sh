@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# filesql integration end-to-end tests (#244). Locks that every supported file
+# filesql integration end-to-end tests. Locks that every supported file
 # format imports into the shared session and can be queried and inspected, and
 # that the ACH/Fedwire cleanup path stays deterministic across repeated imports.
 

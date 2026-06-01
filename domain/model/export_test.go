@@ -221,13 +221,13 @@ func TestResolveOutputTarget(t *testing.T) {
 			wantComp:    CompressionNone,
 		},
 		{
-			name:       "unknown extension with no flag falls back to csv (#292)",
+			name:       "unknown extension with no flag falls back to csv",
 			path:       "result.txt",
 			wantFormat: ExportCSV,
 			wantComp:   CompressionNone,
 		},
 		{
-			name:        "unknown extension with an explicit format is kept (#292)",
+			name:        "unknown extension with an explicit format is kept",
 			path:        "result.txt",
 			explicit:    ExportCSV,
 			explicitSet: true,
@@ -251,6 +251,21 @@ func TestResolveOutputTarget(t *testing.T) {
 			explicitSet: true,
 			wantFormat:  ExportCSV,
 			wantComp:    CompressionGzip,
+		},
+		{
+			name:    "nested csv compression suffixes are rejected",
+			path:    "double.csv.gz.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "nested parquet compression suffixes are rejected",
+			path:    "fake.parquet.gz.zst",
+			wantErr: ErrNestedCompression,
+		},
+		{
+			name:    "nested xlsx compression suffixes are rejected",
+			path:    "fake.xlsx.gz.zst",
+			wantErr: ErrNestedCompression,
 		},
 	}
 	for _, tt := range tests {
@@ -292,8 +307,8 @@ func TestBuildOutputPath(t *testing.T) {
 		{name: "rebuilds base and appends gzip", path: "result.gz", format: ExportCSV, comp: CompressionGzip, want: "result.csv.gz"},
 		{name: "replaces mismatched extension", path: "data.json", format: ExportNDJSON, comp: CompressionNone, want: "data.ndjson"},
 		{name: "keeps ndjson.zst path", path: "out.ndjson.zst", format: ExportNDJSON, comp: CompressionZstd, want: "out.ndjson.zst"},
-		{name: "honors an unknown extension (#292)", path: "out.txt", format: ExportCSV, comp: CompressionNone, want: "out.txt"},
-		{name: "honors an unknown extension with compression (#292)", path: "out.txt.gz", format: ExportCSV, comp: CompressionGzip, want: "out.txt.gz"},
+		{name: "honors an unknown extension", path: "out.txt", format: ExportCSV, comp: CompressionNone, want: "out.txt"},
+		{name: "honors an unknown extension with compression", path: "out.txt.gz", format: ExportCSV, comp: CompressionGzip, want: "out.txt.gz"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -367,7 +382,7 @@ func TestExportFormatFromPrintMode(t *testing.T) {
 }
 
 // TestIsInputOnlyExtension covers rejecting ACH/Fedwire export destinations,
-// including compressed variants. Ref #421, #422.
+// including compressed variants.
 func TestIsInputOnlyExtension(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -379,8 +394,7 @@ func TestIsInputOnlyExtension(t *testing.T) {
 		{"out.ACH", true},
 		{"out.ach.gz", true},
 		{"out.fed.zst", true},
-		// Multiple stacked compression suffixes must still be seen through. Ref
-		// #459, #460.
+		// Multiple stacked compression suffixes must still be seen through.
 		{"out.ach.gz.zst", true},
 		{"out.fed.gz.zst", true},
 		{"out.ach.gz.gz.gz", true},

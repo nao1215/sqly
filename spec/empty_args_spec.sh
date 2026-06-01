@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Empty quoted command arguments (#323, #324, #325). An empty argument must be
+# Empty quoted command arguments. An empty argument must be
 # rejected, not reinterpreted as an in-place save, a ".csv" file, or the current
 # directory.
 
@@ -18,7 +18,7 @@ Describe 'sqly empty command arguments'
   BeforeEach 'setup'
   AfterEach 'cleanup'
 
-  It 'rejects .save "" and leaves the source unchanged (#323)'
+  It 'rejects .save "" and leaves the source unchanged'
     Data
       #|UPDATE u SET first_name = 'EMPTY' WHERE identifier = 1;
       #|.save ""
@@ -30,7 +30,7 @@ Describe 'sqly empty command arguments'
     The contents of file "$WORK/u.csv" should not include 'EMPTY'
   End
 
-  It 'rejects .dump with an empty destination (#324)'
+  It 'rejects .dump with an empty destination'
     Data
       #|.dump user ""
     End
@@ -40,7 +40,7 @@ Describe 'sqly empty command arguments'
     The path .csv should not be exist
   End
 
-  It 'rejects .import with an empty path (#325)'
+  It 'rejects .import with an empty path'
     Data
       #|.import ""
       #|.tables

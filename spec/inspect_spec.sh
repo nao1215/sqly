@@ -1,10 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Non-interactive inspect workflow end-to-end tests (#259). Runs the binary with
+# Non-interactive inspect workflow end-to-end tests. Runs the binary with
 # --inspect and checks the machine-readable JSON report and stdout purity.
 
-Describe 'sqly --inspect (#259)'
+Describe 'sqly --inspect'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   It 'prints a JSON report for a single file'
@@ -34,7 +34,7 @@ Describe 'sqly --inspect (#259)'
     The line 1 should equal '{'
     The output should include '"name": "a"'
     The output should include '"name": "b"'
-    # Each table reports its real source file, not the directory path (#326).
+    # Each table reports its real source file, not the directory path.
     The output should include '/a.csv'
     The output should include '/b.csv'
     The stderr should include 'Successfully imported'

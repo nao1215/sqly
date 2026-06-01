@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Output-format end-to-end tests (#237 and existing formats). Runs the binary
+# Output-format end-to-end tests ( and existing formats). Runs the binary
 # with --json/--ndjson/--csv and checks the rendered query results.
 
 Describe 'sqly output formats'

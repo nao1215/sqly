@@ -93,7 +93,7 @@ func (d sqliteDriver) Open(name string) (driver.Conn, error) {
 	// SQLITE_BUSY. The history DB is a shared file, so two sqly processes can write
 	// it concurrently; without a busy timeout one process would disable history on
 	// transient lock contention and print a misleading "set a writable path"
-	// warning even though the path is writable. Ref #399.
+	// warning even though the path is writable.
 	if _, err := c.Exec("PRAGMA busy_timeout = 5000;", nil); err != nil {
 		if err := conn.Close(); err != nil {
 			return nil, fmt.Errorf("failed to close connection: %w", err)

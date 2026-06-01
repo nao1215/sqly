@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Schema inspection end-to-end tests (#238): .schema and .describe across CSV,
+# Schema inspection end-to-end tests: .schema and .describe across CSV,
 # JSON, Excel, and ACH-generated tables, plus JSON-mode structured output and
 # missing-table errors. Driven through piped stdin against the built binary.
 

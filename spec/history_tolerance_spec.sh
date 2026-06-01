@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# History-storage tolerance end-to-end tests (#262). Non-interactive runs must
+# History-storage tolerance end-to-end tests. Non-interactive runs must
 # succeed even when the history database cannot be created or written. The
 # history DB path is pointed at a directory that does not exist, so creating it
 # fails the way a read-only or sandboxed config location would.
@@ -43,7 +43,7 @@ Describe 'sqly history tolerance'
   End
 End
 
-# Runtime history failures (#273): the DB is created successfully at startup but a
+# Runtime history failures: the DB is created successfully at startup but a
 # later write fails, simulating a history DB that becomes read-only mid-session.
 Describe 'sqly history tolerance after startup'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"

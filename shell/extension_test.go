@@ -108,7 +108,7 @@ func TestValidatePath(t *testing.T) {
 		// unixOnly marks a case that depends on the Unix system-directory block,
 		// which keys on Unix absolute paths (e.g. "/etc"). On Windows filepath.Abs
 		// rewrites such a path (e.g. "C:\\etc\\passwd"), so the block does not apply
-		// and the case is skipped. Ref #427, #428.
+		// and the case is skipped.
 		unixOnly bool
 	}{
 		{name: "Normal file path", path: "test.csv", shouldError: false},
@@ -118,11 +118,11 @@ func TestValidatePath(t *testing.T) {
 		{name: "Dangerous path traversal", path: "../../../etc/passwd", shouldError: true},
 		{name: "Clean path functionality", path: "./test/../test.csv", shouldError: false},
 		// /dev/shm and /dev/fd hold legitimate user inputs and are accepted, while
-		// other system directories stay blocked. Ref #427, #428.
+		// other system directories stay blocked.
 		{name: "dev shm user file is allowed", path: "/dev/shm/sqly/user.csv", shouldError: false},
 		{name: "dev fd descriptor is allowed", path: "/dev/fd/63", shouldError: false},
 		// Standard stream pseudo-files and the Linux /proc fd aliases are allowed
-		// too, so streamed and fd-backed inputs import. Ref #461, #462.
+		// too, so streamed and fd-backed inputs import.
 		{name: "dev stdin is allowed", path: "/dev/stdin", shouldError: false},
 		{name: "dev stdout is allowed", path: "/dev/stdout", shouldError: false},
 		{name: "proc self fd is allowed", path: "/proc/self/fd/0", shouldError: false},

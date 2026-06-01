@@ -359,8 +359,7 @@ func TestSqlite3Repository_CreateTable_InvalidTableReturnsError(t *testing.T) {
 
 // TestSqlite3RepositorySchemaObjects verifies that SchemaObjects lists base
 // tables, views, and TEMP tables (so .tables can enumerate everything queryable),
-// while TablesName stays limited to base tables used by write-back. Ref #449,
-// #450.
+// while TablesName stays limited to base tables used by write-back.
 func TestSqlite3RepositorySchemaObjects(t *testing.T) {
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
@@ -409,7 +408,6 @@ func TestSqlite3RepositorySchemaObjects(t *testing.T) {
 
 // TestSqlite3RepositoryListSchemaQualified verifies that List accepts a
 // schema-qualified table name, so .dump and .header can target main.<table>.
-// Ref #445, #447, #448.
 func TestSqlite3RepositoryListSchemaQualified(t *testing.T) {
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {

@@ -103,18 +103,18 @@ func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64,
 // - For unsupported commands: (nil, 0, error)
 func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	// Strip a leading BOM and leading comments so the statement classifies and
-	// runs the same way it does on the batch and --sql-file paths. Ref #386, #387.
+	// runs the same way it does on the batch and --sql-file paths.
 	stmt := stripSQLNoise(statement)
 	if stmt == "" {
 		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
-	// Rewrite shorthands the engine does not accept (e.g. "TABLE name"). Ref #408.
+	// Rewrite shorthands the engine does not accept (e.g. "TABLE name").
 	stmt = normalizeStatement(stmt)
 
 	// Reject statements sqly cannot run safely or correctly under its per-statement
 	// transaction and in-memory session model (explicit transaction control,
 	// VACUUM, ATTACH/DETACH), with a clear error instead of SQLite's confusing
-	// internal message. Ref #441, #442, #443, #457, #458.
+	// internal message.
 	if reason := unsupportedStatementReason(stmt); reason != "" {
 		return nil, 0, fmt.Errorf("%s: %s", reason, color.CyanString(statement))
 	}
@@ -133,7 +133,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		// like "PRAGMA incremental_vacuum") is routed here by keyword but yields no
 		// result columns, so the query path reports ErrNoRows. Re-run it on the exec
 		// path so it commits and reports neutral success instead of a misleading "no
-		// records" error. Ref #440, #485.
+		// records" error.
 		if !errors.Is(err, repository.ErrNoRows) || leadingKeyword(stmt) != sqlPRAGMA {
 			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}

@@ -39,6 +39,6 @@ func TestIssue218LargeIntegerPreserved(t *testing.T) {
 		t.Fatalf("query failed: %v", err)
 	}
 	if want := "11040320260000000000"; got != want {
-		t.Errorf("ctsn = %q, want %q (scientific-notation regression of sqly#218)", got, want)
+		t.Errorf("ctsn = %q, want %q (scientific-notation regression of sqly)", got, want)
 	}
 }

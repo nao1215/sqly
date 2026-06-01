@@ -11,9 +11,11 @@ import (
 )
 
 // Test_clearCommand tests the clearCommand registration and metadata.
+//
+// Not parallel at the top level: the ANSI-output subtest swaps the package-global
+// config.Stdout, so running concurrently with other parallel package tests would
+// race. Keeping the parent serial confines that swap to the sequential phase.
 func Test_clearCommand(t *testing.T) {
-	t.Parallel()
-
 	t.Run("clear command is registered", func(t *testing.T) {
 		t.Parallel()
 
@@ -38,7 +40,7 @@ func Test_clearCommand(t *testing.T) {
 	})
 
 	t.Run("writes ANSI clear sequence to stdout in-process", func(t *testing.T) {
-		// Regression for #236: .clear must clear the screen in-process via ANSI
+		// Regression for: .clear must clear the screen in-process via ANSI
 		// escapes instead of shelling out to clear/cls.
 		c := NewCommands()
 

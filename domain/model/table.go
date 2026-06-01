@@ -341,7 +341,6 @@ func (t *Table) printTable(out io.Writer) error {
 // markdownCell renders a cell for a Markdown table. A "|" is escaped so it does
 // not start a new column, and an embedded newline is replaced with "<br>" so a
 // multi-line value stays on one physical row instead of breaking the table. Ref
-// #426.
 func markdownCell(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
@@ -378,14 +377,14 @@ func (t *Table) printMarkdownTable(out io.Writer) {
 // printCSV print all record with header; output format is csv. It uses a CSV
 // writer so values that contain commas, quotes, or newlines are quoted and
 // escaped, matching the --output file path and staying valid when redirected to
-// a file or piped to a CSV-aware tool. Ref #380.
+// a file or piped to a CSV-aware tool.
 func (t *Table) printCSV(out io.Writer) error {
 	return t.writeDelimited(out, ',')
 }
 
 // printTSV print all record with header; output format is tsv. Like printCSV it
 // uses a writer that quotes values containing the delimiter, quotes, or newlines,
-// so the stream stays a valid tabular record when redirected or piped. Ref #381.
+// so the stream stays a valid tabular record when redirected or piped.
 func (t *Table) printTSV(out io.Writer) error {
 	return t.writeDelimited(out, '\t')
 }
@@ -411,7 +410,7 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 // escaping mechanism: a tab separates fields and a newline ends a record, so a
 // value containing either cannot be represented losslessly. Reject such a value
 // up front instead of emitting output that no longer round-trips as LTSV. Ref
-// #382, #383.
+// ,.
 func (t *Table) printLTSV(out io.Writer) error {
 	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
 		return err
@@ -433,7 +432,7 @@ func (t *Table) printLTSV(out io.Writer) error {
 // [0-9A-Za-z_.-]+ (https://ltsv.org). A label outside this set — empty, or
 // containing ':', a space, a tab, or any other character — cannot be written as a
 // distinct "label:value" field that re-imports to the same column, so the LTSV
-// writers reject it. Ref #465.
+// writers reject it.
 func isValidLTSVLabel(label string) bool {
 	if label == "" {
 		return false
@@ -456,7 +455,6 @@ func isValidLTSVLabel(label string) bool {
 // column as a "label:value" field with no escaping, so an invalid label (e.g.
 // "foo:bar") is ambiguous on re-import and a duplicate label silently keeps only
 // the last value. Rejecting both up front keeps LTSV output round-trippable.
-// Ref #465, #466.
 func EnsureLTSVHeaderWritable(header Header) error {
 	seen := make(map[string]struct{}, len(header))
 	for _, label := range header {
@@ -473,7 +471,7 @@ func EnsureLTSVHeaderWritable(header Header) error {
 
 // ensureLTSVValueRepresentable reports an error when a value contains a byte LTSV
 // cannot represent (tab or newline), so the caller rejects it before writing
-// output that cannot be re-imported as LTSV. Ref #382, #383.
+// output that cannot be re-imported as LTSV.
 func ensureLTSVValueRepresentable(label, value string) error {
 	if strings.ContainsAny(value, "\t\n\r") {
 		return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
@@ -530,7 +528,7 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 // duplicateColumnName returns the first column name that appears more than once
 // in the header, or "" when all names are unique. JSON objects with duplicate
 // keys are ambiguous for downstream parsers, so the JSON/NDJSON writers reject
-// such a result instead of emitting it. Ref #384, #385.
+// such a result instead of emitting it.
 func (t *Table) duplicateColumnName() string {
 	seen := make(map[string]struct{}, len(t.header))
 	for _, h := range t.header {

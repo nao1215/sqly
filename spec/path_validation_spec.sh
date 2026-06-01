@@ -1,12 +1,12 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Input path validation false positives (#316, #317). sqly runs locally with the
+# Input path validation false positives. sqly runs locally with the
 # user's own permissions, so legitimate readable paths must import regardless of
 # nesting depth or filenames that merely contain traversal-looking byte
 # sequences.
 
-Describe 'sqly input path validation (#316, #317)'
+Describe 'sqly input path validation'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {
@@ -18,7 +18,7 @@ Describe 'sqly input path validation (#316, #317)'
   BeforeEach 'setup'
   AfterEach 'cleanup'
 
-  It 'imports a deeply nested path (#316)'
+  It 'imports a deeply nested path'
     deep="$WORK/a/b/c/d/e/f/g/h/i/j/k"
     mkdir -p "$deep"
     cp testdata/user.csv "$deep/user.csv"
@@ -27,7 +27,7 @@ Describe 'sqly input path validation (#316, #317)'
     The line 2 should equal '3'
   End
 
-  It 'imports a file whose name literally contains ..%2f (#317)'
+  It 'imports a file whose name literally contains ..%2f'
     cp testdata/user.csv "$WORK/..%2fuser.csv"
     When run sqly --inspect "$WORK/..%2fuser.csv"
     The status should be success

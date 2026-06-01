@@ -289,7 +289,7 @@ func TestCommandList_lsCommand(t *testing.T) {
 }
 
 func TestCommandList_lsCommand_Output(t *testing.T) {
-	// Regression for #236: .ls must list directory contents in-process with
+	// Regression for: .ls must list directory contents in-process with
 	// deterministic, OS-independent output instead of shelling out to ls/dir.
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "b.csv"), []byte("x\n"), 0o600); err != nil {
@@ -321,7 +321,7 @@ func TestCommandList_lsCommand_Output(t *testing.T) {
 }
 
 func TestCommandList_cdCommand_StoresAbsolutePath(t *testing.T) {
-	// Regression for #236: .cd must store a normalized absolute path so the
+	// Regression for: .cd must store a normalized absolute path so the
 	// prompt stays correct after a relative move.
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "sub")
@@ -535,7 +535,11 @@ func TestCommandList_tablesCommand_dependsOnMetadataUsecase(t *testing.T) {
 		model.NewTable("orders", nil, nil),
 	}, nil)
 
-	s := &Shell{usecases: Usecases{metadata: metadata}}
+	st, err := newState(&config.Arg{Output: &config.Output{Mode: model.PrintModeTable}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Shell{usecases: Usecases{metadata: metadata}, state: st}
 	out := captureStdout(t, func() {
 		if err := NewCommands().tablesCommand(context.Background(), s, nil); err != nil {
 			t.Fatalf("tablesCommand returned error: %v", err)
@@ -557,7 +561,11 @@ func TestCommandList_headerCommand_dependsOnMetadataUsecase(t *testing.T) {
 	metadata.EXPECT().Header(gomock.Any(), "users").Return(
 		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil)
 
-	s := &Shell{usecases: Usecases{metadata: metadata}}
+	st, err := newState(&config.Arg{Output: &config.Output{Mode: model.PrintModeTable}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Shell{usecases: Usecases{metadata: metadata}, state: st}
 	out := captureStdout(t, func() {
 		if err := NewCommands().headerCommand(context.Background(), s, []string{"users"}); err != nil {
 			t.Fatalf("headerCommand returned error: %v", err)
@@ -605,7 +613,7 @@ func TestShell_execSQL_dependsOnQueryUsecase(t *testing.T) {
 }
 
 func TestCommandList_dumpCommand_RejectsDirectoryTarget(t *testing.T) {
-	// Regression for #303: a directory destination must be rejected, not
+	// Regression for: a directory destination must be rejected, not
 	// rewritten to a sibling .csv file.
 	ctrl := gomock.NewController(t)
 	metadata := mock.NewMockMetadataUsecase(ctrl)
@@ -641,7 +649,7 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 		export:   exporter,
 	})
 
-	// The dump status line is control-plane output and goes to stderr (#309).
+	// The dump status line is control-plane output and goes to stderr.
 	out := captureStderr(t, func() {
 		if err := NewCommands().dumpCommand(context.Background(), s, []string{"users", outputPath}); err != nil {
 			t.Fatalf("dumpCommand returned error: %v", err)

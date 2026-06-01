@@ -1,10 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Helper commands reject unexpected extra arguments (#327). Trailing arguments
+# Helper commands reject unexpected extra arguments. Trailing arguments
 # must cause a clear error, not be silently ignored.
 
-Describe 'sqly helper commands reject extra args (#327)'
+Describe 'sqly helper commands reject extra args'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   It 'rejects .schema with an extra argument'

@@ -18,7 +18,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	// DDL and other no-rowset statements that sqly can run inside its per-statement
 	// transaction are routed to the exec path. SQLite remains the authority on
-	// validity. Ref #406, #409, #411, #431.
+	// validity.
 	execRouted := []struct {
 		name      string
 		statement string
@@ -47,7 +47,6 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 	// Explicit transaction control, VACUUM, and ATTACH/DETACH cannot run correctly
 	// under sqly's per-statement transaction and in-memory session model, so they
 	// are rejected up front with a clear error and never reach the repository.
-	// Ref #441, #442, #443, #457, #458.
 	rejected := []struct {
 		name      string
 		statement string
@@ -78,12 +77,12 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 	}
 
 	// PRAGMA, VALUES, and the TABLE shorthand return a result set, so they run on
-	// the query path. Ref #406, #407, #408.
+	// the query path.
 	queryRouted := []struct {
 		name      string
 		statement string
 		// queried is the statement the repository receives; it differs from
-		// statement when sqly rewrites a shorthand (TABLE name). Ref #408.
+		// statement when sqly rewrites a shorthand (TABLE name).
 		queried string
 	}{
 		{"PRAGMA routes to query", "PRAGMA table_info(test)", "PRAGMA table_info(test)"},
@@ -108,7 +107,6 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 	// "PRAGMA incremental_vacuum") is routed to the query path by keyword but yields
 	// no result columns, so the query path returns ErrNoRows. ExecSQL must re-run it
 	// on the exec path and report neutral success instead of a "no records" error.
-	// Ref #440, #485.
 	pragmaSetters := []string{"PRAGMA user_version = 1", "PRAGMA incremental_vacuum"}
 	for _, stmt := range pragmaSetters {
 		t.Run("no-rowset PRAGMA falls through to exec: "+stmt, func(t *testing.T) {
@@ -147,7 +145,6 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 
 	// A leading comment or UTF-8 BOM is stripped before classification, so the
 	// statement runs the same way the batch and --sql-file paths run it.
-	// Ref #386, #387.
 	t.Run("leading line comment is stripped and SELECT runs on query path", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
@@ -173,7 +170,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 	})
 
 	// A non-returning WITH ... UPDATE/INSERT/DELETE is DML, so it runs on the exec
-	// path instead of the query path. Ref #412, #413, #414.
+	// path instead of the query path.
 	t.Run("WITH ... UPDATE without RETURNING routes to exec", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
@@ -400,7 +397,7 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		}
 	})
 
-	t.Run("DML with RETURNING routes to Query and returns rows (#363)", func(t *testing.T) {
+	t.Run("DML with RETURNING routes to Query and returns rows", func(t *testing.T) {
 		t.Parallel()
 		for _, statement := range []string{
 			"UPDATE test SET name = 'X' WHERE id = 1 RETURNING id, name",

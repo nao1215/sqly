@@ -1,10 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Excel export end-to-end tests (#296). Exported .xlsx files must be ordinary
+# Excel export end-to-end tests. Exported .xlsx files must be ordinary
 # data files, not executables, matching other output formats.
 
-Describe 'sqly excel export (#296)'
+Describe 'sqly excel export'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {

@@ -83,7 +83,7 @@ func TestGenerateInsertStatement(t *testing.T) {
 
 // TestQuoteTableRef verifies that a bare name is backtick-quoted and a
 // schema-qualified name is quoted per part, so helper commands can reference
-// schema-qualified tables. Ref #445, #446, #447, #448.
+// schema-qualified tables.
 func TestQuoteTableRef(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -93,7 +93,11 @@ func TestQuoteTableRef(t *testing.T) {
 		{"user", "`user`"},
 		{"main.user", "`main`.`user`"},
 		{"temp.t", "`temp`.`t`"},
-		{"weird.name", "`weird`.`name`"},
+		{"TEMP.t", "`TEMP`.`t`"}, // schema name match is case-insensitive
+		// A dotted name whose prefix is not a real schema (main/temp) is a single
+		// literal identifier, since sqly rejects ATTACH so no other schema exists.
+		{"weird.name", "`weird.name`"},
+		{"a.b", "`a.b`"},
 		{".leadingdot", "`.leadingdot`"},
 		{"trailingdot.", "`trailingdot.`"},
 		{"has`tick", "`has``tick`"},

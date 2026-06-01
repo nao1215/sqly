@@ -7,7 +7,7 @@ import (
 )
 
 // TestEnsureNotDirectory covers rejecting directory-like output destinations:
-// an existing directory and a path ending with a path separator (#419, #420).
+// an existing directory and a path ending with a path separator.
 func TestEnsureNotDirectory(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -35,7 +35,7 @@ func TestEnsureNotDirectory(t *testing.T) {
 }
 
 // TestSameFilePathSymlink verifies that a symlink alias to a file is recognized
-// as the same file, so the overwrite guard cannot be bypassed. Ref #394, #418.
+// as the same file, so the overwrite guard cannot be bypassed.
 func TestSameFilePathSymlink(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

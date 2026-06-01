@@ -77,7 +77,7 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	// An empty JSON array ("[]") or an empty JSONL file is valid JSON input but
 	// has no rows. filesql rejects it as an empty data source, so handle those
 	// files here as zero-row tables (a single "data" column, matching filesql's
-	// JSON schema) before delegating the rest to filesql. Ref #388, #389.
+	// JSON schema) before delegating the rest to filesql.
 	var toLoad []string
 	for _, path := range filePaths {
 		name, isEmpty := emptyJSONLikeTable(path)
@@ -112,8 +112,7 @@ const jsonDataColumn = "data"
 // JSON, or an empty/blank-only JSONL file), returning the table name to create for
 // it. The format is decided by the base extension after any compression suffix is
 // stripped, and the content is read through filesql's decompressor so a compressed
-// empty input is detected the same as an uncompressed one. Ref #388, #389, #452,
-// #453.
+// empty input is detected the same as an uncompressed one.,
 func emptyJSONLikeTable(path string) (string, bool) {
 	switch strings.ToLower(filepath.Ext(stripCompressionExt(path))) {
 	case model.ExtJSON:
@@ -160,7 +159,7 @@ func stripCompressionExt(path string) string {
 
 // readDecompressed reads the full content of path, transparently decompressing it
 // when its extension names a known codec. It backs the empty JSON/JSONL detection
-// for both plain and compressed inputs. Ref #452, #453.
+// for both plain and compressed inputs.
 func readDecompressed(path string) ([]byte, error) {
 	r, cleanup, err := NewDecompressingReaderForFile(path)
 	if err != nil {
@@ -172,7 +171,7 @@ func readDecompressed(path string) ([]byte, error) {
 
 // createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON
 // "data" column, so an empty JSON/JSONL input imports as an empty table instead
-// of failing. Ref #388, #389.
+// of failing.
 func (f *FileSQLAdapter) createEmptyJSONTable(ctx context.Context, name string) error {
 	quoted := QuoteIdentifier(name)
 	if _, err := f.sharedDB.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {

@@ -58,7 +58,7 @@ Describe 'sqly CLI surface'
     End
   End
 
-  Describe 'flags after input paths (#264)'
+  Describe 'flags after input paths'
     It 'applies --output placed after the file path instead of importing it'
       out_dir=$(mktemp -d)
       export out_dir

@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# --sheet validation end-to-end tests (#287). --sheet only affects Excel
+# --sheet validation end-to-end tests. --sheet only affects Excel
 # imports, so it must be rejected for non-Excel inputs instead of being
 # silently ignored.
 
-Describe 'sqly --sheet validation (#287)'
+Describe 'sqly --sheet validation'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   It 'rejects --sheet with a non-Excel file and --sql'
@@ -26,13 +26,13 @@ Describe 'sqly --sheet validation (#287)'
     The output should include 'name'
   End
 
-  It 'rejects an explicit empty --sheet (#313)'
+  It 'rejects an explicit empty --sheet'
     When run sqly --inspect --sheet "" testdata/user.csv
     The status should be failure
     The stderr should include 'sheet'
   End
 
-  It 'rejects --sheet for a directory with no Excel files (#312)'
+  It 'rejects --sheet for a directory with no Excel files'
     work=$(mktemp -d)
     cp testdata/user.csv "$work/u.csv"
     When run sqly --inspect --sheet anything "$work"

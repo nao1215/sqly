@@ -22,6 +22,7 @@ const (
 	sqlREPLACE   = "REPLACE"
 	sqlBEGIN     = "BEGIN"
 	sqlCOMMIT    = "COMMIT"
+	sqlEND       = "END"
 	sqlROLLBACK  = "ROLLBACK"
 	sqlSAVEPOINT = "SAVEPOINT"
 	sqlRELEASE   = "RELEASE"
@@ -55,7 +56,7 @@ func NewSQL() *SQL {
 	return &SQL{
 		ddl: []string{sqlCREATE, sqlDROP, sqlALTER, sqlREINDEX},
 		dml: []string{sqlSELECT, sqlINSERT, sqlUPDATE, sqlDELETE, sqlEXPLAIN, sqlWITH},
-		tcl: []string{sqlBEGIN, sqlCOMMIT, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE},
+		tcl: []string{sqlBEGIN, sqlCOMMIT, sqlEND, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE},
 		dcl: []string{"GRANT", "REVOKE"},
 	}
 }
@@ -203,7 +204,7 @@ func trimWordGaps(s string) string {
 // ("/* */") comments plus surrounding whitespace, returning the first executable
 // portion. The batch and --sql-file paths already accept a BOM and leading
 // comments; the direct --sql path classifies a statement by its first keyword, so
-// it must strip the same noise to stay consistent. Ref #386, #387.
+// it must strip the same noise to stay consistent.
 func stripSQLNoise(s string) string {
 	s = strings.TrimPrefix(s, "\ufeff")
 	for {
@@ -245,7 +246,7 @@ func leadingKeyword(s string) string {
 // parenthesis depth 0, outside string literals, quoted identifiers, and comments.
 // The CTE bodies live inside parentheses (depth > 0), so this skips them and
 // returns the verb of the statement the CTEs feed. It lets a WITH ... UPDATE run
-// as DML and a WITH ... SELECT run as a query. Ref #412, #413, #414.
+// as DML and a WITH ... SELECT run as a query.
 func mainStatementVerb(stmt string) string {
 	runes := []rune(stmt)
 	var (
@@ -335,10 +336,12 @@ func mainStatementVerb(stmt string) string {
 // are rejected up front with a clear sqly-specific error instead of surfacing
 // SQLite's confusing internal message or silently escaping the session model.
 // The input must already be noise-stripped and normalized.
-// Ref #441, #442, #443, #457, #458.
 func unsupportedStatementReason(stmt string) string {
 	switch leadingKeyword(stmt) {
-	case sqlBEGIN, sqlCOMMIT, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE:
+	case sqlBEGIN, sqlCOMMIT, sqlEND, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE:
+		// END (and END TRANSACTION) is an alias for COMMIT, so it must be rejected
+		// with the same sqly-specific message rather than falling through to
+		// SQLite's "cannot commit - no transaction is active".
 		return "explicit transaction control is not supported; sqly runs each statement in its own transaction"
 	case sqlVACUUM:
 		return "VACUUM is not supported; sqly runs every statement inside a transaction, which SQLite forbids for VACUUM"
@@ -352,7 +355,6 @@ func unsupportedStatementReason(stmt string) string {
 // accept into an equivalent statement it does. The PostgreSQL-style "TABLE name"
 // shorthand (which the sqlite3 CLI accepts but modernc.org/sqlite rejects) is
 // rewritten to "SELECT * FROM name". The input must already be noise-stripped.
-// Ref #408.
 func normalizeStatement(stmt string) string {
 	if leadingKeyword(stmt) == sqlTABLE {
 		if rest := strings.TrimSpace(stmt[len(sqlTABLE):]); rest != "" {
@@ -369,7 +371,6 @@ func normalizeStatement(stmt string) string {
 // WITH that feeds a SELECT/VALUES produce rows, an INSERT/UPDATE/DELETE/REPLACE
 // produces rows only with RETURNING, and everything else (DDL, transaction
 // control, ATTACH, ANALYZE, ...) runs as a no-rowset statement.
-// Ref #406, #407, #408, #409, #410, #411, #412, #413, #414, #430, #431.
 func (sql *SQL) producesRowset(stmt string) bool {
 	switch leadingKeyword(stmt) {
 	case sqlSELECT, sqlVALUES, sqlTABLE, sqlEXPLAIN, sqlPRAGMA:

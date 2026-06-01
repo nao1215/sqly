@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Write-back end-to-end tests (#261). DML changes are persisted to files only
+# Write-back end-to-end tests. DML changes are persisted to files only
 # through the explicit --save / --save-dir flags and the .save command. --save
 # overwrites sources and requires --force; --save-dir never touches the source.
 
-Describe 'sqly write-back (#261)'
+Describe 'sqly write-back'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {

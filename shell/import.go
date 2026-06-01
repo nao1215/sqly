@@ -31,7 +31,6 @@ var errPartialImport = errors.New("one or more inputs failed to import")
 // errSheetNotFound marks a --sheet filter that matched no sheet in a particular
 // workbook. In a multi-workbook import it is downgraded to a non-fatal skip so a
 // single non-matching workbook cannot suppress the workbooks that do match.
-// Ref #378.
 var errSheetNotFound = errors.New("requested sheet not found in workbook")
 
 // validateSheetFlag rejects the CLI --sheet option when no input can be an
@@ -66,7 +65,7 @@ func (s *Shell) sheetAppliesTo(paths []string) bool {
 				// The directory exists but cannot be traversed (e.g. permission
 				// denied), so whether it holds an Excel file is unknown. Defer to the
 				// import step, which surfaces the real access error instead of this
-				// validation misattributing it to --sheet. Ref #356.
+				// validation misattributing it to --sheet.
 				return true
 			}
 			if contains {
@@ -84,7 +83,7 @@ func (s *Shell) sheetAppliesTo(paths []string) bool {
 // dirContainsExcel reports whether dir contains at least one Excel file,
 // searched recursively. It returns a non-nil error when the directory cannot be
 // traversed (e.g. permission denied), so callers can distinguish "no Excel
-// match" from "could not determine" and defer to the import step. Ref #356.
+// match" from "could not determine" and defer to the import step.
 func (s *Shell) dirContainsExcel(dir string) (bool, error) {
 	found := false
 	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -135,7 +134,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 	// Reject an explicit empty helper --sheet value (separated `--sheet ""` or
 	// joined `--sheet=`) before any file/Excel checks, so it is not silently
-	// treated as "no sheet filter". Ref #354, #355.
+	// treated as "no sheet filter".
 	if helperSheetExplicitlyEmpty(argv) {
 		return errors.New("--sheet requires a non-empty sheet name")
 	}
@@ -146,14 +145,14 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	}
 
 	// Reject --sheet when none of the inputs is an Excel file (or a directory
-	// containing one), so the flag is not silently ignored. Ref #312.
+	// containing one), so the flag is not silently ignored.
 	if sheetName != "" && !s.sheetAppliesTo(importPaths(argv)) {
 		return errors.New("--sheet is only valid for Excel (.xlsx) inputs")
 	}
 
 	// A --sheet filter that misses one workbook must not fail a multi-workbook
 	// import: count the Excel workbooks targeted so a miss can be downgraded to a
-	// non-fatal skip when more than one workbook is involved. Ref #378.
+	// non-fatal skip when more than one workbook is involved.
 	multiWorkbook := sheetName != "" && s.countExcelWorkbooks(importPaths(argv)) > 1
 
 	var errorMessages []string
@@ -177,7 +176,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		}
 
 		// Reject an empty path so `.import ""` does not silently import the
-		// current working directory. Ref #325.
+		// current working directory.
 		if strings.TrimSpace(path) == "" {
 			errorMessages = append(errorMessages, "empty import path")
 			continue
@@ -215,7 +214,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		} else {
 			if err := s.importFile(ctx, cleanPath, path, sheetName); err != nil {
 				// In a multi-workbook import, a workbook that lacks the requested
-				// sheet is skipped rather than failing the whole run. Ref #378.
+				// sheet is skipped rather than failing the whole run.
 				if multiWorkbook && errors.Is(err, errSheetNotFound) {
 					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: %v\n", path, err)
 					skippedSheet++
@@ -230,7 +229,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 	// Every workbook was skipped because none contained the requested sheet, and
 	// nothing else imported. Fail loudly instead of succeeding with no tables so
-	// a wrong --sheet value is visible. Ref #378.
+	// a wrong --sheet value is visible.
 	if successCount == 0 && skippedSheet > 0 && len(errorMessages) == 0 {
 		return fmt.Errorf("sheet %q not found in any of the imported workbooks", sheetName)
 	}
@@ -250,7 +249,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		}
 		// An explicitly requested input failed even though others succeeded.
 		// Return a partial-failure error so non-interactive runs exit non-zero
-		// (Ref #297, #300, #302); the interactive shell tolerates it and starts
+		// (); the interactive shell tolerates it and starts
 		// with the tables that did load.
 		return errPartialImport
 	}
@@ -262,18 +261,18 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 // one file at a time, so each table can be mapped back to the exact file that
 // produced it. Returns imported=true when at least one table was loaded or
 // overwritten, plus the number of workbooks skipped because they lacked the
-// requested --sheet (Ref #378).
+// requested --sheet ().
 //
 // Importing per file (rather than handing the whole directory to filesql) lets
 // importDirectory:
 //   - record each table's real source file even when the basename is sanitized
 //     or the file yields several tables (Excel/ACH/Fedwire), so --inspect reports
-//     per-file provenance (Ref #357, #358);
+//     per-file provenance ();
 //   - reject two files in the tree that map to the same table name instead of
-//     silently overwriting one with the other (Ref #359, #360);
+//     silently overwriting one with the other ();
 //   - treat re-importing over an existing table as a reported overwrite, not "no
 //     supported files", and re-point that table's source so write-back targets
-//     the directory file rather than the original (Ref #361, #362).
+//     the directory file rather than the original ().
 //
 // Every imported table is marked as a directory import so write-back still
 // rejects it: a directory is not a single editable source the session owns.
@@ -288,7 +287,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 
 	// producedHere maps a table name to the file in this directory import that
 	// produced it, so a later file mapping to the same name is a collision rather
-	// than a silent overwrite. Ref #359, #360.
+	// than a silent overwrite.
 	producedHere := make(map[string]string)
 	var importedTables []string
 
@@ -304,7 +303,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		}
 
 		// Apply --sheet filtering to Excel workbooks. A workbook that lacks the
-		// requested sheet is skipped in a multi-workbook import (Ref #378);
+		// requested sheet is skipped in a multi-workbook import ();
 		// filterExcelSheets has already dropped its tables before returning.
 		if sheetName != "" && s.usecases.importer.IsExcelFile(file) {
 			if ferr := s.filterExcelSheets(ctx, file, sheetName, nil); ferr != nil {
@@ -391,7 +390,7 @@ func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
 // table name derived from its path. The "<base>_" prefix is matched only for
 // multi-table formats (Excel sheets, ACH, Fedwire), where one file produces
 // "<base>_<sheet>" tables. Without that restriction a file like "a.csv" would
-// spuriously claim unrelated tables such as "a_b". Ref #429. It is used to
+// spuriously claim unrelated tables such as "a_b". It is used to
 // identify which existing tables a re-imported file overwrote.
 func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []string {
 	base := s.usecases.importer.GetTableNameFromFilePath(file)
@@ -414,7 +413,7 @@ func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []str
 // paths: a path that is itself an Excel file counts as one, and a directory is
 // walked to count the Excel files it contains. It is used to decide whether a
 // --sheet miss in one workbook should be a non-fatal skip (more than one
-// workbook) or a hard error (a single workbook). Ref #378.
+// workbook) or a hard error (a single workbook).
 func (s *Shell) countExcelWorkbooks(paths []string) int {
 	count := 0
 	for _, path := range paths {
@@ -446,7 +445,7 @@ func (s *Shell) countExcelWorkbooks(paths []string) int {
 // identifier ("SELECT * FROM select" is a syntax error); it must be quoted
 // ("SELECT * FROM \"select\""). Warning at import time documents the gotcha
 // instead of leaving the user with a table that silently fails in bare SQL. The
-// table is still imported and is fully usable when quoted. Ref #424.
+// table is still imported and is fully usable when quoted.
 func (s *Shell) warnKeywordTableNames(names []string) {
 	for _, name := range names {
 		if model.IsReservedSQLiteKeyword(name) {
@@ -470,7 +469,7 @@ func (s *Shell) markDirImported(name string) {
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
 	// loadPath is the path actually handed to filesql. It differs from cleanPath
 	// only for an extensionless pseudo-file (e.g. /dev/stdin, /proc/self/fd/0),
-	// which is staged to a temporary CSV so it imports end-to-end. Ref #461, #462.
+	// which is staged to a temporary CSV so it imports end-to-end.
 	loadPath := cleanPath
 	if !s.usecases.importer.IsSupportedFile(cleanPath) {
 		staged, cleanup, ok := s.stagePseudoFileAsCSV(cleanPath)
@@ -518,14 +517,13 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 			// Re-import of the same source path (including a symlink alias) is a
 			// harmless last-wins overwrite. Take clean ownership so a table first
 			// seen via a directory import becomes a normal file-backed table that
-			// write-back accepts. Ref #415, #417.
+			// write-back accepts.
 			s.clearDirImported(owned)
 			return nil
 		case s.anyDirImported(owned):
 			// A deliberate single-file .import replaces directory-sourced data of the
 			// same name: re-point the table to this standalone file and drop the
 			// directory marker so write-back targets the file the user named. Ref
-			// #416.
 			s.recordTableSources(owned, displayPath)
 			s.clearDirImported(owned)
 			s.warnKeywordTableNames(owned)
@@ -535,7 +533,6 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 			// example "a-b.csv" and "a_b.csv" both becoming "a_b"). filesql overwrote
 			// the earlier table, which would leave the first file's source mapped to
 			// the second file's rows, so fail instead of silently overwriting. Ref
-			// #286.
 			return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
 		}
 	}
@@ -548,7 +545,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 // isRecordedSource reports whether path is already the source of an imported
 // table. Paths are compared with symlink resolution, so a symlink alias of an
 // imported source is recognized as the same source and re-importing through it is
-// a harmless last-wins overwrite rather than a table-name collision. Ref #417.
+// a harmless last-wins overwrite rather than a table-name collision.
 func (s *Shell) isRecordedSource(path string) bool {
 	for _, src := range s.tableSources {
 		if src == stdinTableSource {
@@ -564,7 +561,6 @@ func (s *Shell) isRecordedSource(path string) bool {
 // clearDirImported removes the directory-import marker from the given tables, so
 // a table first seen via a directory import becomes a normal file-backed table
 // that write-back accepts once it is re-imported directly from a single file.
-// Ref #415, #416.
 func (s *Shell) clearDirImported(names []string) {
 	for _, name := range names {
 		delete(s.dirImported, name)
@@ -574,7 +570,7 @@ func (s *Shell) clearDirImported(names []string) {
 // anyDirImported reports whether any of the given tables came from a directory
 // import. It lets a deliberate single-file .import replace directory-sourced data
 // of the same name, while two distinct plain-file inputs that collide are still
-// rejected. Ref #416, #286.
+// rejected.
 func (s *Shell) anyDirImported(names []string) bool {
 	for _, name := range names {
 		if s.dirImported[name] {
@@ -605,7 +601,7 @@ func (s *Shell) recordTableSources(tableNames []string, source string) {
 // importStatusWriter returns where import progress and error messages go.
 // Import diagnostics are control-plane output, so they always go to stderr.
 // This keeps stdout reserved for query results and the --inspect JSON report,
-// so machine-readable output is never mixed with import banners. Ref #306.
+// so machine-readable output is never mixed with import banners.
 func (s *Shell) importStatusWriter() io.Writer {
 	return config.Stderr
 }
@@ -705,13 +701,11 @@ func validatePath(path string) (string, error) {
 
 	// No directory-depth limit: sqly is a local CLI run with the user's own
 	// permissions, so legitimate deeply nested workspace paths must import. Ref
-	// #316.
 
 	// Check for dangerous patterns that could indicate path traversal attacks.
 	// URL-encoded sequences (..%2f, ..%5c) are intentionally NOT matched: the
 	// filesystem never URL-decodes a path, so those bytes only ever appear in a
 	// legitimate literal filename, and matching them rejected real files. Ref
-	// #317.
 	dangerousPatterns := []string{
 		"../../../",    // Multiple levels up
 		"..\\..\\..\\", // Windows path traversal
@@ -744,7 +738,7 @@ func validatePath(path string) (string, error) {
 // file by its name, and these pseudo-files carry no format extension, so their
 // content is copied to "<table>.csv" and read as CSV (sqly's default text format);
 // use --stdin FORMAT for a non-CSV stream. Only the allowed pseudo-files are
-// staged, so an ordinary unsupported path still fails as before. Ref #461, #462.
+// staged, so an ordinary unsupported path still fails as before.
 func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup func(), ok bool) {
 	abs := path
 	if a, err := filepath.Abs(path); err == nil {
@@ -775,10 +769,10 @@ func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup fu
 // isAllowedPseudoFile reports whether an absolute path is a standard Unix
 // pseudo-file that holds legitimate, user-controlled input even though it lives
 // under a system directory. These are exempt from the system-directory guard:
-//   - /dev/shm/*            tmpfs for user data (Ref #427)
-//   - /dev/fd/*             open file descriptors, process substitution (Ref #428)
-//   - /dev/stdin, /dev/stdout, /dev/stderr  standard stream pseudo-files (Ref #461)
-//   - /proc/<pid|self>/fd/* the Linux fd aliases behind many fd-based workflows (Ref #462)
+//   - /dev/shm/*            tmpfs for user data ()
+//   - /dev/fd/*             open file descriptors, process substitution ()
+//   - /dev/stdin, /dev/stdout, /dev/stderr  standard stream pseudo-files ()
+//   - /proc/<pid|self>/fd/* the Linux fd aliases behind many fd-based workflows ()
 func isAllowedPseudoFile(absPath string) bool {
 	switch absPath {
 	case "/dev/stdin", "/dev/stdout", "/dev/stderr":
@@ -844,7 +838,7 @@ func extractSheetNameFromArgs(argv []string) string {
 // or the joined form (`--sheet=`). An empty value is the "no sheet" sentinel, so
 // accepting it would silently import every sheet; the caller rejects it instead.
 // A bare trailing --sheet with no value at all is left to the main loop, which
-// reports it as a missing value. Ref #354, #355.
+// reports it as a missing value.
 func helperSheetExplicitlyEmpty(argv []string) bool {
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]

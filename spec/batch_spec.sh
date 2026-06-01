@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Non-TTY batch-mode end-to-end tests (#246). Piping into sqly (no terminal)
+# Non-TTY batch-mode end-to-end tests. Piping into sqly (no terminal)
 # runs commands from stdin; failures must surface a non-zero exit code.
 
 Describe 'sqly batch mode (piped stdin)'
@@ -58,7 +58,7 @@ Describe 'sqly batch mode (piped stdin)'
     The stderr should include 'no_such_table'
   End
 
-  Describe 'multiline statements (#263)'
+  Describe 'multiline statements'
     It 'runs a multiline SELECT terminated by a semicolon'
       Data
         #|SELECT user_name
@@ -95,7 +95,7 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'booker12'
     End
 
-    It 'ignores a semicolon inside a leading line comment (#299)'
+    It 'ignores a semicolon inside a leading line comment'
       Data
         #|-- comment ;
         #|SELECT 'v' AS x;
@@ -105,7 +105,7 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'v'
     End
 
-    It 'ignores a semicolon inside a block comment (#299)'
+    It 'ignores a semicolon inside a block comment'
       Data
         #|/* comment ; */
         #|SELECT 'v' AS x;
@@ -115,7 +115,7 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'v'
     End
 
-    It 'ignores a semicolon inside a trailing line comment (#299)'
+    It 'ignores a semicolon inside a trailing line comment'
       Data
         #|SELECT 'first' AS x; -- trailing ; comment
         #|SELECT 'second' AS y;
@@ -126,7 +126,7 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'second'
     End
 
-    It 'does not split on a semicolon inside a bracket-quoted identifier (#314)'
+    It 'does not split on a semicolon inside a bracket-quoted identifier'
       Data
         #|SELECT 'v' AS [a;b];
       End
@@ -136,7 +136,7 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'v'
     End
 
-    It 'does not split on a semicolon inside a backtick-quoted identifier (#315)'
+    It 'does not split on a semicolon inside a backtick-quoted identifier'
       Data
         #|SELECT 'v' AS `a;b`;
       End

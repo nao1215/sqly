@@ -82,7 +82,7 @@ type Arg struct {
 }
 
 // Output mode flag names, shared by the flag registration and the conflict
-// check so the strings are defined once. Ref #365.
+// check so the strings are defined once.
 const (
 	outCSV      = "csv"
 	outTSV      = "tsv"
@@ -108,7 +108,7 @@ type outputFlag struct {
 
 // selectedNames returns the names of the output mode flags that are set. More
 // than one means the user passed conflicting mode flags, which NewArg rejects
-// instead of silently applying a precedence. Ref #365.
+// instead of silently applying a precedence.
 func (of outputFlag) selectedNames() []string {
 	flags := []struct {
 		name string
@@ -149,7 +149,7 @@ func NewArg(args []string) (*Arg, error) {
 	// zero-value pflag.FlagSet disables this, which silently turns a misplaced
 	// flag (e.g. "sqly data.csv --output out") and its value into import paths
 	// that fail with "path does not exist". Interspersed parsing instead applies
-	// the flag, and an unknown flag fails fast with a clear parse error. Ref #264.
+	// the flag, and an unknown flag fails fast with a clear parse error.
 	flag.SetInterspersed(true)
 	flag.BoolVarP(&oFlag.csv, outCSV, "c", false, "change output format to csv (default: table)")
 	flag.BoolVarP(&oFlag.excel, outExcel, "e", false, "change output format to excel (default: table)")
@@ -178,14 +178,14 @@ func NewArg(args []string) (*Arg, error) {
 
 	// An explicit empty --sheet ("--sheet \"\"") is a mistake: the empty string
 	// is the "no sheet selected" sentinel, so accepting it would silently behave
-	// like the flag was never passed. Reject it so the error is visible. Ref #313.
+	// like the flag was never passed. Reject it so the error is visible.
 	if flag.Changed("sheet") && *sheetName == "" {
 		return nil, errEmptySheet
 	}
 
 	// Reject other flags given an explicit empty value for the same reason: each
 	// flag's empty string is the "flag absent" sentinel, so an explicit "" would
-	// otherwise be silently ignored. Ref #349, #350, #352, #353.
+	// otherwise be silently ignored.
 	if flag.Changed("output") && *output == "" {
 		return nil, errEmptyOutput
 	}
@@ -200,20 +200,20 @@ func NewArg(args []string) (*Arg, error) {
 	}
 
 	// --stdin-name only names the --stdin dataset, so it has no effect without
-	// --stdin. Reject it when set alone instead of silently ignoring it. Ref #391.
+	// --stdin. Reject it when set alone instead of silently ignoring it.
 	if flag.Changed("stdin-name") && *stdinFormat == "" {
 		return nil, errStdinNameWithoutStdin
 	}
 
 	// --inspect-sample only caps the rows --inspect samples, so it has no effect
 	// without --inspect. Reject it (including invalid values like -1) when set
-	// without --inspect instead of silently ignoring it. Ref #392.
+	// without --inspect instead of silently ignoring it.
 	if flag.Changed("inspect-sample") && !arg.InspectFlag {
 		return nil, errInspectSampleWithoutInspect
 	}
 
 	// --force only confirms the destructive --save write-back, so it has no effect
-	// without --save/--save-dir. Reject it when set alone. Ref #393.
+	// without --save/--save-dir. Reject it when set alone.
 	if arg.Force && !arg.SaveInPlace && *saveDir == "" {
 		return nil, errForceWithoutSave
 	}
@@ -221,7 +221,7 @@ func NewArg(args []string) (*Arg, error) {
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
-	// #305. Only meaningful with --stdin, so validate only when staging applies.
+	//. Only meaningful with --stdin, so validate only when staging applies.
 	if *stdinFormat != "" {
 		if err := validateStdinName(*stdinName); err != nil {
 			return nil, err
@@ -230,7 +230,7 @@ func NewArg(args []string) (*Arg, error) {
 
 	// Reject conflicting output mode flags (e.g. --csv --json) instead of
 	// silently applying an internal precedence, which would discard the other
-	// flags without warning. Ref #365.
+	// flags without warning.
 	if names := oFlag.selectedNames(); len(names) > 1 {
 		return nil, fmt.Errorf("conflicting output mode flags: %s; choose one", strings.Join(names, ", "))
 	}
@@ -252,7 +252,7 @@ func NewArg(args []string) (*Arg, error) {
 
 // validateStdinName rejects a --stdin-name that is empty or path-like. The name
 // is used as a staging file name, so path separators or "."/".." could escape
-// the temp directory or create surprising files. Ref #305.
+// the temp directory or create surprising files.
 func validateStdinName(name string) error {
 	if name == "" {
 		return errInvalidStdinName
@@ -265,13 +265,13 @@ func validateStdinName(name string) error {
 	}
 	// Require a bare-identifier name so the advertised --stdin-name is the exact
 	// queryable table name. Otherwise filesql sanitizes spaces and dashes (e.g.
-	// "my data" -> "my_data"), leaving the name the user gave unusable. Ref #289.
+	// "my data" -> "my_data"), leaving the name the user gave unusable.
 	if !isValidTableIdentifier(name) {
 		return errInvalidStdinName
 	}
 	// A SQLite keyword has a valid identifier shape but is not queryable as a bare
 	// table name (e.g. "SELECT * FROM select" is a syntax error), so reject it
-	// instead of advertising an unusable name. Ref #423.
+	// instead of advertising an unusable name.
 	if model.IsReservedSQLiteKeyword(name) {
 		return errStdinNameReserved
 	}

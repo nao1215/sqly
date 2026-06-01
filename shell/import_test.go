@@ -70,13 +70,12 @@ func TestImportDirectory_ReimportSameDir_ReportsOverwrite(t *testing.T) {
 	// Re-importing the same directory overwrites the existing table. The
 	// directory still contains a supported file, so the import is reported as
 	// successful (it overwrote data) rather than as "No supported files". Ref
-	// #361.
 	imported, _, err = s.importDirectory(ctx, dir, dir, "", false)
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}
 	if !imported {
-		t.Error("expected re-import of a directory with a supported file to report imported=true (#361)")
+		t.Error("expected re-import of a directory with a supported file to report imported=true")
 	}
 }
 
@@ -95,8 +94,8 @@ func copyTestFile(t *testing.T, name, dst string) {
 
 func TestImportDirectory_RecordsPerFileSource(t *testing.T) {
 	// Directory --inspect must report each table's real source file, even when
-	// the basename is sanitized (#357) or the file produces multiple tables such
-	// as Excel/ACH/Fedwire (#358). The directory path must never be used as a
+	// the basename is sanitized or the file produces multiple tables such
+	// as Excel/ACH/Fedwire. The directory path must never be used as a
 	// table source.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
@@ -144,7 +143,7 @@ func TestImportDirectory_RecordsPerFileSource(t *testing.T) {
 
 func TestImportDirectory_RejectsDuplicateBasenameCollision(t *testing.T) {
 	// Two files that map to the same table name from different subdirectories must
-	// be rejected instead of one silently overwriting the other. Ref #359.
+	// be rejected instead of one silently overwriting the other.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +175,6 @@ func TestImportDirectory_RejectsDuplicateBasenameCollision(t *testing.T) {
 
 func TestImportDirectory_RejectsSanitizedCollision(t *testing.T) {
 	// Two files whose names sanitize to the same table name must be rejected. Ref
-	// #360.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +202,7 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	// A directory import that overwrites a table previously loaded from a file
 	// argument must update the table's source to the directory file and mark it as
 	// a directory import, so later .save --force cannot write the directory rows
-	// back into the original file. Ref #361, #362.
+	// back into the original file.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -242,19 +240,19 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 		t.Fatalf("importDirectory re-import: %v", err)
 	}
 	if !imported {
-		t.Error("expected the directory re-import to report imported=true (#361)")
+		t.Error("expected the directory re-import to report imported=true")
 	}
 	if !s.dirImported["user"] {
-		t.Error("user must be marked as a directory import after re-import (#362)")
+		t.Error("user must be marked as a directory import after re-import")
 	}
 	absDirFile, _ := filepath.Abs(dirFile)
 	if got := s.tableSources["user"]; got != absDirFile {
-		t.Errorf("user source = %q, want the directory file %q (#362)", got, absDirFile)
+		t.Errorf("user source = %q, want the directory file %q", got, absDirFile)
 	}
 
 	// .save --force must now refuse to write back, leaving the original untouched.
 	if err := s.writeBack(ctx, ""); err == nil {
-		t.Error("expected .save --force to be rejected for a directory-imported table (#362)")
+		t.Error("expected .save --force to be rejected for a directory-imported table")
 	}
 	after, err := os.ReadFile(orig) //nolint:gosec // test path
 	if err != nil {
@@ -296,7 +294,7 @@ func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
 	}
 
 	var imported bool
-	// Import progress goes to stderr (#306), so capture stderr here.
+	// Import progress goes to stderr, so capture stderr here.
 	out := captureStderr(t, func() {
 		imported, _, err = s.importDirectory(context.Background(), dir, "fixtures", "", false)
 	})
@@ -731,7 +729,7 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 }
 
 func TestImportCommand_TableNameCollision(t *testing.T) {
-	// Regression for #286: two inputs that sanitize to the same table name must
+	// Regression for: two inputs that sanitize to the same table name must
 	// fail instead of one silently overwriting the other.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
@@ -757,7 +755,7 @@ func TestImportCommand_TableNameCollision(t *testing.T) {
 
 func TestImportCommand_ReimportSameFileIsNotACollision(t *testing.T) {
 	// Re-importing the same source path is a harmless last-wins overwrite, not a
-	// collision; it must not be rejected by the #286 collision check.
+	// collision; it must not be rejected by the collision check.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -793,7 +791,7 @@ func TestImportCommand_PartialSuccess(t *testing.T) {
 	ctx := context.Background()
 	// One valid file + one missing file → partial failure. The valid table is
 	// still loaded, but importCommand returns errPartialImport so non-interactive
-	// runs exit non-zero (#297). The loaded table remains queryable.
+	// runs exit non-zero. The loaded table remains queryable.
 	err = s.commands.importCommand(ctx, s, []string{csvPath, "missing.csv"})
 	if !errors.Is(err, errPartialImport) {
 		t.Errorf("expected errPartialImport for partial failure, got: %v", err)
@@ -852,7 +850,7 @@ func TestImportCommand_MissingSheetValueErrors(t *testing.T) {
 func TestSheetAppliesTo_UnreadableDirectoryDefersToImport(t *testing.T) {
 	// An unreadable directory cannot be proven to lack Excel files, so --sheet
 	// validation must defer to the import step (which reports the real access
-	// error) instead of misclassifying it as a non-Excel input. Ref #356.
+	// error) instead of misclassifying it as a non-Excel input.
 	if runtime.GOOS == "windows" {
 		t.Skip("directory permission bits behave differently on Windows")
 	}
@@ -885,7 +883,7 @@ func TestSheetAppliesTo_UnreadableDirectoryDefersToImport(t *testing.T) {
 func TestImportCommand_SheetSkipsWorkbooksMissingSheet(t *testing.T) {
 	// A multi-workbook import with --sheet must skip workbooks that lack the
 	// requested sheet instead of failing the whole import, so matching workbooks
-	// still load. Ref #378.
+	// still load.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -933,14 +931,13 @@ func TestImportCommand_EmptySheetValueRejected(t *testing.T) {
 	// An explicit empty helper --sheet value (separated "" or joined "--sheet=")
 	// must be rejected instead of silently importing every sheet. The rejection
 	// must happen before file/Excel checks, so it surfaces even for a CSV input.
-	// Ref #354, #355.
 	csv := filepath.Join("testdata", "sample.csv")
 	tests := []struct {
 		name string
 		argv []string
 	}{
-		{"separated empty sheet value (#354)", []string{"--sheet", "", csv}},
-		{"joined empty sheet value (#355)", []string{"--sheet=", csv}},
+		{"separated empty sheet value", []string{"--sheet", "", csv}},
+		{"joined empty sheet value", []string{"--sheet=", csv}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -974,9 +971,9 @@ func TestValidatePath_Import(t *testing.T) {
 		{"relative path", "./foo/bar.csv", false, false},
 		{"path traversal", "../../../etc/passwd", true, false},
 		// A literal filename containing "..%2f" is not traversal: the filesystem
-		// never URL-decodes it, so it must be accepted. Ref #317.
+		// never URL-decodes it, so it must be accepted.
 		{"literal ..%2f filename", "data/..%2fuser.csv", false, false},
-		// Deep paths must import regardless of nesting depth. Ref #316.
+		// Deep paths must import regardless of nesting depth.
 		{"deep path", "a/b/c/d/e/f/g/h/i/j/k/user.csv", false, false},
 		{"system dir /etc", "/etc/hosts", true, true},
 		{"system dir /proc", "/proc/cpuinfo", true, true},
@@ -1034,9 +1031,9 @@ func TestTableNameSet(t *testing.T) {
 }
 
 // TestStagePseudoFileScopedToPseudoFiles verifies that the pseudo-file CSV
-// staging added for #461/#462 is scoped to the allowed Unix pseudo-files only: a
+// staging added for/ is scoped to the allowed Unix pseudo-files only: a
 // normal extensionless file is not silently treated as CSV but still fails as an
-// unsupported format. Ref #461, #462.
+// unsupported format.
 func TestStagePseudoFileScopedToPseudoFiles(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

@@ -37,7 +37,7 @@ func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []strin
 // empty record set means the table does not exist (PRAGMA returns no rows).
 func (s *Shell) tableColumns(ctx context.Context, tableName string) (*model.Table, error) {
 	// A schema-qualified name (main.user, temp.t) is inspected against that schema
-	// via "PRAGMA schema.table_info(table)", matching the SQL surface. Ref #446.
+	// via "PRAGMA schema.table_info(table)", matching the SQL surface.
 	schema, object := splitTableQualifier(tableName)
 	pragma := "PRAGMA "
 	if schema != "" {

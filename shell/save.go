@@ -27,13 +27,23 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 		fmt.Fprintln(config.Stdout, "  Only csv/tsv/ltsv/parquet sources are written; compression is preserved.")
 		return nil
 	}
+	// Reject an empty destination so `.save ""` is not treated as an in-place
+	// save, which would bypass the --force safeguard.
+	if argv[0] != forceArg && strings.TrimSpace(argv[0]) == "" {
+		return errors.New(".save requires a non-empty directory; use .save --force to overwrite sources in place")
+	}
+	// A read-only session changed no table data, so there is nothing to persist.
+	// Writing here would rewrite source files (or emit fresh directory exports)
+	// with no logical change, normalizing bytes (e.g. the trailing newline) and
+	// producing surprising diffs and checksum churn. This mirrors the
+	// non-interactive --save/--save-dir contract, which also skips write-back for
+	// a read-only run.
+	if !s.dataChanged {
+		fmt.Fprintln(config.Stderr, "no table data changed in this session; nothing to save")
+		return nil
+	}
 	if argv[0] == forceArg {
 		return s.writeBack(ctx, "")
-	}
-	// Reject an empty destination so `.save ""` is not treated as an in-place
-	// save, which would bypass the --force safeguard. Ref #323.
-	if strings.TrimSpace(argv[0]) == "" {
-		return errors.New(".save requires a non-empty directory; use .save --force to overwrite sources in place")
 	}
 	return s.writeBack(ctx, argv[0])
 }
@@ -54,8 +64,7 @@ func (s *Shell) validateSaveFlags() error {
 	}
 	// --sql-file is a non-interactive execution path just like --sql and piped
 	// input, so it may carry write-back even when stdin is a TTY. Reject the save
-	// flags only for a genuinely interactive run with no query source. Ref #366,
-	// #367.
+	// flags only for a genuinely interactive run with no query source.,
 	if s.argument.Query == "" && s.argument.SQLFilePath == "" && s.isTTY() {
 		return errors.New("--save/--save-dir require --sql, --sql-file, or piped input; use the .save command in the interactive shell")
 	}
@@ -90,9 +99,9 @@ func (s *Shell) maybeSave(ctx context.Context) error {
 }
 
 // preflightSave validates write-back before the SQL runs, so a run that cannot
-// persist fails before any query output reaches stdout (#375) and before any
-// file is written (#370, #372, #377). It is a no-op when no save flag is set or
-// when the SQL is read-only, because a read-only run skips write-back (#376).
+// persist fails before any query output reaches stdout and before any
+// file is written. It is a no-op when no save flag is set or
+// when the SQL is read-only, because a read-only run skips write-back.
 func (s *Shell) preflightSave(ctx context.Context, script string) error {
 	if !s.saveRequested() {
 		return nil
@@ -100,8 +109,7 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 	// Reject a statement whose effect write-back cannot represent (DDL, schema
 	// changes, ANALYZE, maintenance). Only read-only queries and row-modifying DML
 	// on imported tables are persisted, so a schema-only run must fail loudly here
-	// instead of exiting 0 while leaving the source unchanged. Ref #433-#437,
-	// #469-#484.
+	// instead of exiting 0 while leaving the source unchanged.,
 	if stmt := firstSaveIncompatibleStatement(script); stmt != "" {
 		return fmt.Errorf(
 			"--save/--save-dir cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
@@ -109,7 +117,7 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 	}
 	// A script that imports its own input with .import creates its tables while it
 	// runs, so they cannot be listed up front. Defer write-back validation to the
-	// post-run save, which sees the imported tables. Ref #456.
+	// post-run save, which sees the imported tables.
 	if scriptImportsInput(script) {
 		return nil
 	}
@@ -123,17 +131,17 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 // finishNonInteractive runs write-back after a non-interactive run, but only when
 // a save flag is set and the run actually changed data. A read-only run, an
 // EXPLAIN, or a zero-row DML leaves the imported tables unchanged, so write-back
-// is skipped to avoid rewriting source files. Ref #376, #402, #403, #404, #405.
+// is skipped to avoid rewriting source files.
 func (s *Shell) finishNonInteractive(ctx context.Context) error {
 	if s.saveRequested() && s.dataChanged {
 		// Run write-back first. If it fails, return before flushing the buffered
-		// affected counts so stdout stays free of success text. Ref #396.
+		// affected counts so stdout stays free of success text.
 		if err := s.maybeSave(ctx); err != nil {
 			return err
 		}
 	}
 	// The run succeeded (write-back ran, or there was nothing to write back), so
-	// flush the buffered affected counts to stdout now. Ref #396.
+	// flush the buffered affected counts to stdout now.
 	for _, msg := range s.pendingAffected {
 		fmt.Fprint(config.Stdout, msg)
 	}
@@ -171,9 +179,9 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 
 // planWriteBack validates that every current table can be written and returns the
 // resolved write targets. It reports all problems at once and writes nothing, so
-// a session is never partially saved (Ref #377). For --save-dir it also rejects a
-// destination that resolves to the source file (Ref #370) and a destination that
-// already exists (Ref #372).
+// a session is never partially saved (). For --save-dir it also rejects a
+// destination that resolves to the source file () and a destination that
+// already exists ().
 func (s *Shell) planWriteBack(ctx context.Context, destDir string) ([]writeTarget, error) {
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
@@ -212,7 +220,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string) ([]writeTarge
 		}
 		// A directory import is not a single editable source the session owns, so
 		// reject it even though its source may point at a per-file path for
-		// --inspect provenance. Ref #326, #261.
+		// --inspect provenance.
 		if s.dirImported[name] {
 			problems = append(problems, fmt.Sprintf("%s: came from a directory import (%s)", name, source))
 			continue
@@ -236,13 +244,13 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string) ([]writeTarge
 			dest = filepath.Join(destDir, filepath.Base(source))
 			// A --save-dir destination that resolves to the source file would
 			// overwrite it in place without --force, defeating the "originals
-			// untouched" contract. Ref #370.
+			// untouched" contract.
 			if sameFilePath(dest, source) {
 				problems = append(problems, fmt.Sprintf("%s: --save-dir destination %s is the source file; use --save --force to overwrite it in place", name, dest))
 				continue
 			}
 			// Refuse to overwrite a pre-existing destination so --save-dir never
-			// silently clobbers an unrelated file. Ref #372, #377. An in-place
+			// silently clobbers an unrelated file. An in-place
 			// --save intentionally overwrites its own source, so this check is
 			// scoped to --save-dir.
 			if info, statErr := os.Stat(dest); statErr == nil {
@@ -295,7 +303,7 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 // sameFilePath reports whether two paths resolve to the same file location. It
 // resolves symlinks and, when both paths exist, compares file identity, so a
 // symlink (or hardlink) alias to an imported source is recognized as the source
-// file and cannot bypass the overwrite guard. Ref #394, #418. A non-existent
+// file and cannot bypass the overwrite guard. A non-existent
 // path falls back to its cleaned absolute form.
 func sameFilePath(a, b string) bool {
 	if resolveFilePath(a) == resolveFilePath(b) {
@@ -340,7 +348,7 @@ func writableExportTarget(source string) (model.ExportFormat, model.Compression,
 	}
 	// bzip2 has no writer, so a .bz2 source cannot be written back. Reject it here
 	// during preflight, before any destination file is created or truncated, so a
-	// failed write-back never leaves an empty or corrupted file behind. Ref #395.
+	// failed write-back never leaves an empty or corrupted file behind.
 	if comp == model.CompressionBzip2 {
 		return 0, model.CompressionNone, false
 	}

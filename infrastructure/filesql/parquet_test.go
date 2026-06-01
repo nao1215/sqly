@@ -28,7 +28,7 @@ func reimportRowCount(t *testing.T, parquetPath, tableName string) int {
 	return n
 }
 
-// TestDumpTableToParquet_RoundTrip locks the #241 export target: a table
+// TestDumpTableToParquet_RoundTrip locks the export target: a table
 // written to Parquet must re-import into sqly with the same rows and columns.
 func TestDumpTableToParquet_RoundTrip(t *testing.T) {
 	t.Parallel()
@@ -77,9 +77,9 @@ func TestDumpTableToParquet_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestDumpTableToParquet_EmptyResult covers the empty-result behavior required
-// by #241. Parquet needs at least one row to infer its schema, so exporting an
-// empty result returns a clear error rather than writing an unreadable file.
+// TestDumpTableToParquet_EmptyResult covers the empty-result behavior: Parquet
+// needs at least one row to infer its schema, so exporting an empty result
+// returns a clear error rather than writing an unreadable file.
 func TestDumpTableToParquet_EmptyResult(t *testing.T) {
 	t.Parallel()
 

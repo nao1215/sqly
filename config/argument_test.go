@@ -151,7 +151,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("--output after file path sets output destination, not an import path (#264)", func(t *testing.T) {
+	t.Run("--output after file path sets output destination, not an import path", func(t *testing.T) {
 		testFile := filepath.Join(t.TempDir(), "result.csv")
 		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM user", "testdata/user.csv", "--output", testFile})
 		if err != nil {
@@ -165,7 +165,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("output-mode flag after file path sets mode, not an import path (#264)", func(t *testing.T) {
+	t.Run("output-mode flag after file path sets mode, not an import path", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM user", "testdata/user.csv", "--csv"})
 		if err != nil {
 			t.Fatal(err)
@@ -178,7 +178,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("flags interspersed among file paths are not imported as paths (#264)", func(t *testing.T) {
+	t.Run("flags interspersed among file paths are not imported as paths", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "testdata/user.csv", "--json", "testdata/identifier.csv", "--sql", "SELECT 1"})
 		if err != nil {
 			t.Fatal(err)
@@ -194,14 +194,14 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown flag after file path returns a parse error (#264)", func(t *testing.T) {
+	t.Run("unknown flag after file path returns a parse error", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "testdata/user.csv", "--nope"})
 		if err == nil {
 			t.Fatal("expected a parse error for an unknown flag, got nil")
 		}
 	})
 
-	t.Run("--sql-file sets the SQL file path (#281)", func(t *testing.T) {
+	t.Run("--sql-file sets the SQL file path", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--sql-file", "query.sql", "testdata/user.csv"})
 		if err != nil {
 			t.Fatal(err)
@@ -214,7 +214,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("sql file path defaults to empty (#281)", func(t *testing.T) {
+	t.Run("sql file path defaults to empty", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "testdata/user.csv"})
 		if err != nil {
 			t.Fatal(err)
@@ -224,7 +224,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid --stdin-name values are rejected (#305)", func(t *testing.T) {
+	t.Run("invalid --stdin-name values are rejected", func(t *testing.T) {
 		for _, name := range []string{"", ".", "..", "a/b", "../escaped", `a\b`} {
 			if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", name}); err == nil {
 				t.Errorf("NewArg accepted invalid --stdin-name %q, want error", name)
@@ -232,7 +232,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("non-identifier --stdin-name values are rejected (#289)", func(t *testing.T) {
+	t.Run("non-identifier --stdin-name values are rejected", func(t *testing.T) {
 		// These would be sanitized by filesql, leaving the advertised name
 		// unqueryable, so they are rejected up front.
 		for _, name := range []string{"my data", "2023-data", "a-b", "weird!"} {
@@ -242,48 +242,48 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("a normal --stdin-name is accepted (#305)", func(t *testing.T) {
+	t.Run("a normal --stdin-name is accepted", func(t *testing.T) {
 		if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", "people"}); err != nil {
 			t.Errorf("NewArg rejected a valid --stdin-name: %v", err)
 		}
 	})
 
-	t.Run("explicit empty --sheet is rejected (#313)", func(t *testing.T) {
+	t.Run("explicit empty --sheet is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--sheet", "", "testdata/user.csv"})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --sheet, got nil")
 		}
 	})
 
-	t.Run("explicit empty --output is rejected (#349)", func(t *testing.T) {
+	t.Run("explicit empty --output is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1 AS x", "--output", ""})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --output, got nil")
 		}
 	})
 
-	t.Run("explicit empty --sql-file is rejected (#350)", func(t *testing.T) {
+	t.Run("explicit empty --sql-file is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--sql-file", ""})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --sql-file, got nil")
 		}
 	})
 
-	t.Run("explicit empty --save-dir is rejected (#352)", func(t *testing.T) {
+	t.Run("explicit empty --save-dir is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1", "--save-dir", "", "testdata/user.csv"})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --save-dir, got nil")
 		}
 	})
 
-	t.Run("explicit empty --stdin is rejected (#353)", func(t *testing.T) {
+	t.Run("explicit empty --stdin is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--stdin", "", "--sql", "SELECT 1 AS x"})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --stdin, got nil")
 		}
 	})
 
-	t.Run("conflicting output mode flags are rejected (#365)", func(t *testing.T) {
+	t.Run("conflicting output mode flags are rejected", func(t *testing.T) {
 		for _, args := range [][]string{
 			{"sqly", "--csv", "--json", "--sql", "SELECT 1 AS x"},
 			{"sqly", "--tsv", "--json", "--sql", "SELECT 1 AS x"},
@@ -295,13 +295,13 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("a single output mode flag is accepted (#365)", func(t *testing.T) {
+	t.Run("a single output mode flag is accepted", func(t *testing.T) {
 		if _, err := NewArg([]string{"sqly", "--json", "--sql", "SELECT 1 AS x"}); err != nil {
 			t.Errorf("NewArg with a single output mode flag returned an error: %v", err)
 		}
 	})
 
-	t.Run("--inspect sets the inspect flag (#259)", func(t *testing.T) {
+	t.Run("--inspect sets the inspect flag", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--inspect", "testdata/user.csv"})
 		if err != nil {
 			t.Fatal(err)
@@ -314,7 +314,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("inspect flag defaults to false (#259)", func(t *testing.T) {
+	t.Run("inspect flag defaults to false", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "testdata/user.csv"})
 		if err != nil {
 			t.Fatal(err)
@@ -415,9 +415,8 @@ func getStdout(t *testing.T, f func()) string {
 }
 
 // TestNewArgDependentFlagValidation covers the v0.19.0 flag-dependency bugs:
-// --stdin-name without --stdin (#391), --inspect-sample without --inspect (#392),
-// --force without --save/--save-dir (#393), and a SQLite-keyword --stdin-name
-// (#423).
+// --stdin-name without --stdin, --inspect-sample without --inspect,
+// --force without --save/--save-dir, and a SQLite-keyword --stdin-name
 func TestNewArgDependentFlagValidation(t *testing.T) {
 	t.Parallel()
 
