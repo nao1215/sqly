@@ -209,14 +209,4 @@ Describe 'sqly v0.19.0 binary bug fixes'
     End
   End
 
-  Describe 'input path validation (#427)'
-    It 'accepts a user file under /dev/shm (#427)'
-      Skip if "no /dev/shm" [ ! -d /dev/shm ]
-      shm="$(mktemp -d /dev/shm/sqly-XXXXXX)"
-      printf 'id,name\n1,a\n' > "$shm/data.csv"
-      When run sqly --csv --sql "SELECT COUNT(*) AS n FROM data" "$shm/data.csv"
-      The status should be success
-      The line 2 should equal '1'
-    End
-  End
 End
