@@ -71,4 +71,37 @@ Describe 'sqly v0.22.0 binary regressions'
     The status should be success
     The output should include '"main.x"'
   End
+
+  # Nested compression suffixes, including a long-form alias such as .gzip, must be
+  # rejected before --output or .dump writes bytes under a name that lies about them.
+  It 'rejects a --output destination that stacks .gzip and .zst on a format suffix'
+    When run sqly --sql 'SELECT 1 AS x' --output "$WORK/fake.parquet.gzip.zst"
+    The status should be failure
+    The stderr should be present
+    The path "$WORK/fake.parquet.gzip.zst" should not be exist
+  End
+
+  It 'rejects a --output .json.gzip.zst destination'
+    When run sqly --sql 'SELECT 1 AS x' --output "$WORK/fake.json.gzip.zst"
+    The status should be failure
+    The stderr should be present
+    The path "$WORK/fake.json.gzip.zst" should not be exist
+  End
+
+  It 'rejects a --output .ach.gzip.zst destination as input-only'
+    When run sqly --sql 'SELECT 1 AS x' --output "$WORK/fake.ach.gzip.zst"
+    The status should be failure
+    The stderr should be present
+    The path "$WORK/fake.ach.gzip.zst" should not be exist
+  End
+
+  It 'rejects a .dump destination that stacks .gzip and .zst'
+    Data:expand
+      #|.dump user $WORK/fake.parquet.gzip.zst
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should be present
+    The path "$WORK/fake.parquet.gzip.zst" should not be exist
+  End
 End
