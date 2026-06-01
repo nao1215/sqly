@@ -97,7 +97,7 @@ Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysq
 
 ```shell
 $ sqly testdata/user.csv
-sqly v0.19.0
+sqly v0.21.0
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
@@ -206,11 +206,13 @@ $ printf '.tables\nSELECT COUNT(*) FROM user\n' | sqly testdata/user.csv
 
 `--sql-file PATH` runs SQL read from a file (multiple `;`-separated statements allowed). It cannot be combined with `--sql`. Because the query comes from a file, stdin stays free for a dataset:
 
+![sql-file demo](./doc/img/sql-file-demo.gif)
+
 ```shell
-$ cat testdata/user.csv | sqly --stdin csv --sql-file join.sql testdata/identifier.csv
+$ cat testdata/user.csv | sqly --stdin csv --sql-file doc/vhs/join.sql testdata/identifier.csv
 ```
 
-where `join.sql` holds:
+where `doc/vhs/join.sql` holds:
 
 ```sql
 SELECT s.user_name, i.position
@@ -222,6 +224,8 @@ ORDER BY s.identifier;
 ## Inspect tables: --inspect
 
 `--inspect` imports the inputs, prints a JSON report of every table (name, source, columns, row count, sample rows), and exits without the shell. It is the non-interactive equivalent of `.tables` + `.schema` + `.describe`, useful for scripts and LLMs. Import progress goes to stderr, so stdout is JSON only. `--inspect-sample N` sets the sample size (default 5; `0` for schema only).
+
+![inspect demo](./doc/img/inspect-demo.gif)
 
 ```shell
 $ sqly --inspect --inspect-sample 1 testdata/identifier.csv
@@ -241,6 +245,12 @@ $ sqly --inspect --inspect-sample 1 testdata/identifier.csv
     }
   ]
 }
+```
+
+Use `--inspect-sample 0` for a schema-only report (no `sample_rows`), so a script can read column types without pulling any data:
+
+```shell
+$ sqly --inspect --inspect-sample 0 testdata/identifier.csv
 ```
 
 ## Inspect schema: .schema and .describe
@@ -269,6 +279,17 @@ A session is in-memory only: `UPDATE`/`INSERT`/`DELETE` change the loaded tables
 ```shell
 $ sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out testdata/user.csv
 $ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force testdata/user.csv
+```
+
+Write-back is deliberately strict about what it will touch. `--save` refuses to run without `--force`, and a run whose SQL changes schema (DDL such as `CREATE TABLE ... AS SELECT`) is rejected up front, before any output is written, since only row changes map back to a file:
+
+![write-back safety demo](./doc/img/writeback-demo.gif)
+
+```shell
+$ sqly --sql "UPDATE user SET identifier = identifier + 100" --save testdata/user.csv
+--save overwrites source files; pass --force to confirm, or use --save-dir DIR to write elsewhere
+$ sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir ./out testdata/user.csv
+--save/--save-dir cannot persist "CREATE TABLE backup AS SELECT * FROM user": ... only INSERT/UPDATE/DELETE on imported tables are saved
 ```
 
 Only tables mapping one-to-one to a single CSV, TSV, LTSV, or Parquet source can be written. Tables created by SQL, directory imports, and multi-table sources (Excel, ACH, Fedwire) are rejected with a clear error before anything is written.
@@ -379,7 +400,7 @@ SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `In
 |--------:|--------:|------------:|--------------:|-------------------:|
 | 100,000 | 12 | 515 ms | 161 MB | 2.82M |
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.19.0. Run `make bench` to reproduce on your machine.
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.21.0. Run `make bench` to reproduce on your machine.
 
 ## Comparison with similar tools
 
@@ -406,9 +427,13 @@ sqly stays in the same sub-second range as the CSV-focused tools while reading t
 
 ## Limitations (not supported)
 
-- DDL such as CREATE
-- DML such as GRANT
-- TCL such as transactions
+sqly runs each statement in its own transaction on an in-memory database, so a few SQLite statements are rejected with a clear error rather than failing in confusing ways:
+
+- Explicit transaction control: `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`
+- `VACUUM` / `VACUUM INTO`, and `ATTACH` / `DETACH DATABASE`
+- DCL such as `GRANT` / `REVOKE`
+
+DDL (`CREATE`, `DROP`, `ALTER`, ...) runs against the in-memory tables, but a non-interactive `--save`/`--save-dir` run rejects a schema change up front, since only `INSERT`/`UPDATE`/`DELETE` on an imported table can be written back to a file.
 
 ## Contributing
 

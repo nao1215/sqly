@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Documentation
+* README Version Refresh: Refresh the shell snippet and benchmark caption to the current release, correct the "not supported" list for v0.21.0 (DDL runs in-memory; transaction control, VACUUM, ATTACH/DETACH, and DCL are rejected), and add a Go test that fails when a README `sqly vX.Y.Z` string drifts from the latest CHANGELOG version (#454).
+* README Demos For Non-Interactive Flows: Add VHS demos and examples for `--inspect` (including `--inspect-sample 0` for a schema-only report), `--stdin` combined with `--sql-file`, and the write-back safety boundaries (`--save` requires `--force`; a schema change is rejected up front). The new example commands are exercised end-to-end by the shellspec suite (#455).
+
 ## [v0.21.0](https://github.com/nao1215/sqly/compare/v0.20.0...v0.21.0) (2026-06-01)
 
 ### Breaking Changes

@@ -150,20 +150,18 @@ Describe 'README examples'
   End
 
   Describe 'Load SQL from a file: --sql-file'
-    It 'runs SQL from a file while stdin carries a dataset'
-      WORK=$(mktemp -d)
-      export WORK
-      printf 'SELECT s.user_name, i.position\nFROM stdin s\nJOIN identifier i ON s.identifier = i.id\nORDER BY s.identifier;\n' > "$WORK/join.sql"
+    # Exercises the exact README command, which reads the committed
+    # doc/vhs/join.sql while a piped CSV dataset is the "stdin" table.
+    It 'runs SQL from doc/vhs/join.sql while stdin carries a dataset'
       Data
         #|user_name,identifier,first_name,last_name
         #|booker12,1,Rachel,Booker
         #|jenkins46,2,Mary,Jenkins
         #|smith79,3,Jamie,Smith
       End
-      When run sqly --stdin csv --sql-file "$WORK/join.sql" testdata/identifier.csv
+      When run sqly --stdin csv --sql-file doc/vhs/join.sql testdata/identifier.csv
       The status should be success
       The output should include 'developrt'
-      rm -rf "$WORK"
     End
   End
 
@@ -224,6 +222,29 @@ Describe 'README examples'
       The stderr should include 'Saved user to'
       The contents of file "$WORK/user.csv" should not include 'Rachelle'
       The contents of file "$WORK/out/user.csv" should include 'Rachelle'
+    End
+
+    # Write-back safety boundaries shown in the README write-back demo.
+    It 'rejects --save without --force'
+      When run sqly --sql "UPDATE user SET identifier = identifier + 100" --save "$WORK/user.csv"
+      The status should be failure
+      The stderr should include 'force'
+      The contents of file "$WORK/user.csv" should not include '101'
+    End
+
+    It 'rejects a schema-changing statement under --save-dir before writing anything'
+      When run sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir "$WORK/out" "$WORK/user.csv"
+      The status should be failure
+      The stderr should include 'cannot persist'
+      The path "$WORK/out" should not be exist
+    End
+
+    It 'overwrites the source in place with --save --force'
+      When run sqly --sql "UPDATE user SET identifier = identifier + 100" --save --force "$WORK/user.csv"
+      The status should be success
+      The output should include 'affected'
+      The stderr should include 'Saved user to'
+      The contents of file "$WORK/user.csv" should include '101'
     End
   End
 
