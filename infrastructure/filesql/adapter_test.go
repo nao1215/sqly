@@ -1,6 +1,7 @@
 package filesql
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"os"
@@ -1615,4 +1616,128 @@ func TestFileSQLAdapter_EmptyJSONLikeInputs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// gzipFile writes data gzip-compressed to path, for building compressed test
+// inputs.
+func gzipFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	f, err := os.Create(path) //nolint:gosec // test temp path
+	if err != nil {
+		t.Fatalf("create %s: %v", path, err)
+	}
+	defer func() { _ = f.Close() }()
+	gw := gzip.NewWriter(f)
+	if _, err := gw.Write(data); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+}
+
+// TestFileSQLAdapter_EmptyCompressedJSONLike verifies that an empty compressed
+// JSON array (.json.gz) and an empty compressed JSONL file (.jsonl.gz) import as a
+// zero-row table with the single "data" column, matching the uncompressed empty
+// inputs. Ref #452, #453.
+func TestFileSQLAdapter_EmptyCompressedJSONLike(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		file string
+		raw  []byte
+	}{
+		{"empty JSON array gz", "empty.json.gz", []byte("[]")},
+		{"whitespace-only JSON gz", "blank.json.gz", []byte("   \n")},
+		{"empty JSONL gz", "empty.jsonl.gz", []byte("")},
+		{"blank-only JSONL gz", "blank.jsonl.gz", []byte("\n\n")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			path := filepath.Join(dir, tt.file)
+			gzipFile(t, path, tt.raw)
+
+			sharedDB, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatalf("open db: %v", err)
+			}
+			defer func() { _ = sharedDB.Close() }()
+			adapter := NewFileSQLAdapter(sharedDB)
+
+			ctx := context.Background()
+			if err := adapter.LoadFile(ctx, path); err != nil {
+				t.Fatalf("LoadFile(%s) error = %v, want nil (zero-row import)", tt.file, err)
+			}
+
+			name := GetTableNameFromFilePath(path)
+			table, err := adapter.Query(ctx, "SELECT COUNT(*) AS c FROM "+QuoteIdentifier(name))
+			if err != nil {
+				t.Fatalf("count query error: %v", err)
+			}
+			if len(table.Records()) != 1 || table.Records()[0][0] != "0" {
+				t.Errorf("expected a zero-row table, got records %v", table.Records())
+			}
+			// The zero-row table uses filesql's single "data" column contract.
+			hdr, err := adapter.GetTableHeader(ctx, name)
+			if err != nil {
+				t.Fatalf("header error: %v", err)
+			}
+			if h := hdr.Header(); len(h) != 1 || h[0] != "data" {
+				t.Errorf("expected single 'data' column, got header %v", h)
+			}
+		})
+	}
+}
+
+// TestFileSQLAdapter_LTSVDuplicateLabelsRejected verifies that an LTSV input whose
+// row repeats a label is rejected rather than silently keeping only the last
+// value. Ref #467.
+func TestFileSQLAdapter_LTSVDuplicateLabelsRejected(t *testing.T) {
+	t.Parallel()
+
+	t.Run("plain ltsv with duplicate label fails", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "dup.ltsv")
+		if err := os.WriteFile(path, []byte("x:1\tx:2\n"), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		sharedDB, _ := sql.Open("sqlite", ":memory:")
+		defer func() { _ = sharedDB.Close() }()
+		adapter := NewFileSQLAdapter(sharedDB)
+		if err := adapter.LoadFile(context.Background(), path); err == nil {
+			t.Error("LoadFile of duplicate-label LTSV returned nil error, want a duplicate-label rejection")
+		}
+	})
+
+	t.Run("compressed ltsv with duplicate label fails", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "dup.ltsv.gz")
+		gzipFile(t, path, []byte("a:1\tb:2\ta:3\n"))
+		sharedDB, _ := sql.Open("sqlite", ":memory:")
+		defer func() { _ = sharedDB.Close() }()
+		adapter := NewFileSQLAdapter(sharedDB)
+		if err := adapter.LoadFile(context.Background(), path); err == nil {
+			t.Error("LoadFile of duplicate-label compressed LTSV returned nil error, want rejection")
+		}
+	})
+
+	t.Run("unique labels still import", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "ok.ltsv")
+		if err := os.WriteFile(path, []byte("x:1\ty:2\n"), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		sharedDB, _ := sql.Open("sqlite", ":memory:")
+		defer func() { _ = sharedDB.Close() }()
+		adapter := NewFileSQLAdapter(sharedDB)
+		if err := adapter.LoadFile(context.Background(), path); err != nil {
+			t.Errorf("LoadFile of unique-label LTSV error = %v, want nil", err)
+		}
+	})
 }

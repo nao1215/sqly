@@ -468,8 +468,17 @@ func (s *Shell) markDirImported(name string) {
 
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
+	// loadPath is the path actually handed to filesql. It differs from cleanPath
+	// only for an extensionless pseudo-file (e.g. /dev/stdin, /proc/self/fd/0),
+	// which is staged to a temporary CSV so it imports end-to-end. Ref #461, #462.
+	loadPath := cleanPath
 	if !s.usecases.importer.IsSupportedFile(cleanPath) {
-		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
+		staged, cleanup, ok := s.stagePseudoFileAsCSV(cleanPath)
+		if !ok {
+			return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
+		}
+		defer cleanup()
+		loadPath = staged
 	}
 
 	// Capture which tables this file creates so --inspect and write-back (.save)
@@ -480,7 +489,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	}
 	existingTables := tableNameSet(before)
 
-	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
+	if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 
@@ -488,8 +497,8 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// Use prefix matching over current tables. LoadFiles just created or
 	// overwrote these tables, so all prefix-matching tables belong to this file.
 	// nil candidates tells filterExcelSheets to build the set from prefix match.
-	if s.usecases.importer.IsExcelFile(cleanPath) && sheetName != "" {
-		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, nil); err != nil {
+	if s.usecases.importer.IsExcelFile(loadPath) && sheetName != "" {
+		if err := s.filterExcelSheets(ctx, loadPath, sheetName, nil); err != nil {
 			return err
 		}
 	}
@@ -503,7 +512,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// or more tables that already existed in the session.
 	newNames := diffTableNames(after, existingTables)
 	if len(newNames) == 0 {
-		owned := s.tablesMatchingFile(cleanPath, existingTables)
+		owned := s.tablesMatchingFile(loadPath, existingTables)
 		switch {
 		case s.isRecordedSource(displayPath):
 			// Re-import of the same source path (including a symlink alias) is a
@@ -717,29 +726,99 @@ func validatePath(path string) (string, error) {
 
 	// Prevent access to system directories on Unix-like systems
 	absPath, err := filepath.Abs(cleanPath)
-	if err == nil { // Only check if we can resolve the absolute path
-		// /dev/shm (tmpfs for user data) and /dev/fd (process-substitution and
-		// other open file descriptors) hold legitimate, user-owned inputs, so they
-		// are allowed even though they live under /dev. Ref #427, #428.
-		allowedDevSubdirs := []string{"/dev/shm", "/dev/fd"}
-		allowed := false
-		for _, sub := range allowedDevSubdirs {
-			if absPath == sub || strings.HasPrefix(absPath, sub+"/") {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
-			for _, sysDir := range systemDirs {
-				if absPath == sysDir || strings.HasPrefix(absPath, sysDir+"/") {
-					return "", fmt.Errorf("access to system directory not allowed: %s", path)
-				}
+	if err == nil && !isAllowedPseudoFile(absPath) { // Only check if we can resolve the absolute path
+		systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
+		for _, sysDir := range systemDirs {
+			if absPath == sysDir || strings.HasPrefix(absPath, sysDir+"/") {
+				return "", fmt.Errorf("access to system directory not allowed: %s", path)
 			}
 		}
 	}
 
 	return cleanPath, nil
+}
+
+// stagePseudoFileAsCSV stages an extensionless Unix pseudo-file (e.g. /dev/stdin,
+// /dev/fd/0, /proc/self/fd/0) into a temporary CSV file so it imports end-to-end,
+// returning the temp path, a cleanup, and whether staging applied. filesql types a
+// file by its name, and these pseudo-files carry no format extension, so their
+// content is copied to "<table>.csv" and read as CSV (sqly's default text format);
+// use --stdin FORMAT for a non-CSV stream. Only the allowed pseudo-files are
+// staged, so an ordinary unsupported path still fails as before. Ref #461, #462.
+func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup func(), ok bool) {
+	abs := path
+	if a, err := filepath.Abs(path); err == nil {
+		abs = a
+	}
+	if !isAllowedPseudoFile(abs) {
+		return "", nil, false
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // path is a validated pseudo-file input
+	if err != nil {
+		return "", nil, false
+	}
+	dir, err := os.MkdirTemp("", "sqly-pseudo-")
+	if err != nil {
+		return "", nil, false
+	}
+	cleanup = func() { _ = os.RemoveAll(dir) }
+	// The staged path is a freshly created temp dir joined with the sanitized table
+	// name, so it cannot escape the temp dir.
+	stagedPath = filepath.Join(dir, s.usecases.importer.GetTableNameFromFilePath(path)+model.ExtCSV)
+	if err := os.WriteFile(stagedPath, data, 0o600); err != nil { //nolint:gosec // stagedPath is under a sqly-created temp dir with a sanitized name
+		cleanup()
+		return "", nil, false
+	}
+	return stagedPath, cleanup, true
+}
+
+// isAllowedPseudoFile reports whether an absolute path is a standard Unix
+// pseudo-file that holds legitimate, user-controlled input even though it lives
+// under a system directory. These are exempt from the system-directory guard:
+//   - /dev/shm/*            tmpfs for user data (Ref #427)
+//   - /dev/fd/*             open file descriptors, process substitution (Ref #428)
+//   - /dev/stdin, /dev/stdout, /dev/stderr  standard stream pseudo-files (Ref #461)
+//   - /proc/<pid|self>/fd/* the Linux fd aliases behind many fd-based workflows (Ref #462)
+func isAllowedPseudoFile(absPath string) bool {
+	switch absPath {
+	case "/dev/stdin", "/dev/stdout", "/dev/stderr":
+		return true
+	}
+	for _, prefix := range []string{"/dev/shm/", "/dev/fd/"} {
+		if strings.HasPrefix(absPath, prefix) {
+			return true
+		}
+	}
+	for _, base := range []string{"/dev/shm", "/dev/fd"} {
+		if absPath == base {
+			return true
+		}
+	}
+	// /proc/self/fd/* and /proc/<pid>/fd/* are the Linux aliases for open file
+	// descriptors that shells use for process substitution and fd redirection.
+	if rest, ok := strings.CutPrefix(absPath, "/proc/"); ok {
+		if slash := strings.IndexByte(rest, '/'); slash > 0 {
+			owner, tail := rest[:slash], rest[slash+1:]
+			if (owner == "self" || isAllDigits(owner)) && strings.HasPrefix(tail, "fd/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isAllDigits reports whether s is non-empty and contains only ASCII digits, used
+// to match a numeric /proc/<pid> component.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // extractSheetNameFromArgs extracts the sheet name from command line arguments.

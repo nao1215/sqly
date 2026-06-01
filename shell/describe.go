@@ -36,7 +36,14 @@ func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []strin
 // The result preserves definition order, giving stable column ordering. An
 // empty record set means the table does not exist (PRAGMA returns no rows).
 func (s *Shell) tableColumns(ctx context.Context, tableName string) (*model.Table, error) {
-	query := "PRAGMA table_info(" + s.usecases.importer.QuoteIdentifier(tableName) + ")"
+	// A schema-qualified name (main.user, temp.t) is inspected against that schema
+	// via "PRAGMA schema.table_info(table)", matching the SQL surface. Ref #446.
+	schema, object := splitTableQualifier(tableName)
+	pragma := "PRAGMA "
+	if schema != "" {
+		pragma += s.usecases.importer.QuoteIdentifier(schema) + "."
+	}
+	query := pragma + "table_info(" + s.usecases.importer.QuoteIdentifier(object) + ")"
 	table, err := s.usecases.query.Query(ctx, query)
 	if err != nil {
 		return nil, err

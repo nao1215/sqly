@@ -524,12 +524,13 @@ func captureStderr(t *testing.T, f func()) string {
 }
 
 // TestCommandList_tablesCommand_dependsOnMetadataUsecase verifies that .tables
-// is satisfied by a MetadataUsecase mock alone: given two table names, it lists
-// both.
+// is satisfied by a MetadataUsecase mock alone: given two schema objects, it lists
+// both. .tables enumerates every queryable object via SchemaObjects (tables and
+// views, including TEMP), not only the file-imported base tables.
 func TestCommandList_tablesCommand_dependsOnMetadataUsecase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	metadata := mock.NewMockMetadataUsecase(ctrl)
-	metadata.EXPECT().TablesName(gomock.Any()).Return([]*model.Table{
+	metadata.EXPECT().SchemaObjects(gomock.Any()).Return([]*model.Table{
 		model.NewTable("users", nil, nil),
 		model.NewTable("orders", nil, nil),
 	}, nil)

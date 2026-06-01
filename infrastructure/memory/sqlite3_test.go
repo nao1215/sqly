@@ -356,3 +356,81 @@ func TestSqlite3Repository_CreateTable_InvalidTableReturnsError(t *testing.T) {
 		t.Error("expected error for invalid table, got nil")
 	}
 }
+
+// TestSqlite3RepositorySchemaObjects verifies that SchemaObjects lists base
+// tables, views, and TEMP tables (so .tables can enumerate everything queryable),
+// while TablesName stays limited to base tables used by write-back. Ref #449,
+// #450.
+func TestSqlite3RepositorySchemaObjects(t *testing.T) {
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	r := NewSQLite3Repository(memoryDB)
+	ctx := context.Background()
+	if _, err := r.Exec(ctx, "CREATE TABLE base (id INTEGER)"); err != nil {
+		t.Fatalf("create base table: %v", err)
+	}
+	if _, err := r.Exec(ctx, "CREATE VIEW v AS SELECT id FROM base"); err != nil {
+		t.Fatalf("create view: %v", err)
+	}
+	if _, err := r.Exec(ctx, "CREATE TEMP TABLE temp_t (id INTEGER)"); err != nil {
+		t.Fatalf("create temp table: %v", err)
+	}
+
+	objects, err := r.SchemaObjects(ctx)
+	if err != nil {
+		t.Fatalf("SchemaObjects error: %v", err)
+	}
+	got := map[string]bool{}
+	for _, o := range objects {
+		got[o.Name()] = true
+	}
+	for _, want := range []string{"base", "v", "temp_t"} {
+		if !got[want] {
+			t.Errorf("SchemaObjects missing %q; got %v", want, got)
+		}
+	}
+
+	// TablesName remains scoped to base tables for write-back, excluding the view
+	// and the temp table.
+	tables, err := r.TablesName(ctx)
+	if err != nil {
+		t.Fatalf("TablesName error: %v", err)
+	}
+	for _, tbl := range tables {
+		if tbl.Name() == "v" {
+			t.Error("TablesName unexpectedly included the view 'v'")
+		}
+	}
+}
+
+// TestSqlite3RepositoryListSchemaQualified verifies that List accepts a
+// schema-qualified table name, so .dump and .header can target main.<table>.
+// Ref #445, #447, #448.
+func TestSqlite3RepositoryListSchemaQualified(t *testing.T) {
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	r := NewSQLite3Repository(memoryDB)
+	ctx := context.Background()
+	if _, err := r.Exec(ctx, "CREATE TABLE person (id INTEGER, name TEXT)"); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if _, err := r.Exec(ctx, "INSERT INTO person VALUES (1, 'Ann')"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	table, err := r.List(ctx, "main.person")
+	if err != nil {
+		t.Fatalf("List(main.person) error = %v, want nil", err)
+	}
+	if len(table.Records()) != 1 || table.Records()[0][1] != "Ann" {
+		t.Errorf("List(main.person) records = %v, want one row with Ann", table.Records())
+	}
+}

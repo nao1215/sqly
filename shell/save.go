@@ -94,7 +94,26 @@ func (s *Shell) maybeSave(ctx context.Context) error {
 // file is written (#370, #372, #377). It is a no-op when no save flag is set or
 // when the SQL is read-only, because a read-only run skips write-back (#376).
 func (s *Shell) preflightSave(ctx context.Context, script string) error {
-	if !s.saveRequested() || !scriptModifiesData(script) {
+	if !s.saveRequested() {
+		return nil
+	}
+	// Reject a statement whose effect write-back cannot represent (DDL, schema
+	// changes, ANALYZE, maintenance). Only read-only queries and row-modifying DML
+	// on imported tables are persisted, so a schema-only run must fail loudly here
+	// instead of exiting 0 while leaving the source unchanged. Ref #433-#437,
+	// #469-#484.
+	if stmt := firstSaveIncompatibleStatement(script); stmt != "" {
+		return fmt.Errorf(
+			"--save/--save-dir cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
+			trimGaps(stmt))
+	}
+	// A script that imports its own input with .import creates its tables while it
+	// runs, so they cannot be listed up front. Defer write-back validation to the
+	// post-run save, which sees the imported tables. Ref #456.
+	if scriptImportsInput(script) {
+		return nil
+	}
+	if !scriptModifiesData(script) {
 		return nil
 	}
 	_, err := s.planWriteBack(ctx, s.saveDestDir())

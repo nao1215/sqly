@@ -121,7 +121,14 @@ func TestValidatePath(t *testing.T) {
 		// other system directories stay blocked. Ref #427, #428.
 		{name: "dev shm user file is allowed", path: "/dev/shm/sqly/user.csv", shouldError: false},
 		{name: "dev fd descriptor is allowed", path: "/dev/fd/63", shouldError: false},
+		// Standard stream pseudo-files and the Linux /proc fd aliases are allowed
+		// too, so streamed and fd-backed inputs import. Ref #461, #462.
+		{name: "dev stdin is allowed", path: "/dev/stdin", shouldError: false},
+		{name: "dev stdout is allowed", path: "/dev/stdout", shouldError: false},
+		{name: "proc self fd is allowed", path: "/proc/self/fd/0", shouldError: false},
+		{name: "proc pid fd is allowed", path: "/proc/1234/fd/3", shouldError: false},
 		{name: "dev block device is blocked", path: "/dev/sda", shouldError: true, unixOnly: true},
+		{name: "proc cmdline of self is blocked", path: "/proc/self/cmdline", shouldError: true, unixOnly: true},
 		{name: "etc is blocked", path: "/etc/passwd", shouldError: true, unixOnly: true},
 		{name: "proc is blocked", path: "/proc/cpuinfo", shouldError: true, unixOnly: true},
 	}

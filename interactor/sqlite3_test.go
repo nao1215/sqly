@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/repository"
 	infrastructure "github.com/nao1215/sqly/infrastructure/mock"
 	"go.uber.org/mock/gomock"
 )
@@ -15,10 +16,9 @@ import (
 func TestSQLite3InteractorExecSQL(t *testing.T) {
 	t.Parallel()
 
-	// sqly targets SQLite, so statements that were previously rejected by category
-	// (DDL, transaction control, ATTACH, ANALYZE, REPLACE) are now accepted and
-	// routed to the exec path. SQLite remains the authority on validity.
-	// Ref #406, #409, #410, #411, #430, #431.
+	// DDL and other no-rowset statements that sqly can run inside its per-statement
+	// transaction are routed to the exec path. SQLite remains the authority on
+	// validity. Ref #406, #409, #411, #431.
 	execRouted := []struct {
 		name      string
 		statement string
@@ -27,12 +27,6 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		{"DROP routes to exec", "DROP TABLE test"},
 		{"ALTER routes to exec", "ALTER TABLE test ADD COLUMN age INTEGER"},
 		{"REINDEX routes to exec", "REINDEX test"},
-		{"BEGIN routes to exec", "BEGIN"},
-		{"COMMIT routes to exec", "COMMIT"},
-		{"ROLLBACK routes to exec", "ROLLBACK"},
-		{"SAVEPOINT routes to exec", "SAVEPOINT test"},
-		{"RELEASE routes to exec", "RELEASE test"},
-		{"ATTACH routes to exec", "ATTACH DATABASE ':memory:' AS aux"},
 		{"ANALYZE routes to exec", "ANALYZE"},
 		{"REPLACE routes to exec", "REPLACE INTO test(id) VALUES (1)"},
 	}
@@ -46,6 +40,39 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 			si := NewSQLite3Interactor(repo, NewSQL(), nil)
 			if _, _, err := si.ExecSQL(context.Background(), tt.statement); err != nil {
 				t.Errorf("want: nil, got: %v", err)
+			}
+		})
+	}
+
+	// Explicit transaction control, VACUUM, and ATTACH/DETACH cannot run correctly
+	// under sqly's per-statement transaction and in-memory session model, so they
+	// are rejected up front with a clear error and never reach the repository.
+	// Ref #441, #442, #443, #457, #458.
+	rejected := []struct {
+		name      string
+		statement string
+	}{
+		{"BEGIN is rejected", "BEGIN"},
+		{"BEGIN IMMEDIATE is rejected", "BEGIN IMMEDIATE"},
+		{"COMMIT is rejected", "COMMIT"},
+		{"ROLLBACK is rejected", "ROLLBACK"},
+		{"SAVEPOINT is rejected", "SAVEPOINT test"},
+		{"RELEASE is rejected", "RELEASE test"},
+		{"VACUUM is rejected", "VACUUM"},
+		{"VACUUM INTO is rejected", "VACUUM INTO 'dump.db'"},
+		{"ATTACH is rejected", "ATTACH DATABASE ':memory:' AS aux"},
+		{"DETACH is rejected", "DETACH DATABASE aux"},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			// No Exec/Query is expected: the statement is rejected before routing.
+			repo := infrastructure.NewMockSQLite3Repository(ctrl)
+
+			si := NewSQLite3Interactor(repo, NewSQL(), nil)
+			if _, _, err := si.ExecSQL(context.Background(), tt.statement); err == nil {
+				t.Errorf("ExecSQL(%q) = nil error, want a rejection", tt.statement)
 			}
 		})
 	}
@@ -76,6 +103,47 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 			}
 		})
 	}
+
+	// A no-rowset PRAGMA (a setter like "PRAGMA user_version = 1" or a command like
+	// "PRAGMA incremental_vacuum") is routed to the query path by keyword but yields
+	// no result columns, so the query path returns ErrNoRows. ExecSQL must re-run it
+	// on the exec path and report neutral success instead of a "no records" error.
+	// Ref #440, #485.
+	pragmaSetters := []string{"PRAGMA user_version = 1", "PRAGMA incremental_vacuum"}
+	for _, stmt := range pragmaSetters {
+		t.Run("no-rowset PRAGMA falls through to exec: "+stmt, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			repo := infrastructure.NewMockSQLite3Repository(ctrl)
+			// The query path runs first and reports no records; ExecSQL then re-runs
+			// the same statement on the exec path.
+			repo.EXPECT().Query(gomock.Any(), stmt).Return(nil, repository.ErrNoRows)
+			repo.EXPECT().Exec(gomock.Any(), stmt).Return(int64(0), nil)
+
+			si := NewSQLite3Interactor(repo, NewSQL(), nil)
+			table, _, err := si.ExecSQL(context.Background(), stmt)
+			if err != nil {
+				t.Errorf("ExecSQL(%q) error = %v, want nil", stmt, err)
+			}
+			if table != nil {
+				t.Errorf("ExecSQL(%q) returned a table, want nil for a no-rowset PRAGMA", stmt)
+			}
+		})
+	}
+
+	// A genuine query error (not ErrNoRows) on the query path is surfaced, not
+	// retried on the exec path.
+	t.Run("query error other than ErrNoRows is surfaced", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		repo.EXPECT().Query(gomock.Any(), "SELECT * FROM missing").Return(nil, errors.New("no such table: missing"))
+
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), "SELECT * FROM missing"); err == nil {
+			t.Error("ExecSQL on a failing query returned nil error, want the query error")
+		}
+	})
 
 	// A leading comment or UTF-8 BOM is stripped before classification, so the
 	// statement runs the same way the batch and --sql-file paths run it.

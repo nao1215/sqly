@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -1029,5 +1030,36 @@ func TestTableNameSet(t *testing.T) {
 	}
 	if _, ok := set["y"]; !ok {
 		t.Error("expected 'y' in set")
+	}
+}
+
+// TestStagePseudoFileScopedToPseudoFiles verifies that the pseudo-file CSV
+// staging added for #461/#462 is scoped to the allowed Unix pseudo-files only: a
+// normal extensionless file is not silently treated as CSV but still fails as an
+// unsupported format. Ref #461, #462.
+func TestStagePseudoFileScopedToPseudoFiles(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanup()
+
+	// A regular file without a recognized extension is not a pseudo-file, so
+	// staging must decline it and import must report an unsupported format.
+	dir := t.TempDir()
+	plain := filepath.Join(dir, "noext")
+	if err := os.WriteFile(plain, []byte("name,score\na,1\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, _, ok := shell.stagePseudoFileAsCSV(plain); ok {
+		t.Errorf("stagePseudoFileAsCSV staged a non-pseudo extensionless file %q, want it declined", plain)
+	}
+
+	backout, backerr := config.Stdout, config.Stderr
+	config.Stdout = &bytes.Buffer{}
+	config.Stderr = &bytes.Buffer{}
+	defer func() { config.Stdout, config.Stderr = backout, backerr }()
+	if err := shell.importFile(context.Background(), plain, plain, ""); err == nil {
+		t.Error("importFile accepted a non-pseudo extensionless file, want an unsupported-format error")
 	}
 }

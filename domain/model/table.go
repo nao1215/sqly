@@ -413,10 +413,13 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 // up front instead of emitting output that no longer round-trips as LTSV. Ref
 // #382, #383.
 func (t *Table) printLTSV(out io.Writer) error {
+	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
+		return err
+	}
 	for _, v := range t.Records() {
 		r := make(Record, 0, len(v))
 		for i, data := range v {
-			if err := ensureLTSVRepresentable(t.Header()[i], data); err != nil {
+			if err := ensureLTSVValueRepresentable(t.Header()[i], data); err != nil {
 				return err
 			}
 			r = append(r, t.Header()[i]+":"+data)
@@ -426,13 +429,52 @@ func (t *Table) printLTSV(out io.Writer) error {
 	return nil
 }
 
-// ensureLTSVRepresentable reports an error when a label or value contains a byte
-// LTSV cannot represent (tab or newline), so the caller rejects it before writing
-// output that cannot be re-imported as LTSV. Ref #382, #383.
-func ensureLTSVRepresentable(label, value string) error {
-	if strings.ContainsAny(label, "\t\n\r") {
-		return fmt.Errorf("ltsv: column name %q contains a tab or newline, which LTSV cannot represent", label)
+// isValidLTSVLabel reports whether label matches the LTSV label grammar
+// [0-9A-Za-z_.-]+ (https://ltsv.org). A label outside this set — empty, or
+// containing ':', a space, a tab, or any other character — cannot be written as a
+// distinct "label:value" field that re-imports to the same column, so the LTSV
+// writers reject it. Ref #465.
+func isValidLTSVLabel(label string) bool {
+	if label == "" {
+		return false
 	}
+	for _, r := range label {
+		switch {
+		case r >= '0' && r <= '9',
+			r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r == '_', r == '.', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// EnsureLTSVHeaderWritable validates a header for LTSV output: every column name
+// must be a valid LTSV label, and the names must be unique. LTSV encodes each
+// column as a "label:value" field with no escaping, so an invalid label (e.g.
+// "foo:bar") is ambiguous on re-import and a duplicate label silently keeps only
+// the last value. Rejecting both up front keeps LTSV output round-trippable.
+// Ref #465, #466.
+func EnsureLTSVHeaderWritable(header Header) error {
+	seen := make(map[string]struct{}, len(header))
+	for _, label := range header {
+		if !isValidLTSVLabel(label) {
+			return fmt.Errorf("ltsv: column name %q is not a valid LTSV label (allowed: letters, digits, '_', '.', '-')", label)
+		}
+		if _, ok := seen[label]; ok {
+			return fmt.Errorf("ltsv: duplicate column name %q; LTSV labels must be unique or earlier values are lost on re-import", label)
+		}
+		seen[label] = struct{}{}
+	}
+	return nil
+}
+
+// ensureLTSVValueRepresentable reports an error when a value contains a byte LTSV
+// cannot represent (tab or newline), so the caller rejects it before writing
+// output that cannot be re-imported as LTSV. Ref #382, #383.
+func ensureLTSVValueRepresentable(label, value string) error {
 	if strings.ContainsAny(value, "\t\n\r") {
 		return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
 	}

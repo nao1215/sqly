@@ -73,13 +73,15 @@ Describe 'sqly v0.19.0 binary bug fixes'
     It 'accepts CREATE TABLE (#411)'
       When run sqly --sql "CREATE TABLE t(x)"
       The status should be success
-      The output should include 'affected is 0'
+      # A DDL statement reports neutral success, not a misleading row count (#439).
+      The output should include 'statement executed successfully'
     End
 
     It 'accepts ANALYZE (#431)'
       When run sqly --sql "ANALYZE" testdata/user.csv
       The status should be success
-      The output should include 'affected is'
+      # ANALYZE changes no rows, so it reports neutral success (#439).
+      The output should include 'statement executed successfully'
     End
 
     It 'runs WITH ... UPDATE without RETURNING as DML (#412)'

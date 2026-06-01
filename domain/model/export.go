@@ -287,20 +287,29 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 
 // IsInputOnlyExtension reports whether a destination path targets an input-only
 // format that sqly can read but not write: ACH (.ach) and Fedwire (.fed), which
-// require multi-record coordination the export path cannot produce. The
-// compression suffix is stripped first, so .ach.gz and .fed.gz are detected too.
-// It lets --output and .dump reject these destinations instead of silently
-// writing CSV bytes to a misleading path. Ref #421, #422.
+// require multi-record coordination the export path cannot produce. All trailing
+// compression suffixes are stripped first, so a path that hides the extension
+// behind several codecs (".ach.gz.zst", ".fed.gz.zst") is detected too. It lets
+// --output and .dump reject these destinations instead of silently writing CSV
+// bytes to a misleading path. Ref #421, #422, #459, #460.
 func IsInputOnlyExtension(path string) bool {
-	base := path
-	if _, ok := CompressionFromExtension(filepath.Ext(path)); ok {
-		base = strings.TrimSuffix(path, filepath.Ext(path))
-	}
-	switch strings.ToLower(filepath.Ext(base)) {
+	switch strings.ToLower(filepath.Ext(stripCompressionSuffixes(path))) {
 	case ".ach", ".fed":
 		return true
 	default:
 		return false
+	}
+}
+
+// stripCompressionSuffixes removes every trailing compression extension from a
+// path (e.g. "out.ach.gz.zst" -> "out.ach"), so a check on the remaining base
+// extension is not fooled by stacked codecs. Ref #459, #460.
+func stripCompressionSuffixes(path string) string {
+	for {
+		if _, ok := CompressionFromExtension(filepath.Ext(path)); !ok {
+			return path
+		}
+		path = strings.TrimSuffix(path, filepath.Ext(path))
 	}
 }
 

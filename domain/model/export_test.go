@@ -379,8 +379,14 @@ func TestIsInputOnlyExtension(t *testing.T) {
 		{"out.ACH", true},
 		{"out.ach.gz", true},
 		{"out.fed.zst", true},
+		// Multiple stacked compression suffixes must still be seen through. Ref
+		// #459, #460.
+		{"out.ach.gz.zst", true},
+		{"out.fed.gz.zst", true},
+		{"out.ach.gz.gz.gz", true},
 		{"out.csv", false},
 		{"out.csv.gz", false},
+		{"out.csv.gz.zst", false},
 		{"out.parquet", false},
 		{"out", false},
 	}

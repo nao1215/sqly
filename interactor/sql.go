@@ -25,6 +25,9 @@ const (
 	sqlROLLBACK  = "ROLLBACK"
 	sqlSAVEPOINT = "SAVEPOINT"
 	sqlRELEASE   = "RELEASE"
+	sqlVACUUM    = "VACUUM"
+	sqlATTACH    = "ATTACH"
+	sqlDETACH    = "DETACH"
 )
 
 // ddl is Data Definition Language List
@@ -318,6 +321,29 @@ func mainStatementVerb(stmt string) string {
 				}
 			}
 		}
+	}
+	return ""
+}
+
+// unsupportedStatementReason reports why sqly cannot run a statement, or "" when
+// it is supported. sqly executes every statement in its own transaction on a
+// single in-memory connection, so explicit transaction control cannot span
+// statements (a BEGIN nests inside that wrapper, and a SAVEPOINT is discarded when
+// the wrapper commits or rolls back), and VACUUM cannot run inside a transaction
+// at all. ATTACH/DETACH would let a session read or write external SQLite files
+// outside the import/save model, bypassing sqly's in-memory-only contract. These
+// are rejected up front with a clear sqly-specific error instead of surfacing
+// SQLite's confusing internal message or silently escaping the session model.
+// The input must already be noise-stripped and normalized.
+// Ref #441, #442, #443, #457, #458.
+func unsupportedStatementReason(stmt string) string {
+	switch leadingKeyword(stmt) {
+	case sqlBEGIN, sqlCOMMIT, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE:
+		return "explicit transaction control is not supported; sqly runs each statement in its own transaction"
+	case sqlVACUUM:
+		return "VACUUM is not supported; sqly runs every statement inside a transaction, which SQLite forbids for VACUUM"
+	case sqlATTACH, sqlDETACH:
+		return "ATTACH/DETACH DATABASE is not supported; sqly runs an in-memory session, so import files as tables instead"
 	}
 	return ""
 }

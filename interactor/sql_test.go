@@ -642,3 +642,59 @@ func TestMainStatementVerb(t *testing.T) {
 		})
 	}
 }
+
+// TestUnsupportedStatementReason verifies that statements sqly cannot run under
+// its per-statement transaction and in-memory model are flagged with a reason,
+// while statements it can run (DML, DDL, ANALYZE, PRAGMA, queries) are not.
+// Ref #441, #442, #443, #457, #458.
+func TestUnsupportedStatementReason(t *testing.T) {
+	t.Parallel()
+
+	unsupported := []string{
+		"BEGIN",
+		"BEGIN IMMEDIATE",
+		"BEGIN EXCLUSIVE",
+		"COMMIT",
+		"ROLLBACK",
+		"ROLLBACK TO sp",
+		"SAVEPOINT sp",
+		"RELEASE sp",
+		"VACUUM",
+		"VACUUM INTO 'dump.db'",
+		"ATTACH DATABASE ':memory:' AS aux",
+		"DETACH DATABASE aux",
+		"  attach database 'x' as y", // leading space, lowercase
+	}
+	for _, stmt := range unsupported {
+		t.Run("rejected: "+stmt, func(t *testing.T) {
+			t.Parallel()
+			if reason := unsupportedStatementReason(stmt); reason == "" {
+				t.Errorf("unsupportedStatementReason(%q) = \"\", want a non-empty reason", stmt)
+			}
+		})
+	}
+
+	supported := []string{
+		"SELECT 1",
+		"INSERT INTO t VALUES (1)",
+		"UPDATE t SET x = 1",
+		"DELETE FROM t",
+		"CREATE TABLE t (id INTEGER)",
+		"CREATE VIEW v AS SELECT 1",
+		"CREATE TRIGGER tg AFTER UPDATE ON t BEGIN SELECT 1; END",
+		"DROP TABLE t",
+		"ALTER TABLE t ADD COLUMN c INTEGER",
+		"REINDEX",
+		"ANALYZE",
+		"PRAGMA user_version = 1",
+		"REPLACE INTO t VALUES (1)",
+	}
+	for _, stmt := range supported {
+		t.Run("supported: "+stmt, func(t *testing.T) {
+			t.Parallel()
+			if reason := unsupportedStatementReason(stmt); reason != "" {
+				t.Errorf("unsupportedStatementReason(%q) = %q, want \"\"", stmt, reason)
+			}
+		})
+	}
+}

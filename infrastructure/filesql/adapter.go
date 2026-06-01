@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -106,14 +107,17 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 // json_extract() behave the same on a zero-row table.
 const jsonDataColumn = "data"
 
-// emptyJSONLikeTable reports whether an uncompressed .json or .jsonl file holds
-// no rows (an empty JSON array, whitespace-only JSON, or an empty/blank-only
-// JSONL file), returning the table name to create for it. Compressed inputs are
-// left to filesql. Ref #388, #389.
+// emptyJSONLikeTable reports whether a .json or .jsonl file (uncompressed or
+// compressed, e.g. .json.gz) holds no rows (an empty JSON array, whitespace-only
+// JSON, or an empty/blank-only JSONL file), returning the table name to create for
+// it. The format is decided by the base extension after any compression suffix is
+// stripped, and the content is read through filesql's decompressor so a compressed
+// empty input is detected the same as an uncompressed one. Ref #388, #389, #452,
+// #453.
 func emptyJSONLikeTable(path string) (string, bool) {
-	switch strings.ToLower(filepath.Ext(path)) {
+	switch strings.ToLower(filepath.Ext(stripCompressionExt(path))) {
 	case model.ExtJSON:
-		data, err := os.ReadFile(path) //nolint:gosec // path is a user-provided input file
+		data, err := readDecompressed(path)
 		if err != nil {
 			return "", false
 		}
@@ -127,7 +131,7 @@ func emptyJSONLikeTable(path string) (string, bool) {
 		}
 		return "", false
 	case model.ExtJSONL:
-		data, err := os.ReadFile(path) //nolint:gosec // path is a user-provided input file
+		data, err := readDecompressed(path)
 		if err != nil {
 			return "", false
 		}
@@ -140,6 +144,30 @@ func emptyJSONLikeTable(path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// stripCompressionExt removes a single trailing compression extension from path
+// (case-insensitive), so the base format of "data.json.gz" is read from ".json".
+func stripCompressionExt(path string) string {
+	lower := strings.ToLower(path)
+	for _, ext := range compressionExts {
+		if strings.HasSuffix(lower, ext) {
+			return path[:len(path)-len(ext)]
+		}
+	}
+	return path
+}
+
+// readDecompressed reads the full content of path, transparently decompressing it
+// when its extension names a known codec. It backs the empty JSON/JSONL detection
+// for both plain and compressed inputs. Ref #452, #453.
+func readDecompressed(path string) ([]byte, error) {
+	r, cleanup, err := NewDecompressingReaderForFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cleanup() }()
+	return io.ReadAll(r)
 }
 
 // createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON

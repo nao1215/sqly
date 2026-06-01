@@ -119,6 +119,45 @@ func (c *MockMetadataUsecaseListCall) DoAndReturn(f func(context.Context, string
 	return c
 }
 
+// SchemaObjects mocks base method.
+func (m *MockMetadataUsecase) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SchemaObjects", ctx)
+	ret0, _ := ret[0].([]*model.Table)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SchemaObjects indicates an expected call of SchemaObjects.
+func (mr *MockMetadataUsecaseMockRecorder) SchemaObjects(ctx any) *MockMetadataUsecaseSchemaObjectsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchemaObjects", reflect.TypeOf((*MockMetadataUsecase)(nil).SchemaObjects), ctx)
+	return &MockMetadataUsecaseSchemaObjectsCall{Call: call}
+}
+
+// MockMetadataUsecaseSchemaObjectsCall wrap *gomock.Call
+type MockMetadataUsecaseSchemaObjectsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMetadataUsecaseSchemaObjectsCall) Return(arg0 []*model.Table, arg1 error) *MockMetadataUsecaseSchemaObjectsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMetadataUsecaseSchemaObjectsCall) Do(f func(context.Context) ([]*model.Table, error)) *MockMetadataUsecaseSchemaObjectsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMetadataUsecaseSchemaObjectsCall) DoAndReturn(f func(context.Context) ([]*model.Table, error)) *MockMetadataUsecaseSchemaObjectsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // TablesName mocks base method.
 func (m *MockMetadataUsecase) TablesName(ctx context.Context) ([]*model.Table, error) {
 	m.ctrl.T.Helper()
