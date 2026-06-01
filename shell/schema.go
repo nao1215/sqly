@@ -53,7 +53,7 @@ func isStructuredMode(m model.PrintMode) bool {
 // temp.t) is resolved against that schema. Returns an error when the object does
 // not exist.
 func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (string, error) {
-	schema, object := splitTableQualifier(tableName)
+	schema, object := s.resolveObjectName(ctx, tableName)
 	stored, isTemp, err := s.storedCreateSQL(ctx, schema, object)
 	if err != nil {
 		return "", err
@@ -152,6 +152,35 @@ func splitTableQualifier(name string) (schema, object string) {
 		return name[:i], name[i+1:]
 	}
 	return "", name
+}
+
+// resolveObjectName disambiguates a user-supplied helper-command argument between
+// a literal dotted identifier and a schema-qualified reference. The shell tokenizer
+// strips the quotes the user typed, so "main.x" and main.x arrive identically and
+// the name alone cannot say which was meant. It prefers the literal reading: when
+// an object whose name is exactly tableName exists in the temp or main schema, the
+// name is returned whole (empty schema), so `.schema "main.x"` reaches a table
+// created as `CREATE TABLE "main.x"`. Otherwise a "main."/"temp."-prefixed name is
+// split, so `.schema main.user` still resolves the imported user table.
+func (s *Shell) resolveObjectName(ctx context.Context, tableName string) (schema, object string) {
+	if s.objectExists(ctx, tableName) {
+		return "", tableName
+	}
+	return splitTableQualifier(tableName)
+}
+
+// objectExists reports whether a table or view named exactly name exists in either
+// the temp or main schema. A failed lookup reports false so resolution falls back
+// to the syntactic schema-qualifier split.
+func (s *Shell) objectExists(ctx context.Context, name string) bool {
+	literal := "'" + strings.ReplaceAll(name, "'", "''") + "'"
+	res, err := s.usecases.query.Query(ctx,
+		"SELECT 1 FROM sqlite_temp_master WHERE name = "+literal+" AND type IN ('table', 'view') "+
+			"UNION ALL SELECT 1 FROM sqlite_master WHERE name = "+literal+" AND type IN ('table', 'view')")
+	if err != nil {
+		return false
+	}
+	return len(res.Records()) > 0
 }
 
 // isSchemaName reports whether prefix is a SQLite schema name a sqly session can

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+* Literal Dotted Object Names With A Schema Prefix: `.schema`, `.describe`, `.header`, and `.dump` now reach a table or view whose quoted literal name begins with `main.` or `temp.` (for example `CREATE TABLE "main.x"` or `CREATE VIEW "temp.v"`). Because the shell strips the quotes the user typed, a name is read as a schema qualifier only when no object literally carries it. `.tables` prints such a name quoted so it pastes back into these commands.
+
 ### Documentation
 * Add README demos for cross-format JOIN (Parquet and CSV), --output format conversion (JSON, Parquet, Excel), and directory import across formats, recorded with VHS.
 

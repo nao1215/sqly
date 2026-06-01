@@ -4,6 +4,7 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -146,7 +147,11 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 
 // List get records in the specified table
 func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
-	table, err := r.Query(ctx, "SELECT * FROM "+infra.QuoteTableRef(tableName))
+	ref, err := r.resolveTableRef(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table, err := r.Query(ctx, "SELECT * FROM "+ref)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +162,54 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 // name rather than the name extractTableName parses from the query, which would
 // truncate a name containing spaces (e.g. "two words" -> "two").
 func (r *sqlite3Repository) Header(ctx context.Context, tableName string) (*model.Table, error) {
-	table, err := r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", infra.QuoteTableRef(tableName)))
+	ref, err := r.resolveTableRef(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table, err := r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", ref))
 	if err != nil {
 		return nil, err
 	}
 	return model.NewTable(tableName, table.Header(), table.Records()), nil
+}
+
+// resolveTableRef returns the quoted SQL reference a helper command should query
+// for tableName, disambiguating a literal dotted name from a schema-qualified one.
+// It prefers the literal reading: when an object whose name is exactly tableName
+// exists, the name is quoted whole (so `.dump "main.x"` reaches a table created as
+// `CREATE TABLE "main.x"`); otherwise a "main."/"temp."-prefixed name keeps its
+// schema-qualified quoting (so `.dump main.user` resolves the imported user table).
+func (r *sqlite3Repository) resolveTableRef(ctx context.Context, tableName string) (string, error) {
+	exists, err := r.objectExists(ctx, tableName)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		return infra.Quote(tableName), nil
+	}
+	return infra.QuoteTableRef(tableName), nil
+}
+
+// objectExists reports whether a table or view whose name is exactly name exists
+// in either the temp or main schema.
+func (r *sqlite3Repository) objectExists(ctx context.Context, name string) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	const query = "SELECT 1 FROM sqlite_temp_master WHERE name = ? AND type IN ('table', 'view') " +
+		"UNION ALL SELECT 1 FROM sqlite_master WHERE name = ? AND type IN ('table', 'view') LIMIT 1"
+	var dummy int
+	err = tx.QueryRowContext(ctx, query, name, name).Scan(&dummy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
 }
 
 // Query execute "SELECT" or "EXPLAIN" query

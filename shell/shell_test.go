@@ -3425,6 +3425,135 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 	})
 }
 
+// TestShellExec_LiteralDottedObjectNames verifies that the helper commands reach a
+// table or view whose quoted literal name happens to begin with a "main."/"temp."
+// prefix (e.g. `CREATE TABLE "main.x"`). The prefix is a real schema qualifier only
+// when no object literally carries that name, so the literal object must win.
+func TestShellExec_LiteralDottedObjectNames(t *testing.T) {
+	newImportedShell := func(t *testing.T) (*Shell, func()) {
+		t.Helper()
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "user.csv")}); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		return shell, cleanup
+	}
+
+	// Each case creates one literal-named object and then inspects it. The literal
+	// name carries a column unique to the object so a wrong resolution (an empty or
+	// imported result) is detectable.
+	cases := []struct {
+		name   string
+		create string
+		object string // literal name as it reaches argv after quote stripping
+	}{
+		{"literal table main.x", `CREATE TABLE "main.x"(litcol INTEGER)`, "main.x"},
+		{"literal table temp.x", `CREATE TABLE "temp.x"(litcol INTEGER)`, "temp.x"},
+		{"literal view main.v", `CREATE VIEW "main.v" AS SELECT 1 AS litcol`, "main.v"},
+		{"literal view temp.v", `CREATE VIEW "temp.v" AS SELECT 1 AS litcol`, "temp.v"},
+	}
+
+	for _, tc := range cases {
+		t.Run(".schema reaches "+tc.name, func(t *testing.T) {
+			shell, cleanup := newImportedShell(t)
+			defer cleanup()
+			if err := shell.exec(context.Background(), tc.create); err != nil {
+				t.Fatalf("create error: %v", err)
+			}
+			got, err := getExecStdOutput(t, shell.exec, `.schema "`+tc.object+`"`)
+			if err != nil {
+				t.Fatalf(".schema %q error: %v", tc.object, err)
+			}
+			if !strings.Contains(string(got), "litcol") {
+				t.Fatalf(".schema %q missing the literal object definition: %q", tc.object, got)
+			}
+		})
+
+		t.Run(".describe reaches "+tc.name, func(t *testing.T) {
+			shell, cleanup := newImportedShell(t)
+			defer cleanup()
+			if err := shell.exec(context.Background(), tc.create); err != nil {
+				t.Fatalf("create error: %v", err)
+			}
+			got, err := getExecStdOutput(t, shell.exec, `.describe "`+tc.object+`"`)
+			if err != nil {
+				t.Fatalf(".describe %q error: %v", tc.object, err)
+			}
+			if !strings.Contains(string(got), "litcol") {
+				t.Fatalf(".describe %q missing the literal column: %q", tc.object, got)
+			}
+		})
+
+		t.Run(".header reaches "+tc.name, func(t *testing.T) {
+			shell, cleanup := newImportedShell(t)
+			defer cleanup()
+			if err := shell.exec(context.Background(), tc.create); err != nil {
+				t.Fatalf("create error: %v", err)
+			}
+			got, err := getExecStdOutput(t, shell.exec, `.header "`+tc.object+`"`)
+			if err != nil {
+				t.Fatalf(".header %q error: %v", tc.object, err)
+			}
+			if !strings.Contains(string(got), "litcol") {
+				t.Fatalf(".header %q missing the literal column: %q", tc.object, got)
+			}
+		})
+
+		t.Run(".dump reaches "+tc.name, func(t *testing.T) {
+			shell, cleanup := newImportedShell(t)
+			defer cleanup()
+			if err := shell.exec(context.Background(), tc.create); err != nil {
+				t.Fatalf("create error: %v", err)
+			}
+			dest := filepath.Join(t.TempDir(), "out.csv")
+			if err := shell.exec(context.Background(), `.dump "`+tc.object+`" `+dest); err != nil {
+				t.Fatalf(".dump %q error: %v", tc.object, err)
+			}
+			data, err := os.ReadFile(dest) //nolint:gosec // test path
+			if err != nil {
+				t.Fatalf("reading dump output: %v", err)
+			}
+			if !strings.Contains(string(data), "litcol") {
+				t.Fatalf(".dump %q wrote the wrong table: %q", tc.object, data)
+			}
+		})
+	}
+
+	// A literal "main.user" and the schema-qualified main.user can coexist: the
+	// literal object must win, while a name with no literal match still resolves the
+	// imported table. This guards the disambiguation rule against both readings.
+	t.Run("literal name wins over a same-named schema qualifier", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "main.user"(litcol INTEGER)`); err != nil {
+			t.Fatalf("create error: %v", err)
+		}
+		gotLiteral, err := getExecStdOutput(t, shell.exec, `.describe "main.user"`)
+		if err != nil {
+			t.Fatalf(".describe literal error: %v", err)
+		}
+		if !strings.Contains(string(gotLiteral), "litcol") {
+			t.Fatalf(".describe did not prefer the literal table: %q", gotLiteral)
+		}
+	})
+
+	t.Run("schema qualifier still resolves when no literal object exists", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		got, err := getExecStdOutput(t, shell.exec, ".describe main.user")
+		if err != nil {
+			t.Fatalf(".describe main.user error: %v", err)
+		}
+		if !strings.Contains(string(got), "first_name") {
+			t.Fatalf(".describe main.user lost the imported table: %q", got)
+		}
+	})
+}
+
 // TestRunDirectSQLRejectsMultipleStatements verifies that direct --sql refuses
 // multi-statement input instead of silently running every statement and keeping
 // only the last result.
