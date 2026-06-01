@@ -1558,3 +1558,61 @@ func BenchmarkAdapterLoadFiles(b *testing.B) {
 		}
 	}
 }
+
+// TestFileSQLAdapter_EmptyJSONLikeInputs verifies that an empty JSON array and an
+// empty JSONL file import as zero-row tables (with filesql's "data" column)
+// instead of failing as an empty data source. Ref #388, #389.
+func TestFileSQLAdapter_EmptyJSONLikeInputs(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		file    string
+		content string
+		table   string
+	}{
+		{"empty JSON array", "empty.json", "[]", "empty"},
+		{"whitespace-only JSON", "blank.json", "   \n", "blank"},
+		{"empty JSONL", "empty.jsonl", "", "empty"},
+		{"blank-line-only JSONL", "blank.jsonl", "\n\n", "blank"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			path := filepath.Join(dir, tc.file)
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			sharedDB, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = sharedDB.Close() }()
+
+			adapter := NewFileSQLAdapter(sharedDB)
+			ctx := context.Background()
+			if err := adapter.LoadFile(ctx, path); err != nil {
+				t.Fatalf("LoadFile of empty JSON input failed: %v", err)
+			}
+
+			var count int
+			if err := sharedDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+QuoteIdentifier(tc.table)).Scan(&count); err != nil {
+				t.Fatalf("query zero-row table: %v", err)
+			}
+			if count != 0 {
+				t.Errorf("row_count = %d, want 0", count)
+			}
+
+			var col string
+			if err := sharedDB.QueryRowContext(ctx, "SELECT name FROM pragma_table_info("+QuoteIdentifier(tc.table)+")").Scan(&col); err != nil {
+				t.Fatalf("read column: %v", err)
+			}
+			if col != "data" {
+				t.Errorf("column = %q, want \"data\"", col)
+			}
+		})
+	}
+}

@@ -76,6 +76,17 @@ type Shell struct {
 	// provenance), but write-back still rejects them because a directory import
 	// is not a single editable source the session owns. Ref #326, #261.
 	dirImported map[string]bool
+	// dataChanged is set when an executed statement actually changed table data
+	// (a DML that affected at least one row, or a DML RETURNING that returned at
+	// least one row). A non-interactive run only writes back when data changed, so
+	// an EXPLAIN or a zero-row DML leaves source files untouched. Ref #402, #403,
+	// #404, #405.
+	dataChanged bool
+	// pendingAffected holds "affected is N row(s)" lines produced during a
+	// write-back run. They are buffered rather than printed immediately and flushed
+	// to stdout only after write-back succeeds, so a run that fails during
+	// write-back leaves stdout free of success counts. Ref #396.
+	pendingAffected []string
 }
 
 type promptSession interface {
@@ -224,7 +235,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		if err := s.execSQL(ctx, s.argument.Query); err != nil {
 			return err
 		}
-		return s.finishNonInteractive(ctx, s.argument.Query)
+		return s.finishNonInteractive(ctx)
 	}
 
 	// --sql-file runs the loaded script with the same statement-splitting and
@@ -241,7 +252,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		if !ranAny {
 			return nil
 		}
-		return s.finishNonInteractive(ctx, sqlScript)
+		return s.finishNonInteractive(ctx)
 	}
 
 	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
@@ -266,7 +277,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		if !ranAny {
 			return nil
 		}
-		return s.finishNonInteractive(ctx, batchScript)
+		return s.finishNonInteractive(ctx)
 	}
 
 	// Start shell
@@ -599,16 +610,16 @@ func filterHasPrefix(suggestions []Suggest, prefix string, _ bool) []Suggest {
 // getRegularCompletions returns the original completion logic
 func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Suggest {
 	suggest := []Suggest{
-		{Text: "SELECT", Description: "SQL: get records from table"},
+		{Text: kwSelect, Description: "SQL: get records from table"},
 		{Text: "INSERT INTO", Description: "SQL: creates one or more new records in an existing table"},
-		{Text: "UPDATE", Description: "SQL: update one or more records"},
+		{Text: kwUpdate, Description: "SQL: update one or more records"},
 		{Text: "AS", Description: "SQL: set alias name"},
 		{Text: "FROM", Description: "SQL: specify the table"},
 		{Text: "WHERE", Description: "SQL: search condition"},
 		{Text: "GROUP BY", Description: "SQL: groping records"},
 		{Text: "HAVING", Description: "SQL: extraction conditions for records after grouping"},
 		{Text: "ORDER BY", Description: "SQL: sort result"},
-		{Text: "VALUES", Description: "SQL: specify values to be inserted or updated"},
+		{Text: kwValues, Description: "SQL: specify values to be inserted or updated"},
 		{Text: "SET", Description: "SQL: specify values to be updated"},
 		{Text: "DELETE FROM", Description: "SQL: specify tables to be deleted"},
 		{Text: "IN", Description: "SQL: condition grouping"},
@@ -732,12 +743,31 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if err != nil {
 		return err
 	}
+	// Track whether this statement actually changed data, so write-back runs only
+	// for a run that modified a table (not an EXPLAIN or a zero-row DML). Ref #402,
+	// #403, #404, #405.
+	if statementModifiesData(req) {
+		if table != nil {
+			if len(table.Records()) > 0 {
+				s.dataChanged = true
+			}
+		} else if affectedRows > 0 {
+			s.dataChanged = true
+		}
+	}
 	if table == nil {
 		// --output is only meaningful for a statement that produces a rowset. An
 		// INSERT/UPDATE/DELETE without RETURNING produces only an affected-row
 		// count, so reject --output instead of silently ignoring it. Ref #364.
 		if s.argument.NeedsOutputToFile() {
 			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
+		}
+		// When a write-back is requested, buffer the affected-row count instead of
+		// printing it now: it is flushed to stdout only after write-back succeeds,
+		// so a run that fails during write-back leaves stdout clean. Ref #396.
+		if s.saveRequested() {
+			s.pendingAffected = append(s.pendingAffected, fmt.Sprintf("affected is %d row(s)\n", affectedRows))
+			return nil
 		}
 		fmt.Fprintf(config.Stdout, "affected is %d row(s)\n", affectedRows)
 		return nil
@@ -757,6 +787,12 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 // resolved from both the chosen output mode and the destination path, so a path
 // like "result.parquet" or "out.ndjson.gz" is honored even without a mode flag.
 func (s *Shell) outputToFile(table *model.Table) error {
+	// ACH and Fedwire are input-only formats: sqly can read them but cannot
+	// produce them, so reject such a destination instead of silently writing CSV
+	// bytes to a misleading .ach/.fed path. Ref #421.
+	if model.IsInputOnlyExtension(s.argument.Output.FilePath) {
+		return fmt.Errorf("--output destination %q uses an input-only format (ACH/Fedwire); export to csv/tsv/json/parquet instead", s.argument.Output.FilePath)
+	}
 	mode := s.state.mode.PrintMode
 	explicit := model.ExportFormatFromPrintMode(mode)
 	exportFmt, compression, err := model.ResolveOutputTarget(s.argument.Output.FilePath, explicit, mode != model.PrintModeTable)
@@ -796,11 +832,20 @@ func (s *Shell) outputAliasesImportedSource(path string) (string, bool) {
 	return "", false
 }
 
-// ensureNotDirectory rejects an output destination that already exists as a
+// ensureNotDirectory rejects an output destination that is, or looks like, a
 // directory. Without this check the path gets a format extension appended,
-// silently writing to a sibling file (e.g. "out" -> "out.csv") instead of the
-// directory the user named. A non-existent path is fine; it is created on write.
+// silently writing to a sibling file (e.g. "out" -> "out.csv") or, for a
+// directory-like path ending in a separator, a hidden file ("outdir/" ->
+// "outdir/.csv"). A path ending in a path separator is rejected up front (Ref
+// #419, #420), as is an existing directory. A plain non-existent path is fine; it
+// is created on write.
 func ensureNotDirectory(path string) error {
+	if path == "" {
+		return nil
+	}
+	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(os.PathSeparator)) {
+		return fmt.Errorf("output destination %q ends with a path separator; specify a file path, not a directory", path)
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil //nolint:nilerr // a missing path is created at write time; other errors surface there

@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -253,17 +254,13 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 		t.printMarkdownTable(out)
 		return nil
 	case PrintModeCSV:
-		t.printCSV(out)
-		return nil
+		return t.printCSV(out)
 	case PrintModeTSV:
-		t.printTSV(out)
-		return nil
+		return t.printTSV(out)
 	case PrintModeLTSV:
-		t.printLTSV(out)
-		return nil
+		return t.printLTSV(out)
 	case PrintModeExcel:
-		t.printExcel(out)
-		return nil
+		return t.printExcel(out)
 	case PrintModeJSON:
 		return t.printJSON(out)
 	case PrintModeNDJSON:
@@ -271,8 +268,7 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 	case PrintModeParquet:
 		// Export-only: on screen, render like CSV. The Parquet file is written
 		// by the export path (.dump / --output), not here.
-		t.printCSV(out)
-		return nil
+		return t.printCSV(out)
 	default:
 		return t.printTable(out)
 	}
@@ -342,12 +338,23 @@ func (t *Table) printTable(out io.Writer) error {
 	return nil
 }
 
+// markdownCell renders a cell for a Markdown table. A "|" is escaped so it does
+// not start a new column, and an embedded newline is replaced with "<br>" so a
+// multi-line value stays on one physical row instead of breaking the table. Ref
+// #426.
+func markdownCell(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	s = strings.ReplaceAll(s, "|", "\\|")
+	return strings.ReplaceAll(s, "\n", "<br>")
+}
+
 // printMarkdownTable print all record with header; output format is markdown
 func (t *Table) printMarkdownTable(out io.Writer) {
 	// Print header row
 	fmt.Fprint(out, "|")
 	for _, h := range t.Header() {
-		fmt.Fprintf(out, " %s |", strings.ReplaceAll(h, "|", "\\|"))
+		fmt.Fprintf(out, " %s |", markdownCell(h))
 	}
 	fmt.Fprintln(out)
 
@@ -362,43 +369,80 @@ func (t *Table) printMarkdownTable(out io.Writer) {
 	for _, record := range t.Records() {
 		fmt.Fprint(out, "|")
 		for _, cell := range record {
-			fmt.Fprintf(out, " %s |", strings.ReplaceAll(cell, "|", "\\|"))
+			fmt.Fprintf(out, " %s |", markdownCell(cell))
 		}
 		fmt.Fprintln(out)
 	}
 }
 
-// printCSV print all record with header; output format is csv
-func (t *Table) printCSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header(), ","))
-	for _, v := range t.Records() {
-		fmt.Fprintln(out, strings.Join(v, ","))
-	}
+// printCSV print all record with header; output format is csv. It uses a CSV
+// writer so values that contain commas, quotes, or newlines are quoted and
+// escaped, matching the --output file path and staying valid when redirected to
+// a file or piped to a CSV-aware tool. Ref #380.
+func (t *Table) printCSV(out io.Writer) error {
+	return t.writeDelimited(out, ',')
 }
 
-// printTSV print all record with header; output format is tsv
-func (t *Table) printTSV(out io.Writer) {
-	fmt.Fprintln(out, strings.Join(t.Header(), "\t"))
-	for _, v := range t.Records() {
-		fmt.Fprintln(out, strings.Join(v, "\t"))
-	}
+// printTSV print all record with header; output format is tsv. Like printCSV it
+// uses a writer that quotes values containing the delimiter, quotes, or newlines,
+// so the stream stays a valid tabular record when redirected or piped. Ref #381.
+func (t *Table) printTSV(out io.Writer) error {
+	return t.writeDelimited(out, '\t')
 }
 
-// Print print all record with header; output format is ltsv
-func (t *Table) printLTSV(out io.Writer) {
+// writeDelimited writes the header and records as delimiter-separated values
+// using encoding/csv, so the stdout path matches the file-export path exactly.
+func (t *Table) writeDelimited(out io.Writer, comma rune) error {
+	w := csv.NewWriter(out)
+	w.Comma = comma
+	if err := w.Write([]string(t.Header())); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+	for _, v := range t.Records() {
+		if err := w.Write([]string(v)); err != nil {
+			return fmt.Errorf("failed to write record: %w", err)
+		}
+	}
+	w.Flush()
+	return w.Error()
+}
+
+// printLTSV print all record with header; output format is ltsv. LTSV has no
+// escaping mechanism: a tab separates fields and a newline ends a record, so a
+// value containing either cannot be represented losslessly. Reject such a value
+// up front instead of emitting output that no longer round-trips as LTSV. Ref
+// #382, #383.
+func (t *Table) printLTSV(out io.Writer) error {
 	for _, v := range t.Records() {
 		r := make(Record, 0, len(v))
 		for i, data := range v {
+			if err := ensureLTSVRepresentable(t.Header()[i], data); err != nil {
+				return err
+			}
 			r = append(r, t.Header()[i]+":"+data)
 		}
 		fmt.Fprintln(out, strings.Join(r, "\t"))
 	}
+	return nil
+}
+
+// ensureLTSVRepresentable reports an error when a label or value contains a byte
+// LTSV cannot represent (tab or newline), so the caller rejects it before writing
+// output that cannot be re-imported as LTSV. Ref #382, #383.
+func ensureLTSVRepresentable(label, value string) error {
+	if strings.ContainsAny(label, "\t\n\r") {
+		return fmt.Errorf("ltsv: column name %q contains a tab or newline, which LTSV cannot represent", label)
+	}
+	if strings.ContainsAny(value, "\t\n\r") {
+		return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
+	}
+	return nil
 }
 
 // printExcel print all record in excel format.
 // This is the same as printCSV.
-func (t *Table) printExcel(out io.Writer) {
-	t.printCSV(out)
+func (t *Table) printExcel(out io.Writer) error {
+	return t.printCSV(out)
 }
 
 // rowToJSONObject builds a JSON object for one record, preserving the header
@@ -441,9 +485,27 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+// duplicateColumnName returns the first column name that appears more than once
+// in the header, or "" when all names are unique. JSON objects with duplicate
+// keys are ambiguous for downstream parsers, so the JSON/NDJSON writers reject
+// such a result instead of emitting it. Ref #384, #385.
+func (t *Table) duplicateColumnName() string {
+	seen := make(map[string]struct{}, len(t.header))
+	for _, h := range t.header {
+		if _, ok := seen[h]; ok {
+			return h
+		}
+		seen[h] = struct{}{}
+	}
+	return ""
+}
+
 // printJSON prints all records as a JSON array of objects. An empty result set
 // prints "[]" so consumers always receive valid JSON.
 func (t *Table) printJSON(out io.Writer) error {
+	if dup := t.duplicateColumnName(); dup != "" {
+		return fmt.Errorf("json output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
+	}
 	if len(t.Records()) == 0 {
 		_, err := fmt.Fprintln(out, "[]")
 		return err
@@ -471,6 +533,9 @@ func (t *Table) printJSON(out io.Writer) error {
 // printNDJSON prints one JSON object per line (newline-delimited JSON). An empty
 // result set prints nothing — the empty NDJSON stream.
 func (t *Table) printNDJSON(out io.Writer) error {
+	if dup := t.duplicateColumnName(); dup != "" {
+		return fmt.Errorf("ndjson output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
+	}
 	for i, record := range t.Records() {
 		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {

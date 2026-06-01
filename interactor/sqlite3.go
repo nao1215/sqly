@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/nao1215/sqly/domain/model"
@@ -97,49 +96,34 @@ func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64,
 // - For INSERT/UPDATE/DELETE: (nil, affected_rows, error)
 // - For unsupported commands: (nil, 0, error)
 func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
-	argv := strings.Split(trimWordGaps(statement), " ")
+	// Strip a leading BOM and leading comments so the statement classifies and
+	// runs the same way it does on the batch and --sql-file paths. Ref #386, #387.
+	stmt := stripSQLNoise(statement)
+	if stmt == "" {
+		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
+	}
+	// Rewrite shorthands the engine does not accept (e.g. "TABLE name"). Ref #408.
+	stmt = normalizeStatement(stmt)
 
-	// NOTE: SQLY uses SQLite3. There is some SQL that can be changed from non-support
-	// to support in the future. Currently, it is not supported because it is not needed
-	// for developer ( == me:) ) use cases.
-	switch {
-	case si.sql.isDDL(argv[0]):
-		return nil, 0, errors.New("not support data definition language: " + strings.Join(si.sql.ddl, ", "))
-	case si.sql.isTCL(argv[0]):
-		return nil, 0, errors.New("not support transaction control language: " + strings.Join(si.sql.tcl, ", "))
-	case si.sql.isDCL(argv[0]):
-		return nil, 0, errors.New("not support data control language: " + strings.Join(si.sql.dcl, ", "))
-	case !si.sql.isDML(argv[0]):
-		return nil, 0, errors.New("this input is not sql query or sqly helper command: " + color.CyanString(statement))
-	case si.sql.isSelect(argv[0]) || si.sql.isExplain(argv[0]) || si.sql.isWithCTE(argv[0]):
-		table, err := si.Query(ctx, statement)
+	// sqly targets SQLite, so every valid SQLite statement is accepted and routed
+	// by shape: a rowset-producing statement runs on the query path and prints its
+	// rows, while any other statement (DML without RETURNING, DDL, transaction
+	// control, ATTACH, ANALYZE, ...) runs on the exec path and reports an
+	// affected-row count. SQLite is the authority on validity, so an unsupported
+	// statement surfaces SQLite's own error instead of a sqly-specific rejection.
+	if si.sql.producesRowset(stmt) {
+		table, err := si.Query(ctx, stmt)
 		if err != nil {
 			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}
 		return table, 0, nil
-	case si.sql.isInsert(argv[0]) || si.sql.isUpdate(argv[0]) || si.sql.isDelete(argv[0]):
-		// A RETURNING clause turns INSERT/UPDATE/DELETE into a rowset-producing
-		// statement. Run it through the query path so the returned rows are
-		// captured and can be printed or exported, instead of being discarded as a
-		// bare affected-row count. Ref #363, #368.
-		if hasReturningClause(statement) {
-			table, err := si.Query(ctx, statement)
-			if err != nil {
-				return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
-			}
-			return table, 0, nil
-		}
-		affectedRows, err := si.r.Exec(ctx, statement)
-		if err != nil {
-			return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
-		}
-		return nil, affectedRows, nil
-	default:
-		return nil, 0, fmt.Errorf("%s\n%s: %s\n%s",
-			color.HiRedString("*** sqly bug ***"),
-			"please report this log", color.CyanString(statement),
-			"Web site: https://github.com/nao1215/sqly/issues")
 	}
+
+	affectedRows, err := si.r.Exec(ctx, stmt)
+	if err != nil {
+		return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
+	}
+	return nil, affectedRows, nil
 }
 
 // LoadFiles loads multiple files or directories into the database.

@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/csv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -766,4 +767,106 @@ func TestIsAllNumeric(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTablePrintEscaping covers the v0.19.0 output-format bugs: CSV/TSV stdout
+// must stay valid when values contain the delimiter, quotes, or newlines (#380,
+// #381); LTSV must reject values it cannot represent losslessly (#382, #383);
+// JSON/NDJSON must reject duplicate column names (#384, #385); and Markdown must
+// keep a row on one physical line when a value contains a newline (#426).
+func TestTablePrintEscaping(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CSV quotes a value containing a comma, quote, and newline", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"c"}, []Record{{"a,\"b\"\nc"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeCSV); err != nil {
+			t.Fatalf("Print CSV: %v", err)
+		}
+		// Re-parse to confirm the round trip yields the original single field.
+		r := csv.NewReader(bytes.NewReader(buf.Bytes()))
+		rows, err := r.ReadAll()
+		if err != nil {
+			t.Fatalf("output is not valid CSV: %v", err)
+		}
+		if len(rows) != 2 || len(rows[1]) != 1 || rows[1][0] != "a,\"b\"\nc" {
+			t.Errorf("CSV did not round-trip, got rows=%v", rows)
+		}
+	})
+
+	t.Run("TSV quotes a value containing a tab and newline", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"c"}, []Record{{"a\tb\nc"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeTSV); err != nil {
+			t.Fatalf("Print TSV: %v", err)
+		}
+		r := csv.NewReader(bytes.NewReader(buf.Bytes()))
+		r.Comma = '\t'
+		rows, err := r.ReadAll()
+		if err != nil {
+			t.Fatalf("output is not valid TSV: %v", err)
+		}
+		if len(rows) != 2 || rows[1][0] != "a\tb\nc" {
+			t.Errorf("TSV did not round-trip, got rows=%v", rows)
+		}
+	})
+
+	t.Run("LTSV rejects a value containing a tab", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"c"}, []Record{{"a\tb"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeLTSV); err == nil {
+			t.Errorf("want error for tab in LTSV value, got output %q", buf.String())
+		}
+	})
+
+	t.Run("LTSV rejects a value containing a newline", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"c"}, []Record{{"a\nb"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeLTSV); err == nil {
+			t.Errorf("want error for newline in LTSV value, got output %q", buf.String())
+		}
+	})
+
+	t.Run("JSON rejects duplicate column names", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeJSON); err == nil {
+			t.Errorf("want error for duplicate JSON keys, got output %q", buf.String())
+		}
+	})
+
+	t.Run("NDJSON rejects duplicate column names", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeNDJSON); err == nil {
+			t.Errorf("want error for duplicate NDJSON keys, got output %q", buf.String())
+		}
+	})
+
+	t.Run("Markdown keeps a newline value on one physical row", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"x", "y"}, []Record{{"a\nb", "c|d"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeMarkdownTable); err != nil {
+			t.Fatalf("Print markdown: %v", err)
+		}
+		lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+		// header, separator, and exactly one data row.
+		if len(lines) != 3 {
+			t.Fatalf("want 3 markdown lines, got %d: %q", len(lines), buf.String())
+		}
+		dataRow := string(lines[2])
+		if !bytes.Contains(lines[2], []byte("a<br>b")) {
+			t.Errorf("newline not rendered as <br>: %q", dataRow)
+		}
+		if !bytes.Contains(lines[2], []byte("c\\|d")) {
+			t.Errorf("pipe not escaped: %q", dataRow)
+		}
+	})
 }

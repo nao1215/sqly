@@ -365,3 +365,28 @@ func TestExportFormatFromPrintMode(t *testing.T) {
 		})
 	}
 }
+
+// TestIsInputOnlyExtension covers rejecting ACH/Fedwire export destinations,
+// including compressed variants. Ref #421, #422.
+func TestIsInputOnlyExtension(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"out.ach", true},
+		{"out.fed", true},
+		{"out.ACH", true},
+		{"out.ach.gz", true},
+		{"out.fed.zst", true},
+		{"out.csv", false},
+		{"out.csv.gz", false},
+		{"out.parquet", false},
+		{"out", false},
+	}
+	for _, tt := range tests {
+		if got := IsInputOnlyExtension(tt.path); got != tt.want {
+			t.Errorf("IsInputOnlyExtension(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}

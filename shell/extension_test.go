@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -104,18 +105,33 @@ func TestValidatePath(t *testing.T) {
 		name        string
 		path        string
 		shouldError bool
+		// unixOnly marks a case that depends on the Unix system-directory block,
+		// which keys on Unix absolute paths (e.g. "/etc"). On Windows filepath.Abs
+		// rewrites such a path (e.g. "C:\\etc\\passwd"), so the block does not apply
+		// and the case is skipped. Ref #427, #428.
+		unixOnly bool
 	}{
-		{"Normal file path", "test.csv", false},
-		{"Absolute path", "/tmp/test.csv", false},
-		{"Single parent directory", "../test.csv", false},
-		{"Two parent directories", "../../test.csv", false},
-		{"Dangerous path traversal", "../../../etc/passwd", true},
-		{"Clean path functionality", "./test/../test.csv", false},
+		{name: "Normal file path", path: "test.csv", shouldError: false},
+		{name: "Absolute path", path: "/tmp/test.csv", shouldError: false},
+		{name: "Single parent directory", path: "../test.csv", shouldError: false},
+		{name: "Two parent directories", path: "../../test.csv", shouldError: false},
+		{name: "Dangerous path traversal", path: "../../../etc/passwd", shouldError: true},
+		{name: "Clean path functionality", path: "./test/../test.csv", shouldError: false},
+		// /dev/shm and /dev/fd hold legitimate user inputs and are accepted, while
+		// other system directories stay blocked. Ref #427, #428.
+		{name: "dev shm user file is allowed", path: "/dev/shm/sqly/user.csv", shouldError: false},
+		{name: "dev fd descriptor is allowed", path: "/dev/fd/63", shouldError: false},
+		{name: "dev block device is blocked", path: "/dev/sda", shouldError: true, unixOnly: true},
+		{name: "etc is blocked", path: "/etc/passwd", shouldError: true, unixOnly: true},
+		{name: "proc is blocked", path: "/proc/cpuinfo", shouldError: true, unixOnly: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			if tt.unixOnly && runtime.GOOS == "windows" {
+				t.Skip("system-directory block applies to Unix absolute paths only")
+			}
 			_, err := validatePath(tt.path)
 			if tt.shouldError && err == nil {
 				t.Errorf("validatePath(%s) expected error but got none", tt.path)

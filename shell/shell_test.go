@@ -709,7 +709,7 @@ func TestShellExec(t *testing.T) {
 		if got == nil {
 			t.Fatal("expected error when dumping to .ach format, got nil")
 		}
-		if !strings.Contains(got.Error(), "ACH format") {
+		if !strings.Contains(got.Error(), "ACH/Fedwire") {
 			t.Errorf("expected ACH format error, got: %v", got)
 		}
 	})
@@ -730,7 +730,7 @@ func TestShellExec(t *testing.T) {
 		if got == nil {
 			t.Fatal("expected error when dumping to .fed format, got nil")
 		}
-		if !strings.Contains(got.Error(), "Fedwire format") {
+		if !strings.Contains(got.Error(), "ACH/Fedwire") {
 			t.Errorf("expected Fedwire format error, got: %v", got)
 		}
 	})

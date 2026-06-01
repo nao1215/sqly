@@ -37,15 +37,13 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return errors.New(".dump requires a non-empty destination path")
 	}
 
-	// Block round-trip export to .ach/.fed format before normalization.
-	// These formats require multi-table coordination that .dump cannot provide.
-	// Exporting ACH/Fedwire tables to CSV/TSV/etc via .dump is fine.
-	lowerUserPath := strings.ToLower(userPath)
-	if strings.HasSuffix(lowerUserPath, ".ach") {
-		return fmt.Errorf(".dump does not support ACH format output; use csv/tsv/xlsx instead (e.g., .dump %s %s.csv)", tableName, strings.TrimSuffix(userPath, filepath.Ext(userPath)))
-	}
-	if strings.HasSuffix(lowerUserPath, ".fed") {
-		return fmt.Errorf(".dump does not support Fedwire format output; use csv/tsv/xlsx instead (e.g., .dump %s %s.csv)", tableName, strings.TrimSuffix(userPath, filepath.Ext(userPath)))
+	// Block round-trip export to ACH/Fedwire format before normalization. These
+	// formats require multi-record coordination that .dump cannot provide.
+	// Exporting ACH/Fedwire tables to CSV/TSV/etc via .dump is fine. The check
+	// strips any compression suffix, so .ach.gz and .fed.gz are rejected too.
+	// Ref #422.
+	if model.IsInputOnlyExtension(userPath) {
+		return fmt.Errorf(".dump does not support ACH/Fedwire format output; use csv/tsv/xlsx instead (e.g., .dump %s %s.csv)", tableName, strings.TrimSuffix(userPath, filepath.Ext(userPath)))
 	}
 
 	// Reject a directory destination before doing any work, so it is not
@@ -67,6 +65,13 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return err
 	}
 	filePath := model.BuildOutputPath(userPath, exportFmt, compression)
+	// Refuse a destination that aliases an imported source file, including symlink
+	// aliases. A destructive source overwrite must go through .save --force, not
+	// .dump, so a stray .dump cannot silently rewrite the dataset in another
+	// format. Ref #398, #418.
+	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
+		return fmt.Errorf(".dump destination %s is the source file for table %q; use .save --force to overwrite a source", filePath, name)
+	}
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
 	}
