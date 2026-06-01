@@ -273,6 +273,45 @@ func (c *MockSQLite3RepositoryQueryCall) DoAndReturn(f func(context.Context, str
 	return c
 }
 
+// SchemaObjects mocks base method.
+func (m *MockSQLite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SchemaObjects", ctx)
+	ret0, _ := ret[0].([]*model.Table)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SchemaObjects indicates an expected call of SchemaObjects.
+func (mr *MockSQLite3RepositoryMockRecorder) SchemaObjects(ctx any) *MockSQLite3RepositorySchemaObjectsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchemaObjects", reflect.TypeOf((*MockSQLite3Repository)(nil).SchemaObjects), ctx)
+	return &MockSQLite3RepositorySchemaObjectsCall{Call: call}
+}
+
+// MockSQLite3RepositorySchemaObjectsCall wrap *gomock.Call
+type MockSQLite3RepositorySchemaObjectsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSQLite3RepositorySchemaObjectsCall) Return(arg0 []*model.Table, arg1 error) *MockSQLite3RepositorySchemaObjectsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSQLite3RepositorySchemaObjectsCall) Do(f func(context.Context) ([]*model.Table, error)) *MockSQLite3RepositorySchemaObjectsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSQLite3RepositorySchemaObjectsCall) DoAndReturn(f func(context.Context) ([]*model.Table, error)) *MockSQLite3RepositorySchemaObjectsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // TablesName mocks base method.
 func (m *MockSQLite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
 	m.ctrl.T.Helper()

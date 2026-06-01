@@ -870,3 +870,80 @@ func TestTablePrintEscaping(t *testing.T) {
 		}
 	})
 }
+
+// TestEnsureLTSVHeaderWritable verifies that LTSV output rejects column names that
+// are not valid LTSV labels and rejects duplicate labels, so LTSV output stays
+// valid and round-trippable. Ref #465, #466.
+func TestEnsureLTSVHeaderWritable(t *testing.T) {
+	t.Parallel()
+
+	valid := []Header{
+		{"x"},
+		{"user_name", "identifier"},
+		{"a.b", "c-d", "e_f"},
+		{"Col1", "Col2"},
+	}
+	for _, h := range valid {
+		if err := EnsureLTSVHeaderWritable(h); err != nil {
+			t.Errorf("EnsureLTSVHeaderWritable(%v) = %v, want nil", h, err)
+		}
+	}
+
+	invalid := []struct {
+		name   string
+		header Header
+	}{
+		{"colon in label", Header{"foo:bar"}},
+		{"space in label", Header{"foo bar"}},
+		{"tab in label", Header{"foo\tbar"}},
+		{"newline in label", Header{"foo\nbar"}},
+		{"empty label", Header{""}},
+		{"duplicate labels", Header{"x", "x"}},
+		{"duplicate among valid", Header{"a", "b", "a"}},
+	}
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := EnsureLTSVHeaderWritable(tt.header); err == nil {
+				t.Errorf("EnsureLTSVHeaderWritable(%v) = nil, want an error", tt.header)
+			}
+		})
+	}
+}
+
+// TestTablePrintLTSV_RejectsInvalidLabels verifies that printing a table as LTSV
+// fails for an invalid or duplicate label rather than emitting ambiguous output.
+// Ref #465, #466.
+func TestTablePrintLTSV_RejectsInvalidLabels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		header Header
+	}{
+		{"label with colon", Header{"foo:bar"}},
+		{"duplicate labels", Header{"x", "x"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tbl := NewTable("t", tt.header, []Record{make(Record, len(tt.header))})
+			var buf bytes.Buffer
+			if err := tbl.Print(&buf, PrintModeLTSV); err == nil {
+				t.Errorf("Print(LTSV) for header %v = nil error, want rejection; output=%q", tt.header, buf.String())
+			}
+		})
+	}
+
+	t.Run("valid labels still print", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"a", "b"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeLTSV); err != nil {
+			t.Fatalf("Print(LTSV) for a valid header returned error: %v", err)
+		}
+		if got := buf.String(); got != "a:1\tb:2\n" {
+			t.Errorf("Print(LTSV) = %q, want %q", got, "a:1\tb:2\n")
+		}
+	})
+}

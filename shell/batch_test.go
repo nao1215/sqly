@@ -125,3 +125,197 @@ func TestScriptModifiesData(t *testing.T) {
 		})
 	}
 }
+
+// TestSplitSQLStatements_TriggerBody verifies that a CREATE TRIGGER definition is
+// kept as a single statement even though its BEGIN ... END body contains inner
+// semicolons, while ordinary semicolon-terminated statements still split. Ref #468.
+func TestSplitSQLStatements_TriggerBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		input     string
+		wantStmts []string
+		wantRem   string
+	}{
+		{
+			name:      "trigger with one inner statement stays whole",
+			input:     "CREATE TRIGGER tg AFTER UPDATE ON t BEGIN\n  UPDATE t SET y=1 WHERE id=2;\nEND;\n",
+			wantStmts: []string{"CREATE TRIGGER tg AFTER UPDATE ON t BEGIN\n  UPDATE t SET y=1 WHERE id=2;\nEND"},
+			wantRem:   "\n",
+		},
+		{
+			name:      "trigger with multiple inner statements stays whole",
+			input:     "CREATE TRIGGER tg AFTER INSERT ON t BEGIN UPDATE t SET a=1; UPDATE t SET b=2; END;",
+			wantStmts: []string{"CREATE TRIGGER tg AFTER INSERT ON t BEGIN UPDATE t SET a=1; UPDATE t SET b=2; END"},
+			wantRem:   "",
+		},
+		{
+			name:      "TEMP trigger stays whole",
+			input:     "CREATE TEMP TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1; END;",
+			wantStmts: []string{"CREATE TEMP TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1; END"},
+			wantRem:   "",
+		},
+		{
+			name:      "trigger body with CASE...END balances correctly",
+			input:     "CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a = CASE WHEN x THEN 1 ELSE 2 END; END; SELECT 1;",
+			wantStmts: []string{"CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a = CASE WHEN x THEN 1 ELSE 2 END; END", "SELECT 1"},
+			wantRem:   "",
+		},
+		{
+			name:      "trigger followed by a normal statement splits after END",
+			input:     "CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1; END; INSERT INTO t VALUES (1);",
+			wantStmts: []string{"CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1; END", "INSERT INTO t VALUES (1)"},
+			wantRem:   "",
+		},
+		{
+			name:      "ordinary statements still split on semicolons",
+			input:     "UPDATE t SET a=1; UPDATE t SET b=2;",
+			wantStmts: []string{"UPDATE t SET a=1", "UPDATE t SET b=2"},
+			wantRem:   "",
+		},
+		{
+			name:      "incomplete trigger is left in the remainder, not split",
+			input:     "CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1;\n",
+			wantStmts: nil,
+			wantRem:   "CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1;\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotStmts, gotRem := splitSQLStatements(tt.input)
+			if len(gotStmts) != len(tt.wantStmts) {
+				t.Fatalf("splitSQLStatements(%q) stmts = %#v, want %#v", tt.input, gotStmts, tt.wantStmts)
+			}
+			for i := range gotStmts {
+				if gotStmts[i] != tt.wantStmts[i] {
+					t.Errorf("stmt[%d] = %q, want %q", i, gotStmts[i], tt.wantStmts[i])
+				}
+			}
+			if gotRem != tt.wantRem {
+				t.Errorf("remainder = %q, want %q", gotRem, tt.wantRem)
+			}
+		})
+	}
+}
+
+// TestStatementResultMessage verifies that only a data-modifying statement reports
+// an affected-row count; a no-rowset DDL/PRAGMA/maintenance statement reports
+// neutral success instead of a misleading row count. Ref #439.
+func TestStatementResultMessage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		stmt     string
+		affected int64
+		want     string
+	}{
+		{"UPDATE reports affected count", "UPDATE t SET x=1", 3, "affected is 3 row(s)\n"},
+		{"INSERT reports affected count", "INSERT INTO t VALUES (1)", 1, "affected is 1 row(s)\n"},
+		{"DELETE reports affected count", "DELETE FROM t", 2, "affected is 2 row(s)\n"},
+		{"WITH feeding UPDATE reports affected count", "WITH s AS (SELECT 1) UPDATE t SET x=1", 5, "affected is 5 row(s)\n"},
+		{"CREATE VIEW reports neutral success", "CREATE VIEW v AS SELECT 1", 1, msgStatementExecuted},
+		{"CREATE TABLE reports neutral success", "CREATE TABLE t (id INTEGER)", 0, msgStatementExecuted},
+		{"DROP TABLE reports neutral success", "DROP TABLE t", 1, msgStatementExecuted},
+		{"PRAGMA reports neutral success", "PRAGMA user_version = 1", 1, msgStatementExecuted},
+		{"ANALYZE reports neutral success", "ANALYZE", 1, msgStatementExecuted},
+		{"REINDEX reports neutral success", "REINDEX", 0, msgStatementExecuted},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := statementResultMessage(tt.stmt, tt.affected); got != tt.want {
+				t.Errorf("statementResultMessage(%q, %d) = %q, want %q", tt.stmt, tt.affected, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFirstSaveIncompatibleStatement verifies that a non-interactive save run is
+// allowed only for read-only queries and row-modifying DML; any DDL, schema, or
+// maintenance statement is reported as save-incompatible so the run fails loudly
+// instead of exiting 0 while leaving the source unchanged. Ref #433-#437,
+// #469-#484.
+func TestFirstSaveIncompatibleStatement(t *testing.T) {
+	t.Parallel()
+
+	compatible := []string{
+		"SELECT * FROM user",
+		"UPDATE user SET first_name='Z' WHERE id=1",
+		"INSERT INTO user VALUES (1)",
+		"DELETE FROM user WHERE id=1",
+		"REPLACE INTO user VALUES (1)",
+		"WITH s AS (SELECT 1) UPDATE user SET x=1",
+		".import testdata/user.csv\nUPDATE user SET first_name='Z' WHERE id=1;",
+		"-- a comment\nUPDATE user SET x=1;",
+	}
+	for _, script := range compatible {
+		t.Run("compatible: "+firstLine(script), func(t *testing.T) {
+			t.Parallel()
+			if got := firstSaveIncompatibleStatement(script); got != "" {
+				t.Errorf("firstSaveIncompatibleStatement(%q) = %q, want \"\"", script, got)
+			}
+		})
+	}
+
+	incompatible := []string{
+		"ALTER TABLE user RENAME COLUMN first_name TO fname",
+		"DROP TABLE user",
+		"CREATE TABLE backup (id INTEGER)",
+		"CREATE TABLE backup AS SELECT * FROM user",
+		"CREATE VIEW v AS SELECT user_name FROM user",
+		"CREATE INDEX idx ON user(identifier)",
+		"DROP VIEW v",
+		"DROP INDEX idx",
+		"REINDEX",
+		"ANALYZE",
+		"CREATE TRIGGER tg AFTER UPDATE ON user BEGIN UPDATE user SET x=1; END;",
+		"CREATE TABLE backup AS SELECT * FROM user;\nUPDATE user SET first_name='Z' WHERE id=1;",
+	}
+	for _, script := range incompatible {
+		t.Run("incompatible: "+firstLine(script), func(t *testing.T) {
+			t.Parallel()
+			if got := firstSaveIncompatibleStatement(script); got == "" {
+				t.Errorf("firstSaveIncompatibleStatement(%q) = \"\", want a non-empty incompatible statement", script)
+			}
+		})
+	}
+}
+
+// TestScriptImportsInput verifies detection of a .import helper command, which
+// lets save preflight defer write-back validation until after the import runs.
+// Ref #456.
+func TestScriptImportsInput(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		script string
+		want   bool
+	}{
+		{"import then DML", ".import testdata/user.csv\nUPDATE user SET x=1;", true},
+		{"import with leading spaces", "   .import testdata/user.csv\n", true},
+		{"no import", "UPDATE user SET x=1;", false},
+		{"other dot command only", ".mode csv\nSELECT 1;", false},
+		{"importer-like prefix is not .import", ".importance 1\n", false},
+		{"import inside a SQL value is not a command", "INSERT INTO t VALUES ('.import x');", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := scriptImportsInput(tt.script); got != tt.want {
+				t.Errorf("scriptImportsInput(%q) = %v, want %v", tt.script, got, tt.want)
+			}
+		})
+	}
+}
+
+// firstLine returns the first line of s, used to build readable subtest names.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}

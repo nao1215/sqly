@@ -762,14 +762,15 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		if s.argument.NeedsOutputToFile() {
 			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
 		}
-		// When a write-back is requested, buffer the affected-row count instead of
-		// printing it now: it is flushed to stdout only after write-back succeeds,
-		// so a run that fails during write-back leaves stdout clean. Ref #396.
+		msg := statementResultMessage(req, affectedRows)
+		// When a write-back is requested, buffer the result line instead of printing
+		// it now: it is flushed to stdout only after write-back succeeds, so a run
+		// that fails during write-back leaves stdout clean. Ref #396.
 		if s.saveRequested() {
-			s.pendingAffected = append(s.pendingAffected, fmt.Sprintf("affected is %d row(s)\n", affectedRows))
+			s.pendingAffected = append(s.pendingAffected, msg)
 			return nil
 		}
-		fmt.Fprintf(config.Stdout, "affected is %d row(s)\n", affectedRows)
+		fmt.Fprint(config.Stdout, msg)
 		return nil
 	}
 

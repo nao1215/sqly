@@ -717,29 +717,65 @@ func validatePath(path string) (string, error) {
 
 	// Prevent access to system directories on Unix-like systems
 	absPath, err := filepath.Abs(cleanPath)
-	if err == nil { // Only check if we can resolve the absolute path
-		// /dev/shm (tmpfs for user data) and /dev/fd (process-substitution and
-		// other open file descriptors) hold legitimate, user-owned inputs, so they
-		// are allowed even though they live under /dev. Ref #427, #428.
-		allowedDevSubdirs := []string{"/dev/shm", "/dev/fd"}
-		allowed := false
-		for _, sub := range allowedDevSubdirs {
-			if absPath == sub || strings.HasPrefix(absPath, sub+"/") {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
-			for _, sysDir := range systemDirs {
-				if absPath == sysDir || strings.HasPrefix(absPath, sysDir+"/") {
-					return "", fmt.Errorf("access to system directory not allowed: %s", path)
-				}
+	if err == nil && !isAllowedPseudoFile(absPath) { // Only check if we can resolve the absolute path
+		systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
+		for _, sysDir := range systemDirs {
+			if absPath == sysDir || strings.HasPrefix(absPath, sysDir+"/") {
+				return "", fmt.Errorf("access to system directory not allowed: %s", path)
 			}
 		}
 	}
 
 	return cleanPath, nil
+}
+
+// isAllowedPseudoFile reports whether an absolute path is a standard Unix
+// pseudo-file that holds legitimate, user-controlled input even though it lives
+// under a system directory. These are exempt from the system-directory guard:
+//   - /dev/shm/*            tmpfs for user data (Ref #427)
+//   - /dev/fd/*             open file descriptors, process substitution (Ref #428)
+//   - /dev/stdin, /dev/stdout, /dev/stderr  standard stream pseudo-files (Ref #461)
+//   - /proc/<pid|self>/fd/* the Linux fd aliases behind many fd-based workflows (Ref #462)
+func isAllowedPseudoFile(absPath string) bool {
+	switch absPath {
+	case "/dev/stdin", "/dev/stdout", "/dev/stderr":
+		return true
+	}
+	for _, prefix := range []string{"/dev/shm/", "/dev/fd/"} {
+		if strings.HasPrefix(absPath, prefix) {
+			return true
+		}
+	}
+	for _, base := range []string{"/dev/shm", "/dev/fd"} {
+		if absPath == base {
+			return true
+		}
+	}
+	// /proc/self/fd/* and /proc/<pid>/fd/* are the Linux aliases for open file
+	// descriptors that shells use for process substitution and fd redirection.
+	if rest, ok := strings.CutPrefix(absPath, "/proc/"); ok {
+		if slash := strings.IndexByte(rest, '/'); slash > 0 {
+			owner, tail := rest[:slash], rest[slash+1:]
+			if (owner == "self" || isAllDigits(owner)) && strings.HasPrefix(tail, "fd/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isAllDigits reports whether s is non-empty and contains only ASCII digits, used
+// to match a numeric /proc/<pid> component.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // extractSheetNameFromArgs extracts the sheet name from command line arguments.

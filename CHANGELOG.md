@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [v0.21.0](https://github.com/nao1215/sqly/compare/v0.20.0...v0.21.0) (2026-06-01)
+
+### Breaking Changes
+* Unsupported Statements Rejected Clearly: Explicit transaction control (`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`RELEASE`), `VACUUM`/`VACUUM INTO`, and `ATTACH`/`DETACH DATABASE` are now rejected with a clear sqly error. sqly runs each statement in its own transaction on a single in-memory connection, so these cannot work across statements, and ATTACH would let a session read or write external SQLite files outside the import/save model (#441, #442, #443, #444, #457, #458, #463).
+* Write-Back Rejects Schema-Only Runs: A non-interactive `--save`/`--save-dir` run now fails up front when the SQL changes schema or runs a maintenance statement (ALTER, DROP, REINDEX, ANALYZE, CREATE/DROP of a table/view/index/trigger, including `CREATE TABLE AS SELECT`), since write-back can only persist `INSERT`/`UPDATE`/`DELETE` on imported tables. Previously such a run exited 0 and reported success while leaving the source unchanged (#433, #434, #435, #436, #437, #438, #469, #470, #471, #472, #473, #474, #475, #476, #477, #478, #479, #480, #481, #482, #483, #484).
+
+### Bug Fixes
+* Neutral Result Message For Non-DML: A DDL, PRAGMA, or maintenance statement now reports `statement executed successfully` instead of a misleading `affected is N row(s)` count (#439).
+* PRAGMA On The Exec Path: A setter PRAGMA (`PRAGMA user_version = 1`) and a no-row command PRAGMA (`PRAGMA incremental_vacuum`) now run successfully instead of failing with a "no records" error (#440, #485).
+* Batch .import Under Save Flags: A batch or `--sql-file` script that imports its own input with `.import` and then modifies it is now allowed under `--save`/`--save-dir`; write-back is validated after the import runs (#456).
+* Schema-Qualified Helper Commands: `.schema`, `.describe`, `.header`, and `.dump` accept schema-qualified names such as `main.user` (#445, #446, #447, #448).
+* TEMP Tables And Views In Helper Commands: `.tables` lists session-created views and TEMP tables (#449, #450); `.schema` prints the real `CREATE VIEW` for a view (#451) and reads the stored definition for a constrained TEMP table instead of a lossy reconstruction (#464).
+* Empty Compressed JSON And JSONL: An empty compressed JSON array (`.json.gz`) and an empty compressed JSONL file now import as a zero-row table, matching the uncompressed inputs (#452, #453).
+* Output Destination Safety: `--output` and `.dump` strip every trailing compression suffix before checking for an input-only ACH/Fedwire extension, so a path like `out.ach.gz.zst` is rejected instead of receiving CSV bytes (#459, #460).
+* Pseudo-File Inputs: Input path validation accepts `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and the Linux `/proc/<pid|self>/fd/*` aliases, matching the already-allowed `/dev/fd/*` (#461, #462).
+* LTSV Label Validation: LTSV output rejects a column name that is not a valid LTSV label (for example `foo:bar`) or that duplicates another, and LTSV import rejects a row that repeats a label, so LTSV stays round-trippable instead of silently losing values (#465, #466, #467).
+* Multiline CREATE TRIGGER: Batch and `--sql-file` parsing keeps a `CREATE TRIGGER ... BEGIN ... END` body as one statement instead of splitting it at the inner semicolons (#468).
+
 ## [v0.20.0](https://github.com/nao1215/sqly/compare/v0.19.0...v0.20.0) (2026-06-01)
 
 ### Bug Fixes

@@ -26,6 +26,18 @@ func Quote(s string) string {
 	return buf.String()
 }
 
+// QuoteTableRef quotes a possibly schema-qualified table reference. A bare name
+// "user" becomes `user`; a qualified name "main.user" becomes `main`.`user`, so a
+// helper command can reference the same schema-qualified table SQLite accepts in a
+// query. The split is on the first dot, which sqly never produces inside an
+// imported table name (dots are sanitized to "_"). Ref #445, #446, #447, #448.
+func QuoteTableRef(name string) string {
+	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 {
+		return Quote(name[:i]) + "." + Quote(name[i+1:])
+	}
+	return Quote(name)
+}
+
 // SingleQuote returns single quoted string.
 func SingleQuote(s string) string {
 	var buf strings.Builder

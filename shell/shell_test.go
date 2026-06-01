@@ -3100,3 +3100,120 @@ func TestShell_shortCWD(t *testing.T) {
 		t.Logf("Short path may be simplified: %s", shortPath)
 	}
 }
+
+// TestShellExec_SchemaQualifiedTempView covers the helper-command surface added
+// for v0.20.0 hardening: schema-qualified names, TEMP tables, and views.
+// Ref #445, #446, #447, #449, #450, #451, #464.
+func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
+	newImportedShell := func(t *testing.T) (*Shell, func()) {
+		t.Helper()
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "user.csv")}); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		return shell, cleanup
+	}
+
+	t.Run(".schema main.user accepts a schema-qualified name (#445)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		got, err := getExecStdOutput(t, shell.exec, ".schema main.user")
+		if err != nil {
+			t.Fatalf(".schema main.user error: %v", err)
+		}
+		if !strings.Contains(string(got), "user_name") {
+			t.Fatalf(".schema main.user output missing columns: %q", got)
+		}
+	})
+
+	t.Run(".describe main.user accepts a schema-qualified name (#446)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		got, err := getExecStdOutput(t, shell.exec, ".describe main.user")
+		if err != nil {
+			t.Fatalf(".describe main.user error: %v", err)
+		}
+		if !strings.Contains(string(got), "first_name") {
+			t.Fatalf(".describe main.user output missing columns: %q", got)
+		}
+	})
+
+	t.Run(".header main.user accepts a schema-qualified name (#447)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		got, err := getExecStdOutput(t, shell.exec, ".header main.user")
+		if err != nil {
+			t.Fatalf(".header main.user error: %v", err)
+		}
+		if !strings.Contains(string(got), "user_name") {
+			t.Fatalf(".header main.user output missing columns: %q", got)
+		}
+	})
+
+	t.Run(".tables lists session-created VIEW (#450)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE VIEW v_user AS SELECT user_name FROM user"); err != nil {
+			t.Fatalf("create view error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, "v_user") || !strings.Contains(out, "user") {
+			t.Fatalf(".tables omitted the view or base table: %q", out)
+		}
+	})
+
+	t.Run(".tables lists session-created TEMP table (#449)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE TEMP TABLE temp_t (id INTEGER)"); err != nil {
+			t.Fatalf("create temp table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables error: %v", err)
+		}
+		if !strings.Contains(string(got), "temp_t") {
+			t.Fatalf(".tables omitted the temp table: %q", got)
+		}
+	})
+
+	t.Run(".schema on a VIEW prints CREATE VIEW, not a synthesized table (#451)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE VIEW v_user AS SELECT user_name FROM user"); err != nil {
+			t.Fatalf("create view error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema v_user")
+		if err != nil {
+			t.Fatalf(".schema v_user error: %v", err)
+		}
+		if !strings.Contains(string(got), "CREATE VIEW") {
+			t.Fatalf(".schema on a view did not return CREATE VIEW: %q", got)
+		}
+	})
+
+	t.Run(".schema on a constrained TEMP table preserves UNIQUE/CHECK (#464)", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		const ddl = "CREATE TEMP TABLE temp_t (id INTEGER, name TEXT NOT NULL UNIQUE, qty INTEGER DEFAULT 7, CHECK (qty > 0))"
+		if err := shell.exec(context.Background(), ddl); err != nil {
+			t.Fatalf("create temp table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema temp_t")
+		if err != nil {
+			t.Fatalf(".schema temp_t error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, "UNIQUE") || !strings.Contains(out, "CHECK") {
+			t.Fatalf(".schema on a TEMP table dropped constraints: %q", out)
+		}
+	})
+}

@@ -14,6 +14,9 @@ import (
 type MetadataUsecase interface {
 	// TablesName return all table name.
 	TablesName(ctx context.Context) ([]*model.Table, error)
+	// SchemaObjects returns every queryable table and view (including TEMP
+	// tables and views) for enumeration by .tables.
+	SchemaObjects(ctx context.Context) ([]*model.Table, error)
 	// Header get table header name.
 	Header(ctx context.Context, tableName string) (*model.Table, error)
 	// List get records in the specified table

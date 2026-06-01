@@ -17,7 +17,10 @@ func (c CommandList) tablesCommand(ctx context.Context, s *Shell, argv []string)
 	if len(argv) > 0 {
 		return fmt.Errorf(".tables takes no arguments, got %d", len(argv))
 	}
-	tables, err := s.usecases.metadata.TablesName(ctx)
+	// List every queryable object (base tables, views, and TEMP tables/views),
+	// not only the file-imported base tables, so a session-created view or temp
+	// table is discoverable here the same way it is queryable. Ref #449, #450.
+	tables, err := s.usecases.metadata.SchemaObjects(ctx)
 	if err != nil {
 		return err
 	}

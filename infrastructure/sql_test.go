@@ -80,3 +80,27 @@ func TestGenerateInsertStatement(t *testing.T) {
 		})
 	}
 }
+
+// TestQuoteTableRef verifies that a bare name is backtick-quoted and a
+// schema-qualified name is quoted per part, so helper commands can reference
+// schema-qualified tables. Ref #445, #446, #447, #448.
+func TestQuoteTableRef(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"user", "`user`"},
+		{"main.user", "`main`.`user`"},
+		{"temp.t", "`temp`.`t`"},
+		{"weird.name", "`weird`.`name`"},
+		{".leadingdot", "`.leadingdot`"},
+		{"trailingdot.", "`trailingdot.`"},
+		{"has`tick", "`has``tick`"},
+	}
+	for _, tt := range tests {
+		if got := QuoteTableRef(tt.in); got != tt.want {
+			t.Errorf("QuoteTableRef(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}

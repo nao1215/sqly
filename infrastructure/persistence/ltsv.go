@@ -28,13 +28,15 @@ func NewLTSVRepository() repository.LTSVRepository {
 // with a tab delimiter) keeps the output re-importable, since a CSV writer would
 // quote the whole "label:value" token and break the label/value split. Ref #383.
 func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
+	// Reject invalid or duplicate LTSV labels before writing, so the exported file
+	// stays a valid, round-trippable LTSV record set. Ref #465, #466.
+	if err := model.EnsureLTSVHeaderWritable(table.Header()); err != nil {
+		return err
+	}
 	w := bufio.NewWriter(f)
 	for _, v := range table.Records() {
 		for i, data := range v {
 			label := table.Header()[i]
-			if strings.ContainsAny(label, "\t\n\r") {
-				return fmt.Errorf("ltsv: column name %q contains a tab or newline, which LTSV cannot represent", label)
-			}
 			if strings.ContainsAny(data, "\t\n\r") {
 				return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
 			}

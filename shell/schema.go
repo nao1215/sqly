@@ -45,19 +45,21 @@ func isStructuredMode(m model.PrintMode) bool {
 	return m == model.PrintModeJSON || m == model.PrintModeNDJSON
 }
 
-// tableCreateStatement returns the table's CREATE statement. It prefers the
-// statement SQLite stored in sqlite_master; if that is unavailable it builds a
-// functionally equivalent statement from column metadata. Returns an error when
-// the table does not exist.
+// tableCreateStatement returns the object's stored CREATE statement. It prefers
+// the exact SQL SQLite stored, so a VIEW prints "CREATE VIEW ..." (not a
+// synthesized table) and a TEMP or constrained table prints its real definition
+// instead of a lossy reconstruction. Only when no stored SQL is found does it fall
+// back to synthesizing from column metadata. A schema-qualified name (main.user,
+// temp.t) is resolved against that schema. Returns an error when the object does
+// not exist. Ref #445, #451, #463, #464.
 func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (string, error) {
-	// String literal: escape single quotes to query sqlite_master safely.
-	literal := "'" + strings.ReplaceAll(tableName, "'", "''") + "'"
-	master, err := s.usecases.query.Query(ctx, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = "+literal)
+	schema, object := splitTableQualifier(tableName)
+	stored, err := s.storedCreateSQL(ctx, schema, object)
 	if err != nil {
 		return "", err
 	}
-	if recs := master.Records(); len(recs) > 0 && len(recs[0]) > 0 && recs[0][0] != "" {
-		return recs[0][0], nil
+	if stored != "" {
+		return stored, nil
 	}
 
 	// Fallback: synthesize from column metadata (also detects a missing table).
@@ -69,6 +71,45 @@ func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (str
 		return "", fmt.Errorf("no such table: %s", tableName)
 	}
 	return s.buildCreateStatement(tableName, cols), nil
+}
+
+// storedCreateSQL returns the CREATE statement SQLite stored for a table or view,
+// or "" when none is found. It reads the schema's sqlite_master (or, for a TEMP
+// object or an unqualified name, sqlite_temp_master) so the real definition wins
+// over the synthesized fallback: a view yields its CREATE VIEW, and a constrained
+// or TEMP table yields its original DDL including UNIQUE/CHECK constraints the
+// fallback cannot reconstruct. Ref #451, #463, #464.
+func (s *Shell) storedCreateSQL(ctx context.Context, schema, object string) (string, error) {
+	masters := []string{"sqlite_master", "sqlite_temp_master"}
+	if schema != "" {
+		masters = []string{s.usecases.importer.QuoteIdentifier(schema) + ".sqlite_master"}
+	}
+	// String literal: escape single quotes to query the master tables safely.
+	literal := "'" + strings.ReplaceAll(object, "'", "''") + "'"
+	for _, master := range masters {
+		res, err := s.usecases.query.Query(ctx,
+			"SELECT sql FROM "+master+" WHERE name = "+literal+" AND type IN ('table', 'view') AND sql IS NOT NULL")
+		if err != nil {
+			return "", err
+		}
+		if recs := res.Records(); len(recs) > 0 && len(recs[0]) > 0 && recs[0][0] != "" {
+			return recs[0][0], nil
+		}
+	}
+	return "", nil
+}
+
+// splitTableQualifier splits a possibly schema-qualified table reference such as
+// "main.user" or "temp.t" into its schema and object name. A bare name yields an
+// empty schema. The split is on the first dot, which sqly never produces inside an
+// imported table name (dots are sanitized to "_"), so a dot signals a schema
+// qualifier. SQLite accepts a schema-qualified name in SQL, so the helper commands
+// accept it too. Ref #445, #446, #447, #448.
+func splitTableQualifier(name string) (schema, object string) {
+	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 {
+		return name[:i], name[i+1:]
+	}
+	return "", name
 }
 
 // buildCreateStatement assembles a CREATE TABLE statement from PRAGMA

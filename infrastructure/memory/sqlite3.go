@@ -77,6 +77,48 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 	return tables, nil
 }
 
+// SchemaObjects returns every queryable table and view in the session: base
+// tables and views in the main schema plus TEMP tables and views. It backs
+// .tables, which should enumerate everything the user can query, not only the
+// file-imported base tables that write-back targets. Internal bookkeeping tables
+// (sqlite_* and query_result_*) are excluded, and names are sorted for stable
+// output. Ref #449, #450.
+func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	const query = "SELECT name FROM sqlite_master " +
+		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' " +
+		"UNION " +
+		"SELECT name FROM sqlite_temp_master " +
+		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' " +
+		"ORDER BY name"
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	tables := []*model.Table{}
+	var name string
+	for rows.Next() {
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		tables = append(tables, model.NewTable(name, model.Header{}, []model.Record{}))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return tables, nil
+}
+
 // Insert set records in DB
 func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	if err := t.Valid(); err != nil {
@@ -99,7 +141,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 
 // List get records in the specified table
 func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.Table, error) {
-	table, err := r.Query(ctx, "SELECT * FROM "+infra.Quote(tableName))
+	table, err := r.Query(ctx, "SELECT * FROM "+infra.QuoteTableRef(tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +150,7 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 
 // Header get table header name.
 func (r *sqlite3Repository) Header(ctx context.Context, tableName string) (*model.Table, error) {
-	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", infra.Quote(tableName)))
+	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", infra.QuoteTableRef(tableName)))
 }
 
 // Query execute "SELECT" or "EXPLAIN" query
@@ -130,7 +172,7 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 		return nil, err
 	}
 	if len(header) == 0 {
-		return nil, infra.ErrNoRows
+		return nil, repository.ErrNoRows
 	}
 
 	scanDest := make([]any, len(header))

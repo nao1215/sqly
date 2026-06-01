@@ -65,6 +65,12 @@ func (si *SQLite3Interactor) TablesName(ctx context.Context) ([]*model.Table, er
 	return si.r.TablesName(ctx)
 }
 
+// SchemaObjects returns every queryable table and view, including TEMP tables and
+// views, for enumeration by .tables.
+func (si *SQLite3Interactor) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
+	return si.r.SchemaObjects(ctx)
+}
+
 // Insert set records in DB
 func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
 	return si.r.Insert(ctx, t)
@@ -105,18 +111,32 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// Rewrite shorthands the engine does not accept (e.g. "TABLE name"). Ref #408.
 	stmt = normalizeStatement(stmt)
 
-	// sqly targets SQLite, so every valid SQLite statement is accepted and routed
-	// by shape: a rowset-producing statement runs on the query path and prints its
-	// rows, while any other statement (DML without RETURNING, DDL, transaction
-	// control, ATTACH, ANALYZE, ...) runs on the exec path and reports an
-	// affected-row count. SQLite is the authority on validity, so an unsupported
-	// statement surfaces SQLite's own error instead of a sqly-specific rejection.
+	// Reject statements sqly cannot run safely or correctly under its per-statement
+	// transaction and in-memory session model (explicit transaction control,
+	// VACUUM, ATTACH/DETACH), with a clear error instead of SQLite's confusing
+	// internal message. Ref #441, #442, #443, #457, #458.
+	if reason := unsupportedStatementReason(stmt); reason != "" {
+		return nil, 0, fmt.Errorf("%s: %s", reason, color.CyanString(statement))
+	}
+
+	// sqly targets SQLite, so every supported statement is routed by shape: a
+	// rowset-producing statement runs on the query path and prints its rows, while
+	// any other statement (DML without RETURNING, DDL, ANALYZE, ...) runs on the
+	// exec path and reports an affected-row count. SQLite is the authority on
+	// validity, so an unsupported statement surfaces SQLite's own error.
 	if si.sql.producesRowset(stmt) {
 		table, err := si.Query(ctx, stmt)
-		if err != nil {
+		if err == nil {
+			return table, 0, nil
+		}
+		// A no-rowset PRAGMA (a setter like "PRAGMA user_version = 1" or a command
+		// like "PRAGMA incremental_vacuum") is routed here by keyword but yields no
+		// result columns, so the query path reports ErrNoRows. Re-run it on the exec
+		// path so it commits and reports neutral success instead of a misleading "no
+		// records" error. Ref #440, #485.
+		if !errors.Is(err, repository.ErrNoRows) || leadingKeyword(stmt) != sqlPRAGMA {
 			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}
-		return table, 0, nil
 	}
 
 	affectedRows, err := si.r.Exec(ctx, stmt)

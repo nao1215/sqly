@@ -173,6 +173,17 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 		inBacktick, inBracket         bool
 		inLineComment, inBlockComment bool
 	)
+	isWordRune := func(r rune) bool {
+		return r == '_' ||
+			(r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9')
+	}
+	// A CREATE TRIGGER ... BEGIN ... END statement contains inner ";" that must not
+	// split it. trig tracks whether the current statement is a CREATE TRIGGER and
+	// how deep its BEGIN/CASE ... END nesting is, so a ";" only terminates once the
+	// body's END has balanced its BEGIN. It resets after each split. Ref #468.
+	var trig triggerState
 	for i := 0; i < len(runes); i++ {
 		c := runes[i]
 		switch {
@@ -220,16 +231,86 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
 				inBlockComment = true
 				i++
+			case isWordRune(c):
+				// Consume a whole identifier/keyword token and feed it to the trigger
+				// tracker, so BEGIN/CASE/END inside a CREATE TRIGGER are balanced.
+				j := i
+				for j+1 < len(runes) && isWordRune(runes[j+1]) {
+					j++
+				}
+				trig.observe(strings.ToUpper(string(runes[i : j+1])))
+				i = j
 			case c == ';':
+				if trig.insideBody() {
+					break // ";" inside a trigger body does not terminate the statement
+				}
 				if stmt := stripLeadingSQLComments(string(runes[start:i])); stmt != "" {
 					stmts = append(stmts, stmt)
 				}
 				start = i + 1
+				trig = triggerState{}
 			}
 		}
 	}
 	return stmts, string(runes[start:])
 }
+
+// triggerState tracks whether the current statement is a CREATE TRIGGER and the
+// depth of its BEGIN/CASE ... END nesting, so splitSQLStatements does not split a
+// trigger body at its inner semicolons. Ref #468.
+type triggerState struct {
+	tokens    int  // significant word tokens observed from the statement start
+	isTrigger bool // statement starts with CREATE [TEMP|TEMPORARY] TRIGGER
+	bodyOpen  bool // the trigger's BEGIN has been seen
+	depth     int  // open BEGIN/CASE blocks awaiting an END
+}
+
+// observe updates the state from the next upper-cased word token of the statement.
+func (t *triggerState) observe(word string) {
+	t.tokens++
+	if !t.isTrigger {
+		switch {
+		case t.tokens == 1:
+			if word != sqlCreate {
+				t.tokens = notTriggerPrefix // first token is not CREATE: not a trigger
+			}
+		case word == "TEMP" || word == "TEMPORARY":
+			// still within the "CREATE [TEMP] TRIGGER" prefix
+		case word == "TRIGGER":
+			t.isTrigger = true
+		default:
+			t.tokens = notTriggerPrefix // CREATE <something other than a trigger>
+		}
+		return
+	}
+	switch word {
+	case "BEGIN":
+		t.bodyOpen = true
+		t.depth++
+	case "CASE":
+		if t.bodyOpen {
+			t.depth++
+		}
+	case "END":
+		if t.bodyOpen && t.depth > 0 {
+			t.depth--
+		}
+	}
+}
+
+// insideBody reports whether a ";" currently sits inside an open trigger body and
+// so must not terminate the statement: the statement is a trigger and either its
+// BEGIN has not appeared yet or its blocks are not all closed.
+func (t *triggerState) insideBody() bool {
+	return t.isTrigger && (!t.bodyOpen || t.depth > 0)
+}
+
+// notTriggerPrefix is a sentinel token count marking a statement whose prefix has
+// already ruled it out as a CREATE TRIGGER, so further tokens are ignored.
+const notTriggerPrefix = 99
+
+// sqlCreate is the CREATE keyword, matched when detecting a CREATE TRIGGER prefix.
+const sqlCreate = "CREATE"
 
 // atStatementBoundary reports whether the pending batch buffer holds no open
 // statement: only whitespace and complete (closed) leading comments, with no
@@ -316,6 +397,19 @@ func endsInsideBlockComment(s string) bool {
 // read-only script. Ref #376, #402, #403. Whether write-back actually runs is
 // decided dynamically by the rows a statement changes (see Shell.dataChanged).
 func scriptModifiesData(script string) bool {
+	for _, stmt := range scriptSQLStatements(script) {
+		if statementModifiesData(stmt) {
+			return true
+		}
+	}
+	return false
+}
+
+// scriptSQLStatements extracts the SQL statements from a batch or --sql-file
+// script, dropping helper command lines (a "." line at a statement boundary) so
+// they are not misclassified as SQL. It is the shared front end for the write-back
+// classifiers below.
+func scriptSQLStatements(script string) []string {
 	var sql strings.Builder
 	for _, line := range strings.Split(script, "\n") {
 		if atStatementBoundary(sql.String()) && strings.HasPrefix(strings.TrimSpace(line), ".") {
@@ -328,10 +422,61 @@ func scriptModifiesData(script string) bool {
 	if leftover := stripLeadingSQLComments(remainder); leftover != "" {
 		stmts = append(stmts, leftover)
 	}
-	for _, stmt := range stmts {
-		if statementModifiesData(stmt) {
-			return true
+	return stmts
+}
+
+// statementSaveCompatible reports whether a non-interactive --save/--save-dir run
+// can handle a statement: a read-only query (which skips write-back) or a
+// row-modifying DML on an imported table (which write-back persists). Any other
+// statement — DDL (CREATE/DROP/ALTER/REINDEX and CREATE VIEW/INDEX/TRIGGER),
+// ANALYZE, or other schema/maintenance work — has no file write-back
+// representation, so it is save-incompatible and the run must fail loudly instead
+// of exiting 0 while leaving the source unchanged. Ref #433-#437, #469-#484.
+func statementSaveCompatible(stmt string) bool {
+	if statementModifiesData(stmt) {
+		return true
+	}
+	switch leadingSQLKeyword(stmt) {
+	case kwSelect, kwValues, "WITH", "EXPLAIN", "TABLE", "PRAGMA":
+		return true
+	default:
+		return false
+	}
+}
+
+// firstSaveIncompatibleStatement returns the first statement a non-interactive
+// save run cannot persist, or "" when every statement is a read-only query or a
+// row-modifying DML. Ref #433-#437, #469-#484.
+func firstSaveIncompatibleStatement(script string) string {
+	for _, stmt := range scriptSQLStatements(script) {
+		if !statementSaveCompatible(stmt) {
+			return stmt
 		}
+	}
+	return ""
+}
+
+// scriptImportsInput reports whether a batch or --sql-file script imports its own
+// input with a ".import" helper command. Such a script creates its tables while it
+// runs, so save preflight cannot list them up front and instead defers write-back
+// validation until after the run. Ref #456.
+func scriptImportsInput(script string) bool {
+	var sql strings.Builder
+	for _, line := range strings.Split(script, "\n") {
+		if !atStatementBoundary(sql.String()) {
+			sql.WriteString(line)
+			sql.WriteString("\n")
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, ".") {
+			if fields := strings.Fields(trimmed); len(fields) > 0 && fields[0] == importCommand {
+				return true
+			}
+			continue // another helper command, not part of any SQL statement
+		}
+		sql.WriteString(line)
+		sql.WriteString("\n")
 	}
 	return false
 }
@@ -352,6 +497,23 @@ func statementModifiesData(stmt string) bool {
 	}
 	return false
 }
+
+// statementResultMessage returns the stdout line for a no-rowset statement. A
+// data-modifying statement (INSERT/UPDATE/DELETE/REPLACE, or a WITH feeding one)
+// reports its affected-row count; any other no-rowset statement (DDL, PRAGMA,
+// maintenance) reports neutral success, because an "affected is N row(s)" line for
+// a CREATE VIEW, PRAGMA, or ANALYZE implies a row change that did not happen.
+// Ref #439.
+func statementResultMessage(stmt string, affected int64) string {
+	if statementModifiesData(stmt) {
+		return fmt.Sprintf("affected is %d row(s)\n", affected)
+	}
+	return msgStatementExecuted
+}
+
+// msgStatementExecuted is the neutral stdout line printed for a no-rowset
+// statement that does not change table data (DDL, PRAGMA, maintenance). Ref #439.
+const msgStatementExecuted = "statement executed successfully\n"
 
 // leadingSQLKeyword returns the upper-cased first keyword of a statement after
 // leading comments are stripped, reading only the leading ASCII letters.

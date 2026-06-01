@@ -34,6 +34,17 @@ func compressionToLib(c model.Compression) (libfilesql.CompressionType, error) {
 	}
 }
 
+// NewDecompressingReaderForFile opens path and returns a reader that
+// transparently decompresses it when the extension names a known codec (.gz, .xz,
+// .zst, ...), plus a cleanup that closes the underlying file and decoder. For an
+// uncompressed file it returns a plain file reader. It reuses filesql's codecs so
+// sqly does not depend on the compression libraries directly, and lets the adapter
+// inspect compressed JSON/JSONL inputs (e.g. an empty "[]") the same way it
+// inspects uncompressed ones. Ref #452, #453.
+func NewDecompressingReaderForFile(path string) (io.Reader, func() error, error) {
+	return libfilesql.NewCompressionFactory().CreateReaderForFile(path)
+}
+
 // NewCompressingWriter wraps w with the codec for c, reusing filesql's
 // compression writers so sqly does not depend on the codec libraries directly.
 // The returned close function flushes and finalizes the codec and must be called
