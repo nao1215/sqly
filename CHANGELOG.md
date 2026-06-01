@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.23.0](https://github.com/nao1215/sqly/compare/v0.22.0...v0.23.0) (2026-06-02)
 
 ### Bug Fixes
 * Literal Dotted Object Names With A Schema Prefix: `.schema`, `.describe`, `.header`, and `.dump` now reach a table or view whose quoted literal name begins with `main.` or `temp.` (for example `CREATE TABLE "main.x"` or `CREATE VIEW "temp.v"`). Because the shell strips the quotes the user typed, a name is read as a schema qualifier only when no object literally carries it. `.tables` prints such a name quoted so it pastes back into these commands.
