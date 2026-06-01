@@ -296,6 +296,144 @@ func TestSaveCommandPersistsAfterDataChange(t *testing.T) {
 	}
 }
 
+// TestSaveCommandSkipsWhenNoImportedTableChanged covers the cases where the
+// session reports a data change but no file-backed imported table actually
+// differs: only a TEMP or SQL-created scratch table changed, or edits to an
+// imported table cancel out (net-zero). Write-back must touch no source file and
+// must not fail on an unwritable or non-file-backed table it should ignore.
+func TestSaveCommandSkipsWhenNoImportedTableChanged(t *testing.T) {
+	const content = "user_name,identifier\nalice,1"
+
+	setup := func(t *testing.T, name string, stmts ...string) (*Shell, func(), string) {
+		t.Helper()
+		dir := t.TempDir()
+		src := filepath.Join(dir, name)
+		if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		for _, stmt := range stmts {
+			if err := shell.exec(context.Background(), stmt); err != nil {
+				cleanup()
+				t.Fatalf("exec %q: %v", stmt, err)
+			}
+		}
+		return shell, cleanup, src
+	}
+
+	cases := []struct {
+		name  string
+		file  string
+		stmts []string
+	}{
+		{
+			name: "only a TEMP table changed",
+			file: "temp_only.csv",
+			stmts: []string{
+				"CREATE TEMP TABLE scratch(id INTEGER)",
+				"INSERT INTO scratch VALUES (1)",
+			},
+		},
+		{
+			name: "only a SQL-created scratch table changed",
+			file: "scratch_only.csv",
+			stmts: []string{
+				"CREATE TABLE scratch(id INTEGER)",
+				"INSERT INTO scratch VALUES (1)",
+			},
+		},
+		{
+			name: "net-zero edits cancel out",
+			file: "netzero.csv",
+			stmts: []string{
+				"UPDATE netzero SET identifier=99 WHERE user_name='alice'",
+				"UPDATE netzero SET identifier=1 WHERE user_name='alice'",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(".save --force leaves the source untouched when "+tc.name, func(t *testing.T) {
+			shell, cleanup, src := setup(t, tc.file, tc.stmts...)
+			defer cleanup()
+
+			backup := config.Stderr
+			config.Stderr = &strings.Builder{}
+			defer func() { config.Stderr = backup }()
+
+			if err := shell.commands.saveCommand(context.Background(), shell, []string{forceArg}); err != nil {
+				t.Fatalf(".save --force returned error: %v", err)
+			}
+			after, _ := os.ReadFile(src) //nolint:gosec // test path
+			if string(after) != content {
+				t.Errorf(".save --force rewrote an unchanged source:\n got %q\nwant %q", after, content)
+			}
+		})
+
+		t.Run(".save DIR writes no export when "+tc.name, func(t *testing.T) {
+			shell, cleanup, src := setup(t, tc.file, tc.stmts...)
+			defer cleanup()
+			outDir := filepath.Join(filepath.Dir(src), "out")
+
+			backup := config.Stderr
+			config.Stderr = &strings.Builder{}
+			defer func() { config.Stderr = backup }()
+
+			if err := shell.commands.saveCommand(context.Background(), shell, []string{outDir}); err != nil {
+				t.Fatalf(".save DIR returned error: %v", err)
+			}
+			if _, statErr := os.Stat(filepath.Join(outDir, tc.file)); statErr == nil {
+				t.Error(".save DIR wrote an export when no imported table changed")
+			}
+		})
+	}
+}
+
+// TestSaveCommandSkipsUnwritableImportWhenUnchanged covers a JSONL import (which
+// write-back cannot persist) left untouched while only a scratch table changed:
+// the unchanged unwritable import must be ignored, not reported as unwritable.
+func TestSaveCommandSkipsUnwritableImportWhenUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "data.jsonl")
+	const content = "{\"id\":1}\n{\"id\":2}\n"
+	if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+		t.Fatal(err)
+	}
+	if err := shell.exec(context.Background(), "CREATE TEMP TABLE scratch(id INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := shell.exec(context.Background(), "INSERT INTO scratch VALUES (1)"); err != nil {
+		t.Fatal(err)
+	}
+
+	backup := config.Stderr
+	config.Stderr = &strings.Builder{}
+	defer func() { config.Stderr = backup }()
+
+	if err := shell.commands.saveCommand(context.Background(), shell, []string{forceArg}); err != nil {
+		t.Fatalf(".save --force reported an error for an unchanged JSONL import: %v", err)
+	}
+	after, _ := os.ReadFile(src) //nolint:gosec // test path
+	if string(after) != content {
+		t.Errorf(".save --force rewrote the unchanged JSONL source: got %q", after)
+	}
+}
+
 func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 	dir := t.TempDir()
 	// JSON loads into a single data column and does not round-trip, so write-back

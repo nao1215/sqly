@@ -2,6 +2,9 @@ package shell
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -331,7 +334,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		}
 		for _, name := range fileTables {
 			producedHere[name] = file
-			s.recordTableSources([]string{name}, file)
+			s.recordTableSources(ctx, []string{name}, file)
 			s.markDirImported(name)
 		}
 		s.warnKeywordTableNames(fileTables)
@@ -524,7 +527,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 			// A deliberate single-file .import replaces directory-sourced data of the
 			// same name: re-point the table to this standalone file and drop the
 			// directory marker so write-back targets the file the user named. Ref
-			s.recordTableSources(owned, displayPath)
+			s.recordTableSources(ctx, owned, displayPath)
 			s.clearDirImported(owned)
 			s.warnKeywordTableNames(owned)
 			return nil
@@ -536,7 +539,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 			return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
 		}
 	}
-	s.recordTableSources(newNames, displayPath)
+	s.recordTableSources(ctx, newNames, displayPath)
 	s.warnKeywordTableNames(newNames)
 
 	return nil
@@ -586,7 +589,7 @@ func (s *Shell) anyDirImported(names []string) bool {
 // the right file after the shell changes directory with .cd. For directory
 // imports the source is the directory; write-back rejects those because it
 // cannot tell which file in the directory owns the table.
-func (s *Shell) recordTableSources(tableNames []string, source string) {
+func (s *Shell) recordTableSources(ctx context.Context, tableNames []string, source string) {
 	if abs, err := filepath.Abs(source); err == nil {
 		source = abs
 	}
@@ -595,7 +598,70 @@ func (s *Shell) recordTableSources(tableNames []string, source string) {
 	}
 	for _, name := range tableNames {
 		s.tableSources[name] = source
+		s.snapshotBaseline(ctx, name)
 	}
+}
+
+// snapshotBaseline records the content fingerprint of a freshly imported table so
+// write-back can later tell whether the table changed. A fingerprint that cannot be
+// computed is left unset, which makes the table count as changed (a safe default
+// that never skips a real change).
+func (s *Shell) snapshotBaseline(ctx context.Context, name string) {
+	fp, err := s.tableContentFingerprint(ctx, name)
+	if err != nil {
+		return
+	}
+	if s.importBaseline == nil {
+		s.importBaseline = make(map[string]string)
+	}
+	s.importBaseline[name] = fp
+}
+
+// tableContentFingerprint returns a hash of a table's current relational content
+// (header then every record, in row order). Fields are length-prefixed so distinct
+// shapes cannot collide (["a","b"] differs from ["ab"]). Write-back compares this
+// against the import baseline to skip a table whose content did not change.
+func (s *Shell) tableContentFingerprint(ctx context.Context, name string) (string, error) {
+	if s.usecases.metadata == nil {
+		return "", errors.New("metadata usecase is unavailable")
+	}
+	t, err := s.usecases.metadata.List(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	var lenBuf [8]byte
+	writeField := func(f string) {
+		binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(f)))
+		_, _ = h.Write(lenBuf[:])
+		_, _ = h.Write([]byte(f))
+	}
+	for _, col := range t.Header() {
+		writeField(col)
+	}
+	for _, rec := range t.Records() {
+		writeField("\x00") // row separator that no column value can forge
+		for _, f := range rec {
+			writeField(f)
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// tableChanged reports whether a table's current content differs from the baseline
+// captured at import. A table with no baseline (never imported, or whose baseline
+// could not be computed) is treated as changed, so write-back never skips a table
+// it is unsure about.
+func (s *Shell) tableChanged(ctx context.Context, name string) bool {
+	baseline, ok := s.importBaseline[name]
+	if !ok {
+		return true
+	}
+	current, err := s.tableContentFingerprint(ctx, name)
+	if err != nil {
+		return true
+	}
+	return current != baseline
 }
 
 // importStatusWriter returns where import progress and error messages go.
