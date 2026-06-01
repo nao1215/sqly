@@ -222,6 +222,12 @@ func TestStatementResultMessage(t *testing.T) {
 		{"PRAGMA reports neutral success", "PRAGMA user_version = 1", 1, msgStatementExecuted},
 		{"ANALYZE reports neutral success", "ANALYZE", 1, msgStatementExecuted},
 		{"REINDEX reports neutral success", "REINDEX", 0, msgStatementExecuted},
+		// A leading empty statement (a bare ";") must not change classification: the
+		// real verb still decides, so a ";UPDATE" reports its affected count and a
+		// ";CREATE" reports neutral success.
+		{"leading empty statement before UPDATE reports affected count", ";UPDATE t SET x=1", 3, "affected is 3 row(s)\n"},
+		{"two leading empty statements before INSERT report affected count", ";; INSERT INTO t VALUES (1)", 1, "affected is 1 row(s)\n"},
+		{"leading empty statement before CREATE reports neutral success", ";CREATE TABLE t (id INTEGER)", 0, msgStatementExecuted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

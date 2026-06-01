@@ -134,10 +134,13 @@ scan:
 }
 
 // stripLeadingSQLComments removes leading line ("--") and block ("/* */")
-// comments and surrounding whitespace from a statement, returning "" when
-// nothing executable remains. sqly classifies a statement by its first token, so
-// a leading comment would otherwise be rejected as "not sql"; SQL files commonly
-// open with a header comment, so this lets them run unchanged.
+// comments, leading empty statements (bare ";"), and surrounding whitespace from a
+// statement, returning "" when nothing executable remains. sqly classifies a
+// statement by its first token, so a leading comment would otherwise be rejected as
+// "not sql"; SQL files commonly open with a header comment, so this lets them run
+// unchanged. A leading ";" is an empty statement, so dropping it keeps a statement
+// like ";UPDATE t ..." classified by its real verb instead of as a no-rowset
+// statement that skips write-back.
 func stripLeadingSQLComments(s string) string {
 	for {
 		s = strings.TrimSpace(s)
@@ -154,6 +157,8 @@ func stripLeadingSQLComments(s string) string {
 				return "" // unterminated block comment, nothing executable
 			}
 			s = s[i+2:]
+		case strings.HasPrefix(s, ";"):
+			s = s[1:] // leading empty statement
 		default:
 			return s
 		}
