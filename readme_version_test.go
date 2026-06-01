@@ -10,7 +10,7 @@ import (
 // the README: every "sqly vX.Y.Z" string (the shell welcome snippet and the
 // benchmark caption) must match the latest version heading in CHANGELOG.md. When a
 // release bumps the changelog, this fails until the README is refreshed too, so
-// stale version strings cannot silently linger. Ref #454.
+// stale version strings cannot silently linger.
 func TestREADMEVersionMatchesChangelog(t *testing.T) {
 	t.Parallel()
 

@@ -176,10 +176,10 @@ func TestSQLite3Interactor_GetTableNameFromFilePath(t *testing.T) {
 }
 
 // TestSQLite3Interactor_LoadFiles_PreservesFilesqlSchema locks the integration
-// model for issue #244: filesql detects column types, and sqly copies the exact
+// model for issue: filesql detects column types, and sqly copies the exact
 // CREATE TABLE into the shared DB, so the detected types survive. This is the
-// schema fidelity that .schema/.describe (#238) and export/write-back (#241,
-// #242) depend on.
+// schema fidelity that .schema/.describe and export/write-back (,
+// ) depend on.
 func TestSQLite3Interactor_LoadFiles_PreservesFilesqlSchema(t *testing.T) {
 	t.Parallel()
 

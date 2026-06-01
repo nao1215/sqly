@@ -5,7 +5,7 @@ import "strings"
 // reservedSQLiteKeywords is the set of SQLite keywords that are not usable as a
 // bare table identifier in a query such as "SELECT * FROM <name>". A table whose
 // name is one of these must be quoted, so sqly rejects such a --stdin-name up
-// front (#423) and renames an imported file's table to a queryable form (#424).
+// front and renames an imported file's table to a queryable form.
 // Source: https://www.sqlite.org/lang_keywords.html.
 var reservedSQLiteKeywords = func() map[string]struct{} {
 	words := []string{

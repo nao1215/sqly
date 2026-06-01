@@ -28,14 +28,14 @@ func runBatchShell(t *testing.T, args []string, stdin string) error {
 }
 
 // TestImportCollisionRegressions covers the v0.19.0 directory-import collision
-// bugs (#415, #416, #417, #429): re-importing a directory-sourced file directly
+// bugs: re-importing a directory-sourced file directly
 // should clear the directory marker, a standalone file should be able to replace
 // a directory-imported table, a same-source symlink alias is not a collision, and
 // directory re-imports must not mis-detect basename-prefix tables as collisions.
 func TestImportCollisionRegressions(t *testing.T) {
 	const csv = "id,name\n1,a\n"
 
-	t.Run("re-importing a directory-sourced file directly makes it saveable (#415)", func(t *testing.T) {
+	t.Run("re-importing a directory-sourced file directly makes it saveable", func(t *testing.T) {
 		dir := t.TempDir()
 		sub := filepath.Join(dir, "sub")
 		if err := os.Mkdir(sub, 0o750); err != nil {
@@ -49,7 +49,7 @@ func TestImportCollisionRegressions(t *testing.T) {
 		}
 	})
 
-	t.Run("standalone file replaces a directory-imported table (#416)", func(t *testing.T) {
+	t.Run("standalone file replaces a directory-imported table", func(t *testing.T) {
 		dir := t.TempDir()
 		sub := filepath.Join(dir, "sub")
 		if err := os.Mkdir(sub, 0o750); err != nil {
@@ -64,7 +64,7 @@ func TestImportCollisionRegressions(t *testing.T) {
 		}
 	})
 
-	t.Run("same-source symlink alias is not a collision (#417)", func(t *testing.T) {
+	t.Run("same-source symlink alias is not a collision", func(t *testing.T) {
 		dir := t.TempDir()
 		src := writeCSV(t, dir, "user.csv", csv)
 		aliasDir := filepath.Join(dir, "alias")
@@ -82,7 +82,7 @@ func TestImportCollisionRegressions(t *testing.T) {
 		}
 	})
 
-	t.Run("directory re-import does not mis-detect basename-prefix tables (#429)", func(t *testing.T) {
+	t.Run("directory re-import does not mis-detect basename-prefix tables", func(t *testing.T) {
 		dir := t.TempDir()
 		sub := filepath.Join(dir, "d")
 		if err := os.Mkdir(sub, 0o750); err != nil {

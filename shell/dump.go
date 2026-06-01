@@ -32,7 +32,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	userPath := argv[1]
 
 	// Reject an empty destination so `.dump table ""` does not write a file
-	// named ".csv" into the current directory. Ref #324.
+	// named ".csv" into the current directory.
 	if strings.TrimSpace(userPath) == "" {
 		return errors.New(".dump requires a non-empty destination path")
 	}
@@ -41,7 +41,6 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// formats require multi-record coordination that .dump cannot provide.
 	// Exporting ACH/Fedwire tables to CSV/TSV/etc via .dump is fine. The check
 	// strips any compression suffix, so .ach.gz and .fed.gz are rejected too.
-	// Ref #422.
 	if model.IsInputOnlyExtension(userPath) {
 		return fmt.Errorf(".dump does not support ACH/Fedwire format output; use csv/tsv/xlsx instead (e.g., .dump %s %s.csv)", tableName, strings.TrimSuffix(userPath, filepath.Ext(userPath)))
 	}
@@ -68,7 +67,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// Refuse a destination that aliases an imported source file, including symlink
 	// aliases. A destructive source overwrite must go through .save --force, not
 	// .dump, so a stray .dump cannot silently rewrite the dataset in another
-	// format. Ref #398, #418.
+	// format.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
 		return fmt.Errorf(".dump destination %s is the source file for table %q; use .save --force to overwrite a source", filePath, name)
 	}

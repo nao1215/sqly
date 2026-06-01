@@ -82,7 +82,12 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 // .tables, which should enumerate everything the user can query, not only the
 // file-imported base tables that write-back targets. Internal bookkeeping tables
 // (sqlite_* and query_result_*) are excluded, and names are sorted for stable
-// output. Ref #449, #450.
+// output.
+//
+// Each returned table carries the raw object name in Name() and the owning schema
+// ("main" or "temp") as the single Header entry, so .tables can disambiguate a
+// main object and a same-named temp object instead of collapsing them. UNION ALL
+// (not UNION) keeps both rows of such a collision.
 func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -90,10 +95,10 @@ func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	const query = "SELECT name FROM sqlite_master " +
+	const query = "SELECT name, 'main' AS schema_name FROM sqlite_master " +
 		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' " +
-		"UNION " +
-		"SELECT name FROM sqlite_temp_master " +
+		"UNION ALL " +
+		"SELECT name, 'temp' AS schema_name FROM sqlite_temp_master " +
 		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' " +
 		"ORDER BY name"
 	rows, err := tx.QueryContext(ctx, query)
@@ -103,12 +108,12 @@ func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, 
 	defer func() { _ = rows.Close() }()
 
 	tables := []*model.Table{}
-	var name string
+	var name, schemaName string
 	for rows.Next() {
-		if err := rows.Scan(&name); err != nil {
+		if err := rows.Scan(&name, &schemaName); err != nil {
 			return nil, err
 		}
-		tables = append(tables, model.NewTable(name, model.Header{}, []model.Record{}))
+		tables = append(tables, model.NewTable(name, model.Header{schemaName}, []model.Record{}))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -148,9 +153,15 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 	return model.NewTable(tableName, table.Header(), table.Records()), nil
 }
 
-// Header get table header name.
+// Header get table header name. The result is re-wrapped with the requested table
+// name rather than the name extractTableName parses from the query, which would
+// truncate a name containing spaces (e.g. "two words" -> "two").
 func (r *sqlite3Repository) Header(ctx context.Context, tableName string) (*model.Table, error) {
-	return r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", infra.QuoteTableRef(tableName)))
+	table, err := r.Query(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 1", infra.QuoteTableRef(tableName)))
+	if err != nil {
+		return nil, err
+	}
+	return model.NewTable(tableName, table.Header(), table.Records()), nil
 }
 
 // Query execute "SELECT" or "EXPLAIN" query

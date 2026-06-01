@@ -1,10 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Sanitized table-name collisions (#286). Two inputs that sanitize to the same
+# Sanitized table-name collisions. Two inputs that sanitize to the same
 # table name must fail instead of one silently overwriting the other.
 
-Describe 'sqly table-name collision (#286)'
+Describe 'sqly table-name collision'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {

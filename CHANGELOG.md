@@ -1,65 +1,79 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.22.0](https://github.com/nao1215/sqly/compare/v0.21.0...v0.22.0) (2026-06-01)
+
+### Breaking Changes
+* Direct --sql Runs One Statement: direct `--sql` (and `--sql --output`) now rejects multi-statement input instead of silently running every statement and keeping only the last result set.
+* Save Mode Rejects PRAGMA: a non-interactive `--save`/`--save-dir` run now rejects a setter, command, or rowset PRAGMA, since a PRAGMA side effect lives only in the in-memory session and has no file write-back representation.
+* Nested Compression Suffixes Rejected: `--output` and `.dump` reject a destination that stacks more than one compression suffix (for example `out.csv.gz.zst` or `fake.parquet.gz.zst`), instead of applying only the outermost codec and leaving a file whose name lies about its bytes.
+* END Rejected As Transaction Control: `END` and `END TRANSACTION` are rejected as unsupported transaction control across direct `--sql`, batch stdin, and `--sql-file`, matching `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`.
+
+### Bug Fixes
+* Helper Commands Resolve TEMP Before Main: `.schema` resolves an unqualified name against temp objects before main, so a TEMP table or view that shadows an imported table reports the live definition; `.tables` keeps both a main object and a same-named temp object instead of collapsing them.
+* Literal Dotted Table Names: `.schema`, `.describe`, `.header`, and `.dump` target a SQL-created table whose quoted literal name contains a dot (for example `"a.b"`); only `main` and `temp` are treated as schema qualifiers, since ATTACH is rejected and no other schema can exist.
+* TEMP Keyword Preserved: `.schema temp.NAME` emits `CREATE TEMP TABLE`/`CREATE TEMP VIEW`, re-inserting the TEMP keyword SQLite strips from the SQL it stores for a temp object.
+* Paste-Safe .tables Output: `.tables` quotes identifiers that need quoting and qualifies a temp object as `temp.NAME`, so its output pastes back into SQL and helper commands; `.header` keeps the full table name when it contains spaces.
+* Structured Output For .tables And .header: `.tables` and `.header` honor `.mode json` and `.mode ndjson`, emitting machine-readable rows instead of always printing an ASCII table.
+* Read-Only Interactive Save: interactive `.save --force` and `.save DIR` write nothing when the session changed no table data, so a read-only session no longer rewrites sources or emits fresh exports, matching the non-interactive `--save` contract.
 
 ### Documentation
-* README Version Refresh: Refresh the shell snippet and benchmark caption to the current release, correct the "not supported" list for v0.21.0 (DDL runs in-memory; transaction control, VACUUM, ATTACH/DETACH, and DCL are rejected), and add a Go test that fails when a README `sqly vX.Y.Z` string drifts from the latest CHANGELOG version (#454).
-* README Demos For Non-Interactive Flows: Add VHS demos and examples for `--inspect` (including `--inspect-sample 0` for a schema-only report), `--stdin` combined with `--sql-file`, and the write-back safety boundaries (`--save` requires `--force`; a schema change is rejected up front). The new example commands are exercised end-to-end by the shellspec suite (#455).
+* README Version Refresh: Refresh the shell snippet and benchmark caption to the current release, correct the "not supported" list for v0.21.0 (DDL runs in-memory; transaction control, VACUUM, ATTACH/DETACH, and DCL are rejected), and add a Go test that fails when a README `sqly vX.Y.Z` string drifts from the latest CHANGELOG version.
+* README Demos For Non-Interactive Flows: Add VHS demos and examples for `--inspect` (including `--inspect-sample 0` for a schema-only report), `--stdin` combined with `--sql-file`, and the write-back safety boundaries (`--save` requires `--force`; a schema change is rejected up front). The new example commands are exercised end-to-end by the shellspec suite.
 
 ## [v0.21.0](https://github.com/nao1215/sqly/compare/v0.20.0...v0.21.0) (2026-06-01)
 
 ### Breaking Changes
-* Unsupported Statements Rejected Clearly: Explicit transaction control (`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`RELEASE`), `VACUUM`/`VACUUM INTO`, and `ATTACH`/`DETACH DATABASE` are now rejected with a clear sqly error. sqly runs each statement in its own transaction on a single in-memory connection, so these cannot work across statements, and ATTACH would let a session read or write external SQLite files outside the import/save model (#441, #442, #443, #444, #457, #458, #463).
-* Write-Back Rejects Schema-Only Runs: A non-interactive `--save`/`--save-dir` run now fails up front when the SQL changes schema or runs a maintenance statement (ALTER, DROP, REINDEX, ANALYZE, CREATE/DROP of a table/view/index/trigger, including `CREATE TABLE AS SELECT`), since write-back can only persist `INSERT`/`UPDATE`/`DELETE` on imported tables. Previously such a run exited 0 and reported success while leaving the source unchanged (#433, #434, #435, #436, #437, #438, #469, #470, #471, #472, #473, #474, #475, #476, #477, #478, #479, #480, #481, #482, #483, #484).
+* Unsupported Statements Rejected Clearly: Explicit transaction control (`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`RELEASE`), `VACUUM`/`VACUUM INTO`, and `ATTACH`/`DETACH DATABASE` are now rejected with a clear sqly error. sqly runs each statement in its own transaction on a single in-memory connection, so these cannot work across statements, and ATTACH would let a session read or write external SQLite files outside the import/save model.
+* Write-Back Rejects Schema-Only Runs: A non-interactive `--save`/`--save-dir` run now fails up front when the SQL changes schema or runs a maintenance statement (ALTER, DROP, REINDEX, ANALYZE, CREATE/DROP of a table/view/index/trigger, including `CREATE TABLE AS SELECT`), since write-back can only persist `INSERT`/`UPDATE`/`DELETE` on imported tables. Previously such a run exited 0 and reported success while leaving the source unchanged.
 
 ### Bug Fixes
-* Neutral Result Message For Non-DML: A DDL, PRAGMA, or maintenance statement now reports `statement executed successfully` instead of a misleading `affected is N row(s)` count (#439).
-* PRAGMA On The Exec Path: A setter PRAGMA (`PRAGMA user_version = 1`) and a no-row command PRAGMA (`PRAGMA incremental_vacuum`) now run successfully instead of failing with a "no records" error (#440, #485).
-* Batch .import Under Save Flags: A batch or `--sql-file` script that imports its own input with `.import` and then modifies it is now allowed under `--save`/`--save-dir`; write-back is validated after the import runs (#456).
-* Schema-Qualified Helper Commands: `.schema`, `.describe`, `.header`, and `.dump` accept schema-qualified names such as `main.user` (#445, #446, #447, #448).
-* TEMP Tables And Views In Helper Commands: `.tables` lists session-created views and TEMP tables (#449, #450); `.schema` prints the real `CREATE VIEW` for a view (#451) and reads the stored definition for a constrained TEMP table instead of a lossy reconstruction (#464).
-* Empty Compressed JSON And JSONL: An empty compressed JSON array (`.json.gz`) and an empty compressed JSONL file now import as a zero-row table, matching the uncompressed inputs (#452, #453).
-* Output Destination Safety: `--output` and `.dump` strip every trailing compression suffix before checking for an input-only ACH/Fedwire extension, so a path like `out.ach.gz.zst` is rejected instead of receiving CSV bytes (#459, #460).
-* Pseudo-File Inputs: `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and the Linux `/proc/<pid|self>/fd/*` aliases pass input-path validation and import end-to-end. An extensionless pseudo-file is staged as CSV (use `--stdin FORMAT` for another format), matching the already-allowed `/dev/fd/*` (#461, #462).
-* LTSV Label Validation: LTSV output rejects a column name that is not a valid LTSV label (for example `foo:bar`) or that duplicates another, and LTSV import rejects a row that repeats a label, so LTSV stays round-trippable instead of silently losing values (#465, #466, #467).
-* Multiline CREATE TRIGGER: Batch and `--sql-file` parsing keeps a `CREATE TRIGGER ... BEGIN ... END` body as one statement instead of splitting it at the inner semicolons (#468).
+* Neutral Result Message For Non-DML: A DDL, PRAGMA, or maintenance statement now reports `statement executed successfully` instead of a misleading `affected is N row(s)` count.
+* PRAGMA On The Exec Path: A setter PRAGMA (`PRAGMA user_version = 1`) and a no-row command PRAGMA (`PRAGMA incremental_vacuum`) now run successfully instead of failing with a "no records" error.
+* Batch .import Under Save Flags: A batch or `--sql-file` script that imports its own input with `.import` and then modifies it is now allowed under `--save`/`--save-dir`; write-back is validated after the import runs.
+* Schema-Qualified Helper Commands: `.schema`, `.describe`, `.header`, and `.dump` accept schema-qualified names such as `main.user`.
+* TEMP Tables And Views In Helper Commands: `.tables` lists session-created views and TEMP tables; `.schema` prints the real `CREATE VIEW` for a view and reads the stored definition for a constrained TEMP table instead of a lossy reconstruction.
+* Empty Compressed JSON And JSONL: An empty compressed JSON array (`.json.gz`) and an empty compressed JSONL file now import as a zero-row table, matching the uncompressed inputs.
+* Output Destination Safety: `--output` and `.dump` strip every trailing compression suffix before checking for an input-only ACH/Fedwire extension, so a path like `out.ach.gz.zst` is rejected instead of receiving CSV bytes.
+* Pseudo-File Inputs: `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and the Linux `/proc/<pid|self>/fd/*` aliases pass input-path validation and import end-to-end. An extensionless pseudo-file is staged as CSV (use `--stdin FORMAT` for another format), matching the already-allowed `/dev/fd/*`.
+* LTSV Label Validation: LTSV output rejects a column name that is not a valid LTSV label (for example `foo:bar`) or that duplicates another, and LTSV import rejects a row that repeats a label, so LTSV stays round-trippable instead of silently losing values.
+* Multiline CREATE TRIGGER: Batch and `--sql-file` parsing keeps a `CREATE TRIGGER ... BEGIN ... END` body as one statement instead of splitting it at the inner semicolons.
 
 ### Dependencies
-* filesql: 0.13.0 → 0.14.0, which rejects a duplicate label within an LTSV record on import (the upstream root fix for #467, replacing the temporary sqly-side check) and pulls in fileparser 0.5.2.
+* filesql: 0.13.0 → 0.14.0, which rejects a duplicate label within an LTSV record on import (the upstream root fix, replacing the temporary sqly-side check) and pulls in fileparser 0.5.2.
 
 ## [v0.20.0](https://github.com/nao1215/sqly/compare/v0.19.0...v0.20.0) (2026-06-01)
 
 ### Bug Fixes
-* Valid Machine-Readable Output: `--csv` and `--tsv` stdout now go through a CSV/TSV writer, so values containing the delimiter, quotes, or newlines are quoted and stay valid when redirected or piped (#380, #381). `--ltsv` rejects values with a tab or newline, which LTSV cannot represent losslessly, and the LTSV file export no longer quotes the whole `label:value` token, so it round-trips (#382, #383). `--json` and `--ndjson` reject duplicate output column names instead of emitting ambiguous duplicate keys (#384, #385). `--markdown` renders an embedded newline as `<br>` so a row stays on one line (#426).
-* Direct --sql Accepts More SQLite: The direct `--sql` path strips a leading SQL comment or UTF-8 BOM before classifying a statement, matching the batch and `--sql-file` paths (#386, #387). It now runs `PRAGMA`, `VALUES`, `REPLACE`, transaction control (`BEGIN`/`COMMIT`/...), DDL (`CREATE`/`DROP`/...), `ATTACH`, and `ANALYZE` instead of rejecting them, and rewrites the `TABLE name` shorthand to `SELECT * FROM name` (#406, #407, #408, #409, #410, #411, #430, #431). A non-returning `WITH ... INSERT/UPDATE/DELETE` runs as DML instead of failing on the query path (#412, #413, #414).
-* Empty JSON And JSONL Inputs: An empty JSON array (`[]`), whitespace-only JSON, and an empty or blank-only JSONL file now import as a zero-row table with the `data` column instead of failing as an empty data source (#388, #389).
-* Inspect And Dependent-Flag Validation: `--inspect` rejects a conflicting output mode flag such as `--csv` or `--parquet` (#390). `--stdin-name` requires `--stdin` (#391), `--inspect-sample` requires `--inspect` (#392), and `--force` requires `--save`/`--save-dir` (#393), instead of being silently ignored. A `--stdin-name` that is a SQLite keyword is rejected since it is not queryable as a bare table name (#423), and an imported file whose name sanitizes to a keyword now warns that the table must be quoted (#424).
-* Output Destination Safety: `--output` and `.dump` resolve symlinks before comparing a destination to an imported source, so a symlink alias can no longer overwrite a source file (#394, #418). `.dump` now rejects a destination that aliases an imported source, pointing at `.save --force` (#398). A destination ending with a path separator is rejected instead of becoming a hidden `.csv` file (#419, #420), and ACH/Fedwire destination extensions (including compressed variants) are rejected instead of receiving CSV bytes (#421, #422).
-* Write-Back Semantics: An `EXPLAIN` of a DML statement (#402, #403) and a zero-row DML (#404, #405) no longer trigger write-back, since neither changes table data. A `.csv.bz2` source is rejected during preflight, before any file is truncated, because bzip2 has no writer (#395). A run that fails during write-back keeps stdout free of the DML success count (#396).
-* Directory Import And Collisions: Re-importing a directory-sourced file directly clears the directory marker so it becomes saveable (#415), a standalone `.import` can replace a directory-imported table (#416), a same-source symlink alias is treated as a harmless re-import rather than a collision (#417), and a directory re-import no longer mis-detects basename-prefix tables (for example `a.csv` and `a_b.csv`) as collisions (#429).
-* Batch Line-By-Line Parsing: A helper command after a terminated SQL statement or after a leading SQL comment is parsed and executed on its own line instead of being absorbed into the following statement (#397, #425).
-* Input Path Validation: User files under `/dev/shm` and process-substitution paths under `/dev/fd` are no longer rejected as system directories (#427, #428).
-* History Lock Contention: The session databases set `busy_timeout`, so two sqly processes sharing one history DB wait for a transient lock instead of disabling history with a misleading SQLITE_BUSY warning (#399).
+* Valid Machine-Readable Output: `--csv` and `--tsv` stdout now go through a CSV/TSV writer, so values containing the delimiter, quotes, or newlines are quoted and stay valid when redirected or piped. `--ltsv` rejects values with a tab or newline, which LTSV cannot represent losslessly, and the LTSV file export no longer quotes the whole `label:value` token, so it round-trips. `--json` and `--ndjson` reject duplicate output column names instead of emitting ambiguous duplicate keys. `--markdown` renders an embedded newline as `<br>` so a row stays on one line.
+* Direct --sql Accepts More SQLite: The direct `--sql` path strips a leading SQL comment or UTF-8 BOM before classifying a statement, matching the batch and `--sql-file` paths. It now runs `PRAGMA`, `VALUES`, `REPLACE`, transaction control (`BEGIN`/`COMMIT`/...), DDL (`CREATE`/`DROP`/...), `ATTACH`, and `ANALYZE` instead of rejecting them, and rewrites the `TABLE name` shorthand to `SELECT * FROM name`. A non-returning `WITH ... INSERT/UPDATE/DELETE` runs as DML instead of failing on the query path.
+* Empty JSON And JSONL Inputs: An empty JSON array (`[]`), whitespace-only JSON, and an empty or blank-only JSONL file now import as a zero-row table with the `data` column instead of failing as an empty data source.
+* Inspect And Dependent-Flag Validation: `--inspect` rejects a conflicting output mode flag such as `--csv` or `--parquet`. `--stdin-name` requires `--stdin`, `--inspect-sample` requires `--inspect`, and `--force` requires `--save`/`--save-dir`, instead of being silently ignored. A `--stdin-name` that is a SQLite keyword is rejected since it is not queryable as a bare table name, and an imported file whose name sanitizes to a keyword now warns that the table must be quoted.
+* Output Destination Safety: `--output` and `.dump` resolve symlinks before comparing a destination to an imported source, so a symlink alias can no longer overwrite a source file. `.dump` now rejects a destination that aliases an imported source, pointing at `.save --force`. A destination ending with a path separator is rejected instead of becoming a hidden `.csv` file, and ACH/Fedwire destination extensions (including compressed variants) are rejected instead of receiving CSV bytes.
+* Write-Back Semantics: An `EXPLAIN` of a DML statement and a zero-row DML no longer trigger write-back, since neither changes table data. A `.csv.bz2` source is rejected during preflight, before any file is truncated, because bzip2 has no writer. A run that fails during write-back keeps stdout free of the DML success count.
+* Directory Import And Collisions: Re-importing a directory-sourced file directly clears the directory marker so it becomes saveable, a standalone `.import` can replace a directory-imported table, a same-source symlink alias is treated as a harmless re-import rather than a collision, and a directory re-import no longer mis-detects basename-prefix tables (for example `a.csv` and `a_b.csv`) as collisions.
+* Batch Line-By-Line Parsing: A helper command after a terminated SQL statement or after a leading SQL comment is parsed and executed on its own line instead of being absorbed into the following statement.
+* Input Path Validation: User files under `/dev/shm` and process-substitution paths under `/dev/fd` are no longer rejected as system directories.
+* History Lock Contention: The session databases set `busy_timeout`, so two sqly processes sharing one history DB wait for a transient lock instead of disabling history with a misleading SQLITE_BUSY warning.
 
 ## [v0.19.0](https://github.com/nao1215/sqly/compare/v0.18.0...v0.19.0) (2026-06-01)
 
 ### New Features
-* DML RETURNING Support: `INSERT`, `UPDATE`, and `DELETE` statements with a `RETURNING` clause now print the returned rows instead of only an affected-row count, and those rows can be exported with `--output` (#363, #368).
+* DML RETURNING Support: `INSERT`, `UPDATE`, and `DELETE` statements with a `RETURNING` clause now print the returned rows instead of only an affected-row count, and those rows can be exported with `--output`.
 
 ### Bug Fixes
-* Explicit Empty Flag Values Rejected: `--output`, `--sql-file`, `--save-dir`, and `--stdin` now reject an explicit empty value instead of treating the flag as absent (#349, #350, #352, #353). `.import` likewise rejects an empty `--sheet`, in both the `--sheet ""` and `--sheet=` forms (#354, #355).
-* Comment-Only SQL Files Rejected: A `--sql-file` that contains only comments now fails like an empty file, since it has no executable SQL (#351).
-* Conflicting Output Mode Flags Rejected: Passing more than one output mode flag (for example `--csv --json`) now fails instead of applying an undocumented precedence (#365).
-* Output For Non-Rowset DML: `--output` is now rejected for a DML statement that produces no rows (an `INSERT`/`UPDATE`/`DELETE` without `RETURNING`), instead of being silently ignored (#364).
-* Save Flags With sql-file On A Terminal: `--save` and `--save-dir` now work with `--sql-file` even when stdin is a terminal (#366, #367).
-* Stdin Routing: `--sql-file` now rejects non-empty piped stdin instead of silently dropping it, pointing at `--stdin` for dataset input (#373). A `--stdin` dataset run with no query now fails instead of importing and discarding the data (#374).
-* UTF-8 BOM In Scripts: A leading UTF-8 BOM is now stripped from `--sql-file` scripts and batch stdin, so BOM-prefixed files from Windows editors and export tools parse like plain UTF-8 (#369).
-* Sheet Flag On Unreadable Directories: `--sheet` validation now surfaces the real directory access error instead of misclassifying an unreadable directory as a non-Excel input (#356).
-* Multi-Workbook Sheet Filter: In a multi-workbook or directory import, a workbook that lacks the requested `--sheet` is now skipped instead of failing the whole import, so matching workbooks still load. The run fails only when no workbook contains the sheet (#378).
-* Directory Import Provenance: Directory imports now record each table's source file even when the basename is sanitized or the file yields several tables (Excel, ACH, Fedwire), so `--inspect` reports the file rather than the directory path (#357, #358).
-* Directory Import Collisions: Two files in a directory tree that map to the same table name (duplicate basenames from different subdirectories, or sanitized-name collisions) are now rejected instead of one silently overwriting the other (#359, #360).
-* Directory Re-Import: Re-importing a directory that overwrites an existing table is now reported as a successful overwrite instead of `No supported files found`, and the table's source is re-pointed to the directory file so `.save --force` can no longer write the directory rows back into the original source file (#361, #362).
-* Write-Back Safety: `--save-dir` now rejects a destination that resolves to the source file (#370) or already exists in the destination directory (#372), and validates all targets before writing any, so a failure leaves no partial output (#377). `--output` now rejects a destination that aliases an imported source file (#371). A read-only query no longer triggers write-back under `--save`/`--save-dir` (#376), and a run that fails during write-back no longer prints a DML success count to stdout (#375).
+* Explicit Empty Flag Values Rejected: `--output`, `--sql-file`, `--save-dir`, and `--stdin` now reject an explicit empty value instead of treating the flag as absent. `.import` likewise rejects an empty `--sheet`, in both the `--sheet ""` and `--sheet=` forms.
+* Comment-Only SQL Files Rejected: A `--sql-file` that contains only comments now fails like an empty file, since it has no executable SQL.
+* Conflicting Output Mode Flags Rejected: Passing more than one output mode flag (for example `--csv --json`) now fails instead of applying an undocumented precedence.
+* Output For Non-Rowset DML: `--output` is now rejected for a DML statement that produces no rows (an `INSERT`/`UPDATE`/`DELETE` without `RETURNING`), instead of being silently ignored.
+* Save Flags With sql-file On A Terminal: `--save` and `--save-dir` now work with `--sql-file` even when stdin is a terminal.
+* Stdin Routing: `--sql-file` now rejects non-empty piped stdin instead of silently dropping it, pointing at `--stdin` for dataset input. A `--stdin` dataset run with no query now fails instead of importing and discarding the data.
+* UTF-8 BOM In Scripts: A leading UTF-8 BOM is now stripped from `--sql-file` scripts and batch stdin, so BOM-prefixed files from Windows editors and export tools parse like plain UTF-8.
+* Sheet Flag On Unreadable Directories: `--sheet` validation now surfaces the real directory access error instead of misclassifying an unreadable directory as a non-Excel input.
+* Multi-Workbook Sheet Filter: In a multi-workbook or directory import, a workbook that lacks the requested `--sheet` is now skipped instead of failing the whole import, so matching workbooks still load. The run fails only when no workbook contains the sheet.
+* Directory Import Provenance: Directory imports now record each table's source file even when the basename is sanitized or the file yields several tables (Excel, ACH, Fedwire), so `--inspect` reports the file rather than the directory path.
+* Directory Import Collisions: Two files in a directory tree that map to the same table name (duplicate basenames from different subdirectories, or sanitized-name collisions) are now rejected instead of one silently overwriting the other.
+* Directory Re-Import: Re-importing a directory that overwrites an existing table is now reported as a successful overwrite instead of `No supported files found`, and the table's source is re-pointed to the directory file so `.save --force` can no longer write the directory rows back into the original source file.
+* Write-Back Safety: `--save-dir` now rejects a destination that resolves to the source file or already exists in the destination directory, and validates all targets before writing any, so a failure leaves no partial output. `--output` now rejects a destination that aliases an imported source file. A read-only query no longer triggers write-back under `--save`/`--save-dir`, and a run that fails during write-back no longer prints a DML success count to stdout.
 
 ## [v0.18.0](https://github.com/nao1215/sqly/compare/v0.17.0...v0.18.0) (2026-05-31)
 
@@ -68,7 +82,7 @@
 * JSON/NDJSON Preserve NULL: `--json` and `--ndjson` now emit a SQL `NULL` as JSON `null` instead of collapsing it to an empty string, so `NULL` and `''` are distinguishable in machine-readable output. Query results carry per-cell NULL information (a NULL scans as a nil byte slice, an empty string as a non-nil empty one); text formats are unchanged.
 * Stdin Name Must Be Queryable: `--stdin-name` now requires a valid table identifier (letters, digits, and underscores, not starting with a digit) and rejects values such as `my data` or `2023-data` up front. Previously such names were silently sanitized (`my data` became `my_data`), leaving the advertised name unusable in SQL.
 * Table-Name Collision Detection: When two inputs sanitize to the same table name (for example `a-b.csv` and `a_b.csv`, both becoming `a_b`), sqly now fails with a clear collision error instead of letting the later import silently overwrite the earlier one while keeping the first file's source metadata.
-* Input Path Validation False Positives: Input path validation no longer rejects legitimate paths. The arbitrary 10-level directory-depth limit is removed, so deeply nested workspace paths import (#316), and the URL-encoded traversal patterns (`..%2f`, `..%5c`) are no longer matched, so a real filename that merely contains those bytes is accepted (#317). sqly runs locally with the user's own permissions, so these web-style traversal checks only produced false rejections.
+* Input Path Validation False Positives: Input path validation no longer rejects legitimate paths. The arbitrary 10-level directory-depth limit is removed, so deeply nested workspace paths import, and the URL-encoded traversal patterns (`..%2f`, `..%5c`) are no longer matched, so a real filename that merely contains those bytes is accepted. sqly runs locally with the user's own permissions, so these web-style traversal checks only produced false rejections.
 * Helper Commands Reject Extra Arguments: `.schema`, `.describe`, `.header`, `.mode`, `.tables`, and `.help` now reject unexpected trailing arguments with a clear error instead of silently ignoring them, so typos no longer pass unnoticed.
 * Output Requires SQL: `--output` is now rejected with a clear error when no `--sql` query is supplied (including batch stdin, `--sql-file`, and interactive runs), instead of being silently ignored while the command still exits successfully. `--output` is only honored by the single-result `--sql` path.
 * Empty Command Arguments Rejected: `.save ""`, `.dump TABLE ""`, and `.import ""` now fail with a clear error instead of being reinterpreted. `.save ""` no longer behaves like an in-place save (which bypassed `--force`), `.dump TABLE ""` no longer writes a file named `.csv`, and `.import ""` no longer imports the current working directory.
@@ -350,7 +364,7 @@
 ## [v0.12.2](https://github.com/nao1215/sqly/compare/v0.12.1...v0.12.2) (2025-09-17)
 
 ### Bug Fixes
-* **Table Names**: Fix SQL syntax errors caused by special characters in filenames ([#153](https://github.com/nao1215/sqly/pull/153))
+* **Table Names**: Fix SQL syntax errors caused by special characters in filenames ()
   - Automatically sanitize table names by replacing problematic characters (hyphens, dots, special chars) with underscores
   - Example: `bug-syntax-error.csv` now creates table `bug_syntax_error` instead of failing with syntax error
   - Added comprehensive test coverage for filename sanitization edge cases
@@ -463,154 +477,154 @@
 
 ## [v0.9.0](https://github.com/nao1215/sqly/compare/v0.8.1...v0.9.0) (2025-02-03)
 
-* Add architecture linter [#87](https://github.com/nao1215/sqly/pull/87) ([nao1215](https://github.com/nao1215))
-* Reduce dependency and add unit tests for interactor [#86](https://github.com/nao1215/sqly/pull/86) ([nao1215](https://github.com/nao1215))
-* Add usecase interface and mock code [#85](https://github.com/nao1215/sqly/pull/85) ([nao1215](https://github.com/nao1215))
-* Bump github.com/spf13/pflag from 1.0.5 to 1.0.6 [#84](https://github.com/nao1215/sqly/pull/84) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump golang.org/x/net from 0.30.0 to 0.33.0 [#83](https://github.com/nao1215/sqly/pull/83) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.34.4 to 1.34.5 [#82](https://github.com/nao1215/sqly/pull/82) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/mattn/go-colorable from 0.1.13 to 0.1.14 [#81](https://github.com/nao1215/sqly/pull/81) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.34.3 to 1.34.4 [#80](https://github.com/nao1215/sqly/pull/80) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump golang.org/x/crypto from 0.28.0 to 0.31.0 [#79](https://github.com/nao1215/sqly/pull/79) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.34.1 to 1.34.3 [#78](https://github.com/nao1215/sqly/pull/78) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.33.1 to 1.34.1 [#76](https://github.com/nao1215/sqly/pull/76) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/fatih/color from 1.17.0 to 1.18.0 [#75](https://github.com/nao1215/sqly/pull/75) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/mattn/go-sqlite3 from 1.14.23 to 1.14.24 [#73](https://github.com/nao1215/sqly/pull/73) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/xuri/excelize/v2 from 2.8.1 to 2.9.0 [#74](https://github.com/nao1215/sqly/pull/74) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/mattn/go-sqlite3 from 1.14.22 to 1.14.23 [#70](https://github.com/nao1215/sqly/pull/70) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.33.0 to 1.33.1 [#72](https://github.com/nao1215/sqly/pull/72) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.32.0 to 1.33.0 [#71](https://github.com/nao1215/sqly/pull/71) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Add go 1.23 in unit test coverage [#69](https://github.com/nao1215/sqly/pull/69) ([nao1215](https://github.com/nao1215))
-* Bump modernc.org/sqlite from 1.31.1 to 1.32.0 [#68](https://github.com/nao1215/sqly/pull/68) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.30.2 to 1.31.1 [#67](https://github.com/nao1215/sqly/pull/67) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.30.1 to 1.30.2 [#66](https://github.com/nao1215/sqly/pull/66) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.30.0 to 1.30.1 [#65](https://github.com/nao1215/sqly/pull/65) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump goreleaser/goreleaser-action from 5 to 6 [#64](https://github.com/nao1215/sqly/pull/64) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.29.10 to 1.30.0 [#63](https://github.com/nao1215/sqly/pull/63) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.29.9 to 1.29.10 [#62](https://github.com/nao1215/sqly/pull/62) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Update project config [#61](https://github.com/nao1215/sqly/pull/61) ([nao1215](https://github.com/nao1215))
-* Bump github.com/fatih/color from 1.16.0 to 1.17.0 [#60](https://github.com/nao1215/sqly/pull/60) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump modernc.org/sqlite from 1.29.8 to 1.29.9 [#59](https://github.com/nao1215/sqly/pull/59) ([dependabot[bot]](https://github.com/apps/dependabot))
+* Add architecture linter ([nao1215](https://github.com/nao1215))
+* Reduce dependency and add unit tests for interactor ([nao1215](https://github.com/nao1215))
+* Add usecase interface and mock code ([nao1215](https://github.com/nao1215))
+* Bump github.com/spf13/pflag from 1.0.5 to 1.0.6 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump golang.org/x/net from 0.30.0 to 0.33.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.34.4 to 1.34.5 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/mattn/go-colorable from 0.1.13 to 0.1.14 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.34.3 to 1.34.4 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump golang.org/x/crypto from 0.28.0 to 0.31.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.34.1 to 1.34.3 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.33.1 to 1.34.1 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/fatih/color from 1.17.0 to 1.18.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/mattn/go-sqlite3 from 1.14.23 to 1.14.24 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/xuri/excelize/v2 from 2.8.1 to 2.9.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/mattn/go-sqlite3 from 1.14.22 to 1.14.23 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.33.0 to 1.33.1 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.32.0 to 1.33.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Add go 1.23 in unit test coverage ([nao1215](https://github.com/nao1215))
+* Bump modernc.org/sqlite from 1.31.1 to 1.32.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.30.2 to 1.31.1 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.30.1 to 1.30.2 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.30.0 to 1.30.1 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump goreleaser/goreleaser-action from 5 to 6 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.29.10 to 1.30.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.29.9 to 1.29.10 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Update project config ([nao1215](https://github.com/nao1215))
+* Bump github.com/fatih/color from 1.16.0 to 1.17.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump modernc.org/sqlite from 1.29.8 to 1.29.9 ([dependabot[bot]](https://github.com/apps/dependabot))
 
 ## [v0.8.1](https://github.com/nao1215/sqly/compare/v0.8.0...v0.8.1) (2024-05-01)
 
-* Introduce homebrew [#58](https://github.com/nao1215/sqly/pull/58) ([nao1215](https://github.com/nao1215))
+* Introduce homebrew ([nao1215](https://github.com/nao1215))
 
 ## [v0.8.0](https://github.com/nao1215/sqly/compare/v0.7.0...v0.8.0) (2024-05-01)
 
-* Change SQLite3 driver from mattn/go-sqlite3 to modernc.org/sqlite [#57](https://github.com/nao1215/sqly/pull/57) ([nao1215](https://github.com/nao1215))
-* Add benchmark [#56](https://github.com/nao1215/sqly/pull/56) ([nao1215](https://github.com/nao1215))
-* Add unit test for excel [#55](https://github.com/nao1215/sqly/pull/55) ([nao1215](https://github.com/nao1215))
+* Change SQLite3 driver from mattn/go-sqlite3 to modernc.org/sqlite ([nao1215](https://github.com/nao1215))
+* Add benchmark ([nao1215](https://github.com/nao1215))
+* Add unit test for excel ([nao1215](https://github.com/nao1215))
 
 ## [v0.7.0](https://github.com/nao1215/sqly/compare/v0.6.5...v0.7.0) (2024-04-30)
 
-* Bump golang.org/x/net from 0.21.0 to 0.23.0 [#54](https://github.com/nao1215/sqly/pull/54) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Support Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX) [#53](https://github.com/nao1215/sqly/pull/53) ([nao1215](https://github.com/nao1215))
+* Bump golang.org/x/net from 0.21.0 to 0.23.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Support Microsoft Excel™ (XLAM / XLSM / XLSX / XLTM / XLTX) ([nao1215](https://github.com/nao1215))
 
 ## [v0.6.5](https://github.com/nao1215/sqly/compare/v0.6.4...v0.6.5) (2024-04-29)
 
 ## [v0.6.4](https://github.com/nao1215/sqly/compare/v0.5.2...v0.6.4) (2024-04-29)
 
-* Bump goreleaser/goreleaser-action from 2 to 5 [#50](https://github.com/nao1215/sqly/pull/50) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump actions/checkout from 3 to 4 [#52](https://github.com/nao1215/sqly/pull/52) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump actions/setup-go from 3 to 5 [#51](https://github.com/nao1215/sqly/pull/51) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Maintain dependencies for GitHub Actions [#49](https://github.com/nao1215/sqly/pull/49) ([nao1215](https://github.com/nao1215))
-* Introduce numerical sorting [#48](https://github.com/nao1215/sqly/pull/48) ([nao1215](https://github.com/nao1215))
-* Fix issue 43: Panic when importing json table with numeric field. [#47](https://github.com/nao1215/sqly/pull/47) ([nao1215](https://github.com/nao1215))
-* Fix issue 42 (bug): Panic when json field is null [#46](https://github.com/nao1215/sqly/pull/46) ([nao1215](https://github.com/nao1215))
-* Update project config [#45](https://github.com/nao1215/sqly/pull/45) ([nao1215](https://github.com/nao1215))
-* Introduce octocov [#44](https://github.com/nao1215/sqly/pull/44) ([nao1215](https://github.com/nao1215))
-* Bump github.com/google/wire from 0.5.0 to 0.6.0 [#41](https://github.com/nao1215/sqly/pull/41) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/mattn/go-sqlite3 from 1.14.19 to 1.14.22 [#40](https://github.com/nao1215/sqly/pull/40) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/mattn/go-sqlite3 from 1.14.18 to 1.14.19 [#37](https://github.com/nao1215/sqly/pull/37) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/fatih/color from 1.15.0 to 1.16.0 [#36](https://github.com/nao1215/sqly/pull/36) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/mattn/go-sqlite3 from 1.14.17 to 1.14.18 [#35](https://github.com/nao1215/sqly/pull/35) ([dependabot[bot]](https://github.com/apps/dependabot))
-* (auto merged) Bump github.com/google/go-cmp from 0.5.9 to 0.6.0 [#34](https://github.com/nao1215/sqly/pull/34) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Add automerged workflows [#33](https://github.com/nao1215/sqly/pull/33) ([nao1215](https://github.com/nao1215))
-* Bump github.com/mattn/go-sqlite3 from 1.14.16 to 1.14.17 [#32](https://github.com/nao1215/sqly/pull/32) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/nao1215/gorky from 0.2.0 to 0.2.1 [#31](https://github.com/nao1215/sqly/pull/31) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/fatih/color from 1.14.1 to 1.15.0 [#30](https://github.com/nao1215/sqly/pull/30) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Bump github.com/fatih/color from 1.13.0 to 1.14.1 [#29](https://github.com/nao1215/sqly/pull/29) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Change golden package import path [#28](https://github.com/nao1215/sqly/pull/28) ([nao1215](https://github.com/nao1215))
+* Bump goreleaser/goreleaser-action from 2 to 5 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump actions/checkout from 3 to 4 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump actions/setup-go from 3 to 5 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Maintain dependencies for GitHub Actions ([nao1215](https://github.com/nao1215))
+* Introduce numerical sorting ([nao1215](https://github.com/nao1215))
+* Fix issue 43: Panic when importing json table with numeric field. ([nao1215](https://github.com/nao1215))
+* Fix issue 42 (bug): Panic when json field is null ([nao1215](https://github.com/nao1215))
+* Update project config ([nao1215](https://github.com/nao1215))
+* Introduce octocov ([nao1215](https://github.com/nao1215))
+* Bump github.com/google/wire from 0.5.0 to 0.6.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/mattn/go-sqlite3 from 1.14.19 to 1.14.22 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/mattn/go-sqlite3 from 1.14.18 to 1.14.19 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/fatih/color from 1.15.0 to 1.16.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/mattn/go-sqlite3 from 1.14.17 to 1.14.18 ([dependabot[bot]](https://github.com/apps/dependabot))
+* (auto merged) Bump github.com/google/go-cmp from 0.5.9 to 0.6.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Add automerged workflows ([nao1215](https://github.com/nao1215))
+* Bump github.com/mattn/go-sqlite3 from 1.14.16 to 1.14.17 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/nao1215/gorky from 0.2.0 to 0.2.1 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/fatih/color from 1.14.1 to 1.15.0 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Bump github.com/fatih/color from 1.13.0 to 1.14.1 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Change golden package import path ([nao1215](https://github.com/nao1215))
 
 ## [v0.5.2](https://github.com/nao1215/sqly/compare/v0.5.1...v0.5.2) (2022-11-27)
 
-* add unit test for infra package [#27](https://github.com/nao1215/sqly/pull/27) ([nao1215](https://github.com/nao1215))
-* Add basic unit test for shell [#26](https://github.com/nao1215/sqly/pull/26) ([nao1215](https://github.com/nao1215))
-* Add unit test for model package [#24](https://github.com/nao1215/sqly/pull/24) ([nao1215](https://github.com/nao1215))
-* Bump github.com/google/go-cmp from 0.2.0 to 0.5.9 [#25](https://github.com/nao1215/sqly/pull/25) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Change golden test package from goldie to golden and more [#23](https://github.com/nao1215/sqly/pull/23) ([nao1215](https://github.com/nao1215))
-* Add unit test for argument paser [#21](https://github.com/nao1215/sqly/pull/21) ([nao1215](https://github.com/nao1215))
+* add unit test for infra package ([nao1215](https://github.com/nao1215))
+* Add basic unit test for shell ([nao1215](https://github.com/nao1215))
+* Add unit test for model package ([nao1215](https://github.com/nao1215))
+* Bump github.com/google/go-cmp from 0.2.0 to 0.5.9 ([dependabot[bot]](https://github.com/apps/dependabot))
+* Change golden test package from goldie to golden and more ([nao1215](https://github.com/nao1215))
+* Add unit test for argument paser ([nao1215](https://github.com/nao1215))
 
 ## [v0.5.1](https://github.com/nao1215/sqly/compare/v0.5.0...v0.5.1) (2022-11-19)
 
-* Add sqlite3 syntax completion [#22](https://github.com/nao1215/sqly/pull/22) ([nao1215](https://github.com/nao1215))
+* Add sqlite3 syntax completion ([nao1215](https://github.com/nao1215))
 
 ## [v0.5.0](https://github.com/nao1215/sqly/compare/v0.4.0...v0.5.0) (2022-11-13)
 
-* Feat dump tsv ltsv json [#20](https://github.com/nao1215/sqly/pull/20) ([nao1215](https://github.com/nao1215))
-* Add featuer thar print date by markdown table format [#19](https://github.com/nao1215/sqly/pull/19) ([nao1215](https://github.com/nao1215))
-* Feat import ltsv [#18](https://github.com/nao1215/sqly/pull/18) ([nao1215](https://github.com/nao1215))
+* Feat dump tsv ltsv json ([nao1215](https://github.com/nao1215))
+* Add featuer thar print date by markdown table format ([nao1215](https://github.com/nao1215))
+* Feat import ltsv ([nao1215](https://github.com/nao1215))
 
 ## [v0.4.0](https://github.com/nao1215/sqly/compare/v0.3.1...v0.4.0) (2022-11-13)
 
-* Feat import tsv [#17](https://github.com/nao1215/sqly/pull/17) ([nao1215](https://github.com/nao1215))
+* Feat import tsv ([nao1215](https://github.com/nao1215))
 
 ## [v0.3.1](https://github.com/nao1215/sqly/compare/v0.3.0...v0.3.1) (2022-11-11)
 
-* Fix panic bug when import file that is without extension [#15](https://github.com/nao1215/sqly/pull/15) ([nao1215](https://github.com/nao1215))
+* Fix panic bug when import file that is without extension ([nao1215](https://github.com/nao1215))
 
 ## [v0.3.0](https://github.com/nao1215/sqly/compare/v0.2.1...v0.3.0) (2022-11-10)
 
-* Feat import json [#14](https://github.com/nao1215/sqly/pull/14) ([nao1215](https://github.com/nao1215))
-* Fix input delays when increasing records [#13](https://github.com/nao1215/sqly/pull/13) ([nao1215](https://github.com/nao1215))
+* Feat import json ([nao1215](https://github.com/nao1215))
+* Fix input delays when increasing records ([nao1215](https://github.com/nao1215))
 
 ## [v0.2.1](https://github.com/nao1215/sqly/compare/v0.2.0...v0.2.1) (2022-11-09)
 
-* Add header command [#12](https://github.com/nao1215/sqly/pull/12) ([nao1215](https://github.com/nao1215))
+* Add header command ([nao1215](https://github.com/nao1215))
 
 ## [v0.2.0](https://github.com/nao1215/sqly/compare/v0.1.1...v0.2.0) (2022-11-09)
 
-* Fixed a display collapse problem when multiple lines are entered [#11](https://github.com/nao1215/sqly/pull/11) ([nao1215](https://github.com/nao1215))
+* Fixed a display collapse problem when multiple lines are entered ([nao1215](https://github.com/nao1215))
 
 ## [v0.1.1](https://github.com/nao1215/sqly/compare/v0.1.0...v0.1.1) (2022-11-07)
 
-* Fixed a bug that caused SQL to fail if there was a trailing semicolon [#10](https://github.com/nao1215/sqly/pull/10) ([nao1215](https://github.com/nao1215))
+* Fixed a bug that caused SQL to fail if there was a trailing semicolon ([nao1215](https://github.com/nao1215))
 
 ## [v0.1.0](https://github.com/nao1215/sqly/compare/v0.0.11...v0.1.0) (2022-11-07)
 
-* Add move cursor function in intaractive shell [#9](https://github.com/nao1215/sqly/pull/9) ([nao1215](https://github.com/nao1215))
+* Add move cursor function in intaractive shell ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.11](https://github.com/nao1215/sqly/compare/v0.0.10...v0.0.11) (2022-11-06)
 
-* Fixed a bug in which the wrong arguments were used [#8](https://github.com/nao1215/sqly/pull/8) ([nao1215](https://github.com/nao1215))
+* Fixed a bug in which the wrong arguments were used ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.10](https://github.com/nao1215/sqly/compare/v0.0.9...v0.0.10) (2022-11-06)
 
-* Added CSV output mode [#7](https://github.com/nao1215/sqly/pull/7) ([nao1215](https://github.com/nao1215))
+* Added CSV output mode ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.9](https://github.com/nao1215/sqly/compare/v0.0.7...v0.0.9) (2022-11-06)
 
 ## [v0.0.7](https://github.com/nao1215/sqly/compare/v0.0.6...v0.0.7) (2022-11-06)
 
-* Improve execute query [#6](https://github.com/nao1215/sqly/pull/6) ([nao1215](https://github.com/nao1215))
+* Improve execute query ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.6](https://github.com/nao1215/sqly/compare/v0.0.5...v0.0.6) (2022-11-05)
 
 ## [v0.0.5](https://github.com/nao1215/sqly/compare/v0.0.4...v0.0.5) (2022-11-05)
 
-* Add history usecase, repository, infra. sqly manage history by sqlite3 [#5](https://github.com/nao1215/sqly/pull/5) ([nao1215](https://github.com/nao1215))
-* Add function that execute select query [#4](https://github.com/nao1215/sqly/pull/4) ([nao1215](https://github.com/nao1215))
+* Add history usecase, repository, infra. sqly manage history by sqlite3 ([nao1215](https://github.com/nao1215))
+* Add function that execute select query ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.4](https://github.com/nao1215/sqly/compare/v0.0.3...v0.0.4) (2022-11-05)
 
 ## [v0.0.3](https://github.com/nao1215/sqly/compare/v0.0.2...v0.0.3) (2022-11-05)
 
-* Add import command [#3](https://github.com/nao1215/sqly/pull/3) ([nao1215](https://github.com/nao1215))
+* Add import command ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.2](https://github.com/nao1215/sqly/compare/v0.0.1...v0.0.2) (2022-11-05)
 
-* Add .tables command [#2](https://github.com/nao1215/sqly/pull/2) ([nao1215](https://github.com/nao1215))
-* Add .exit/.help command and history manager [#1](https://github.com/nao1215/sqly/pull/1) ([nao1215](https://github.com/nao1215))
+* Add .tables command ([nao1215](https://github.com/nao1215))
+* Add .exit/.help command and history manager ([nao1215](https://github.com/nao1215))
 
 ## [v0.0.1](https://github.com/nao1215/sqly/compare/dbf99896449e...v0.0.1) (2022-11-03)

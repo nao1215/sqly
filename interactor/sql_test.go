@@ -646,7 +646,6 @@ func TestMainStatementVerb(t *testing.T) {
 // TestUnsupportedStatementReason verifies that statements sqly cannot run under
 // its per-statement transaction and in-memory model are flagged with a reason,
 // while statements it can run (DML, DDL, ANALYZE, PRAGMA, queries) are not.
-// Ref #441, #442, #443, #457, #458.
 func TestUnsupportedStatementReason(t *testing.T) {
 	t.Parallel()
 
@@ -655,6 +654,9 @@ func TestUnsupportedStatementReason(t *testing.T) {
 		"BEGIN IMMEDIATE",
 		"BEGIN EXCLUSIVE",
 		"COMMIT",
+		"END",             // END is an alias for COMMIT
+		"END TRANSACTION", // END TRANSACTION is an alias for COMMIT
+		"end",             // lowercase
 		"ROLLBACK",
 		"ROLLBACK TO sp",
 		"SAVEPOINT sp",

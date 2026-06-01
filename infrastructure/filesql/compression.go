@@ -40,7 +40,7 @@ func compressionToLib(c model.Compression) (libfilesql.CompressionType, error) {
 // uncompressed file it returns a plain file reader. It reuses filesql's codecs so
 // sqly does not depend on the compression libraries directly, and lets the adapter
 // inspect compressed JSON/JSONL inputs (e.g. an empty "[]") the same way it
-// inspects uncompressed ones. Ref #452, #453.
+// inspects uncompressed ones.
 func NewDecompressingReaderForFile(path string) (io.Reader, func() error, error) {
 	return libfilesql.NewCompressionFactory().CreateReaderForFile(path)
 }

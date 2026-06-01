@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# File-output status routing (#309). When data is written to a file via
+# File-output status routing. When data is written to a file via
 # --output, .dump, or .save, the success/status line is control-plane output
 # and must go to stderr so stdout stays empty for scripts.
 
-Describe 'sqly file-output status routing (#309)'
+Describe 'sqly file-output status routing'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {

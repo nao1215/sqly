@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# --output requires --sql (#318, #319). --output is only honored by the --sql
+# --output requires --sql. --output is only honored by the --sql
 # path, so without --sql (no query or batch stdin) it must be rejected instead
 # of silently ignored.
 
-Describe 'sqly --output requires --sql (#318, #319)'
+Describe 'sqly --output requires --sql'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {
@@ -17,7 +17,7 @@ Describe 'sqly --output requires --sql (#318, #319)'
   BeforeEach 'setup'
   AfterEach 'cleanup'
 
-  It 'rejects --output with no query (#318)'
+  It 'rejects --output with no query'
     Data
       #|
     End
@@ -27,7 +27,7 @@ Describe 'sqly --output requires --sql (#318, #319)'
     The path "$OUT_DIR/out.csv" should not be exist
   End
 
-  It 'rejects --output for batch SQL from stdin (#319)'
+  It 'rejects --output for batch SQL from stdin'
     Data
       #|SELECT user_name FROM user ORDER BY identifier LIMIT 1
     End

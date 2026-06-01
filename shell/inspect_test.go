@@ -57,7 +57,7 @@ func writeCSV(t *testing.T, dir, name, content string) string {
 }
 
 func TestInspect_RejectsConflictingFlags(t *testing.T) {
-	// Regression for #288: --inspect must reject other effectful flags instead
+	// Regression for: --inspect must reject other effectful flags instead
 	// of silently discarding them.
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
@@ -222,7 +222,7 @@ func TestInspect_Directory(t *testing.T) {
 	if len(report.Tables) != 2 {
 		t.Fatalf("expected 2 tables from directory, got %d", len(report.Tables))
 	}
-	// Each table reports its real source file, not the directory path. Ref #326.
+	// Each table reports its real source file, not the directory path.
 	want := map[string]string{
 		"one": filepath.Join(sub, "one.csv"),
 		"two": filepath.Join(sub, "two.csv"),
@@ -235,7 +235,7 @@ func TestInspect_Directory(t *testing.T) {
 }
 
 func TestWriteBack_RejectsDirectoryImport(t *testing.T) {
-	// Regression for #261/#326: a directory-imported table reports its per-file
+	// Regression for/: a directory-imported table reports its per-file
 	// source in --inspect, but write-back must still reject it.
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {

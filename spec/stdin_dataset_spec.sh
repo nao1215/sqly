@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# stdin-as-dataset end-to-end tests (#258). With --stdin <format>, piped stdin
+# stdin-as-dataset end-to-end tests. With --stdin <format>, piped stdin
 # is imported as a dataset (default table "stdin") instead of being read as
 # SQL/helper commands, and it can be joined with file arguments. Without
 # --stdin, batch mode behavior is unchanged.
@@ -70,7 +70,7 @@ Describe 'sqly --stdin dataset'
   End
 
   Describe 'stdin dataset robustness'
-    It 'reports a stable stdin source in --inspect, not a temp path (#290)'
+    It 'reports a stable stdin source in --inspect, not a temp path'
       Data
         #|id,name
         #|1,alice
@@ -81,7 +81,7 @@ Describe 'sqly --stdin dataset'
       The output should not include 'sqly-stdin-'
     End
 
-    It 'rejects --save --force for a stdin-backed table (#291)'
+    It 'rejects --save --force for a stdin-backed table'
       Data
         #|id,name
         #|1,alice
@@ -89,12 +89,12 @@ Describe 'sqly --stdin dataset'
       When run sqly --stdin csv --sql "UPDATE stdin SET name = 'x'" --save --force
       The status should be failure
       # Write-back is validated before the query runs, so the run fails before any
-      # DML success count reaches stdout (#375).
+      # DML success count reaches stdout.
       The output should not include 'affected'
       The stderr should include 'stdin'
     End
 
-    It 'rejects a non-identifier --stdin-name so the name stays queryable (#289)'
+    It 'rejects a non-identifier --stdin-name so the name stays queryable'
       Data
         #|id,name
         #|1,alice
@@ -104,7 +104,7 @@ Describe 'sqly --stdin dataset'
       The stderr should include 'stdin-name'
     End
 
-    It 'rejects a path-like --stdin-name (#305)'
+    It 'rejects a path-like --stdin-name'
       Data
         #|a
         #|1

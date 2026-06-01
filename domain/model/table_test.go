@@ -453,7 +453,7 @@ aaa:777	bbb:888	ccc:999
 
 func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 	t.Parallel()
-	// Regression for #328/#329: a SQL NULL must render as JSON null, distinct
+	// Regression for/: a SQL NULL must render as JSON null, distinct
 	// from an empty string. The null mask marks column 0 (n) as NULL; column 1
 	// (e) is a real empty string.
 	tbl := NewTable("t", Header{"n", "e", "x"}, []Record{{"", "", "1"}})
@@ -770,10 +770,10 @@ func TestIsAllNumeric(t *testing.T) {
 }
 
 // TestTablePrintEscaping covers the v0.19.0 output-format bugs: CSV/TSV stdout
-// must stay valid when values contain the delimiter, quotes, or newlines (#380,
-// #381); LTSV must reject values it cannot represent losslessly (#382, #383);
-// JSON/NDJSON must reject duplicate column names (#384, #385); and Markdown must
-// keep a row on one physical line when a value contains a newline (#426).
+// must stay valid when values contain the delimiter, quotes, or newlines (,
+// ); LTSV must reject values it cannot represent losslessly;
+// JSON/NDJSON must reject duplicate column names; and Markdown must
+// keep a row on one physical line when a value contains a newline.
 func TestTablePrintEscaping(t *testing.T) {
 	t.Parallel()
 
@@ -873,7 +873,7 @@ func TestTablePrintEscaping(t *testing.T) {
 
 // TestEnsureLTSVHeaderWritable verifies that LTSV output rejects column names that
 // are not valid LTSV labels and rejects duplicate labels, so LTSV output stays
-// valid and round-trippable. Ref #465, #466.
+// valid and round-trippable.
 func TestEnsureLTSVHeaderWritable(t *testing.T) {
 	t.Parallel()
 
@@ -913,7 +913,6 @@ func TestEnsureLTSVHeaderWritable(t *testing.T) {
 
 // TestTablePrintLTSV_RejectsInvalidLabels verifies that printing a table as LTSV
 // fails for an invalid or duplicate label rather than emitting ambiguous output.
-// Ref #465, #466.
 func TestTablePrintLTSV_RejectsInvalidLabels(t *testing.T) {
 	t.Parallel()
 

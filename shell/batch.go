@@ -29,7 +29,7 @@ const (
 )
 
 // utf8BOM is the UTF-8 byte order mark stripped from the start of batch input
-// and --sql-file scripts so BOM-prefixed files parse like plain UTF-8. Ref #369.
+// and --sql-file scripts so BOM-prefixed files parse like plain UTF-8.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 // runBatchReader executes SQL statements and helper commands read from r. It is
@@ -45,13 +45,13 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 // Execution is fail-fast: the first failed statement or helper command stops
 // the run and returns an error, so later statements never execute and their
 // output cannot leak into a pipeline that the process then reports as failed
-// (Ref #308). A ".exit" command stops early with success, mirroring the
+// (). A ".exit" command stops early with success, mirroring the
 // interactive shell. ranAny reports whether at least one statement or command
 // was executed, so callers can skip post-run side effects (e.g. --save
-// write-back) for an empty batch (Ref #330).
+// write-back) for an empty batch ().
 func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, err error) {
 	// Strip a leading UTF-8 BOM so a BOM-prefixed batch stream (common from
-	// Windows editors and export tools) parses the same as plain UTF-8. Ref #369.
+	// Windows editors and export tools) parses the same as plain UTF-8.
 	br := bufio.NewReader(r)
 	if prefix, perr := br.Peek(len(utf8BOM)); perr == nil && bytes.Equal(prefix, utf8BOM) {
 		_, _ = br.Discard(len(utf8BOM))
@@ -90,7 +90,7 @@ scan:
 		// terminated statement, or a standalone (closed) leading comment. Checking
 		// the boundary (rather than pending.Len() == 0) lets helper commands and SQL
 		// alternate line-by-line after a ";" or a leading comment, while a dot-line
-		// inside an open block comment stays part of the comment. Ref #397, #425.
+		// inside an open block comment stays part of the comment.
 		if atStatementBoundary(pending.String()) {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" {
@@ -182,7 +182,7 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 	// A CREATE TRIGGER ... BEGIN ... END statement contains inner ";" that must not
 	// split it. trig tracks whether the current statement is a CREATE TRIGGER and
 	// how deep its BEGIN/CASE ... END nesting is, so a ";" only terminates once the
-	// body's END has balanced its BEGIN. It resets after each split. Ref #468.
+	// body's END has balanced its BEGIN. It resets after each split.
 	var trig triggerState
 	for i := 0; i < len(runes); i++ {
 		c := runes[i]
@@ -257,7 +257,7 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 
 // triggerState tracks whether the current statement is a CREATE TRIGGER and the
 // depth of its BEGIN/CASE ... END nesting, so splitSQLStatements does not split a
-// trigger body at its inner semicolons. Ref #468.
+// trigger body at its inner semicolons.
 type triggerState struct {
 	tokens    int  // significant word tokens observed from the statement start
 	isTrigger bool // statement starts with CREATE [TEMP|TEMPORARY] TRIGGER
@@ -317,7 +317,6 @@ const sqlCreate = "CREATE"
 // unterminated block comment. At a boundary the next line may start a new
 // statement or a helper command. An unterminated block comment is not a boundary,
 // because following lines (including dot-lines) are still inside the comment.
-// Ref #397, #425.
 func atStatementBoundary(pending string) bool {
 	if strings.TrimSpace(stripLeadingSQLComments(pending)) != "" {
 		return false
@@ -394,7 +393,7 @@ func endsInsideBlockComment(s string) bool {
 // ".mode csv\nUPDATE t SET x=1;" would hide the UPDATE behind the dot-line.
 // Classification is per statement so an EXPLAIN of a DML statement counts as
 // read-only. It lets a non-interactive run skip write-back preflight for a
-// read-only script. Ref #376, #402, #403. Whether write-back actually runs is
+// read-only script. Whether write-back actually runs is
 // decided dynamically by the rows a statement changes (see Shell.dataChanged).
 func scriptModifiesData(script string) bool {
 	for _, stmt := range scriptSQLStatements(script) {
@@ -425,19 +424,38 @@ func scriptSQLStatements(script string) []string {
 	return stmts
 }
 
+// countSQLStatements returns the number of complete SQL statements in s, counting
+// a trailing statement that is not terminated by ";". It is quote-, comment-, and
+// CREATE TRIGGER-aware (via splitSQLStatements), so semicolons inside string
+// literals, identifiers, comments, and trigger bodies do not inflate the count. It
+// backs the direct --sql single-statement guard.
+func countSQLStatements(s string) int {
+	stmts, remainder := splitSQLStatements(s)
+	count := len(stmts)
+	if stripLeadingSQLComments(remainder) != "" {
+		count++
+	}
+	return count
+}
+
 // statementSaveCompatible reports whether a non-interactive --save/--save-dir run
 // can handle a statement: a read-only query (which skips write-back) or a
 // row-modifying DML on an imported table (which write-back persists). Any other
 // statement — DDL (CREATE/DROP/ALTER/REINDEX and CREATE VIEW/INDEX/TRIGGER),
 // ANALYZE, or other schema/maintenance work — has no file write-back
 // representation, so it is save-incompatible and the run must fail loudly instead
-// of exiting 0 while leaving the source unchanged. Ref #433-#437, #469-#484.
+// of exiting 0 while leaving the source unchanged.
+//
+// PRAGMA is save-incompatible too: a setter (PRAGMA user_version=1), command
+// (PRAGMA incremental_vacuum), or rowset (PRAGMA journal_mode=OFF) PRAGMA only
+// changes the transient in-memory session, with no file representation, so a save
+// run that includes one must fail rather than imply a durable effect.
 func statementSaveCompatible(stmt string) bool {
 	if statementModifiesData(stmt) {
 		return true
 	}
 	switch leadingSQLKeyword(stmt) {
-	case kwSelect, kwValues, "WITH", "EXPLAIN", "TABLE", "PRAGMA":
+	case kwSelect, kwValues, "WITH", "EXPLAIN", "TABLE":
 		return true
 	default:
 		return false
@@ -446,7 +464,7 @@ func statementSaveCompatible(stmt string) bool {
 
 // firstSaveIncompatibleStatement returns the first statement a non-interactive
 // save run cannot persist, or "" when every statement is a read-only query or a
-// row-modifying DML. Ref #433-#437, #469-#484.
+// row-modifying DML.
 func firstSaveIncompatibleStatement(script string) string {
 	for _, stmt := range scriptSQLStatements(script) {
 		if !statementSaveCompatible(stmt) {
@@ -459,7 +477,7 @@ func firstSaveIncompatibleStatement(script string) string {
 // scriptImportsInput reports whether a batch or --sql-file script imports its own
 // input with a ".import" helper command. Such a script creates its tables while it
 // runs, so save preflight cannot list them up front and instead defers write-back
-// validation until after the run. Ref #456.
+// validation until after the run.
 func scriptImportsInput(script string) bool {
 	var sql strings.Builder
 	for _, line := range strings.Split(script, "\n") {
@@ -484,7 +502,7 @@ func scriptImportsInput(script string) bool {
 // statementModifiesData reports whether a single statement changes table data:
 // an INSERT/UPDATE/DELETE/REPLACE, or a WITH whose main statement is one of those.
 // An EXPLAIN of such a statement is read-only and reports false, so it never
-// triggers write-back. Ref #402, #403.
+// triggers write-back.
 func statementModifiesData(stmt string) bool {
 	switch leadingSQLKeyword(stmt) {
 	case kwInsert, kwUpdate, kwDelete, kwReplace:
@@ -503,7 +521,6 @@ func statementModifiesData(stmt string) bool {
 // reports its affected-row count; any other no-rowset statement (DDL, PRAGMA,
 // maintenance) reports neutral success, because an "affected is N row(s)" line for
 // a CREATE VIEW, PRAGMA, or ANALYZE implies a row change that did not happen.
-// Ref #439.
 func statementResultMessage(stmt string, affected int64) string {
 	if statementModifiesData(stmt) {
 		return fmt.Sprintf("affected is %d row(s)\n", affected)
@@ -512,7 +529,7 @@ func statementResultMessage(stmt string, affected int64) string {
 }
 
 // msgStatementExecuted is the neutral stdout line printed for a no-rowset
-// statement that does not change table data (DDL, PRAGMA, maintenance). Ref #439.
+// statement that does not change table data (DDL, PRAGMA, maintenance).
 const msgStatementExecuted = "statement executed successfully\n"
 
 // leadingSQLKeyword returns the upper-cased first keyword of a statement after
@@ -620,7 +637,7 @@ func readSQLFile(path string) (string, error) {
 		return "", fmt.Errorf("failed to read --sql-file %q: %w", path, err)
 	}
 	// Strip a leading UTF-8 BOM so a BOM-prefixed script (common from Windows
-	// editors and export tools) parses the same as plain UTF-8. Ref #369.
+	// editors and export tools) parses the same as plain UTF-8.
 	content := strings.TrimPrefix(string(data), "\ufeff")
 	if strings.TrimSpace(content) == "" {
 		return "", fmt.Errorf("--sql-file %q is empty", path)
@@ -628,7 +645,7 @@ func readSQLFile(path string) (string, error) {
 	// A comment-only script has no executable SQL, which is the same failure as
 	// an empty file: splitting yields no terminated statements and the remainder
 	// strips down to nothing once leading comments are removed. Reject it instead
-	// of silently running nothing. Ref #351.
+	// of silently running nothing.
 	stmts, remainder := splitSQLStatements(content)
 	if len(stmts) == 0 && stripLeadingSQLComments(remainder) == "" {
 		return "", fmt.Errorf("--sql-file %q contains no executable SQL statements", path)

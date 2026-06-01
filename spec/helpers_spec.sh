@@ -1,8 +1,8 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Shell helper-command end-to-end tests: in-process .ls/.clear/.cd (#236),
-# quoted .import arguments (#246), and the .mode listing (#237). Driven through
+# Shell helper-command end-to-end tests: in-process .ls/.clear/.cd,
+# quoted .import arguments, and the .mode listing. Driven through
 # piped stdin so the real binary is exercised.
 
 Describe 'sqly shell helper commands'

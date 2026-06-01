@@ -1,12 +1,12 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Batch fail-fast semantics (#308, #320, #321, #322, #330, #331). The first
+# Batch fail-fast semantics. The first
 # failed statement stops the batch, so later statements and side-effecting
 # helper commands (.save, .dump) do not run, and an empty batch performs no
 # write-back.
 
-Describe 'sqly batch fail-fast (#308)'
+Describe 'sqly batch fail-fast'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {
@@ -30,7 +30,7 @@ Describe 'sqly batch fail-fast (#308)'
     The stderr should include 'no_such_table'
   End
 
-  It 'does not run .save --force after an earlier failure (#320)'
+  It 'does not run .save --force after an earlier failure'
     Data:expand
       #|UPDATE u SET first_name = 'BROKEN' WHERE identifier = 1;
       #|SELECT * FROM no_such_table;
@@ -43,7 +43,7 @@ Describe 'sqly batch fail-fast (#308)'
     The contents of file "$WORK/u.csv" should not include 'BROKEN'
   End
 
-  It 'does not run .dump after an earlier failure (#322)'
+  It 'does not run .dump after an earlier failure'
     Data:expand
       #|SELECT * FROM no_such_table;
       #|.dump u ${WORK}/out.csv
@@ -54,7 +54,7 @@ Describe 'sqly batch fail-fast (#308)'
     The path "$WORK/out.csv" should not be exist
   End
 
-  It 'does not write back for empty stdin with --save --force (#330)'
+  It 'does not write back for empty stdin with --save --force'
     When run sqly "$WORK/u.csv" --save --force
     The status should be success
     The stderr should not include 'Saved'

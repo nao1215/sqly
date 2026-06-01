@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Export format and compression inference from --output and .dump paths (#260).
+# Export format and compression inference from --output and .dump paths.
 # Verifies the binary infers the format from the destination extension, applies
 # compression wrappers, round-trips compressed output, and reports conflicts.
 
-Describe 'sqly export format inference (#260)'
+Describe 'sqly export format inference'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   Describe '--output path inference'
@@ -43,7 +43,7 @@ Describe 'sqly export format inference (#260)'
     End
   End
 
-  Describe 'unknown extension honors the exact path (#292)'
+  Describe 'unknown extension honors the exact path'
     It 'writes the CSV fallback to the requested path without rewriting it'
       out_dir=$(mktemp -d)
       export out_dir
@@ -56,7 +56,7 @@ Describe 'sqly export format inference (#260)'
     End
   End
 
-  Describe 'directory destinations are rejected (#303)'
+  Describe 'directory destinations are rejected'
     It 'rejects --output to an existing directory'
       out_dir=$(mktemp -d)
       export out_dir

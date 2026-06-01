@@ -125,6 +125,177 @@ func TestWriteBack_SaveInPlaceWithForce(t *testing.T) {
 	}
 }
 
+// TestRunSaveRejectsPragma verifies that a non-interactive --save/--save-dir run
+// rejects a side-effecting PRAGMA before execution, so it never implies a durable
+// effect or prints a rowset that cannot be written back.
+func TestRunSaveRejectsPragma(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"setter PRAGMA with --save --force", []string{"sqly", "--sql", "PRAGMA user_version=1", "--save", "--force"}},
+		{"command PRAGMA with --save --force", []string{"sqly", "--sql", "PRAGMA incremental_vacuum", "--save", "--force"}},
+		{"rowset PRAGMA with --save --force", []string{"sqly", "--sql", "PRAGMA journal_mode=OFF", "--save", "--force"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			src := writeCSV(t, dir, "psample.csv", "user_name,identifier\na,1\n")
+			args := append(append([]string{}, tc.args...), src)
+
+			shell, cleanup, err := newShell(t, args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			shell.isTTY = func() bool { return true }
+
+			backup := config.Stdout
+			var buf strings.Builder
+			config.Stdout = &buf
+			defer func() { config.Stdout = backup }()
+
+			if runErr := shell.Run(context.Background()); runErr == nil {
+				t.Fatal("expected a PRAGMA save-incompatibility error, got nil")
+			}
+			if buf.Len() != 0 {
+				t.Errorf("stdout should stay empty on rejection, got %q", buf.String())
+			}
+		})
+	}
+}
+
+// TestRunSaveDirRejectsPragma covers the --save-dir variant of the PRAGMA
+// save-incompatibility rejection.
+func TestRunSaveDirRejectsPragma(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+	}{
+		{"setter PRAGMA with --save-dir", "PRAGMA user_version=1"},
+		{"command PRAGMA with --save-dir", "PRAGMA incremental_vacuum"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			src := writeCSV(t, dir, "psample.csv", "user_name,identifier\na,1\n")
+			outDir := filepath.Join(dir, "out")
+
+			shell, cleanup, err := newShell(t, []string{"sqly", "--sql", tc.query, "--save-dir", outDir, src})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			shell.isTTY = func() bool { return true }
+
+			if runErr := shell.Run(context.Background()); runErr == nil {
+				t.Fatal("expected a PRAGMA save-incompatibility error, got nil")
+			}
+			if _, statErr := os.Stat(outDir); statErr == nil {
+				t.Errorf("save directory %s should not be created on rejection", outDir)
+			}
+		})
+	}
+}
+
+// TestSaveCommandReadOnlySessionLeavesSourceUntouched verifies that interactive
+// .save --force after a read-only session does not rewrite the source file (which
+// would normalize its bytes), and .save DIR writes no export.
+func TestSaveCommandReadOnlySessionLeavesSourceUntouched(t *testing.T) {
+	// No trailing newline, so any rewrite that normalizes it is detectable.
+	const content = "user_name,identifier\nalice,1"
+
+	setup := func(t *testing.T, name string) (*Shell, func(), string) {
+		t.Helper()
+		dir := t.TempDir()
+		src := filepath.Join(dir, name)
+		if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		// A read-only query must not mark the session as changed.
+		if _, err := getExecStdOutput(t, shell.exec, "SELECT * FROM "+strings.TrimSuffix(name, ".csv")); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		return shell, cleanup, src
+	}
+
+	t.Run(".save --force does not rewrite an unchanged source", func(t *testing.T) {
+		shell, cleanup, src := setup(t, "readonly.csv")
+		defer cleanup()
+
+		backup := config.Stderr
+		config.Stderr = &strings.Builder{}
+		defer func() { config.Stderr = backup }()
+
+		if err := shell.commands.saveCommand(context.Background(), shell, []string{forceArg}); err != nil {
+			t.Fatalf(".save --force returned error: %v", err)
+		}
+		after, _ := os.ReadFile(src) //nolint:gosec // test path
+		if string(after) != content {
+			t.Errorf("read-only .save --force rewrote the source:\n got %q\nwant %q", after, content)
+		}
+	})
+
+	t.Run(".save DIR writes no export for an unchanged session", func(t *testing.T) {
+		shell, cleanup, src := setup(t, "readonly2.csv")
+		defer cleanup()
+		outDir := filepath.Join(filepath.Dir(src), "out")
+
+		backup := config.Stderr
+		config.Stderr = &strings.Builder{}
+		defer func() { config.Stderr = backup }()
+
+		if err := shell.commands.saveCommand(context.Background(), shell, []string{outDir}); err != nil {
+			t.Fatalf(".save DIR returned error: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(outDir, "readonly2.csv")); statErr == nil {
+			t.Error("read-only .save DIR wrote an export when no data changed")
+		}
+	})
+}
+
+// TestSaveCommandPersistsAfterDataChange guards that the read-only no-op does not
+// also suppress a legitimate save after the session modified table data.
+func TestSaveCommandPersistsAfterDataChange(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "changed.csv")
+	if err := os.WriteFile(src, []byte("user_name,identifier\nalice,1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := getExecStdOutput(t, shell.exec, "UPDATE changed SET identifier=2 WHERE user_name='alice'"); err != nil {
+		t.Fatal(err)
+	}
+
+	backup := config.Stderr
+	config.Stderr = &strings.Builder{}
+	defer func() { config.Stderr = backup }()
+
+	if err := shell.commands.saveCommand(context.Background(), shell, []string{forceArg}); err != nil {
+		t.Fatalf(".save --force after a change returned error: %v", err)
+	}
+	after, _ := os.ReadFile(src) //nolint:gosec // test path
+	if !strings.Contains(string(after), "alice,2") {
+		t.Errorf(".save --force did not persist the change; got %q", after)
+	}
+}
+
 func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 	dir := t.TempDir()
 	// JSON loads into a single data column and does not round-trip, so write-back
@@ -135,7 +306,7 @@ func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 	}
 
 	// A modifying statement triggers write-back (a read-only query would skip it,
-	// Ref #376), so the unsupported-source rejection is exercised.
+	//), so the unsupported-source rejection is exercised.
 	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "DELETE FROM data WHERE 1=0", "--save", "--force", jsonPath})
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +321,7 @@ func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 func TestWriteBack_SaveDirRejectsSourceParent(t *testing.T) {
 	// --save-dir pointed at the source's own directory resolves the destination to
 	// the source file, which would overwrite it in place without --force. Reject
-	// it and leave the source untouched. Ref #370.
+	// it and leave the source untouched.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	orig, _ := os.ReadFile(src) //nolint:gosec // test path
@@ -173,7 +344,7 @@ func TestWriteBack_SaveDirRejectsSourceParent(t *testing.T) {
 
 func TestWriteBack_OutputRejectsSourceAlias(t *testing.T) {
 	// --output that aliases an imported source file would destroy the dataset
-	// without --save --force. Reject it and leave the source untouched. Ref #371.
+	// without --save --force. Reject it and leave the source untouched.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	orig, _ := os.ReadFile(src) //nolint:gosec // test path
@@ -200,7 +371,7 @@ func TestWriteBack_OutputRejectsSourceAlias(t *testing.T) {
 
 func TestWriteBack_SaveDirRejectsExistingDestination(t *testing.T) {
 	// --save-dir must not silently overwrite a pre-existing file in the
-	// destination directory. Ref #372.
+	// destination directory.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	out := filepath.Join(dir, "out")
@@ -232,7 +403,6 @@ func TestWriteBack_SaveDirRejectsExistingDestination(t *testing.T) {
 func TestWriteBack_FailedWriteBackKeepsStdoutClean(t *testing.T) {
 	// When a run ultimately fails during write-back, stdout must stay free of the
 	// DML success count so scripts do not treat it as partially successful. Ref
-	// #375.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	xlsx := filepath.Join(dir, "sample.xlsx")
@@ -257,7 +427,6 @@ func TestWriteBack_FailedWriteBackKeepsStdoutClean(t *testing.T) {
 
 func TestWriteBack_ReadOnlyQuerySkipsWriteBack(t *testing.T) {
 	// A read-only query under --save --force must not rewrite the source file. Ref
-	// #376.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	orig, _ := os.ReadFile(src) //nolint:gosec // test path
@@ -280,7 +449,7 @@ func TestWriteBack_ReadOnlyQuerySkipsWriteBack(t *testing.T) {
 
 func TestWriteBack_SaveDirIsAllOrNothing(t *testing.T) {
 	// --save-dir must validate every target before writing any, so one bad target
-	// cannot leave partial output behind. Ref #377.
+	// cannot leave partial output behind.
 	dir := t.TempDir()
 	idSrc := writeCSV(t, dir, "identifier.csv", "identifier\n1\n2\n")
 	userSrc := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")

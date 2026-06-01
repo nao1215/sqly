@@ -10,8 +10,8 @@ import (
 )
 
 // TestRunBatchReaderLineByLine covers the batch parsing bugs where a helper
-// command after a terminated SQL statement (#397) or after a leading SQL comment
-// (#425) was absorbed into a pending SQL buffer instead of running as its own
+// command after a terminated SQL statement or after a leading SQL comment
+// was absorbed into a pending SQL buffer instead of running as its own
 // statement.
 func TestRunBatchReaderLineByLine(t *testing.T) {
 	cases := []struct {
@@ -33,7 +33,7 @@ func TestRunBatchReaderLineByLine(t *testing.T) {
 	}
 
 	// A dot-line inside an open block comment must stay part of the comment, not be
-	// executed as a helper command. Ref CodeRabbit review of #425.
+	// executed as a helper command. Ref CodeRabbit review of.
 	t.Run("dot line inside an open block comment is not executed as a command", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
@@ -88,7 +88,7 @@ func TestRunBatchReaderLineByLine(t *testing.T) {
 }
 
 // TestScriptModifiesData verifies that write-back intent detection is statement
-// aware: an EXPLAIN of a DML statement is read-only (#402, #403), while a real
+// aware: an EXPLAIN of a DML statement is read-only, while a real
 // DML or a WITH that feeds one is data-modifying.
 func TestScriptModifiesData(t *testing.T) {
 	t.Parallel()
@@ -111,7 +111,7 @@ func TestScriptModifiesData(t *testing.T) {
 		{"multiple statements, one modifies", "SELECT 1;\nUPDATE t SET x=1;", true},
 		{"explain then select stays read-only", "EXPLAIN UPDATE t SET x=1;\nSELECT 1;", false},
 		// A helper command line is not SQL, so it must not hide a following DML. Ref
-		// CodeRabbit review of #397.
+		// CodeRabbit review of.
 		{"helper command before UPDATE still detects modification", ".mode csv\nUPDATE t SET x=1;", true},
 		{"helper command before SELECT stays read-only", ".mode csv\nSELECT 1;", false},
 	}
@@ -128,7 +128,7 @@ func TestScriptModifiesData(t *testing.T) {
 
 // TestSplitSQLStatements_TriggerBody verifies that a CREATE TRIGGER definition is
 // kept as a single statement even though its BEGIN ... END body contains inner
-// semicolons, while ordinary semicolon-terminated statements still split. Ref #468.
+// semicolons, while ordinary semicolon-terminated statements still split.
 func TestSplitSQLStatements_TriggerBody(t *testing.T) {
 	t.Parallel()
 
@@ -202,7 +202,7 @@ func TestSplitSQLStatements_TriggerBody(t *testing.T) {
 
 // TestStatementResultMessage verifies that only a data-modifying statement reports
 // an affected-row count; a no-rowset DDL/PRAGMA/maintenance statement reports
-// neutral success instead of a misleading row count. Ref #439.
+// neutral success instead of a misleading row count.
 func TestStatementResultMessage(t *testing.T) {
 	t.Parallel()
 
@@ -236,8 +236,7 @@ func TestStatementResultMessage(t *testing.T) {
 // TestFirstSaveIncompatibleStatement verifies that a non-interactive save run is
 // allowed only for read-only queries and row-modifying DML; any DDL, schema, or
 // maintenance statement is reported as save-incompatible so the run fails loudly
-// instead of exiting 0 while leaving the source unchanged. Ref #433-#437,
-// #469-#484.
+// instead of exiting 0 while leaving the source unchanged.,
 func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	t.Parallel()
 
@@ -271,6 +270,9 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 		"DROP INDEX idx",
 		"REINDEX",
 		"ANALYZE",
+		"PRAGMA user_version = 1",   // setter PRAGMA
+		"PRAGMA incremental_vacuum", // command PRAGMA
+		"PRAGMA journal_mode = OFF", // rowset PRAGMA
 		"CREATE TRIGGER tg AFTER UPDATE ON user BEGIN UPDATE user SET x=1; END;",
 		"CREATE TABLE backup AS SELECT * FROM user;\nUPDATE user SET first_name='Z' WHERE id=1;",
 	}
@@ -286,7 +288,6 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 
 // TestScriptImportsInput verifies detection of a .import helper command, which
 // lets save preflight defer write-back validation until after the import runs.
-// Ref #456.
 func TestScriptImportsInput(t *testing.T) {
 	t.Parallel()
 

@@ -26,6 +26,19 @@ func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string)
 	if err != nil {
 		return err
 	}
+
+	// In a structured mode emit one machine-readable {column} object per column so
+	// automation can consume the header after selecting json/ndjson, instead of an
+	// ASCII table that ignores the mode.
+	if isStructuredMode(s.state.mode.PrintMode) {
+		records := make([]model.Record, 0, len(table.Header()))
+		for _, col := range table.Header() {
+			records = append(records, model.Record{col})
+		}
+		out := model.NewTable(table.Name(), model.Header{"column"}, records)
+		return out.Print(config.Stdout, s.state.mode.PrintMode)
+	}
+
 	if err := printHeader(config.Stdout, table); err != nil {
 		return fmt.Errorf("failed to print header: %w", err)
 	}

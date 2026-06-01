@@ -26,10 +26,10 @@ func NewLTSVRepository() repository.LTSVRepository {
 // containing a tab or newline cannot be represented losslessly and is rejected
 // before writing. Writing each token directly (rather than through a CSV writer
 // with a tab delimiter) keeps the output re-importable, since a CSV writer would
-// quote the whole "label:value" token and break the label/value split. Ref #383.
+// quote the whole "label:value" token and break the label/value split.
 func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
 	// Reject invalid or duplicate LTSV labels before writing, so the exported file
-	// stays a valid, round-trippable LTSV record set. Ref #465, #466.
+	// stays a valid, round-trippable LTSV record set.
 	if err := model.EnsureLTSVHeaderWritable(table.Header()); err != nil {
 		return err
 	}

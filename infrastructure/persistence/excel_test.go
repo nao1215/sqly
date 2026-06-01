@@ -56,7 +56,7 @@ func TestExcelRepositoryDump(t *testing.T) {
 		}
 	})
 
-	t.Run("dumped excel file is not executable (#296)", func(t *testing.T) {
+	t.Run("dumped excel file is not executable", func(t *testing.T) {
 		t.Parallel()
 
 		r := NewExcelRepository()

@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# .mode change banner routing (#295). In batch mode the mode-change banner must
+# .mode change banner routing. In batch mode the mode-change banner must
 # not pollute stdout, so JSON and NDJSON output stay machine-readable. The
 # banner is a status message and goes to stderr instead.
 
-Describe 'sqly .mode banner routing (#295)'
+Describe 'sqly .mode banner routing'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   It 'keeps stdout pure JSON after .mode json'

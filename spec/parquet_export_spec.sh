@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# Parquet export end-to-end tests (#241). Parquet is export-only, like Excel:
+# Parquet export end-to-end tests. Parquet is export-only, like Excel:
 # it is written by .dump and --output, re-imports cleanly, normalizes the file
 # extension, and reports a clear error for an empty result.
 

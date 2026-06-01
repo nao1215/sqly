@@ -1,12 +1,12 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# --sql-file end-to-end tests (#281). --sql-file loads SQL from a file for
+# --sql-file end-to-end tests. --sql-file loads SQL from a file for
 # non-interactive runs, which frees stdin to carry a piped --stdin dataset. The
 # file supports multiline statements and the same splitting rules as batch
 # stdin mode.
 
-Describe 'sqly --sql-file (#281)'
+Describe 'sqly --sql-file'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {

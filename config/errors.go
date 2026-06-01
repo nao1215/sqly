@@ -19,7 +19,7 @@ var errInvalidStdinName = errors.New("--stdin-name must be a valid table name: l
 // returned when their flag is given an explicit empty value. For each flag the
 // empty string is the "flag absent" sentinel, so accepting an explicit "" would
 // silently behave like the flag was never passed instead of surfacing the
-// malformed value. Ref #349, #350, #352, #353.
+// malformed value.
 var (
 	errEmptyOutput  = errors.New("--output requires a non-empty destination path")
 	errEmptySQLFile = errors.New("--sql-file requires a non-empty file path")
@@ -30,12 +30,12 @@ var (
 // errStdinNameReserved is returned when --stdin-name is a SQLite keyword. Such a
 // name is a valid identifier shape but is not queryable as a bare table name
 // (e.g. "SELECT * FROM select" is a syntax error), so it is rejected up front
-// instead of advertising an unusable table name. Ref #423.
+// instead of advertising an unusable table name.
 var errStdinNameReserved = errors.New("--stdin-name is a SQLite keyword and is not queryable as a bare table name; choose another name")
 
 // errStdinNameWithoutStdin and errInspectSampleWithoutInspect are returned when
 // a dependent flag is set without the flag that gives it meaning, so the flag is
-// not silently ignored. Ref #391, #392.
+// not silently ignored.
 var (
 	errStdinNameWithoutStdin       = errors.New("--stdin-name has no effect without --stdin FORMAT")
 	errInspectSampleWithoutInspect = errors.New("--inspect-sample has no effect without --inspect")
@@ -43,5 +43,5 @@ var (
 
 // errForceWithoutSave is returned when --force is set without --save or
 // --save-dir. --force only confirms the destructive in-place write-back, so it
-// is meaningless on its own and is rejected instead of silently ignored. Ref #393.
+// is meaningless on its own and is rejected instead of silently ignored.
 var errForceWithoutSave = errors.New("--force has no effect without --save or --save-dir")

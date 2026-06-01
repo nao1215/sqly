@@ -1795,7 +1795,7 @@ func TestSplitArgs(t *testing.T) {
 }
 
 func TestShellRun_BatchModeReadsStdin(t *testing.T) {
-	// Regression for issue #246: without a TTY, sqly reads SQL and helper
+	// Regression for issue: without a TTY, sqly reads SQL and helper
 	// commands from stdin instead of failing on prompt initialization.
 	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
@@ -1850,7 +1850,7 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 }
 
 func TestShellRunBatch_FailFast(t *testing.T) {
-	// Regression for #308: the first failed statement stops the batch, so later
+	// Regression for: the first failed statement stops the batch, so later
 	// statements do not run and cannot leak output into a failed pipeline.
 	t.Run("a SQL failure stops a later statement", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
@@ -1898,7 +1898,7 @@ func TestShellRunBatch_FailFast(t *testing.T) {
 }
 
 func TestShellRunBatch_EmptyStdinSkipsSave(t *testing.T) {
-	// Regression for #330/#331: empty batch stdin must not trigger --save
+	// Regression for/: empty batch stdin must not trigger --save
 	// write-back, which would rewrite source files even though nothing ran.
 	dir := t.TempDir()
 	src := filepath.Join(dir, "u.csv")
@@ -1932,7 +1932,7 @@ func TestShellRunBatch_EmptyStdinSkipsSave(t *testing.T) {
 }
 
 func TestShellRunBatch_MultilineStatements(t *testing.T) {
-	// Regression for #263: batch mode parses statements, so SQL can span lines.
+	// Regression for: batch mode parses statements, so SQL can span lines.
 	newBatchShell := func(t *testing.T, stdin string) (*Shell, func()) {
 		t.Helper()
 		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
@@ -1993,7 +1993,7 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
-	t.Run("semicolon inside a bracket-quoted identifier does not split (#314)", func(t *testing.T) {
+	t.Run("semicolon inside a bracket-quoted identifier does not split", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "SELECT 'v' AS [a;b];\n")
 		defer cleanup()
 		got := string(getStdoutForRunFunc(t, shell.Run))
@@ -2002,7 +2002,7 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
-	t.Run("semicolon inside a backtick-quoted identifier does not split (#315)", func(t *testing.T) {
+	t.Run("semicolon inside a backtick-quoted identifier does not split", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "SELECT 'v' AS `a;b`;\n")
 		defer cleanup()
 		got := string(getStdoutForRunFunc(t, shell.Run))
@@ -2011,7 +2011,7 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
-	t.Run("semicolon inside a line comment does not split (#299)", func(t *testing.T) {
+	t.Run("semicolon inside a line comment does not split", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "-- comment ;\nSELECT 'v' AS x;\n")
 		defer cleanup()
 		got := string(getStdoutForRunFunc(t, shell.Run))
@@ -2020,7 +2020,7 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
-	t.Run("semicolon inside a block comment does not split (#299)", func(t *testing.T) {
+	t.Run("semicolon inside a block comment does not split", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "/* comment ; */\nSELECT 'v' AS x;\n")
 		defer cleanup()
 		got := string(getStdoutForRunFunc(t, shell.Run))
@@ -2029,7 +2029,7 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 		}
 	})
 
-	t.Run("semicolon inside a trailing line comment does not split (#299)", func(t *testing.T) {
+	t.Run("semicolon inside a trailing line comment does not split", func(t *testing.T) {
 		shell, cleanup := newBatchShell(t, "SELECT 'first' AS x; -- trailing ; comment\nSELECT 'second' AS y;\n")
 		defer cleanup()
 		got := string(getStdoutForRunFunc(t, shell.Run))
@@ -2122,7 +2122,7 @@ func TestShellRunBatch_QuotedSheetArgument(t *testing.T) {
 }
 
 func TestShellRun_JSONOutputFromCLI(t *testing.T) {
-	// Regression for #237: --json renders query results as a JSON array that
+	// Regression for: --json renders query results as a JSON array that
 	// decodes with the expected column names and values.
 	shell, cleanup, err := newShell(t, []string{"sqly", "--json", "--sql", "SELECT actor FROM actor ORDER BY actor ASC LIMIT 2", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
@@ -2148,7 +2148,7 @@ func TestShellRun_JSONOutputFromCLI(t *testing.T) {
 }
 
 func TestShellExec_NDJSONModeSwitch(t *testing.T) {
-	// Regression for #237: .mode ndjson makes shell query output emit one JSON
+	// Regression for: .mode ndjson makes shell query output emit one JSON
 	// object per line.
 	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
@@ -2184,7 +2184,7 @@ func TestShellExec_NDJSONModeSwitch(t *testing.T) {
 }
 
 func TestShellExec_SchemaAndDescribe(t *testing.T) {
-	// Regression for #238: schema inspection commands over an imported CSV.
+	// Regression for: schema inspection commands over an imported CSV.
 	newImportedShell := func(t *testing.T) (*Shell, func()) {
 		t.Helper()
 		shell, cleanup, err := newShell(t, []string{"sqly"})
@@ -2345,7 +2345,7 @@ func TestShell_buildCreateStatement(t *testing.T) {
 }
 
 func TestShellRun_StdinDataset(t *testing.T) {
-	// Regression for #258: --stdin treats piped stdin as an input dataset.
+	// Regression for: --stdin treats piped stdin as an input dataset.
 	t.Run("queries piped CSV through the default stdin table", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
 		if err != nil {
@@ -2400,7 +2400,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 	})
 
-	t.Run("inspect reports a stable stdin source, not a temp path (#290)", func(t *testing.T) {
+	t.Run("inspect reports a stable stdin source, not a temp path", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--stdin", "csv"})
 		if err != nil {
 			t.Fatal(err)
@@ -2418,7 +2418,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 	})
 
-	t.Run("save is rejected for a stdin-backed table (#291)", func(t *testing.T) {
+	t.Run("save is rejected for a stdin-backed table", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sql", "UPDATE stdin SET name = 'x'", "--save", "--force"})
 		if err != nil {
 			t.Fatal(err)
@@ -2478,7 +2478,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 }
 
 func TestShellRun_SQLFile(t *testing.T) {
-	// Regression for #281: --sql-file loads SQL from a file for non-interactive
+	// Regression for: --sql-file loads SQL from a file for non-interactive
 	// runs, freeing stdin to carry a piped dataset.
 	t.Run("runs a multiline SQL file against a file input", func(t *testing.T) {
 		dir := t.TempDir()
@@ -2606,7 +2606,7 @@ func TestShellRun_SQLFile(t *testing.T) {
 		}
 	})
 
-	t.Run("returns an error for a comment-only SQL file (#351)", func(t *testing.T) {
+	t.Run("returns an error for a comment-only SQL file", func(t *testing.T) {
 		dir := t.TempDir()
 		sqlPath := filepath.Join(dir, "comments.sql")
 		if err := os.WriteFile(sqlPath, []byte("-- header only\n/* block */\n"), 0o600); err != nil {
@@ -2631,13 +2631,13 @@ func TestShellRun_SQLFile(t *testing.T) {
 
 func TestValidateSaveFlags_SQLFileAllowedOnTTY(t *testing.T) {
 	// --sql-file is a non-interactive execution path, so --save/--save-dir must be
-	// allowed with it even when stdin is a TTY. Ref #366, #367.
+	// allowed with it even when stdin is a TTY.
 	cases := []struct {
 		name string
 		args []string
 	}{
-		{"save-dir with sql-file (#366)", []string{"sqly", "--sql-file", "q.sql", "--save-dir", "out", "f.csv"}},
-		{"save --force with sql-file (#367)", []string{"sqly", "--sql-file", "q.sql", "--save", "--force", "f.csv"}},
+		{"save-dir with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-dir", "out", "f.csv"}},
+		{"save --force with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save", "--force", "f.csv"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2656,7 +2656,7 @@ func TestValidateSaveFlags_SQLFileAllowedOnTTY(t *testing.T) {
 }
 
 func TestShellRun_SQLFileRejectsPipedStdin(t *testing.T) {
-	// Regression for #373: when --sql-file is used without --stdin, non-empty
+	// Regression for: when --sql-file is used without --stdin, non-empty
 	// piped stdin must be rejected instead of silently discarded.
 	dir := t.TempDir()
 	sqlPath := filepath.Join(dir, "q.sql")
@@ -2682,7 +2682,7 @@ func TestShellRun_SQLFileRejectsPipedStdin(t *testing.T) {
 
 func TestShellRun_SQLFileWithEmptyStdinIsAllowed(t *testing.T) {
 	// A non-TTY run with empty stdin (e.g. CI redirecting /dev/null) must still
-	// work with --sql-file; only non-empty piped stdin is rejected. Ref #373.
+	// work with --sql-file; only non-empty piped stdin is rejected.
 	dir := t.TempDir()
 	sqlPath := filepath.Join(dir, "q.sql")
 	if err := os.WriteFile(sqlPath, []byte("SELECT 1 AS x;\n"), 0o600); err != nil {
@@ -2703,7 +2703,7 @@ func TestShellRun_SQLFileWithEmptyStdinIsAllowed(t *testing.T) {
 }
 
 func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
-	// Regression for #374: a --stdin dataset run with no query must fail loudly
+	// Regression for: a --stdin dataset run with no query must fail loudly
 	// instead of importing the data and discarding it.
 	shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv"})
 	if err != nil {
@@ -2723,7 +2723,7 @@ func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
 }
 
 func TestShellRun_BOMStrippedInSQLFile(t *testing.T) {
-	// Regression for #369: a UTF-8 BOM at the start of a --sql-file script must be
+	// Regression for: a UTF-8 BOM at the start of a --sql-file script must be
 	// stripped so the first statement parses.
 	dir := t.TempDir()
 	sqlPath := filepath.Join(dir, "q.sql")
@@ -2744,7 +2744,7 @@ func TestShellRun_BOMStrippedInSQLFile(t *testing.T) {
 }
 
 func TestShellRun_BOMStrippedInBatchStdin(t *testing.T) {
-	// Regression for #369: a UTF-8 BOM at the start of batch stdin must be
+	// Regression for: a UTF-8 BOM at the start of batch stdin must be
 	// stripped so the first statement parses.
 	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
@@ -2761,7 +2761,7 @@ func TestShellRun_BOMStrippedInBatchStdin(t *testing.T) {
 }
 
 func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
-	// Regression for #303: --output to an existing directory must be rejected,
+	// Regression for: --output to an existing directory must be rejected,
 	// not rewritten to a sibling .csv file.
 	dir := t.TempDir()
 	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", dir, filepath.Join("testdata", "sample.csv")})
@@ -2784,7 +2784,7 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 }
 
 func TestShellRun_OutputRejectedForNonRowsetDML(t *testing.T) {
-	// Regression for #364: --output for an UPDATE/DELETE without RETURNING must be
+	// Regression for: --output for an UPDATE/DELETE without RETURNING must be
 	// rejected, not silently ignored, and no output file is created.
 	work := t.TempDir()
 	src := filepath.Join(work, "u.csv")
@@ -2811,7 +2811,7 @@ func TestShellRun_OutputRejectedForNonRowsetDML(t *testing.T) {
 }
 
 func TestShellRun_OutputExportsReturningRows(t *testing.T) {
-	// Regression for #368: a DML statement with RETURNING must create the output
+	// Regression for: a DML statement with RETURNING must create the output
 	// file with the returned rows.
 	work := t.TempDir()
 	src := filepath.Join(work, "u.csv")
@@ -2838,7 +2838,7 @@ func TestShellRun_OutputExportsReturningRows(t *testing.T) {
 }
 
 func TestHelperCommandsRejectExtraArgs(t *testing.T) {
-	// Regression for #327: helper commands must reject unexpected extra
+	// Regression for: helper commands must reject unexpected extra
 	// arguments instead of silently ignoring them.
 	cases := []struct {
 		name string
@@ -2872,7 +2872,7 @@ func TestHelperCommandsRejectExtraArgs(t *testing.T) {
 }
 
 func TestShellRun_OutputRequiresSQL(t *testing.T) {
-	// Regression for #318/#319: --output is honored only with --sql, so it must
+	// Regression for/: --output is honored only with --sql, so it must
 	// be rejected (not silently ignored) on the batch and no-query paths.
 	t.Run("rejects --output with batch stdin and no --sql", func(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "o.csv")
@@ -2919,9 +2919,9 @@ func TestShellRun_OutputRequiresSQL(t *testing.T) {
 }
 
 func TestCommandsRejectEmptyArgs(t *testing.T) {
-	// Regression for #323/#324/#325: empty quoted arguments must be rejected, not
+	// Regression for//: empty quoted arguments must be rejected, not
 	// reinterpreted as in-place save, a ".csv" file, or the current directory.
-	t.Run(".save empty is rejected and is not an in-place save (#323)", func(t *testing.T) {
+	t.Run(".save empty is rejected and is not an in-place save", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -2932,7 +2932,7 @@ func TestCommandsRejectEmptyArgs(t *testing.T) {
 		}
 	})
 
-	t.Run(".dump empty destination is rejected (#324)", func(t *testing.T) {
+	t.Run(".dump empty destination is rejected", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -2943,7 +2943,7 @@ func TestCommandsRejectEmptyArgs(t *testing.T) {
 		}
 	})
 
-	t.Run(".import empty path is rejected (#325)", func(t *testing.T) {
+	t.Run(".import empty path is rejected", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -2956,7 +2956,7 @@ func TestCommandsRejectEmptyArgs(t *testing.T) {
 }
 
 func TestShellValidateSheetFlag(t *testing.T) {
-	// Regression for #287: --sheet only affects Excel imports, so it must be
+	// Regression for: --sheet only affects Excel imports, so it must be
 	// rejected when no input can be an Excel file instead of being silently
 	// ignored.
 	t.Run("rejects --sheet when the only input is a non-Excel file", func(t *testing.T) {
@@ -3011,7 +3011,7 @@ func TestShellValidateSheetFlag(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects --sheet for a directory with no Excel files (#312)", func(t *testing.T) {
+	t.Run("rejects --sheet for a directory with no Excel files", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, "u.csv"), []byte("a\n1\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -3039,7 +3039,7 @@ func TestShellValidateSheetFlag(t *testing.T) {
 }
 
 func TestShellRun_HistoryUnavailable(t *testing.T) {
-	// Regression for #262: non-interactive runs must succeed even when the
+	// Regression for: non-interactive runs must succeed even when the
 	// history DB cannot be created or written (e.g. read-only config dir).
 	readonlyErr := errors.New("attempt to write a readonly database")
 
@@ -3103,7 +3103,6 @@ func TestShell_shortCWD(t *testing.T) {
 
 // TestShellExec_SchemaQualifiedTempView covers the helper-command surface added
 // for v0.20.0 hardening: schema-qualified names, TEMP tables, and views.
-// Ref #445, #446, #447, #449, #450, #451, #464.
 func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 	newImportedShell := func(t *testing.T) (*Shell, func()) {
 		t.Helper()
@@ -3118,7 +3117,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		return shell, cleanup
 	}
 
-	t.Run(".schema main.user accepts a schema-qualified name (#445)", func(t *testing.T) {
+	t.Run(".schema main.user accepts a schema-qualified name", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		got, err := getExecStdOutput(t, shell.exec, ".schema main.user")
@@ -3130,7 +3129,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".describe main.user accepts a schema-qualified name (#446)", func(t *testing.T) {
+	t.Run(".describe main.user accepts a schema-qualified name", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		got, err := getExecStdOutput(t, shell.exec, ".describe main.user")
@@ -3142,7 +3141,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".header main.user accepts a schema-qualified name (#447)", func(t *testing.T) {
+	t.Run(".header main.user accepts a schema-qualified name", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		got, err := getExecStdOutput(t, shell.exec, ".header main.user")
@@ -3154,7 +3153,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".tables lists session-created VIEW (#450)", func(t *testing.T) {
+	t.Run(".tables lists session-created VIEW", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		if err := shell.exec(context.Background(), "CREATE VIEW v_user AS SELECT user_name FROM user"); err != nil {
@@ -3170,7 +3169,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".tables lists session-created TEMP table (#449)", func(t *testing.T) {
+	t.Run(".tables lists session-created TEMP table", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		if err := shell.exec(context.Background(), "CREATE TEMP TABLE temp_t (id INTEGER)"); err != nil {
@@ -3185,7 +3184,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".schema on a VIEW prints CREATE VIEW, not a synthesized table (#451)", func(t *testing.T) {
+	t.Run(".schema on a VIEW prints CREATE VIEW, not a synthesized table", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		if err := shell.exec(context.Background(), "CREATE VIEW v_user AS SELECT user_name FROM user"); err != nil {
@@ -3200,7 +3199,7 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".schema on a constrained TEMP table preserves UNIQUE/CHECK (#464)", func(t *testing.T) {
+	t.Run(".schema on a constrained TEMP table preserves UNIQUE/CHECK", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		const ddl = "CREATE TEMP TABLE temp_t (id INTEGER, name TEXT NOT NULL UNIQUE, qty INTEGER DEFAULT 7, CHECK (qty > 0))"
@@ -3216,4 +3215,285 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 			t.Fatalf(".schema on a TEMP table dropped constraints: %q", out)
 		}
 	})
+
+	t.Run(".schema prefers a TEMP table over a same-named main table", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE TEMP TABLE user(id TEXT)"); err != nil {
+			t.Fatalf("create temp table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema user")
+		if err != nil {
+			t.Fatalf(".schema user error: %v", err)
+		}
+		out := string(got)
+		// The temp table has only "id"; the imported main table has "first_name".
+		if !strings.Contains(out, "TEMP") || strings.Contains(out, "first_name") {
+			t.Fatalf(".schema did not prefer the temp table: %q", out)
+		}
+	})
+
+	t.Run(".schema prefers a TEMP view over a same-named main table", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE TEMP VIEW user AS SELECT 1 AS id"); err != nil {
+			t.Fatalf("create temp view error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema user")
+		if err != nil {
+			t.Fatalf(".schema user error: %v", err)
+		}
+		if out := string(got); !strings.Contains(out, "TEMP VIEW") {
+			t.Fatalf(".schema did not return the temp view definition: %q", out)
+		}
+	})
+
+	t.Run(".tables keeps a main object and a same-named TEMP object", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE TEMP TABLE user(id TEXT)"); err != nil {
+			t.Fatalf("create temp table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, "temp.user") || strings.Count(out, "user") < 2 {
+			t.Fatalf(".tables collapsed the main and temp objects: %q", out)
+		}
+	})
+
+	t.Run(".schema targets a literal dotted table name", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "a.b"(id INTEGER)`); err != nil {
+			t.Fatalf("create table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, `.schema "a.b"`)
+		if err != nil {
+			t.Fatalf(`.schema "a.b" error: %v`, err)
+		}
+		if !strings.Contains(string(got), "id") {
+			t.Fatalf(`.schema "a.b" missing the id column: %q`, got)
+		}
+	})
+
+	t.Run(".describe targets a literal dotted table name", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "a.b"(id INTEGER)`); err != nil {
+			t.Fatalf("create table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, `.describe "a.b"`)
+		if err != nil {
+			t.Fatalf(`.describe "a.b" error: %v`, err)
+		}
+		if !strings.Contains(string(got), "id") {
+			t.Fatalf(`.describe "a.b" missing the id column: %q`, got)
+		}
+	})
+
+	t.Run(".header targets a literal dotted table name", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "a.b"(id INTEGER)`); err != nil {
+			t.Fatalf("create table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, `.header "a.b"`)
+		if err != nil {
+			t.Fatalf(`.header "a.b" error: %v`, err)
+		}
+		if !strings.Contains(string(got), "id") {
+			t.Fatalf(`.header "a.b" missing the id header: %q`, got)
+		}
+	})
+
+	t.Run(".dump targets a literal dotted table name", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "a.b"(id INTEGER)`); err != nil {
+			t.Fatalf("create table error: %v", err)
+		}
+		dst := filepath.Join(t.TempDir(), "ab.csv")
+		backupErr := config.Stderr
+		config.Stderr = &bytes.Buffer{}
+		err := shell.exec(context.Background(), `.dump "a.b" `+dst)
+		config.Stderr = backupErr
+		if err != nil {
+			t.Fatalf(`.dump "a.b" error: %v`, err)
+		}
+		data, readErr := os.ReadFile(dst) //nolint:gosec // test path
+		if readErr != nil {
+			t.Fatalf("dump destination not written: %v", readErr)
+		}
+		if !strings.Contains(string(data), "id") {
+			t.Fatalf(`.dump "a.b" missing the id column: %q`, data)
+		}
+	})
+
+	t.Run(".tables prints paste-safe quoted identifiers", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "two words"(id INTEGER)`); err != nil {
+			t.Fatalf("create table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables error: %v", err)
+		}
+		if !strings.Contains(string(got), `"two words"`) {
+			t.Fatalf(".tables did not quote the spaced identifier: %q", got)
+		}
+	})
+
+	t.Run(".header keeps the full spaced table name", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), `CREATE TABLE "two words"(id INTEGER)`); err != nil {
+			t.Fatalf("create table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, `.header "two words"`)
+		if err != nil {
+			t.Fatalf(`.header "two words" error: %v`, err)
+		}
+		if !strings.Contains(string(got), "two words") {
+			t.Fatalf(".header truncated the spaced table name: %q", got)
+		}
+	})
+
+	t.Run(".schema temp.t keeps the TEMP keyword", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE TEMP TABLE t(id INTEGER PRIMARY KEY)"); err != nil {
+			t.Fatalf("create temp table error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema temp.t")
+		if err != nil {
+			t.Fatalf(".schema temp.t error: %v", err)
+		}
+		if !strings.Contains(string(got), "TEMP") {
+			t.Fatalf(".schema temp.t dropped the TEMP keyword: %q", got)
+		}
+	})
+
+	t.Run(".schema temp.v keeps the TEMP keyword for a view", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), "CREATE TEMP VIEW v AS SELECT 1 AS id"); err != nil {
+			t.Fatalf("create temp view error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema temp.v")
+		if err != nil {
+			t.Fatalf(".schema temp.v error: %v", err)
+		}
+		if !strings.Contains(string(got), "TEMP VIEW") {
+			t.Fatalf(".schema temp.v dropped the TEMP keyword: %q", got)
+		}
+	})
+
+	t.Run(".tables respects .mode json", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), ".mode json"); err != nil {
+			t.Fatalf(".mode json error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".tables")
+		if err != nil {
+			t.Fatalf(".tables error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, `"name"`) || !strings.Contains(out, "user") {
+			t.Fatalf(".tables ignored json mode: %q", out)
+		}
+	})
+
+	t.Run(".header respects .mode ndjson", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+		if err := shell.exec(context.Background(), ".mode ndjson"); err != nil {
+			t.Fatalf(".mode ndjson error: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".header user")
+		if err != nil {
+			t.Fatalf(".header user error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, `"column"`) || !strings.Contains(out, "first_name") {
+			t.Fatalf(".header ignored ndjson mode: %q", out)
+		}
+	})
+}
+
+// TestRunDirectSQLRejectsMultipleStatements verifies that direct --sql refuses
+// multi-statement input instead of silently running every statement and keeping
+// only the last result.
+func TestRunDirectSQLRejectsMultipleStatements(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+	}{
+		{"two SELECTs keep only the last", "SELECT 1 AS x; SELECT 2 AS y"},
+		{"SELECT then UPDATE is multi-statement", "SELECT 1 AS x; UPDATE t SET x=1"},
+		{"trailing semicolon on two statements", "SELECT 1; SELECT 2;"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly", "--sql", tc.query})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			shell.isTTY = func() bool { return true }
+
+			runErr := shell.Run(context.Background())
+			if runErr == nil {
+				t.Fatal("expected a multi-statement rejection, got nil")
+			}
+			if !strings.Contains(runErr.Error(), "single SQL statement") {
+				t.Errorf("error = %q, want it to mention a single SQL statement", runErr)
+			}
+		})
+	}
+}
+
+// TestRunDirectSQLOutputRejectsMultipleStatementsBeforeWriting verifies that
+// --sql --output rejects multi-statement input before the destination file is
+// created, so a pipeline never sees a partial export.
+func TestRunDirectSQLOutputRejectsMultipleStatementsBeforeWriting(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.csv")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT 1 AS x; SELECT 2 AS y", "--output", out})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	if runErr := shell.Run(context.Background()); runErr == nil {
+		t.Fatal("expected a multi-statement rejection, got nil")
+	}
+	if _, statErr := os.Stat(out); statErr == nil {
+		t.Errorf("output file %s was written despite the rejection", out)
+	}
+}
+
+// TestRunDirectSQLAllowsSingleStatementWithTrailingSemicolon guards against the
+// statement counter over-counting a single statement that ends in ";".
+func TestRunDirectSQLAllowsSingleStatementWithTrailingSemicolon(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "SELECT 1 AS x;"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return true }
+
+	backup := config.Stdout
+	config.Stdout = &bytes.Buffer{}
+	defer func() { config.Stdout = backup }()
+
+	if runErr := shell.Run(context.Background()); runErr != nil {
+		t.Fatalf("single statement with trailing semicolon should run, got: %v", runErr)
+	}
 }

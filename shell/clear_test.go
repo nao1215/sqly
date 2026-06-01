@@ -38,7 +38,7 @@ func Test_clearCommand(t *testing.T) {
 	})
 
 	t.Run("writes ANSI clear sequence to stdout in-process", func(t *testing.T) {
-		// Regression for #236: .clear must clear the screen in-process via ANSI
+		// Regression for: .clear must clear the screen in-process via ANSI
 		// escapes instead of shelling out to clear/cls.
 		c := NewCommands()
 

@@ -2,32 +2,32 @@
 # shellcheck shell=sh
 #
 # Binary end-to-end tests for the bugs reported against the published v0.18.0
-# binary (#349-#378). These exercise the CLI the way a user does: flags, piped
+# binary. These exercise the CLI the way a user does: flags, piped
 # stdin, exit codes, and stdout/stderr separation.
 
 Describe 'sqly v0.18.0 binary bug fixes'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   Describe 'explicit empty flag values are rejected'
-    It 'rejects an empty --output (#349)'
+    It 'rejects an empty --output'
       When run sqly --sql "SELECT 1 AS x" --output ""
       The status should be failure
       The stderr should include '--output'
     End
 
-    It 'rejects an empty --sql-file (#350)'
+    It 'rejects an empty --sql-file'
       When run sqly --sql-file ""
       The status should be failure
       The stderr should include '--sql-file'
     End
 
-    It 'rejects an empty --save-dir (#352)'
+    It 'rejects an empty --save-dir'
       When run sqly --sql "SELECT 1" --save-dir "" testdata/user.csv
       The status should be failure
       The stderr should include '--save-dir'
     End
 
-    It 'rejects an empty --stdin (#353)'
+    It 'rejects an empty --stdin'
       Data
         #|id,name
         #|1,a
@@ -39,13 +39,13 @@ Describe 'sqly v0.18.0 binary bug fixes'
   End
 
   Describe 'output mode and DML validation'
-    It 'rejects conflicting output mode flags (#365)'
+    It 'rejects conflicting output mode flags'
       When run sqly --csv --json --sql "SELECT 1 AS x"
       The status should be failure
       The stderr should include 'conflicting'
     End
 
-    It 'prints rows for a DML RETURNING statement (#363)'
+    It 'prints rows for a DML RETURNING statement'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/u.csv"
       When run sqly --csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name" "$work/u.csv"
@@ -55,7 +55,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'rejects --output for a non-rowset DML statement (#364)'
+    It 'rejects --output for a non-rowset DML statement'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/u.csv"
       When run sqly --sql "UPDATE u SET first_name='X' WHERE identifier=1" --output "$work/out.csv" "$work/u.csv"
@@ -65,7 +65,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'exports RETURNING rows with --output (#368)'
+    It 'exports RETURNING rows with --output'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/u.csv"
       When run sqly --csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier" --output "$work/out.csv" "$work/u.csv"
@@ -77,7 +77,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
   End
 
   Describe 'sql-file and stdin routing'
-    It 'rejects a comment-only --sql-file (#351)'
+    It 'rejects a comment-only --sql-file'
       work=$(mktemp -d)
       printf -- '-- header only\n/* block */\n' > "$work/q.sql"
       When run sqly --sql-file "$work/q.sql"
@@ -86,7 +86,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'strips a UTF-8 BOM from a --sql-file script (#369)'
+    It 'strips a UTF-8 BOM from a --sql-file script'
       work=$(mktemp -d)
       printf '\357\273\277SELECT 2 AS y;\n' > "$work/q.sql"
       When run sqly --csv --sql-file "$work/q.sql" testdata/user.csv
@@ -95,7 +95,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'strips a UTF-8 BOM from batch stdin (#369)'
+    It 'strips a UTF-8 BOM from batch stdin'
       Data
         #|﻿SELECT 7 AS z;
       End
@@ -104,7 +104,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       The output should include '7'
     End
 
-    It 'rejects non-empty piped stdin with --sql-file (#373)'
+    It 'rejects non-empty piped stdin with --sql-file'
       work=$(mktemp -d)
       printf 'SELECT 1 AS x;\n' > "$work/q.sql"
       Data
@@ -116,7 +116,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'fails a --stdin dataset run with no query (#374)'
+    It 'fails a --stdin dataset run with no query'
       Data
         #|id,name
         #|1,a
@@ -128,7 +128,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
   End
 
   Describe 'directory imports'
-    It 'reports per-file provenance for a sanitized basename (#357)'
+    It 'reports per-file provenance for a sanitized basename'
       work=$(mktemp -d)
       printf 'id,name\n1,a\n' > "$work/2023-data.csv"
       When run sqly --inspect "$work"
@@ -138,7 +138,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'rejects duplicate basenames from different subdirectories (#359)'
+    It 'rejects duplicate basenames from different subdirectories'
       work=$(mktemp -d)
       mkdir -p "$work/a" "$work/b"
       printf 'id,name\n1,alpha\n' > "$work/a/user.csv"
@@ -149,7 +149,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'reports an overwrite when re-importing a directory (#361)'
+    It 'reports an overwrite when re-importing a directory'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/user.csv"
       mkdir "$work/dir"
@@ -166,7 +166,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
   End
 
   Describe 'write-back safety'
-    It 'rejects --output that aliases an imported source (#371)'
+    It 'rejects --output that aliases an imported source'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/user.csv"
       When run sqly --csv --sql "SELECT * FROM user WHERE identifier=1" --output "$work/user.csv" "$work/user.csv"
@@ -175,7 +175,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'rejects --save-dir that resolves to the source directory (#370)'
+    It 'rejects --save-dir that resolves to the source directory'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/user.csv"
       When run sqly --sql "UPDATE user SET first_name='P' WHERE identifier=1" --save-dir "$work" "$work/user.csv"
@@ -184,7 +184,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'rejects a --save-dir destination that already exists (#372)'
+    It 'rejects a --save-dir destination that already exists'
       work=$(mktemp -d)
       mkdir -p "$work/src" "$work/out"
       cp testdata/user.csv "$work/src/user.csv"
@@ -195,7 +195,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'keeps stdout clean when write-back fails (#375)'
+    It 'keeps stdout clean when write-back fails'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/user.csv"
       cp testdata/sample.xlsx "$work/sample.xlsx"
@@ -206,7 +206,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
       rm -rf "$work"
     End
 
-    It 'skips write-back for a read-only query under --save --force (#376)'
+    It 'skips write-back for a read-only query under --save --force'
       work=$(mktemp -d)
       cp testdata/user.csv "$work/user.csv"
       When run sqly --csv --sql "SELECT * FROM user WHERE identifier=1" --save --force "$work/user.csv"
@@ -218,7 +218,7 @@ Describe 'sqly v0.18.0 binary bug fixes'
   End
 
   Describe 'multi-workbook --sheet'
-    It 'skips workbooks lacking the requested sheet (#378)'
+    It 'skips workbooks lacking the requested sheet'
       When run sqly --inspect --sheet "A test" testdata/sheet_with_spaces.xlsx testdata/sample.xlsx testdata/sheet_with_accents.xlsx
       The status should be success
       The output should include 'sheet_with_spaces'

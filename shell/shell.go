@@ -74,18 +74,18 @@ type Shell struct {
 	// dirImported marks tables that came from a directory import. Their
 	// tableSources entry may point at the per-file source (for --inspect
 	// provenance), but write-back still rejects them because a directory import
-	// is not a single editable source the session owns. Ref #326, #261.
+	// is not a single editable source the session owns.
 	dirImported map[string]bool
 	// dataChanged is set when an executed statement actually changed table data
 	// (a DML that affected at least one row, or a DML RETURNING that returned at
 	// least one row). A non-interactive run only writes back when data changed, so
-	// an EXPLAIN or a zero-row DML leaves source files untouched. Ref #402, #403,
-	// #404, #405.
+	// an EXPLAIN or a zero-row DML leaves source files untouched.,
+	//,.
 	dataChanged bool
 	// pendingAffected holds "affected is N row(s)" lines produced during a
 	// write-back run. They are buffered rather than printed immediately and flushed
 	// to stdout only after write-back succeeds, so a run that fails during
-	// write-back leaves stdout free of success counts. Ref #396.
+	// write-back leaves stdout free of success counts.
 	pendingAffected []string
 }
 
@@ -161,7 +161,6 @@ func (s *Shell) Run(ctx context.Context) error {
 	// --output is only honored by the --sql path (a single result written to one
 	// file). Without --sql (no query, batch stdin, --sql-file, or interactive)
 	// the flag was silently ignored, so reject it instead of looking successful.
-	// Ref #318, #319.
 	if s.argument.Output.FilePath != "" && s.argument.Query == "" {
 		return errors.New("--output requires --sql")
 	}
@@ -181,7 +180,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// --stdin stages piped stdin as a dataset, which consumes stdin entirely, so
 	// nothing remains to carry a query. Require an explicit query source;
 	// otherwise the dataset is imported and immediately discarded with a success
-	// exit code. Ref #374.
+	// exit code.
 	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
 		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
 	}
@@ -197,7 +196,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		// --sql-file takes its query from the file, not stdin. Without --stdin to
 		// route piped stdin to a dataset, non-empty piped stdin would be silently
 		// dropped, so reject it and point the user at --stdin. Empty stdin (e.g.
-		// CI redirecting /dev/null) is fine. Ref #373.
+		// CI redirecting /dev/null) is fine.
 		if s.argument.StdinFormat == "" && !s.isTTY() && s.pipedStdinHasData() {
 			return errors.New("--sql-file does not read SQL from stdin; piped stdin would be ignored. Use --stdin FORMAT to load it as a dataset, or remove the pipe")
 		}
@@ -207,7 +206,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		// A partial import (some inputs loaded, some failed) keeps the loaded
 		// tables usable, so the interactive shell still starts after a warning.
 		// Non-interactive modes (--sql, --sql-file, --inspect, batch) treat it as
-		// a hard failure so automation sees a non-zero exit. Ref #297, #300, #302.
+		// a hard failure so automation sees a non-zero exit.
 		if errors.Is(err, errPartialImport) && s.startsInteractiveShell() {
 			fmt.Fprintf(config.Stderr, "%v\n", err)
 		} else {
@@ -227,8 +226,15 @@ func (s *Shell) Run(ctx context.Context) error {
 	}
 
 	if s.argument.Query != "" {
+		// Direct --sql runs exactly one statement and prints (or exports) its single
+		// result. Multiple statements separated by ";" would silently drop every
+		// result but the last, so reject them up front instead of running the input
+		// and discarding output.
+		if n := countSQLStatements(s.argument.Query); n > 1 {
+			return fmt.Errorf("--sql accepts a single SQL statement, but got %d; run one statement per invocation or use --sql-file for a multi-statement script", n)
+		}
 		// Validate write-back before running, so a run that cannot persist fails
-		// before any query output reaches stdout. Ref #375.
+		// before any query output reaches stdout.
 		if err := s.preflightSave(ctx, s.argument.Query); err != nil {
 			return err
 		}
@@ -258,7 +264,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
 	// initialize, so read SQL and helper commands from stdin in batch mode. The
 	// whole script is read up front so write-back can be validated before the
-	// first statement runs (#375) and skipped for a read-only script (#376).
+	// first statement runs and skipped for a read-only script.
 	if !s.isTTY() {
 		data, err := io.ReadAll(s.stdin)
 		if err != nil {
@@ -273,7 +279,7 @@ func (s *Shell) Run(ctx context.Context) error {
 			return err
 		}
 		// Skip write-back when nothing ran (e.g. empty stdin), so an empty batch
-		// does not trigger --save/--save-dir side effects. Ref #330, #331.
+		// does not trigger --save/--save-dir side effects.
 		if !ranAny {
 			return nil
 		}
@@ -396,9 +402,9 @@ func (s *Shell) init(ctx context.Context) error {
 	}
 	importErr := s.commands.importCommand(ctx, s, paths)
 	// Re-point any stdin-derived table's source from the ephemeral temp path to
-	// a stable "stdin" marker, so --inspect does not leak the temp path (#290)
+	// a stable "stdin" marker, so --inspect does not leak the temp path
 	// and write-back can reject stdin-backed tables instead of writing to a
-	// deleted temp file (#291).
+	// deleted temp file.
 	if stdinAbsPath != "" {
 		s.remapStdinTableSources(stdinAbsPath)
 	}
@@ -744,8 +750,8 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		return err
 	}
 	// Track whether this statement actually changed data, so write-back runs only
-	// for a run that modified a table (not an EXPLAIN or a zero-row DML). Ref #402,
-	// #403, #404, #405.
+	// for a run that modified a table (not an EXPLAIN or a zero-row DML).,
+	//,,.
 	if statementModifiesData(req) {
 		if table != nil {
 			if len(table.Records()) > 0 {
@@ -758,14 +764,14 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if table == nil {
 		// --output is only meaningful for a statement that produces a rowset. An
 		// INSERT/UPDATE/DELETE without RETURNING produces only an affected-row
-		// count, so reject --output instead of silently ignoring it. Ref #364.
+		// count, so reject --output instead of silently ignoring it.
 		if s.argument.NeedsOutputToFile() {
 			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
 		}
 		msg := statementResultMessage(req, affectedRows)
 		// When a write-back is requested, buffer the result line instead of printing
 		// it now: it is flushed to stdout only after write-back succeeds, so a run
-		// that fails during write-back leaves stdout clean. Ref #396.
+		// that fails during write-back leaves stdout clean.
 		if s.saveRequested() {
 			s.pendingAffected = append(s.pendingAffected, msg)
 			return nil
@@ -790,7 +796,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 func (s *Shell) outputToFile(table *model.Table) error {
 	// ACH and Fedwire are input-only formats: sqly can read them but cannot
 	// produce them, so reject such a destination instead of silently writing CSV
-	// bytes to a misleading .ach/.fed path. Ref #421.
+	// bytes to a misleading .ach/.fed path.
 	if model.IsInputOnlyExtension(s.argument.Output.FilePath) {
 		return fmt.Errorf("--output destination %q uses an input-only format (ACH/Fedwire); export to csv/tsv/json/parquet instead", s.argument.Output.FilePath)
 	}
@@ -803,7 +809,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	filePath := model.BuildOutputPath(s.argument.Output.FilePath, exportFmt, compression)
 	// Refuse an --output destination that aliases an imported source file. A
 	// destructive source write must go through --save --force, not a one-off
-	// export, so a stray --output cannot silently destroy the dataset. Ref #371.
+	// export, so a stray --output cannot silently destroy the dataset.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
 		return fmt.Errorf("--output destination %s is the source file for table %q; use --save --force to overwrite a source", filePath, name)
 	}
@@ -838,7 +844,7 @@ func (s *Shell) outputAliasesImportedSource(path string) (string, bool) {
 // silently writing to a sibling file (e.g. "out" -> "out.csv") or, for a
 // directory-like path ending in a separator, a hidden file ("outdir/" ->
 // "outdir/.csv"). A path ending in a path separator is rejected up front (Ref
-// #419, #420), as is an existing directory. A plain non-existent path is fine; it
+// ,), as is an existing directory. A plain non-existent path is fine; it
 // is created on write.
 func ensureNotDirectory(path string) error {
 	if path == "" {

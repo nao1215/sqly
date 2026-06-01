@@ -1,11 +1,11 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# --inspect conflicting-flag validation (#288). --inspect is self-contained, so
+# --inspect conflicting-flag validation. --inspect is self-contained, so
 # combining it with action or side-effecting flags must fail instead of
 # silently discarding them.
 
-Describe 'sqly --inspect conflicts (#288)'
+Describe 'sqly --inspect conflicts'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   setup() {

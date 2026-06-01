@@ -51,14 +51,20 @@ func isStructuredMode(m model.PrintMode) bool {
 // instead of a lossy reconstruction. Only when no stored SQL is found does it fall
 // back to synthesizing from column metadata. A schema-qualified name (main.user,
 // temp.t) is resolved against that schema. Returns an error when the object does
-// not exist. Ref #445, #451, #463, #464.
+// not exist.
 func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (string, error) {
 	schema, object := splitTableQualifier(tableName)
-	stored, err := s.storedCreateSQL(ctx, schema, object)
+	stored, isTemp, err := s.storedCreateSQL(ctx, schema, object)
 	if err != nil {
 		return "", err
 	}
 	if stored != "" {
+		// SQLite stores a temp object's SQL with the TEMP keyword removed, so
+		// re-insert it for a temp object to keep the reported schema faithful and
+		// round-trippable to the same kind of object.
+		if isTemp {
+			stored = injectTempKeyword(stored)
+		}
 		return stored, nil
 	}
 
@@ -74,42 +80,91 @@ func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (str
 }
 
 // storedCreateSQL returns the CREATE statement SQLite stored for a table or view,
-// or "" when none is found. It reads the schema's sqlite_master (or, for a TEMP
-// object or an unqualified name, sqlite_temp_master) so the real definition wins
-// over the synthesized fallback: a view yields its CREATE VIEW, and a constrained
-// or TEMP table yields its original DDL including UNIQUE/CHECK constraints the
-// fallback cannot reconstruct. Ref #451, #463, #464.
-func (s *Shell) storedCreateSQL(ctx context.Context, schema, object string) (string, error) {
-	masters := []string{"sqlite_master", "sqlite_temp_master"}
-	if schema != "" {
-		masters = []string{s.usecases.importer.QuoteIdentifier(schema) + ".sqlite_master"}
+// whether the matched object is a TEMP object, or "" when none is found. It reads
+// the right master table so the real definition wins over the synthesized
+// fallback: a view yields its CREATE VIEW, and a constrained or TEMP table yields
+// its original DDL including UNIQUE/CHECK constraints the fallback cannot
+// reconstruct.
+//
+// An unqualified name is resolved against sqlite_temp_master before sqlite_master,
+// matching SQLite's own temp-before-main lookup, so a TEMP object shadowing an
+// imported main table reports the temp definition the session will actually query.
+// A "temp."/"main."-qualified name is resolved against just that schema.
+func (s *Shell) storedCreateSQL(ctx context.Context, schema, object string) (sqlText string, isTemp bool, err error) {
+	type masterSource struct {
+		table string
+		temp  bool
+	}
+	var sources []masterSource
+	switch {
+	case schema == "":
+		sources = []masterSource{{"sqlite_temp_master", true}, {"sqlite_master", false}}
+	case strings.EqualFold(schema, "temp"):
+		sources = []masterSource{{"sqlite_temp_master", true}}
+	default: // main
+		sources = []masterSource{{"sqlite_master", false}}
 	}
 	// String literal: escape single quotes to query the master tables safely.
 	literal := "'" + strings.ReplaceAll(object, "'", "''") + "'"
-	for _, master := range masters {
+	for _, src := range sources {
 		res, err := s.usecases.query.Query(ctx,
-			"SELECT sql FROM "+master+" WHERE name = "+literal+" AND type IN ('table', 'view') AND sql IS NOT NULL")
+			"SELECT sql FROM "+src.table+" WHERE name = "+literal+" AND type IN ('table', 'view') AND sql IS NOT NULL")
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if recs := res.Records(); len(recs) > 0 && len(recs[0]) > 0 && recs[0][0] != "" {
-			return recs[0][0], nil
+			return recs[0][0], src.temp, nil
 		}
 	}
-	return "", nil
+	return "", false, nil
+}
+
+// injectTempKeyword re-inserts the TEMP keyword after CREATE, because SQLite
+// strips TEMP/TEMPORARY from the SQL it stores for a temp object. The guard
+// clauses make it a no-op for a non-CREATE or already temp-qualified statement.
+func injectTempKeyword(createSQL string) string {
+	i := 0
+	for i < len(createSQL) && (createSQL[i] == ' ' || createSQL[i] == '\t' || createSQL[i] == '\n' || createSQL[i] == '\r') {
+		i++
+	}
+	const kw = "CREATE"
+	if !strings.HasPrefix(strings.ToUpper(createSQL[i:]), kw) {
+		return createSQL
+	}
+	after := createSQL[i+len(kw):]
+	upperAfter := strings.ToUpper(strings.TrimLeft(after, " \t\r\n"))
+	if strings.HasPrefix(upperAfter, "TEMP") {
+		return createSQL // already temp-qualified (TEMP or TEMPORARY)
+	}
+	return createSQL[:i+len(kw)] + " TEMP" + after
 }
 
 // splitTableQualifier splits a possibly schema-qualified table reference such as
 // "main.user" or "temp.t" into its schema and object name. A bare name yields an
-// empty schema. The split is on the first dot, which sqly never produces inside an
-// imported table name (dots are sanitized to "_"), so a dot signals a schema
-// qualifier. SQLite accepts a schema-qualified name in SQL, so the helper commands
-// accept it too. Ref #445, #446, #447, #448.
+// empty schema. The split happens only when the prefix before the first dot is a
+// real SQLite schema (main or temp); sqly rejects ATTACH/DETACH, so those are the
+// only schemas a session can have. Any other dotted name (e.g. "a.b") is a literal
+// table identifier and is returned whole, matching `SELECT * FROM "a.b"`. This is
+// why `.schema "a.b"` reaches its table instead of querying a non-existent
+// "a.sqlite_master".
 func splitTableQualifier(name string) (schema, object string) {
-	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 {
+	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 && isSchemaName(name[:i]) {
 		return name[:i], name[i+1:]
 	}
 	return "", name
+}
+
+// isSchemaName reports whether prefix is a SQLite schema name a sqly session can
+// reference. Only "main" and "temp" (case-insensitive) qualify: ATTACH/DETACH are
+// rejected, so no other database can be attached. A dotted prefix that is not one
+// of these is therefore part of a literal table name, not a schema qualifier.
+func isSchemaName(prefix string) bool {
+	switch strings.ToLower(prefix) {
+	case "main", "temp":
+		return true
+	default:
+		return false
+	}
 }
 
 // buildCreateStatement assembles a CREATE TABLE statement from PRAGMA

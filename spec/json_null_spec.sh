@@ -1,10 +1,10 @@
 #!/bin/sh
 # shellcheck shell=sh
 #
-# JSON/NDJSON NULL rendering (#328, #329). A SQL NULL must be emitted as JSON
+# JSON/NDJSON NULL rendering. A SQL NULL must be emitted as JSON
 # null, distinct from an empty string, in machine-readable output.
 
-Describe 'sqly JSON/NDJSON NULL handling (#328, #329)'
+Describe 'sqly JSON/NDJSON NULL handling'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
   It 'emits NULL as JSON null in --json'
