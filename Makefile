@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e clean vet fmt chkfmt
+.PHONY: build test test-e2e demo clean vet fmt chkfmt
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
@@ -30,6 +30,9 @@ test: ## Start test
 
 test-e2e: build ## Run shellspec end-to-end tests against the built binary
 	shellspec --shell sh
+
+demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, ffmpeg)
+	for tape in doc/vhs/*.tape; do vhs "$$tape"; done
 
 bench: ## Start benchmark
 	env GOOS=$(GOOS) go test -bench=BenchmarkImport100000Records -benchmem
