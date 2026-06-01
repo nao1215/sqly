@@ -200,11 +200,14 @@ func trimWordGaps(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// stripSQLNoise removes a leading UTF-8 BOM and any leading line ("--") or block
-// ("/* */") comments plus surrounding whitespace, returning the first executable
-// portion. The batch and --sql-file paths already accept a BOM and leading
-// comments; the direct --sql path classifies a statement by its first keyword, so
-// it must strip the same noise to stay consistent.
+// stripSQLNoise removes a leading UTF-8 BOM, any leading line ("--") or block
+// ("/* */") comments, leading empty statements (bare ";"), plus surrounding
+// whitespace, returning the first executable portion. The batch and --sql-file
+// paths already accept a BOM and leading comments; the direct --sql path classifies
+// a statement by its first keyword, so it must strip the same noise to stay
+// consistent. A leading ";" is an empty statement: dropping it makes ";SELECT 1"
+// classify and run as the SELECT rather than as a no-rowset statement that discards
+// the query.
 func stripSQLNoise(s string) string {
 	s = strings.TrimPrefix(s, "\ufeff")
 	for {
@@ -222,6 +225,8 @@ func stripSQLNoise(s string) string {
 				return "" // unterminated block comment, nothing executable
 			}
 			s = s[i+2:]
+		case strings.HasPrefix(s, ";"):
+			s = s[1:] // leading empty statement
 		default:
 			return s
 		}

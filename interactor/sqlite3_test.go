@@ -169,6 +169,54 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		}
 	})
 
+	// A leading empty statement (a bare ";") is dropped before classification, so
+	// ";SELECT 1" runs as the SELECT on the query path instead of being misread as a
+	// no-rowset statement that discards the query.
+	t.Run("leading empty statement is dropped and SELECT runs on query path", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		repo.EXPECT().Query(gomock.Any(), "SELECT 1 AS x").Return(model.NewTable("", model.Header{"x"}, []model.Record{{"1"}}), nil)
+
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), ";SELECT 1 AS x"); err != nil {
+			t.Errorf("want: nil, got: %v", err)
+		}
+	})
+
+	t.Run("multiple leading empty statements are dropped and SELECT runs on query path", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		repo.EXPECT().Query(gomock.Any(), "SELECT 1 AS x").Return(model.NewTable("", model.Header{"x"}, []model.Record{{"1"}}), nil)
+
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), "; ;SELECT 1 AS x"); err != nil {
+			t.Errorf("want: nil, got: %v", err)
+		}
+	})
+
+	t.Run("leading empty statement before UPDATE routes to exec", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		repo.EXPECT().Exec(gomock.Any(), "UPDATE test SET name='z' WHERE id=1").Return(int64(1), nil)
+
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), ";UPDATE test SET name='z' WHERE id=1"); err != nil {
+			t.Errorf("want: nil, got: %v", err)
+		}
+	})
+
+	t.Run("leading empty statement before ATTACH is still rejected as unsupported", func(t *testing.T) {
+		t.Parallel()
+		si := NewSQLite3Interactor(nil, NewSQL(), nil)
+		_, _, got := si.ExecSQL(context.Background(), ";ATTACH DATABASE '/tmp/x.db' AS aux")
+		if got == nil || !strings.Contains(got.Error(), "ATTACH/DETACH") {
+			t.Errorf("want: ATTACH rejection, got: %v", got)
+		}
+	})
+
 	// A non-returning WITH ... UPDATE/INSERT/DELETE is DML, so it runs on the exec
 	// path instead of the query path.
 	t.Run("WITH ... UPDATE without RETURNING routes to exec", func(t *testing.T) {

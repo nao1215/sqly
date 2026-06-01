@@ -104,4 +104,32 @@ Describe 'sqly v0.22.0 binary regressions'
     The stderr should be present
     The path "$WORK/fake.parquet.gzip.zst" should not be exist
   End
+
+  # A leading empty statement (a bare ";") must not swallow the statement that
+  # follows it in direct --sql.
+  It 'runs the SELECT after a leading empty statement in direct --sql'
+    When run sqly --sql ';SELECT 1 AS x'
+    The status should be success
+    The output should include 'x'
+    The output should include '1'
+  End
+
+  It 'runs the SELECT after multiple leading empty statements in direct --sql'
+    When run sqly --sql ';;SELECT 2 AS y'
+    The status should be success
+    The output should include '2'
+  End
+
+  It 'exports the SELECT after a leading empty statement with --output'
+    When run sqly --sql ';SELECT 1 AS x' --output "$WORK/lead.csv"
+    The status should be success
+    The stderr should be present
+    The contents of file "$WORK/lead.csv" should include 'x'
+  End
+
+  It 'still rejects ATTACH after a leading empty statement in direct --sql'
+    When run sqly --sql ";ATTACH DATABASE '$WORK/x.db' AS aux"
+    The status should be failure
+    The stderr should include 'ATTACH'
+  End
 End
