@@ -89,6 +89,21 @@ $ sqly --sql "SELECT name, price FROM products ORDER BY CAST(price AS REAL) DESC
 $ sqly --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id" testdata/user.csv.gz testdata/identifier.csv
 ```
 
+A JOIN can cross formats directly. Here a Parquet table of products joins a CSV of sales, with revenue computed in the query:
+
+![cross-format join demo](./doc/img/crossjoin-demo.gif)
+
+```shell
+$ sqly --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2) AS revenue FROM products p JOIN sales s ON p.id = s.product_id ORDER BY revenue DESC" testdata/products.parquet testdata/sales.csv
++----------+--------+----------+---------+
+|   name   | price  | quantity | revenue |
++----------+--------+----------+---------+
+| Laptop   | 999.99 |        3 | 2999.97 |
+| Keyboard |  79.99 |        5 |  399.95 |
+| Mouse    |  29.99 |       10 |   299.9 |
++----------+--------+----------+---------+
+```
+
 ## Interactive shell
 
 Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysql`: type SQL, or a helper command that begins with a dot. Tab completes keywords and table names, and history is kept across sessions.
@@ -165,6 +180,16 @@ The format and compression are inferred from the `--output` extension when no mo
 
 ```shell
 $ sqly --sql "SELECT * FROM user" --output result.ndjson.gz testdata/user.csv
+```
+
+Because the format is inferred from the extension, `--output` doubles as a converter: query a CSV once and write JSON, Parquet, or Excel. Each result is a normal table you can query again.
+
+![format converter demo](./doc/img/convert-demo.gif)
+
+```shell
+$ sqly --sql "SELECT user_name, identifier FROM user" --output users.json testdata/user.csv
+$ sqly --sql "SELECT user_name, identifier FROM user" --output users.parquet testdata/user.csv
+$ sqly --sql "SELECT user_name, identifier FROM user" --output users.xlsx testdata/user.csv
 ```
 
 ## Pipe data in: --stdin
@@ -301,6 +326,14 @@ A directory argument imports every supported file under it recursively, and you 
 ```shell
 $ sqly ./data_directory
 $ sqly file1.csv ./data_directory file2.tsv --sql "SELECT * FROM users"
+```
+
+Point sqly at a folder of mixed-format files and join across them in one query:
+
+![directory import demo](./doc/img/directory-demo.gif)
+
+```shell
+$ sqly ./shop --sql "SELECT p.name, s.quantity FROM products p JOIN sales s ON p.id = s.product_id ORDER BY p.name"
 ```
 
 The shell `.import` command does the same:
