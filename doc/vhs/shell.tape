@@ -4,8 +4,11 @@ Output "doc/img/shell-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1100
-Set Height 640
+Set Height 700
 Set Padding 18
+Set CursorBlink false
+Set Framerate 24
+Set TypingSpeed 60ms
 Hide
 Type "export PATH=$PWD:$PATH PS1='$ '; clear"
 Enter

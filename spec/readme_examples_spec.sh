@@ -27,6 +27,40 @@ Describe 'README examples'
     End
   End
 
+  Describe 'Complex queries'
+    It 'runs the analytics script (CTE + window + GROUP BY) from doc/vhs/analytics.sql'
+      When run sqly --sql-file doc/vhs/analytics.sql testdata/actor.csv
+      The status should be success
+      The output should include 'Harrison Ford'
+      The output should include '50+ movies'
+    End
+
+    It 'extracts JSON fields from a JSONL file via doc/vhs/json.sql'
+      When run sqly --sql-file doc/vhs/json.sql testdata/sample.jsonl
+      The status should be success
+      The output should include 'Charlie'
+      The output should include 'Nagoya'
+    End
+
+    It 'reads a gzipped CSV transparently'
+      When run sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" testdata/user.csv.gz
+      The status should be success
+      The line 2 should equal 'booker12'
+    End
+
+    It 'queries a Parquet file'
+      When run sqly --csv --sql "SELECT name FROM products ORDER BY CAST(price AS REAL) DESC LIMIT 1" testdata/products.parquet
+      The status should be success
+      The line 2 should equal 'Laptop'
+    End
+
+    It 'joins a compressed CSV with a plain CSV'
+      When run sqly --csv --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" testdata/user.csv.gz testdata/identifier.csv
+      The status should be success
+      The output should include 'developrt'
+    End
+  End
+
   Describe 'Output formats'
     It 'renders CSV with --csv'
       When run sqly --csv --sql "SELECT user_name, identifier FROM user LIMIT 2" testdata/user.csv

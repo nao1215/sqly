@@ -48,6 +48,47 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv
 +-----------+------------+------------+-----------+
 ```
 
+## Complex queries
+
+Because every file is loaded into SQLite, the full query engine is available: CTEs, window functions, aggregates, and joins across files of different formats.
+
+Window functions and CTEs (here read from a file with `--sql-file`):
+
+![analytics demo](./doc/img/analytics-demo.gif)
+
+```sql
+-- analytics.sql, run with: sqly --sql-file analytics.sql actor.csv
+WITH ranked AS (
+  SELECT actor, total_gross,
+         RANK() OVER (ORDER BY total_gross DESC) AS rank
+  FROM actor
+)
+SELECT rank, actor, total_gross FROM ranked WHERE rank <= 5 ORDER BY rank;
+
+SELECT CASE WHEN number_of_movies >= 50 THEN '50+ movies'
+            WHEN number_of_movies >= 35 THEN '35-49 movies'
+            ELSE 'under 35' END AS bucket,
+       COUNT(*) AS actors, ROUND(AVG(total_gross), 1) AS avg_gross
+FROM actor GROUP BY bucket ORDER BY avg_gross DESC;
+```
+
+JSON and JSONL rows land in a single `data` column; pull fields out with `json_extract()`:
+
+![json demo](./doc/img/json-demo.gif)
+
+```shell
+$ sqly --sql "SELECT json_extract(data, '$.name') AS name, json_extract(data, '$.age') AS age FROM sample WHERE json_extract(data, '$.age') >= 30 ORDER BY age DESC" testdata/sample.jsonl
+```
+
+Formats and compression mix freely. A gzipped CSV is read transparently and joins a plain CSV; a Parquet file is just another table:
+
+![mixed format demo](./doc/img/mixed-demo.gif)
+
+```shell
+$ sqly --sql "SELECT name, price FROM products ORDER BY CAST(price AS REAL) DESC" testdata/products.parquet
+$ sqly --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id" testdata/user.csv.gz testdata/identifier.csv
+```
+
 ## Interactive shell
 
 Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysql`: type SQL, or a helper command that begins with a dot. Tab completes keywords and table names, and history is kept across sessions.
@@ -328,16 +369,30 @@ CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel also read these compression extensions: `.
 
 ## Benchmark
 
-CPU: AMD Ryzen 5 3400G with Radeon Vega Graphics. Query:
+`make bench` measures one full run (import the CSV into the in-memory DB, then run the query) over `testdata/benchmark/customers100000.csv` (100,000 rows, 12 columns):
 
 ```sql
-SELECT * FROM `table` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC LIMIT 1000
+SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC LIMIT 1000
 ```
 
-|Records  | Columns | Time per Operation | Memory Allocated per Operation | Allocations per Operation |
-|---------|----|-------------------|--------------------------------|---------------------------|
-|100,000|   12|  1715818835 ns/op  |      441387928 B/op   |4967183 allocs/op | 
-|1,000,000|   9|   11414332112 ns/op |      2767580080 B/op | 39131122 allocs/op |
+| Records | Columns | Time per op | Memory per op | Allocations per op |
+|--------:|--------:|------------:|--------------:|-------------------:|
+| 100,000 | 12 | 515 ms | 161 MB | 2.82M |
+
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.19.0. Run `make bench` to reproduce on your machine.
+
+## Comparison with similar tools
+
+The same query on the same 100,000-row, 12-column CSV (top 10 countries by row count), best of 5 end-to-end runs (process start, parse, query) on an AMD Ryzen 7 5800U:
+
+| Tool | Time | Reads |
+|:--|--:|:--|
+| [trdsql](https://github.com/noborus/trdsql) | 0.32s | CSV, LTSV, JSON, TBLN |
+| [csvq](https://github.com/mithrandie/csvq) | 0.34s | CSV, TSV, fixed-length, JSON |
+| sqly | 0.49s | CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire (+ compression) |
+| [textql](https://github.com/dinedal/textql) | 0.52s | CSV, TSV |
+
+sqly stays in the same sub-second range as the CSV-focused tools while reading the widest set of formats, shipping an interactive shell, and building as a pure-Go binary with no CGO or external SQLite toolchain. Pick the tool that fits the job; sqly optimizes for format breadth and an interactive workflow over raw single-query speed.
 
 ## Alternative tools
 
