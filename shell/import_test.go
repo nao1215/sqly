@@ -250,7 +250,12 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 		t.Errorf("user source = %q, want the directory file %q", got, absDirFile)
 	}
 
-	// .save --force must now refuse to write back, leaving the original untouched.
+	// Change the table so write-back considers it (an unchanged table is skipped),
+	// then .save --force must refuse to write back a directory import, leaving the
+	// original untouched.
+	if err := s.exec(ctx, "INSERT INTO user VALUES ('alt2',2,'ALT','Two')"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
 	if err := s.writeBack(ctx, ""); err == nil {
 		t.Error("expected .save --force to be rejected for a directory-imported table")
 	}

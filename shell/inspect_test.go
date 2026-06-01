@@ -249,6 +249,12 @@ func TestWriteBack_RejectsDirectoryImport(t *testing.T) {
 		t.Fatalf("directory import failed: %v", err)
 	}
 
+	// Change the table so write-back actually considers it; an unchanged table is
+	// skipped before the directory-import rejection. The change still must be
+	// rejected because a directory import is not a single editable source.
+	if err := shell.exec(context.Background(), "INSERT INTO one VALUES (2)"); err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
 	if err := shell.writeBack(context.Background(), t.TempDir()); err == nil {
 		t.Fatal("write-back of a directory-imported table returned nil, want rejection")
 	}

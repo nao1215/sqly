@@ -124,7 +124,9 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 	if !scriptModifiesData(script) {
 		return nil
 	}
-	_, err := s.planWriteBack(ctx, s.saveDestDir())
+	// Validate every file-backed table up front: at preflight no change has happened
+	// yet, so the unchanged-skip is disabled (false) to keep the validation meaningful.
+	_, err := s.planWriteBack(ctx, s.saveDestDir(), false)
 	return err
 }
 
@@ -170,9 +172,17 @@ type writeTarget struct {
 // formats are rejected with a clear error before anything is written, so a
 // session is never partially saved.
 func (s *Shell) writeBack(ctx context.Context, destDir string) error {
-	targets, err := s.planWriteBack(ctx, destDir)
+	// skipUnchanged: an actual save persists only tables whose content differs from
+	// the import baseline, so a session that touched only a TEMP or scratch table,
+	// or made net-zero edits, writes nothing instead of rewriting an untouched
+	// source. Preflight validation uses the unfiltered plan (see preflightSave).
+	targets, err := s.planWriteBack(ctx, destDir, true)
 	if err != nil {
 		return err
+	}
+	if len(targets) == 0 {
+		fmt.Fprintln(config.Stderr, "no imported table changed in this session; nothing to save")
+		return nil
 	}
 	return s.executeWriteBack(ctx, destDir, targets)
 }
@@ -182,7 +192,11 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 // a session is never partially saved (). For --save-dir it also rejects a
 // destination that resolves to the source file () and a destination that
 // already exists ().
-func (s *Shell) planWriteBack(ctx context.Context, destDir string) ([]writeTarget, error) {
+// skipUnchanged selects whether a table whose content matches its import baseline
+// is dropped from the plan. An actual save passes true (persist only real changes);
+// preflight passes false (validate every file-backed table up front, before any
+// change has happened).
+func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged bool) ([]writeTarget, error) {
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
@@ -211,7 +225,15 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string) ([]writeTarge
 		name := t.Name()
 		source, ok := s.tableSources[name]
 		if !ok {
-			problems = append(problems, name+": not loaded from a file")
+			// A SQL-created scratch table has no source file, so it cannot be
+			// persisted. It is transient session state, not a dataset the user asked
+			// to save, so skip it instead of failing the whole save.
+			continue
+		}
+		// An actual save persists only tables whose content changed. This is checked
+		// before the writability and stdin/directory rejections below, so an unchanged
+		// JSONL or Excel import is silently skipped rather than reported as unwritable.
+		if skipUnchanged && !s.tableChanged(ctx, name) {
 			continue
 		}
 		if source == stdinTableSource {
@@ -293,6 +315,10 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 		if err := s.usecases.export.DumpTable(tgt.dest, table, tgt.format, tgt.comp); err != nil {
 			return fmt.Errorf("failed to save table %s to %s: %w", tgt.table, tgt.dest, err)
 		}
+		// The file now matches the table, so move the baseline forward. A later .save
+		// in the same session then treats the table as unchanged and does not rewrite
+		// an identical file.
+		s.snapshotBaseline(ctx, tgt.table)
 		// Write-back is a file-output operation; its confirmation is control-plane
 		// output and goes to stderr so stdout stays free of non-data noise.
 		fmt.Fprintf(config.Stderr, "Saved %s to %s\n", tgt.table, tgt.dest)

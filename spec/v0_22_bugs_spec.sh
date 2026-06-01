@@ -132,4 +132,76 @@ Describe 'sqly v0.22.0 binary regressions'
     The status should be failure
     The stderr should include 'ATTACH'
   End
+
+  # Write-back persists only a changed file-backed import. A session that touches
+  # only a TEMP/scratch table, or makes net-zero edits, must leave the source as-is.
+  # Small inline fixtures keep these fast and self-contained.
+  It 'does not rewrite an unchanged CSV when only a TEMP table changed'
+    Data:expand
+      #|CREATE TEMP TABLE scratch(id INTEGER);
+      #|INSERT INTO scratch VALUES (1);
+      #|.save --force
+    End
+    printf 'name,age\nalice,30\nbob,25\n' > "$WORK/temp_only.csv"
+    before=$(cksum < "$WORK/temp_only.csv")
+    When run sqly "$WORK/temp_only.csv"
+    The status should be success
+    The stderr should include 'nothing to save'
+    The output should not include 'Saved'
+    The value "$(cksum < "$WORK/temp_only.csv")" should equal "$before"
+  End
+
+  It 'does not fail on an unchanged JSONL import when only a scratch table changed'
+    Data:expand
+      #|CREATE TABLE scratch(id INTEGER);
+      #|INSERT INTO scratch VALUES (1);
+      #|.save --force
+    End
+    printf '{"id":1}\n{"id":2}\n' > "$WORK/data.jsonl"
+    When run sqly "$WORK/data.jsonl"
+    The status should be success
+    The output should include 'affected'
+    The stderr should include 'nothing to save'
+    The stderr should not include 'not supported'
+    The stderr should not include 'not loaded from a file'
+  End
+
+  It 'does not rewrite the source after net-zero CSV edits'
+    Data:expand
+      #|UPDATE netzero SET age=99 WHERE name='alice';
+      #|UPDATE netzero SET age=30 WHERE name='alice';
+      #|.save --force
+    End
+    printf 'name,age\nalice,30\nbob,25\n' > "$WORK/netzero.csv"
+    before=$(cksum < "$WORK/netzero.csv")
+    When run sqly "$WORK/netzero.csv"
+    The status should be success
+    The stderr should include 'nothing to save'
+    The output should not include 'Saved'
+    The value "$(cksum < "$WORK/netzero.csv")" should equal "$before"
+  End
+
+  It 'does not rewrite the source after net-zero edits via --sql-file --save --force'
+    printf 'name,age\nalice,30\nbob,25\n' > "$WORK/netzero_file.csv"
+    printf "UPDATE netzero_file SET age=99 WHERE name='alice';\nUPDATE netzero_file SET age=30 WHERE name='alice';\n" > "$WORK/netzero.sql"
+    before=$(cksum < "$WORK/netzero_file.csv")
+    When run sqly --sql-file "$WORK/netzero.sql" --save --force "$WORK/netzero_file.csv"
+    The status should be success
+    The stderr should include 'nothing to save'
+    The output should not include 'Saved'
+    The value "$(cksum < "$WORK/netzero_file.csv")" should equal "$before"
+  End
+
+  It 'still persists a genuine CSV change with .save --force'
+    Data:expand
+      #|UPDATE genuine SET age=999 WHERE name='alice';
+      #|.save --force
+    End
+    printf 'name,age\nalice,30\nbob,25\n' > "$WORK/genuine.csv"
+    When run sqly "$WORK/genuine.csv"
+    The status should be success
+    The output should include 'affected'
+    The stderr should include 'Saved'
+    The contents of file "$WORK/genuine.csv" should include '999'
+  End
 End
