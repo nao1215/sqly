@@ -32,6 +32,31 @@ func TestRunBatchReaderLineByLine(t *testing.T) {
 		},
 	}
 
+	// A dot-line inside an open block comment must stay part of the comment, not be
+	// executed as a helper command. Ref CodeRabbit review of #425.
+	t.Run("dot line inside an open block comment is not executed as a command", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatalf("newShell: %v", err)
+		}
+		defer cleanup()
+		backout, backerr := config.Stdout, config.Stderr
+		var stderr bytes.Buffer
+		config.Stdout = &bytes.Buffer{}
+		config.Stderr = &stderr
+		defer func() { config.Stdout, config.Stderr = backout, backerr }()
+
+		// The ".mode csv" is inside the /* ... */ block, so it is a comment, not a
+		// command; only the trailing SELECT runs.
+		_, runErr := shell.runBatchReader(context.Background(), strings.NewReader("/* header\n.mode csv\n*/\nSELECT 1 AS x;\n"))
+		if runErr != nil {
+			t.Errorf("runBatchReader returned error: %v", runErr)
+		}
+		if strings.Contains(stderr.String(), "mode") || strings.Contains(stderr.String(), "batch statement") {
+			t.Errorf("dot-line inside a block comment was executed: stderr=%q", stderr.String())
+		}
+	})
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			shell, cleanup, err := newShell(t, []string{"sqly"})
@@ -85,6 +110,10 @@ func TestScriptModifiesData(t *testing.T) {
 		{"identifier update_log does not match", "SELECT * FROM update_log", false},
 		{"multiple statements, one modifies", "SELECT 1;\nUPDATE t SET x=1;", true},
 		{"explain then select stays read-only", "EXPLAIN UPDATE t SET x=1;\nSELECT 1;", false},
+		// A helper command line is not SQL, so it must not hide a following DML. Ref
+		// CodeRabbit review of #397.
+		{"helper command before UPDATE still detects modification", ".mode csv\nUPDATE t SET x=1;", true},
+		{"helper command before SELECT stays read-only", ".mode csv\nSELECT 1;", false},
 	}
 
 	for _, tt := range tests {

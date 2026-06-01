@@ -85,12 +85,13 @@ scan:
 	for scanner.Scan() {
 		line := scanner.Text()
 		// A dot-command is a complete single-line statement when no SQL statement
-		// is open. "Open" means the pending buffer holds executable SQL, not just
-		// whitespace, newlines left after a terminated statement, or a standalone
-		// leading comment. Checking executable content (rather than pending.Len()
-		// == 0) lets helper commands and SQL alternate line-by-line after a ";" or
-		// a leading comment. Ref #397, #425.
-		if stripLeadingSQLComments(pending.String()) == "" {
+		// is open. "Open" means the pending buffer holds executable SQL, an
+		// unterminated block comment, not just whitespace, newlines left after a
+		// terminated statement, or a standalone (closed) leading comment. Checking
+		// the boundary (rather than pending.Len() == 0) lets helper commands and SQL
+		// alternate line-by-line after a ";" or a leading comment, while a dot-line
+		// inside an open block comment stays part of the comment. Ref #397, #425.
+		if atStatementBoundary(pending.String()) {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" {
 				continue
@@ -230,14 +231,100 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 	return stmts, string(runes[start:])
 }
 
-// scriptModifiesData reports whether any statement in a SQL script is a
+// atStatementBoundary reports whether the pending batch buffer holds no open
+// statement: only whitespace and complete (closed) leading comments, with no
+// unterminated block comment. At a boundary the next line may start a new
+// statement or a helper command. An unterminated block comment is not a boundary,
+// because following lines (including dot-lines) are still inside the comment.
+// Ref #397, #425.
+func atStatementBoundary(pending string) bool {
+	if strings.TrimSpace(stripLeadingSQLComments(pending)) != "" {
+		return false
+	}
+	// stripLeadingSQLComments also strips to "" for an unterminated block comment,
+	// so check that state explicitly to avoid treating an open comment as empty.
+	return !endsInsideBlockComment(pending)
+}
+
+// endsInsideBlockComment reports whether s ends inside an unterminated "/* ... */"
+// block comment, scanning quote- and comment-aware so a "/*" inside a string
+// literal or line comment is not mistaken for a comment opener.
+func endsInsideBlockComment(s string) bool {
+	runes := []rune(s)
+	var (
+		inSingle, inDouble            bool
+		inBacktick, inBracket         bool
+		inLineComment, inBlockComment bool
+	)
+	for i := 0; i < len(runes); i++ {
+		c := runes[i]
+		switch {
+		case inLineComment:
+			if c == '\n' {
+				inLineComment = false
+			}
+		case inBlockComment:
+			if c == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+		case inSingle:
+			if c == '\'' {
+				inSingle = false
+			}
+		case inDouble:
+			if c == '"' {
+				inDouble = false
+			}
+		case inBacktick:
+			if c == '`' {
+				inBacktick = false
+			}
+		case inBracket:
+			if c == ']' {
+				inBracket = false
+			}
+		default:
+			switch {
+			case c == '\'':
+				inSingle = true
+			case c == '"':
+				inDouble = true
+			case c == '`':
+				inBacktick = true
+			case c == '[':
+				inBracket = true
+			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
+				inLineComment = true
+				i++
+			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
+				inBlockComment = true
+				i++
+			}
+		}
+	}
+	return inBlockComment
+}
+
+// scriptModifiesData reports whether any SQL statement in a batch script is a
 // data-modifying statement (INSERT, UPDATE, DELETE, REPLACE, or a WITH that feeds
-// one), classified per statement so an EXPLAIN of a DML statement counts as
+// one). Helper commands (lines beginning with "." at a statement boundary) are
+// not SQL, so they are dropped before classification; otherwise a script like
+// ".mode csv\nUPDATE t SET x=1;" would hide the UPDATE behind the dot-line.
+// Classification is per statement so an EXPLAIN of a DML statement counts as
 // read-only. It lets a non-interactive run skip write-back preflight for a
 // read-only script. Ref #376, #402, #403. Whether write-back actually runs is
 // decided dynamically by the rows a statement changes (see Shell.dataChanged).
 func scriptModifiesData(script string) bool {
-	stmts, remainder := splitSQLStatements(script)
+	var sql strings.Builder
+	for _, line := range strings.Split(script, "\n") {
+		if atStatementBoundary(sql.String()) && strings.HasPrefix(strings.TrimSpace(line), ".") {
+			continue // a helper command, not part of any SQL statement
+		}
+		sql.WriteString(line)
+		sql.WriteString("\n")
+	}
+	stmts, remainder := splitSQLStatements(sql.String())
 	if leftover := stripLeadingSQLComments(remainder); leftover != "" {
 		stmts = append(stmts, leftover)
 	}
