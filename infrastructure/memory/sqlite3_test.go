@@ -407,7 +407,7 @@ func TestSqlite3RepositorySchemaObjects(t *testing.T) {
 	}
 }
 
-// TestQuoteTableRefViaListHandlesSchema verifies that List accepts a
+// TestSqlite3RepositoryListSchemaQualified verifies that List accepts a
 // schema-qualified table name, so .dump and .header can target main.<table>.
 // Ref #445, #447, #448.
 func TestSqlite3RepositoryListSchemaQualified(t *testing.T) {

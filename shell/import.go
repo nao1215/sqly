@@ -468,8 +468,17 @@ func (s *Shell) markDirImported(name string) {
 
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
+	// loadPath is the path actually handed to filesql. It differs from cleanPath
+	// only for an extensionless pseudo-file (e.g. /dev/stdin, /proc/self/fd/0),
+	// which is staged to a temporary CSV so it imports end-to-end. Ref #461, #462.
+	loadPath := cleanPath
 	if !s.usecases.importer.IsSupportedFile(cleanPath) {
-		return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
+		staged, cleanup, ok := s.stagePseudoFileAsCSV(cleanPath)
+		if !ok {
+			return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
+		}
+		defer cleanup()
+		loadPath = staged
 	}
 
 	// Capture which tables this file creates so --inspect and write-back (.save)
@@ -480,7 +489,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	}
 	existingTables := tableNameSet(before)
 
-	if err := s.usecases.importer.LoadFiles(ctx, cleanPath); err != nil {
+	if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 
@@ -488,8 +497,8 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// Use prefix matching over current tables. LoadFiles just created or
 	// overwrote these tables, so all prefix-matching tables belong to this file.
 	// nil candidates tells filterExcelSheets to build the set from prefix match.
-	if s.usecases.importer.IsExcelFile(cleanPath) && sheetName != "" {
-		if err := s.filterExcelSheets(ctx, cleanPath, sheetName, nil); err != nil {
+	if s.usecases.importer.IsExcelFile(loadPath) && sheetName != "" {
+		if err := s.filterExcelSheets(ctx, loadPath, sheetName, nil); err != nil {
 			return err
 		}
 	}
@@ -503,7 +512,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// or more tables that already existed in the session.
 	newNames := diffTableNames(after, existingTables)
 	if len(newNames) == 0 {
-		owned := s.tablesMatchingFile(cleanPath, existingTables)
+		owned := s.tablesMatchingFile(loadPath, existingTables)
 		switch {
 		case s.isRecordedSource(displayPath):
 			// Re-import of the same source path (including a symlink alias) is a
@@ -727,6 +736,40 @@ func validatePath(path string) (string, error) {
 	}
 
 	return cleanPath, nil
+}
+
+// stagePseudoFileAsCSV stages an extensionless Unix pseudo-file (e.g. /dev/stdin,
+// /dev/fd/0, /proc/self/fd/0) into a temporary CSV file so it imports end-to-end,
+// returning the temp path, a cleanup, and whether staging applied. filesql types a
+// file by its name, and these pseudo-files carry no format extension, so their
+// content is copied to "<table>.csv" and read as CSV (sqly's default text format);
+// use --stdin FORMAT for a non-CSV stream. Only the allowed pseudo-files are
+// staged, so an ordinary unsupported path still fails as before. Ref #461, #462.
+func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup func(), ok bool) {
+	abs := path
+	if a, err := filepath.Abs(path); err == nil {
+		abs = a
+	}
+	if !isAllowedPseudoFile(abs) {
+		return "", nil, false
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // path is a validated pseudo-file input
+	if err != nil {
+		return "", nil, false
+	}
+	dir, err := os.MkdirTemp("", "sqly-pseudo-")
+	if err != nil {
+		return "", nil, false
+	}
+	cleanup = func() { _ = os.RemoveAll(dir) }
+	// The staged path is a freshly created temp dir joined with the sanitized table
+	// name, so it cannot escape the temp dir.
+	stagedPath = filepath.Join(dir, s.usecases.importer.GetTableNameFromFilePath(path)+model.ExtCSV)
+	if err := os.WriteFile(stagedPath, data, 0o600); err != nil { //nolint:gosec // stagedPath is under a sqly-created temp dir with a sanitized name
+		cleanup()
+		return "", nil, false
+	}
+	return stagedPath, cleanup, true
 }
 
 // isAllowedPseudoFile reports whether an absolute path is a standard Unix

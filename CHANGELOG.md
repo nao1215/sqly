@@ -14,9 +14,12 @@
 * TEMP Tables And Views In Helper Commands: `.tables` lists session-created views and TEMP tables (#449, #450); `.schema` prints the real `CREATE VIEW` for a view (#451) and reads the stored definition for a constrained TEMP table instead of a lossy reconstruction (#464).
 * Empty Compressed JSON And JSONL: An empty compressed JSON array (`.json.gz`) and an empty compressed JSONL file now import as a zero-row table, matching the uncompressed inputs (#452, #453).
 * Output Destination Safety: `--output` and `.dump` strip every trailing compression suffix before checking for an input-only ACH/Fedwire extension, so a path like `out.ach.gz.zst` is rejected instead of receiving CSV bytes (#459, #460).
-* Pseudo-File Inputs: Input path validation accepts `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and the Linux `/proc/<pid|self>/fd/*` aliases, matching the already-allowed `/dev/fd/*` (#461, #462).
+* Pseudo-File Inputs: `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and the Linux `/proc/<pid|self>/fd/*` aliases pass input-path validation and import end-to-end. An extensionless pseudo-file is staged as CSV (use `--stdin FORMAT` for another format), matching the already-allowed `/dev/fd/*` (#461, #462).
 * LTSV Label Validation: LTSV output rejects a column name that is not a valid LTSV label (for example `foo:bar`) or that duplicates another, and LTSV import rejects a row that repeats a label, so LTSV stays round-trippable instead of silently losing values (#465, #466, #467).
 * Multiline CREATE TRIGGER: Batch and `--sql-file` parsing keeps a `CREATE TRIGGER ... BEGIN ... END` body as one statement instead of splitting it at the inner semicolons (#468).
+
+### Dependencies
+* filesql: 0.13.0 → 0.14.0, which rejects a duplicate label within an LTSV record on import (the upstream root fix for #467, replacing the temporary sqly-side check) and pulls in fileparser 0.5.2.
 
 ## [v0.20.0](https://github.com/nao1215/sqly/compare/v0.19.0...v0.20.0) (2026-06-01)
 

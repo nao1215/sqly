@@ -74,15 +74,6 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}()
 
-	// Reject an LTSV input whose row repeats a label before delegating to filesql,
-	// which would otherwise keep only the last value for the duplicated label and
-	// silently drop the earlier one. Ref #467.
-	for _, path := range filePaths {
-		if err := checkLTSVDuplicateLabels(path); err != nil {
-			return err
-		}
-	}
-
 	// An empty JSON array ("[]") or an empty JSONL file is valid JSON input but
 	// has no rows. filesql rejects it as an empty data source, so handle those
 	// files here as zero-row tables (a single "data" column, matching filesql's
@@ -153,43 +144,6 @@ func emptyJSONLikeTable(path string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-// checkLTSVDuplicateLabels rejects an LTSV input (uncompressed or compressed)
-// whose row repeats a label. LTSV has no concept of multiple columns with the same
-// label, so filesql keeps only the last value and silently drops the earlier one;
-// failing loudly preserves the data instead. Non-LTSV paths, directories, and
-// unreadable paths are left to the normal import path. Ref #467.
-func checkLTSVDuplicateLabels(path string) error {
-	if strings.ToLower(filepath.Ext(stripCompressionExt(path))) != model.ExtLTSV {
-		return nil
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return nil //nolint:nilerr // not a readable file; the normal import path reports it
-	}
-	data, err := readDecompressed(path)
-	if err != nil {
-		return nil //nolint:nilerr // let filesql surface the real read error
-	}
-	for lineNo, line := range strings.Split(string(data), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		seen := make(map[string]struct{})
-		for _, field := range strings.Split(line, "\t") {
-			idx := strings.Index(field, ":")
-			if idx <= 0 {
-				continue // not a label:value token; leave validation to filesql
-			}
-			label := field[:idx]
-			if _, ok := seen[label]; ok {
-				return fmt.Errorf("filesql: duplicate label %q in LTSV input %s (line %d); rename the column so no value is lost", label, filepath.Base(path), lineNo+1)
-			}
-			seen[label] = struct{}{}
-		}
-	}
-	return nil
 }
 
 // stripCompressionExt removes a single trailing compression extension from path

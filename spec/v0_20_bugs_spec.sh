@@ -181,6 +181,34 @@ Describe 'sqly v0.20.0 binary regressions'
     The output should include '0'
   End
 
+  # Standard Unix pseudo-files import end-to-end (staged as CSV). Ref #461, #462.
+  It 'imports /dev/stdin as CSV (#461)'
+    Data
+      #|name,score
+      #|a,1
+      #|b,2
+      #|c,3
+    End
+    When run sqly --csv --sql "SELECT COUNT(*) AS c FROM stdin" /dev/stdin
+    The status should be success
+    The line 2 should equal '3'
+  End
+
+  It 'imports /proc/self/fd/0 as CSV (#462)'
+    if [ ! -e /proc/self/fd/0 ]; then
+      Skip '/proc not available'
+    fi
+    Data
+      #|name,score
+      #|a,1
+      #|b,2
+      #|c,3
+    End
+    When run sqly --csv --sql "SELECT COUNT(*) AS c FROM sheet_0" /proc/self/fd/0
+    The status should be success
+    The line 2 should equal '3'
+  End
+
   # ACH/Fedwire destinations hidden behind stacked compression suffixes are
   # rejected. Ref #459, #460.
   It 'rejects --output to a multi-compressed ACH destination (#459)'
