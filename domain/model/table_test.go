@@ -453,7 +453,7 @@ aaa:777	bbb:888	ccc:999
 
 func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 	t.Parallel()
-	// Regression for/: a SQL NULL must render as JSON null, distinct
+	// Regression test: a SQL NULL must render as JSON null, distinct
 	// from an empty string. The null mask marks column 0 (n) as NULL; column 1
 	// (e) is a real empty string.
 	tbl := NewTable("t", Header{"n", "e", "x"}, []Record{{"", "", "1"}})
@@ -769,11 +769,11 @@ func TestIsAllNumeric(t *testing.T) {
 	}
 }
 
-// TestTablePrintEscaping covers the v0.19.0 output-format bugs: CSV/TSV stdout
-// must stay valid when values contain the delimiter, quotes, or newlines (,
-// ); LTSV must reject values it cannot represent losslessly;
-// JSON/NDJSON must reject duplicate column names; and Markdown must
-// keep a row on one physical line when a value contains a newline.
+// TestTablePrintEscaping covers the output-format bugs: CSV/TSV stdout must
+// stay valid when values contain the delimiter, quotes, or newlines; LTSV must
+// reject values it cannot represent losslessly; JSON/NDJSON must reject
+// duplicate column names; and Markdown must keep a row on one physical line
+// when a value contains a newline.
 func TestTablePrintEscaping(t *testing.T) {
 	t.Parallel()
 

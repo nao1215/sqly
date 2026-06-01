@@ -77,9 +77,9 @@ func TestDumpTableToParquet_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestDumpTableToParquet_EmptyResult covers the empty-result behavior required
-// by. Parquet needs at least one row to infer its schema, so exporting an
-// empty result returns a clear error rather than writing an unreadable file.
+// TestDumpTableToParquet_EmptyResult covers the empty-result behavior: Parquet
+// needs at least one row to infer its schema, so exporting an empty result
+// returns a clear error rather than writing an unreadable file.
 func TestDumpTableToParquet_EmptyResult(t *testing.T) {
 	t.Parallel()
 

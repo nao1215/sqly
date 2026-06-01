@@ -305,8 +305,8 @@ func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A modifying statement triggers write-back (a read-only query would skip it,
-	//), so the unsupported-source rejection is exercised.
+	// A modifying statement triggers write-back (a read-only query would skip it),
+	// so the unsupported-source rejection is exercised.
 	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "DELETE FROM data WHERE 1=0", "--save", "--force", jsonPath})
 	if err != nil {
 		t.Fatal(err)
@@ -402,7 +402,7 @@ func TestWriteBack_SaveDirRejectsExistingDestination(t *testing.T) {
 
 func TestWriteBack_FailedWriteBackKeepsStdoutClean(t *testing.T) {
 	// When a run ultimately fails during write-back, stdout must stay free of the
-	// DML success count so scripts do not treat it as partially successful. Ref
+	// DML success count so scripts do not treat it as partially successful.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	xlsx := filepath.Join(dir, "sample.xlsx")
@@ -426,7 +426,7 @@ func TestWriteBack_FailedWriteBackKeepsStdoutClean(t *testing.T) {
 }
 
 func TestWriteBack_ReadOnlyQuerySkipsWriteBack(t *testing.T) {
-	// A read-only query under --save --force must not rewrite the source file. Ref
+	// A read-only query under --save --force must not rewrite the source file.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	orig, _ := os.ReadFile(src) //nolint:gosec // test path
