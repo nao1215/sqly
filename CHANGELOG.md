@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Documentation
+* Add README demos for cross-format JOIN (Parquet and CSV), --output format conversion (JSON, Parquet, Excel), and directory import across formats, recorded with VHS.
+
 ## [v0.22.0](https://github.com/nao1215/sqly/compare/v0.21.0...v0.22.0) (2026-06-01)
 
 ### Breaking Changes
