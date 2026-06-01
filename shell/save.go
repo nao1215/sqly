@@ -65,7 +65,7 @@ func (s *Shell) validateSaveFlags() error {
 // saveRequested reports whether a non-interactive save flag (--save or
 // --save-dir) is set.
 func (s *Shell) saveRequested() bool {
-	return s.argument.SaveInPlace || s.argument.SaveDir != ""
+	return s.argument != nil && (s.argument.SaveInPlace || s.argument.SaveDir != "")
 }
 
 // saveDestDir returns the write-back destination directory: the --save-dir value,
@@ -102,14 +102,24 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 }
 
 // finishNonInteractive runs write-back after a non-interactive run, but only when
-// a save flag is set and the executed SQL modified data. A read-only run leaves
-// the imported tables unchanged, so write-back is skipped to avoid rewriting
-// source files. Ref #376.
-func (s *Shell) finishNonInteractive(ctx context.Context, script string) error {
-	if !s.saveRequested() || !scriptModifiesData(script) {
-		return nil
+// a save flag is set and the run actually changed data. A read-only run, an
+// EXPLAIN, or a zero-row DML leaves the imported tables unchanged, so write-back
+// is skipped to avoid rewriting source files. Ref #376, #402, #403, #404, #405.
+func (s *Shell) finishNonInteractive(ctx context.Context) error {
+	if s.saveRequested() && s.dataChanged {
+		// Run write-back first. If it fails, return before flushing the buffered
+		// affected counts so stdout stays free of success text. Ref #396.
+		if err := s.maybeSave(ctx); err != nil {
+			return err
+		}
 	}
-	return s.maybeSave(ctx)
+	// The run succeeded (write-back ran, or there was nothing to write back), so
+	// flush the buffered affected counts to stdout now. Ref #396.
+	for _, msg := range s.pendingAffected {
+		fmt.Fprint(config.Stdout, msg)
+	}
+	s.pendingAffected = nil
+	return nil
 }
 
 // writeTarget is a resolved write-back destination for one table.
@@ -263,16 +273,34 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	return nil
 }
 
-// sameFilePath reports whether two paths resolve to the same file location,
-// comparing cleaned absolute paths so a --save-dir pointed at the source's own
-// directory is recognized as the source file.
+// sameFilePath reports whether two paths resolve to the same file location. It
+// resolves symlinks and, when both paths exist, compares file identity, so a
+// symlink (or hardlink) alias to an imported source is recognized as the source
+// file and cannot bypass the overwrite guard. Ref #394, #418. A non-existent
+// path falls back to its cleaned absolute form.
 func sameFilePath(a, b string) bool {
-	absA, errA := filepath.Abs(a)
-	absB, errB := filepath.Abs(b)
-	if errA == nil && errB == nil {
-		return filepath.Clean(absA) == filepath.Clean(absB)
+	if resolveFilePath(a) == resolveFilePath(b) {
+		return true
 	}
-	return filepath.Clean(a) == filepath.Clean(b)
+	infoA, errA := os.Stat(a)
+	infoB, errB := os.Stat(b)
+	if errA == nil && errB == nil {
+		return os.SameFile(infoA, infoB)
+	}
+	return false
+}
+
+// resolveFilePath returns an absolute path with symlinks resolved when the path
+// exists, falling back to the cleaned absolute path otherwise.
+func resolveFilePath(p string) string {
+	abs := p
+	if a, err := filepath.Abs(p); err == nil {
+		abs = a
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
+	}
+	return filepath.Clean(abs)
 }
 
 // writableExportTarget reports whether a source path can be written back, and
@@ -289,6 +317,12 @@ func writableExportTarget(source string) (model.ExportFormat, model.Compression,
 	}
 	format, ok := model.ExportFormatFromExtension(filepath.Ext(base))
 	if !ok {
+		return 0, model.CompressionNone, false
+	}
+	// bzip2 has no writer, so a .bz2 source cannot be written back. Reject it here
+	// during preflight, before any destination file is created or truncated, so a
+	// failed write-back never leaves an empty or corrupted file behind. Ref #395.
+	if comp == model.CompressionBzip2 {
 		return 0, model.CompressionNone, false
 	}
 	switch format {

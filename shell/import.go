@@ -335,6 +335,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 			s.recordTableSources([]string{name}, file)
 			s.markDirImported(name)
 		}
+		s.warnKeywordTableNames(fileTables)
 		importedTables = append(importedTables, fileTables...)
 	}
 
@@ -386,16 +387,24 @@ func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
 }
 
 // tablesMatchingFile returns the table names in the given set that a file owns by
-// name: the single-table name derived from the path, or any name under its
-// "<base>_" prefix for multi-table formats (Excel sheets, ACH, Fedwire). It is
-// used to identify which existing tables a re-imported file overwrote.
+// name. A single-table format (CSV/TSV/LTSV/JSON/Parquet) owns only the exact
+// table name derived from its path. The "<base>_" prefix is matched only for
+// multi-table formats (Excel sheets, ACH, Fedwire), where one file produces
+// "<base>_<sheet>" tables. Without that restriction a file like "a.csv" would
+// spuriously claim unrelated tables such as "a_b". Ref #429. It is used to
+// identify which existing tables a re-imported file overwrote.
 func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []string {
 	base := s.usecases.importer.GetTableNameFromFilePath(file)
-	prefix := base + "_"
 	var matched []string
-	for name := range names {
-		if name == base || strings.HasPrefix(name, prefix) {
-			matched = append(matched, name)
+	if _, ok := names[base]; ok {
+		matched = append(matched, base)
+	}
+	if s.usecases.importer.IsExcelFile(file) || model.IsInputOnlyExtension(file) {
+		prefix := base + "_"
+		for name := range names {
+			if name != base && strings.HasPrefix(name, prefix) {
+				matched = append(matched, name)
+			}
 		}
 	}
 	return matched
@@ -430,6 +439,22 @@ func (s *Shell) countExcelWorkbooks(paths []string) int {
 		}
 	}
 	return count
+}
+
+// warnKeywordTableNames warns when an imported table's name is a SQLite keyword.
+// Such a name is created from the file name but is not queryable as a bare
+// identifier ("SELECT * FROM select" is a syntax error); it must be quoted
+// ("SELECT * FROM \"select\""). Warning at import time documents the gotcha
+// instead of leaving the user with a table that silently fails in bare SQL. The
+// table is still imported and is fully usable when quoted. Ref #424.
+func (s *Shell) warnKeywordTableNames(names []string) {
+	for _, name := range names {
+		if model.IsReservedSQLiteKeyword(name) {
+			fmt.Fprintf(s.importStatusWriter(),
+				"warning: table %q is a SQLite keyword; quote it in queries, e.g. SELECT * FROM %s\n",
+				name, s.usecases.importer.QuoteIdentifier(name))
+		}
+	}
 }
 
 // markDirImported records that a table came from a directory import, so
@@ -474,38 +499,76 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 		return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
 	}
 
-	// A successful import that produced no new table means this file's table
-	// name collided with one already imported in this session (for example
-	// "a-b.csv" and "a_b.csv" both sanitize to "a_b"). filesql overwrote the
-	// earlier table in memory, which would leave the first file's source mapped
-	// to the second file's rows. Fail instead of silently overwriting. Ref #286.
-	//
-	// A re-import of the same source path is harmless (last-wins), so only reject
-	// when this file's path is not already a recorded source: that means a
-	// different input produced the same sanitized name.
+	// A successful import that produced no new table means this file overwrote one
+	// or more tables that already existed in the session.
 	newNames := diffTableNames(after, existingTables)
 	if len(newNames) == 0 {
-		if s.isRecordedSource(displayPath) {
+		owned := s.tablesMatchingFile(cleanPath, existingTables)
+		switch {
+		case s.isRecordedSource(displayPath):
+			// Re-import of the same source path (including a symlink alias) is a
+			// harmless last-wins overwrite. Take clean ownership so a table first
+			// seen via a directory import becomes a normal file-backed table that
+			// write-back accepts. Ref #415, #417.
+			s.clearDirImported(owned)
 			return nil
+		case s.anyDirImported(owned):
+			// A deliberate single-file .import replaces directory-sourced data of the
+			// same name: re-point the table to this standalone file and drop the
+			// directory marker so write-back targets the file the user named. Ref
+			// #416.
+			s.recordTableSources(owned, displayPath)
+			s.clearDirImported(owned)
+			s.warnKeywordTableNames(owned)
+			return nil
+		default:
+			// Two distinct plain-file inputs sanitized to the same table name (for
+			// example "a-b.csv" and "a_b.csv" both becoming "a_b"). filesql overwrote
+			// the earlier table, which would leave the first file's source mapped to
+			// the second file's rows, so fail instead of silently overwriting. Ref
+			// #286.
+			return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
 		}
-		return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
 	}
 	s.recordTableSources(newNames, displayPath)
+	s.warnKeywordTableNames(newNames)
 
 	return nil
 }
 
-// isRecordedSource reports whether path (resolved to an absolute path, matching
-// recordTableSources) is already the source of an imported table. It lets a
-// re-import of the same file be treated as a harmless last-wins overwrite rather
-// than a table-name collision.
+// isRecordedSource reports whether path is already the source of an imported
+// table. Paths are compared with symlink resolution, so a symlink alias of an
+// imported source is recognized as the same source and re-importing through it is
+// a harmless last-wins overwrite rather than a table-name collision. Ref #417.
 func (s *Shell) isRecordedSource(path string) bool {
-	abs := path
-	if a, err := filepath.Abs(path); err == nil {
-		abs = a
-	}
 	for _, src := range s.tableSources {
-		if src == abs {
+		if src == stdinTableSource {
+			continue
+		}
+		if sameFilePath(path, src) {
+			return true
+		}
+	}
+	return false
+}
+
+// clearDirImported removes the directory-import marker from the given tables, so
+// a table first seen via a directory import becomes a normal file-backed table
+// that write-back accepts once it is re-imported directly from a single file.
+// Ref #415, #416.
+func (s *Shell) clearDirImported(names []string) {
+	for _, name := range names {
+		delete(s.dirImported, name)
+	}
+}
+
+// anyDirImported reports whether any of the given tables came from a directory
+// import. It lets a deliberate single-file .import replace directory-sourced data
+// of the same name, while two distinct plain-file inputs that collide are still
+// rejected. Ref #416, #286.
+func (s *Shell) anyDirImported(names []string) bool {
+	for _, name := range names {
+		if s.dirImported[name] {
 			return true
 		}
 	}
@@ -655,10 +718,23 @@ func validatePath(path string) (string, error) {
 	// Prevent access to system directories on Unix-like systems
 	absPath, err := filepath.Abs(cleanPath)
 	if err == nil { // Only check if we can resolve the absolute path
-		systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
-		for _, sysDir := range systemDirs {
-			if strings.HasPrefix(absPath, sysDir) {
-				return "", fmt.Errorf("access to system directory not allowed: %s", path)
+		// /dev/shm (tmpfs for user data) and /dev/fd (process-substitution and
+		// other open file descriptors) hold legitimate, user-owned inputs, so they
+		// are allowed even though they live under /dev. Ref #427, #428.
+		allowedDevSubdirs := []string{"/dev/shm", "/dev/fd"}
+		allowed := false
+		for _, sub := range allowedDevSubdirs {
+			if absPath == sub || strings.HasPrefix(absPath, sub+"/") {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
+			for _, sysDir := range systemDirs {
+				if absPath == sysDir || strings.HasPrefix(absPath, sysDir+"/") {
+					return "", fmt.Errorf("access to system directory not allowed: %s", path)
+				}
 			}
 		}
 	}

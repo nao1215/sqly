@@ -17,6 +17,17 @@ import (
 // growth on input without newlines.
 const maxBatchLineBytes = 10 * 1024 * 1024
 
+// SQL keyword tokens used by statement classification, named once to avoid
+// repeating the literals across the quote-aware scanners.
+const (
+	kwSelect  = "SELECT"
+	kwInsert  = "INSERT"
+	kwUpdate  = "UPDATE"
+	kwDelete  = "DELETE"
+	kwReplace = "REPLACE"
+	kwValues  = "VALUES"
+)
+
 // utf8BOM is the UTF-8 byte order mark stripped from the start of batch input
 // and --sql-file scripts so BOM-prefixed files parse like plain UTF-8. Ref #369.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
@@ -73,14 +84,21 @@ func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, e
 scan:
 	for scanner.Scan() {
 		line := scanner.Text()
-		// At a statement boundary, a dot-command is a complete single-line
-		// statement. Inside an open SQL statement, the line is SQL.
-		if pending.Len() == 0 {
+		// A dot-command is a complete single-line statement when no SQL statement
+		// is open. "Open" means the pending buffer holds executable SQL, not just
+		// whitespace, newlines left after a terminated statement, or a standalone
+		// leading comment. Checking executable content (rather than pending.Len()
+		// == 0) lets helper commands and SQL alternate line-by-line after a ";" or
+		// a leading comment. Ref #397, #425.
+		if stripLeadingSQLComments(pending.String()) == "" {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" {
 				continue
 			}
 			if strings.HasPrefix(trimmed, ".") {
+				// Abandon any buffered leading comments/blank lines before running the
+				// command, so they do not merge into a later statement.
+				pending.Reset()
 				if run(trimmed) {
 					break scan
 				}
@@ -212,16 +230,62 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 	return stmts, string(runes[start:])
 }
 
-// scriptModifiesData reports whether a SQL script contains a data-modifying
-// keyword (INSERT, UPDATE, DELETE, REPLACE) as a whole-word token outside string
-// literals, quoted identifiers, and comments. It lets a non-interactive run skip
-// write-back for a read-only script, so a SELECT under --save/--save-dir does not
-// rewrite source files. Ref #376. Whole-token matching avoids false positives on
-// identifiers like "update_log", and quote-awareness avoids matching keywords in
-// literal values.
+// scriptModifiesData reports whether any statement in a SQL script is a
+// data-modifying statement (INSERT, UPDATE, DELETE, REPLACE, or a WITH that feeds
+// one), classified per statement so an EXPLAIN of a DML statement counts as
+// read-only. It lets a non-interactive run skip write-back preflight for a
+// read-only script. Ref #376, #402, #403. Whether write-back actually runs is
+// decided dynamically by the rows a statement changes (see Shell.dataChanged).
 func scriptModifiesData(script string) bool {
-	runes := []rune(script)
+	stmts, remainder := splitSQLStatements(script)
+	if leftover := stripLeadingSQLComments(remainder); leftover != "" {
+		stmts = append(stmts, leftover)
+	}
+	for _, stmt := range stmts {
+		if statementModifiesData(stmt) {
+			return true
+		}
+	}
+	return false
+}
+
+// statementModifiesData reports whether a single statement changes table data:
+// an INSERT/UPDATE/DELETE/REPLACE, or a WITH whose main statement is one of those.
+// An EXPLAIN of such a statement is read-only and reports false, so it never
+// triggers write-back. Ref #402, #403.
+func statementModifiesData(stmt string) bool {
+	switch leadingSQLKeyword(stmt) {
+	case kwInsert, kwUpdate, kwDelete, kwReplace:
+		return true
+	case "WITH":
+		switch withMainVerb(stmt) {
+		case kwInsert, kwUpdate, kwDelete, kwReplace:
+			return true
+		}
+	}
+	return false
+}
+
+// leadingSQLKeyword returns the upper-cased first keyword of a statement after
+// leading comments are stripped, reading only the leading ASCII letters.
+func leadingSQLKeyword(stmt string) string {
+	s := stripLeadingSQLComments(stmt)
+	i := 0
+	for i < len(s) && ((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= 'A' && s[i] <= 'Z')) {
+		i++
+	}
+	return strings.ToUpper(s[:i])
+}
+
+// withMainVerb returns the main statement verb of a WITH statement: the first
+// INSERT/UPDATE/DELETE/REPLACE/SELECT/VALUES token at parenthesis depth 0 outside
+// quotes and comments, so the CTE bodies (inside parentheses) are skipped. It
+// lets write-back detection see that a WITH ... UPDATE modifies data while a
+// WITH ... SELECT does not.
+func withMainVerb(stmt string) string {
+	runes := []rune(stmt)
 	var (
+		depth                         int
 		inSingle, inDouble            bool
 		inBacktick, inBracket         bool
 		inLineComment, inBlockComment bool
@@ -276,19 +340,25 @@ func scriptModifiesData(script string) bool {
 			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
 				inBlockComment = true
 				i++
-			case isWordRune(c):
+			case c == '(':
+				depth++
+			case c == ')':
+				if depth > 0 {
+					depth--
+				}
+			case depth == 0 && isWordRune(c):
 				start := i
 				for i+1 < len(runes) && isWordRune(runes[i+1]) {
 					i++
 				}
 				switch strings.ToUpper(string(runes[start : i+1])) {
-				case "INSERT", "UPDATE", "DELETE", "REPLACE":
-					return true
+				case kwSelect, kwValues, kwInsert, kwUpdate, kwDelete, kwReplace:
+					return strings.ToUpper(string(runes[start : i+1]))
 				}
 			}
 		}
 	}
-	return false
+	return ""
 }
 
 // readSQLFile reads the SQL script at path for --sql-file. It returns a clear

@@ -413,3 +413,68 @@ func getStdout(t *testing.T, f func()) string {
 	s := buffer.String()
 	return s[:len(s)-1]
 }
+
+// TestNewArgDependentFlagValidation covers the v0.19.0 flag-dependency bugs:
+// --stdin-name without --stdin (#391), --inspect-sample without --inspect (#392),
+// --force without --save/--save-dir (#393), and a SQLite-keyword --stdin-name
+// (#423).
+func TestNewArgDependentFlagValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr error
+	}{
+		{
+			name:    "stdin-name without stdin is rejected",
+			args:    []string{"sqly", "--stdin-name", "weird", "--sql", "SELECT 1"},
+			wantErr: errStdinNameWithoutStdin,
+		},
+		{
+			name:    "inspect-sample without inspect is rejected",
+			args:    []string{"sqly", "--inspect-sample", "0", "--sql", "SELECT 1"},
+			wantErr: errInspectSampleWithoutInspect,
+		},
+		{
+			name:    "negative inspect-sample without inspect is rejected",
+			args:    []string{"sqly", "--inspect-sample", "-1", "--sql", "SELECT 1"},
+			wantErr: errInspectSampleWithoutInspect,
+		},
+		{
+			name:    "force without save is rejected",
+			args:    []string{"sqly", "--force", "--sql", "SELECT 1"},
+			wantErr: errForceWithoutSave,
+		},
+		{
+			name:    "stdin-name that is a SQLite keyword is rejected",
+			args:    []string{"sqly", "--stdin", "csv", "--stdin-name", "select", "--sql", "SELECT 1"},
+			wantErr: errStdinNameReserved,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := NewArg(tt.args)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("NewArg(%v) error = %v, want %v", tt.args, err, tt.wantErr)
+			}
+		})
+	}
+
+	// Sanity: the dependent flags are accepted when their parent flag is present.
+	t.Run("dependent flags accepted with their parent flag", func(t *testing.T) {
+		t.Parallel()
+		ok := [][]string{
+			{"sqly", "--stdin", "csv", "--stdin-name", "data", "--sql", "SELECT 1"},
+			{"sqly", "--inspect", "--inspect-sample", "0"},
+			{"sqly", "--save", "--force", "--sql", "SELECT 1"},
+		}
+		for _, args := range ok {
+			if _, err := NewArg(args); err != nil {
+				t.Errorf("NewArg(%v) unexpected error: %v", args, err)
+			}
+		}
+	})
+}

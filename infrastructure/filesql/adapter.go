@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -72,13 +73,86 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}()
 
+	// An empty JSON array ("[]") or an empty JSONL file is valid JSON input but
+	// has no rows. filesql rejects it as an empty data source, so handle those
+	// files here as zero-row tables (a single "data" column, matching filesql's
+	// JSON schema) before delegating the rest to filesql. Ref #388, #389.
+	var toLoad []string
+	for _, path := range filePaths {
+		name, isEmpty := emptyJSONLikeTable(path)
+		if !isEmpty {
+			toLoad = append(toLoad, path)
+			continue
+		}
+		if err := f.createEmptyJSONTable(ctx, name); err != nil {
+			return err
+		}
+	}
+
 	// Stream the files directly into the shared session database. filesql's
 	// LoadInto replaces a same-named table (last-wins), matching sqly's import
 	// semantics, and avoids the previous temporary-database-plus-row-copy path.
-	if err := filesql.LoadInto(ctx, f.sharedDB, filePaths...); err != nil {
-		return err
+	if len(toLoad) > 0 {
+		if err := filesql.LoadInto(ctx, f.sharedDB, toLoad...); err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+// jsonDataColumn is the single column filesql uses to store raw JSON/JSONL
+// values; sqly creates the same schema for an empty JSON input so queries with
+// json_extract() behave the same on a zero-row table.
+const jsonDataColumn = "data"
+
+// emptyJSONLikeTable reports whether an uncompressed .json or .jsonl file holds
+// no rows (an empty JSON array, whitespace-only JSON, or an empty/blank-only
+// JSONL file), returning the table name to create for it. Compressed inputs are
+// left to filesql. Ref #388, #389.
+func emptyJSONLikeTable(path string) (string, bool) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case model.ExtJSON:
+		data, err := os.ReadFile(path) //nolint:gosec // path is a user-provided input file
+		if err != nil {
+			return "", false
+		}
+		trimmed := strings.TrimSpace(string(data))
+		if trimmed == "" {
+			return GetTableNameFromFilePath(path), true
+		}
+		var arr []json.RawMessage
+		if err := json.Unmarshal([]byte(trimmed), &arr); err == nil && len(arr) == 0 {
+			return GetTableNameFromFilePath(path), true
+		}
+		return "", false
+	case model.ExtJSONL:
+		data, err := os.ReadFile(path) //nolint:gosec // path is a user-provided input file
+		if err != nil {
+			return "", false
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.TrimSpace(line) != "" {
+				return "", false
+			}
+		}
+		return GetTableNameFromFilePath(path), true
+	default:
+		return "", false
+	}
+}
+
+// createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON
+// "data" column, so an empty JSON/JSONL input imports as an empty table instead
+// of failing. Ref #388, #389.
+func (f *FileSQLAdapter) createEmptyJSONTable(ctx context.Context, name string) error {
+	quoted := QuoteIdentifier(name)
+	if _, err := f.sharedDB.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
+		return fmt.Errorf("failed to reset empty JSON table %q: %w", name, err)
+	}
+	if _, err := f.sharedDB.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s (%s TEXT)", quoted, jsonDataColumn)); err != nil {
+		return fmt.Errorf("failed to create empty JSON table %q: %w", name, err)
+	}
 	return nil
 }
 

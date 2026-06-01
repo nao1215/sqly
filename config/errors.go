@@ -26,3 +26,22 @@ var (
 	errEmptySaveDir = errors.New("--save-dir requires a non-empty directory path")
 	errEmptyStdin   = errors.New("--stdin requires a non-empty dataset format (csv|tsv|ltsv|json|jsonl)")
 )
+
+// errStdinNameReserved is returned when --stdin-name is a SQLite keyword. Such a
+// name is a valid identifier shape but is not queryable as a bare table name
+// (e.g. "SELECT * FROM select" is a syntax error), so it is rejected up front
+// instead of advertising an unusable table name. Ref #423.
+var errStdinNameReserved = errors.New("--stdin-name is a SQLite keyword and is not queryable as a bare table name; choose another name")
+
+// errStdinNameWithoutStdin and errInspectSampleWithoutInspect are returned when
+// a dependent flag is set without the flag that gives it meaning, so the flag is
+// not silently ignored. Ref #391, #392.
+var (
+	errStdinNameWithoutStdin       = errors.New("--stdin-name has no effect without --stdin FORMAT")
+	errInspectSampleWithoutInspect = errors.New("--inspect-sample has no effect without --inspect")
+)
+
+// errForceWithoutSave is returned when --force is set without --save or
+// --save-dir. --force only confirms the destructive in-place write-back, so it
+// is meaningless on its own and is rejected instead of silently ignored. Ref #393.
+var errForceWithoutSave = errors.New("--force has no effect without --save or --save-dir")

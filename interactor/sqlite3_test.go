@@ -15,124 +15,129 @@ import (
 func TestSQLite3InteractorExecSQL(t *testing.T) {
 	t.Parallel()
 
-	t.Run("execute CREATE error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+	// sqly targets SQLite, so statements that were previously rejected by category
+	// (DDL, transaction control, ATTACH, ANALYZE, REPLACE) are now accepted and
+	// routed to the exec path. SQLite remains the authority on validity.
+	// Ref #406, #409, #410, #411, #430, #431.
+	execRouted := []struct {
+		name      string
+		statement string
+	}{
+		{"CREATE routes to exec", "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)"},
+		{"DROP routes to exec", "DROP TABLE test"},
+		{"ALTER routes to exec", "ALTER TABLE test ADD COLUMN age INTEGER"},
+		{"REINDEX routes to exec", "REINDEX test"},
+		{"BEGIN routes to exec", "BEGIN"},
+		{"COMMIT routes to exec", "COMMIT"},
+		{"ROLLBACK routes to exec", "ROLLBACK"},
+		{"SAVEPOINT routes to exec", "SAVEPOINT test"},
+		{"RELEASE routes to exec", "RELEASE test"},
+		{"ATTACH routes to exec", "ATTACH DATABASE ':memory:' AS aux"},
+		{"ANALYZE routes to exec", "ANALYZE"},
+		{"REPLACE routes to exec", "REPLACE INTO test(id) VALUES (1)"},
+	}
+	for _, tt := range execRouted {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			repo := infrastructure.NewMockSQLite3Repository(ctrl)
+			repo.EXPECT().Exec(gomock.Any(), tt.statement).Return(int64(0), nil)
 
-		want := "not support data definition language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
+			si := NewSQLite3Interactor(repo, NewSQL(), nil)
+			if _, _, err := si.ExecSQL(context.Background(), tt.statement); err != nil {
+				t.Errorf("want: nil, got: %v", err)
+			}
+		})
+	}
+
+	// PRAGMA, VALUES, and the TABLE shorthand return a result set, so they run on
+	// the query path. Ref #406, #407, #408.
+	queryRouted := []struct {
+		name      string
+		statement string
+		// queried is the statement the repository receives; it differs from
+		// statement when sqly rewrites a shorthand (TABLE name). Ref #408.
+		queried string
+	}{
+		{"PRAGMA routes to query", "PRAGMA table_info(test)", "PRAGMA table_info(test)"},
+		{"VALUES routes to query", "VALUES (1), (2)", "VALUES (1), (2)"},
+		{"TABLE shorthand is rewritten and routes to query", "TABLE test", "SELECT * FROM test"},
+	}
+	for _, tt := range queryRouted {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			repo := infrastructure.NewMockSQLite3Repository(ctrl)
+			repo.EXPECT().Query(gomock.Any(), tt.queried).Return(model.NewTable("test", model.Header{"x"}, []model.Record{{"1"}}), nil)
+
+			si := NewSQLite3Interactor(repo, NewSQL(), nil)
+			if _, _, err := si.ExecSQL(context.Background(), tt.statement); err != nil {
+				t.Errorf("want: nil, got: %v", err)
+			}
+		})
+	}
+
+	// A leading comment or UTF-8 BOM is stripped before classification, so the
+	// statement runs the same way the batch and --sql-file paths run it.
+	// Ref #386, #387.
+	t.Run("leading line comment is stripped and SELECT runs on query path", func(t *testing.T) {
+		t.Parallel()
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		repo.EXPECT().Query(gomock.Any(), "SELECT 1 AS x").Return(model.NewTable("", model.Header{"x"}, []model.Record{{"1"}}), nil)
+
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), "-- comment\nSELECT 1 AS x"); err != nil {
+			t.Errorf("want: nil, got: %v", err)
 		}
 	})
 
-	t.Run("execute DROP error", func(t *testing.T) {
+	t.Run("leading BOM is stripped and SELECT runs on query path", func(t *testing.T) {
 		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "DROP TABLE test")
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		repo.EXPECT().Query(gomock.Any(), "SELECT 1 AS x").Return(model.NewTable("", model.Header{"x"}, []model.Record{{"1"}}), nil)
 
-		want := "not support data definition language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), "\ufeffSELECT 1 AS x"); err != nil {
+			t.Errorf("want: nil, got: %v", err)
 		}
 	})
 
-	t.Run("execute ALTER error", func(t *testing.T) {
+	// A non-returning WITH ... UPDATE/INSERT/DELETE is DML, so it runs on the exec
+	// path instead of the query path. Ref #412, #413, #414.
+	t.Run("WITH ... UPDATE without RETURNING routes to exec", func(t *testing.T) {
 		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "ALTER TABLE test ADD COLUMN age INTEGER")
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		stmt := "WITH src AS (SELECT 1 AS id) UPDATE test SET name='z' WHERE id IN (SELECT id FROM src)"
+		repo.EXPECT().Exec(gomock.Any(), stmt).Return(int64(1), nil)
 
-		want := "not support data definition language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), stmt); err != nil {
+			t.Errorf("want: nil, got: %v", err)
 		}
 	})
 
-	t.Run("execute REINDEX error", func(t *testing.T) {
+	t.Run("WITH ... UPDATE RETURNING routes to query", func(t *testing.T) {
 		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "REINDEX test")
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		stmt := "WITH src AS (SELECT 1 AS id) UPDATE test SET name='z' WHERE id IN (SELECT id FROM src) RETURNING *"
+		repo.EXPECT().Query(gomock.Any(), stmt).Return(model.NewTable("test", model.Header{"id", "name"}, []model.Record{{"1", "z"}}), nil)
 
-		want := "not support data definition language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		if _, _, err := si.ExecSQL(context.Background(), stmt); err != nil {
+			t.Errorf("want: nil, got: %v", err)
 		}
 	})
 
-	t.Run("execute BEGIN error", func(t *testing.T) {
+	t.Run("comment-only input is rejected as no executable SQL", func(t *testing.T) {
 		t.Parallel()
 		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "BEGIN")
-
-		want := "not support transaction control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
-		}
-	})
-
-	t.Run("execute COMMIT error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "COMMIT")
-
-		want := "not support transaction control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
-		}
-	})
-
-	t.Run("execute ROLLBACK error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "ROLLBACK")
-
-		want := "not support transaction control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
-		}
-	})
-
-	t.Run("execute SAVEPOINT error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "SAVEPOINT test")
-
-		want := "not support transaction control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
-		}
-	})
-
-	t.Run("execute RELEASE error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "RELEASE test")
-
-		want := "not support transaction control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
-		}
-	})
-
-	t.Run("execute GRANT error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "GRANT SELECT ON test TO user")
-
-		want := "not support data control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
-		}
-	})
-
-	t.Run("execute REVOKE error", func(t *testing.T) {
-		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "REVOKE SELECT ON test FROM user")
-
-		want := "not support data control language"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
+		_, _, got := si.ExecSQL(context.Background(), "-- just a comment")
+		if got == nil || !strings.Contains(got.Error(), "no executable SQL") {
+			t.Errorf("want: no executable SQL error, got: %v", got)
 		}
 	})
 
@@ -392,14 +397,21 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 		}
 	})
 
-	t.Run("execute undifined statement error", func(t *testing.T) {
+	// An unrecognized leading keyword is no longer rejected by sqly; it is handed
+	// to SQLite on the exec path, which surfaces its own syntax error. sqly wraps
+	// that error with an "execute statement error" prefix.
+	t.Run("unknown statement is passed to SQLite and surfaces its error", func(t *testing.T) {
 		t.Parallel()
-		si := NewSQLite3Interactor(nil, NewSQL(), nil)
-		_, _, got := si.ExecSQL(context.Background(), "UNDEFINED STATEMENT")
+		ctrl := gomock.NewController(t)
+		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+		statement := "UNDEFINED STATEMENT"
+		someErr := errors.New(`near "UNDEFINED": syntax error`)
+		repo.EXPECT().Exec(gomock.Any(), statement).Return(int64(0), someErr)
 
-		want := "this input is not sql query or sqly helper command:"
-		if !strings.Contains(got.Error(), want) {
-			t.Errorf("want: %v, got: %v", want, got)
+		si := NewSQLite3Interactor(repo, NewSQL(), nil)
+		_, _, got := si.ExecSQL(context.Background(), statement)
+		if !errors.Is(got, someErr) {
+			t.Errorf("want: %v, got: %v", someErr, got)
 		}
 	})
 }

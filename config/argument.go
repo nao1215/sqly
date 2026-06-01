@@ -199,6 +199,25 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, errEmptyStdin
 	}
 
+	// --stdin-name only names the --stdin dataset, so it has no effect without
+	// --stdin. Reject it when set alone instead of silently ignoring it. Ref #391.
+	if flag.Changed("stdin-name") && *stdinFormat == "" {
+		return nil, errStdinNameWithoutStdin
+	}
+
+	// --inspect-sample only caps the rows --inspect samples, so it has no effect
+	// without --inspect. Reject it (including invalid values like -1) when set
+	// without --inspect instead of silently ignoring it. Ref #392.
+	if flag.Changed("inspect-sample") && !arg.InspectFlag {
+		return nil, errInspectSampleWithoutInspect
+	}
+
+	// --force only confirms the destructive --save write-back, so it has no effect
+	// without --save/--save-dir. Reject it when set alone. Ref #393.
+	if arg.Force && !arg.SaveInPlace && *saveDir == "" {
+		return nil, errForceWithoutSave
+	}
+
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
@@ -249,6 +268,12 @@ func validateStdinName(name string) error {
 	// "my data" -> "my_data"), leaving the name the user gave unusable. Ref #289.
 	if !isValidTableIdentifier(name) {
 		return errInvalidStdinName
+	}
+	// A SQLite keyword has a valid identifier shape but is not queryable as a bare
+	// table name (e.g. "SELECT * FROM select" is a syntax error), so reject it
+	// instead of advertising an unusable name. Ref #423.
+	if model.IsReservedSQLiteKeyword(name) {
+		return errStdinNameReserved
 	}
 	return nil
 }

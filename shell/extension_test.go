@@ -111,6 +111,13 @@ func TestValidatePath(t *testing.T) {
 		{"Two parent directories", "../../test.csv", false},
 		{"Dangerous path traversal", "../../../etc/passwd", true},
 		{"Clean path functionality", "./test/../test.csv", false},
+		// /dev/shm and /dev/fd hold legitimate user inputs and are accepted, while
+		// other system directories stay blocked. Ref #427, #428.
+		{"dev shm user file is allowed", "/dev/shm/sqly/user.csv", false},
+		{"dev fd descriptor is allowed", "/dev/fd/63", false},
+		{"dev block device is blocked", "/dev/sda", true},
+		{"etc is blocked", "/etc/passwd", true},
+		{"proc is blocked", "/proc/cpuinfo", true},
 	}
 
 	for _, tt := range tests {

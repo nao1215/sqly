@@ -285,6 +285,25 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 	return base + comp.Extension()
 }
 
+// IsInputOnlyExtension reports whether a destination path targets an input-only
+// format that sqly can read but not write: ACH (.ach) and Fedwire (.fed), which
+// require multi-record coordination the export path cannot produce. The
+// compression suffix is stripped first, so .ach.gz and .fed.gz are detected too.
+// It lets --output and .dump reject these destinations instead of silently
+// writing CSV bytes to a misleading path. Ref #421, #422.
+func IsInputOnlyExtension(path string) bool {
+	base := path
+	if _, ok := CompressionFromExtension(filepath.Ext(path)); ok {
+		base = strings.TrimSuffix(path, filepath.Ext(path))
+	}
+	switch strings.ToLower(filepath.Ext(base)) {
+	case ".ach", ".fed":
+		return true
+	default:
+		return false
+	}
+}
+
 // ExportFormatFromPrintMode converts a PrintMode to an ExportFormat.
 // PrintModeTable falls back to ExportCSV since table format is display-only.
 func ExportFormatFromPrintMode(m PrintMode) ExportFormat {
