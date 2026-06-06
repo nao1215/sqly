@@ -430,7 +430,7 @@ func (s *Shell) init(ctx context.Context) error {
 	if len(paths) == 0 {
 		return nil
 	}
-	importErr := s.commands.importCommand(ctx, s, paths)
+	importErr := s.loadOrImport(ctx, paths)
 	// Re-point any stdin-derived table's source from the ephemeral temp path to
 	// a stable "stdin" marker, so --inspect does not leak the temp path
 	// and write-back can reject stdin-backed tables instead of writing to a

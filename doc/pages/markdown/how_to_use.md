@@ -43,6 +43,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -o, --output string   destination path for SQL results specified in --sql option
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
       --inspect-sample int  rows to include per table in --inspect (0 for schema only) (default 5)
+      --cache string        opt-in import cache: reuse a SQLite snapshot of the imported tables for unchanged inputs (path to the cache file)
+      --cache-clear         delete any existing --cache before the run, forcing a cold rebuild
       --profile             print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit
       --profile-format string   profile output format: json (default) or text
       --compare             compare two imported tables (schema, row count, keyed rows) and print a report, then exit
@@ -159,6 +161,15 @@ $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry
 ```
 
 Tables created by SQL, tables imported from a directory, and Excel sources are rejected for write-back with a clear error before anything is written, so a session is never partially saved.
+
+### Reuse imports across runs: --cache
+
+For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run whose inputs are unchanged reloads from the snapshot instead of re-parsing the source files. The cache key is each input file's path, size, and modification time (directories are expanded recursively), so the cache invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning instead of failing the query. Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs.
+
+```shell
+$ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv
+$ sqly --cache ./sqly.cache --cache-clear --sql "SELECT COUNT(*) FROM big" big.csv
+```
 
 ### Profile data quality: --profile
 

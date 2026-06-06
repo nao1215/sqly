@@ -212,6 +212,28 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("--cache sets the path", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--cache", "/tmp/x.cache", "data.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.CachePath != "/tmp/x.cache" {
+			t.Errorf("CachePath = %q, want /tmp/x.cache", arg.CachePath)
+		}
+	})
+
+	t.Run("an empty --cache value is rejected", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--cache", ""}); err == nil {
+			t.Error("expected an error for an empty --cache value")
+		}
+	})
+
+	t.Run("--cache-clear without --cache is rejected", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--cache-clear", "data.csv"}); err == nil {
+			t.Error("expected an error for --cache-clear without --cache")
+		}
+	})
+
 	t.Run("user set --parquet option", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--parquet"})
 		if err != nil {

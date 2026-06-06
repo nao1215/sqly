@@ -42,6 +42,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --compare-format string   compare output format: json (default) or text (default "json")
       --profile                 print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit
       --profile-format string   profile output format: json (default) or text (default "json")
+      --cache string            opt-in import cache: reuse a SQLite snapshot of the imported tables for unchanged inputs (path to the cache file)
+      --cache-clear             delete any existing --cache before the run, forcing a cold rebuild
       --save                    after the run, write each table back over its source file (requires --force)
       --save-dir string         after the run, write each table into this directory (originals untouched)
       --force                   allow --save to overwrite source files in place

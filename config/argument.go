@@ -88,6 +88,13 @@ type Arg struct {
 	ProfileFlag bool
 	// ProfileFormat selects the profile output format: "json" (default) or "text".
 	ProfileFormat string
+	// CachePath, when non-empty, is the location of an opt-in import cache: a
+	// SQLite snapshot of the imported tables. A warm run whose inputs are unchanged
+	// loads from it instead of re-parsing the source files.
+	CachePath string
+	// CacheClear, when true, deletes any existing cache for CachePath before the
+	// run, forcing a cold rebuild.
+	CacheClear bool
 	// SaveInPlace, when true, writes each table back over its source file after
 	// the run (for --save). It overwrites source files, so it requires Force.
 	SaveInPlace bool
@@ -213,6 +220,8 @@ func NewArg(args []string) (*Arg, error) {
 	compareFormat := flag.String("compare-format", compareFormatJSON, "compare output format: json (default) or text")
 	flag.BoolVar(&arg.ProfileFlag, "profile", false, "print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit")
 	profileFormat := flag.String("profile-format", compareFormatJSON, "profile output format: json (default) or text")
+	cachePath := flag.String("cache", "", "opt-in import cache: reuse a SQLite snapshot of the imported tables for unchanged inputs (path to the cache file)")
+	flag.BoolVar(&arg.CacheClear, "cache-clear", false, "delete any existing --cache before the run, forcing a cold rebuild")
 	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
 	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
 	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
@@ -297,6 +306,15 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, fmt.Errorf("--profile-format must be \"json\" or \"text\", got %q", *profileFormat)
 	}
 
+	// --cache must be non-empty when given (its empty string is the "absent"
+	// sentinel), and --cache-clear only makes sense alongside --cache.
+	if flag.Changed("cache") && *cachePath == "" {
+		return nil, errEmptyCache
+	}
+	if arg.CacheClear && *cachePath == "" {
+		return nil, errCacheClearWithoutCache
+	}
+
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
@@ -329,6 +347,7 @@ func NewArg(args []string) (*Arg, error) {
 	arg.CompareTables = *compareTables
 	arg.CompareFormat = *compareFormat
 	arg.ProfileFormat = *profileFormat
+	arg.CachePath = *cachePath
 
 	return arg, nil
 }

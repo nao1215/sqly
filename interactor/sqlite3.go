@@ -15,9 +15,10 @@ import (
 // Interface implementation checks. One concrete interactor satisfies the three
 // focused session interfaces; commands depend on the narrow one they need.
 var (
-	_ usecase.QueryUsecase    = (*SQLite3Interactor)(nil)
-	_ usecase.ImportUsecase   = (*SQLite3Interactor)(nil)
-	_ usecase.MetadataUsecase = (*SQLite3Interactor)(nil)
+	_ usecase.QueryUsecase       = (*SQLite3Interactor)(nil)
+	_ usecase.ImportUsecase      = (*SQLite3Interactor)(nil)
+	_ usecase.MetadataUsecase    = (*SQLite3Interactor)(nil)
+	_ usecase.PersistenceUsecase = (*SQLite3Interactor)(nil)
 )
 
 // SQLite3Interactor implements the SQLite3-backed session use cases. It handles
@@ -54,6 +55,10 @@ func NewImportUsecase(i *SQLite3Interactor) usecase.ImportUsecase { return i }
 
 // NewMetadataUsecase exposes the interactor as the focused MetadataUsecase.
 func NewMetadataUsecase(i *SQLite3Interactor) usecase.MetadataUsecase { return i }
+
+// NewPersistenceUsecase exposes the interactor as the focused PersistenceUsecase
+// (native financial write-back and the import cache).
+func NewPersistenceUsecase(i *SQLite3Interactor) usecase.PersistenceUsecase { return i }
 
 // CreateTable create a DB table with columns given as model.Table
 func (si *SQLite3Interactor) CreateTable(ctx context.Context, t *model.Table) error {
@@ -191,4 +196,16 @@ func (si *SQLite3Interactor) DumpACHFile(ctx context.Context, baseName, outputPa
 // message table registered under baseName, reflecting any session UPDATEs.
 func (si *SQLite3Interactor) DumpFedWireFile(ctx context.Context, baseName, outputPath string) error {
 	return si.adapter.DumpFedWireFile(ctx, baseName, outputPath)
+}
+
+// SnapshotToCache writes the current session tables to cachePath as a standalone
+// SQLite database for later reuse.
+func (si *SQLite3Interactor) SnapshotToCache(ctx context.Context, cachePath string) error {
+	return si.adapter.SnapshotToCache(ctx, cachePath)
+}
+
+// LoadFromCache populates the session database from a cache written by
+// SnapshotToCache.
+func (si *SQLite3Interactor) LoadFromCache(ctx context.Context, cachePath string) error {
+	return si.adapter.LoadFromCache(ctx, cachePath)
 }

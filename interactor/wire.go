@@ -11,6 +11,7 @@ var Set = wire.NewSet(
 	NewQueryUsecase,
 	NewImportUsecase,
 	NewMetadataUsecase,
+	NewPersistenceUsecase,
 	NewHistoryInteractor,
 	NewExportInteractor,
 	NewSQL,
