@@ -455,3 +455,29 @@ func TestIsInputOnlyExtension(t *testing.T) {
 		}
 	}
 }
+
+func TestFinancialWriteFormat(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"payment.ach", FinancialFormatACH},
+		{"payment.ACH", FinancialFormatACH},
+		{"/abs/transfer.fed", FinancialFormatFedWire},
+		{"transfer.FED", FinancialFormatFedWire},
+		// A compressed financial source is not round-tripped: the native writers
+		// emit a plain uncompressed file, so report "" and let the caller reject it.
+		{"payment.ach.gz", ""},
+		{"transfer.fed.zst", ""},
+		// Non-financial formats are not handled here.
+		{"data.csv", ""},
+		{"data.parquet", ""},
+		{"noext", ""},
+	}
+	for _, tt := range tests {
+		if got := FinancialWriteFormat(tt.path); got != tt.want {
+			t.Errorf("FinancialWriteFormat(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}

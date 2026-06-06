@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -56,23 +55,12 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		return errors.New("shared database is not initialized")
 	}
 
-	// Identify ACH/Fedwire base names from input paths (not table names) so we
-	// can clean up the filesql global registry. We must do this before loading
-	// and defer the cleanup so it runs even if loading fails.
-	achBaseNames, wireBaseNames := collectRegistryBaseNames(filePaths)
-
-	// Clean up filesql global registries for ACH/Fedwire TableSets.
-	// Loading registers TableSets in global maps for DumpACH/DumpFedWire, but sqly
-	// holds the data in its own session DB and does not use round-trip export.
-	// Using defer ensures cleanup even if loading fails partway through.
-	defer func() {
-		for _, baseName := range achBaseNames {
-			filesql.UnregisterACHTableSet(baseName)
-		}
-		for _, baseName := range wireBaseNames {
-			filesql.UnregisterWireTableSet(baseName)
-		}
-	}()
+	// Loading an ACH/Fedwire file registers its TableSet in a filesql global
+	// registry keyed by base name. sqly keeps those registrations for the session
+	// so the whole-set write-back path (DumpACHFile/DumpFedWireFile) can rebuild a
+	// valid .ach/.fed file from the (possibly edited) tables. The registry is keyed
+	// by base name, so re-importing the same source overwrites its entry, and the
+	// process is short-lived, so the retained TableSets are released at exit.
 
 	// An empty JSON array ("[]") or an empty JSONL file is valid JSON input but
 	// has no rows. filesql rejects it as an empty data source, so handle those
@@ -188,55 +176,28 @@ func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
 	return f.LoadFiles(ctx, filePath)
 }
 
-// collectRegistryBaseNames scans the input file paths and returns the sanitized
-// base names for any ACH (.ach) or Fedwire (.fed) files. These base names
-// correspond to the keys that filesql.OpenContext registers in its global
-// ACH/Fedwire TableSet registries. Directory paths are walked recursively to
-// find nested ACH/FED files.
-func collectRegistryBaseNames(filePaths []string) (achBaseNames, wireBaseNames []string) {
-	seen := make(map[string]bool)
-	for _, p := range filePaths {
-		info, err := os.Stat(p)
-		if err != nil {
-			continue
-		}
-		if !info.IsDir() {
-			addACHOrWireBaseName(p, seen, &achBaseNames, &wireBaseNames)
-			continue
-		}
-		// Walk directory to find nested ACH/FED files.
-		// Errors from unreadable entries are skipped.
-		_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil || d.IsDir() {
-				return nil //nolint:nilerr // skip unreadable entries
-			}
-			addACHOrWireBaseName(path, seen, &achBaseNames, &wireBaseNames)
-			return nil
-		})
+// DumpACHFile reconstructs a complete ACH file at outputPath from the table set
+// registered under baseName, reflecting any UPDATEs applied to those tables in
+// the session. It reads the current rows from the shared session database that
+// the queries ran against, so edits are included. It returns an error when no ACH
+// table set is registered for baseName (for example after the source was never
+// imported as ACH, or the registry entry was cleared).
+func (f *FileSQLAdapter) DumpACHFile(ctx context.Context, baseName, outputPath string) error {
+	if f.sharedDB == nil {
+		return errors.New(errDatabaseNotInit)
 	}
-	return achBaseNames, wireBaseNames
+	return filesql.DumpACH(ctx, f.sharedDB, baseName, outputPath)
 }
 
-// addACHOrWireBaseName checks if path is an ACH or Fedwire file and appends
-// its sanitized base name to the appropriate slice, deduplicating per type.
-// ACH and Fedwire are tracked independently so that payment.ach and payment.fed
-// in the same import both get their respective cleanup entries.
-func addACHOrWireBaseName(path string, seen map[string]bool, achOut, wireOut *[]string) {
-	lower := strings.ToLower(path)
-	baseName := GetTableNameFromFilePath(path)
-	if strings.HasSuffix(lower, ".ach") {
-		key := baseName + "|ach"
-		if !seen[key] {
-			seen[key] = true
-			*achOut = append(*achOut, baseName)
-		}
-	} else if strings.HasSuffix(lower, ".fed") {
-		key := baseName + "|fed"
-		if !seen[key] {
-			seen[key] = true
-			*wireOut = append(*wireOut, baseName)
-		}
+// DumpFedWireFile reconstructs a complete Fedwire file at outputPath from the
+// message table registered under baseName, reflecting any UPDATEs applied in the
+// session. It returns an error when no Fedwire table set is registered for
+// baseName.
+func (f *FileSQLAdapter) DumpFedWireFile(ctx context.Context, baseName, outputPath string) error {
+	if f.sharedDB == nil {
+		return errors.New(errDatabaseNotInit)
 	}
+	return filesql.DumpFedWire(ctx, f.sharedDB, baseName, outputPath)
 }
 
 // Query executes SQL query and returns Table model

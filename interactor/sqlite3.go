@@ -180,3 +180,15 @@ func (si *SQLite3Interactor) QuoteIdentifier(identifier string) string {
 func (si *SQLite3Interactor) GetTableNameFromFilePath(filePath string) string {
 	return filesql.GetTableNameFromFilePath(filePath)
 }
+
+// DumpACHFile reconstructs a complete ACH file at outputPath from the table set
+// registered under baseName, reflecting any session UPDATEs.
+func (si *SQLite3Interactor) DumpACHFile(ctx context.Context, baseName, outputPath string) error {
+	return si.adapter.DumpACHFile(ctx, baseName, outputPath)
+}
+
+// DumpFedWireFile reconstructs a complete Fedwire file at outputPath from the
+// message table registered under baseName, reflecting any session UPDATEs.
+func (si *SQLite3Interactor) DumpFedWireFile(ctx context.Context, baseName, outputPath string) error {
+	return si.adapter.DumpFedWireFile(ctx, baseName, outputPath)
+}
