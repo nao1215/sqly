@@ -334,6 +334,18 @@ $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry
 Saved ACH set payment to payment.ach
 ```
 
+## Profile data quality: --profile
+
+`--profile` prints a machine-readable data-quality report for every imported table, so you can understand unfamiliar data before writing SQL. For each table it reports row and column counts and, per column, null and blank counts, distinct and numeric counts, and safe warnings: a mix of numeric and non-numeric values, null-like placeholder text (`NULL`, `N/A`, ...), and leading or trailing whitespace. JSON is the default; `--profile-format text` prints a human-readable summary. It works for files, directories, stdin datasets, and multi-table imports.
+
+```shell
+$ sqly --profile --profile-format text data.csv
+table data: 3 rows, 3 columns
+  id (INTEGER): nulls=0 blanks=0 distinct=3 numeric=3
+  score (TEXT): nulls=0 blanks=1 distinct=2 numeric=1
+    warning: mixed numeric and non-numeric values (1 numeric, 1 non-numeric)
+```
+
 ## Compare two datasets: --compare
 
 `--compare` diffs two imported tables from the command line, without entering the shell. It reports schema differences (columns unique to each side and type changes) and a row-count delta; add `--compare-key COL` to also diff rows by a key column into added, removed, and modified rows. JSON is the default automation contract; `--compare-format text` prints a human-readable summary.

@@ -179,6 +179,14 @@ func (t *Table) isNull(row, col int) bool {
 	return row < len(t.nulls) && col < len(t.nulls[row]) && t.nulls[row][col]
 }
 
+// IsNull reports whether the cell at (row, col) is a known SQL NULL, as opposed
+// to an empty string. It returns false when no NULL information was recorded
+// (the table did not come from a query). It lets callers such as the profile
+// workflow distinguish a NULL from a blank value.
+func (t *Table) IsNull(row, col int) bool {
+	return t.isNull(row, col)
+}
+
 // Name return table name.
 func (t *Table) Name() string {
 	return t.name

@@ -40,6 +40,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --compare-key string      key column for keyed row comparison in --compare mode
       --compare-tables string   the two tables to compare as "left,right" (default: the two imported tables)
       --compare-format string   compare output format: json (default) or text (default "json")
+      --profile                 print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit
+      --profile-format string   profile output format: json (default) or text (default "json")
       --save                    after the run, write each table back over its source file (requires --force)
       --save-dir string         after the run, write each table into this directory (originals untouched)
       --force                   allow --save to overwrite source files in place

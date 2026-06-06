@@ -190,6 +190,28 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("--profile sets the flag and defaults the format to json", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--profile", "a.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !arg.ProfileFlag || arg.ProfileFormat != "json" {
+			t.Errorf("ProfileFlag=%v ProfileFormat=%q, want true/json", arg.ProfileFlag, arg.ProfileFormat)
+		}
+	})
+
+	t.Run("--profile-format without --profile is rejected", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--profile-format", "text"}); err == nil {
+			t.Error("expected an error for --profile-format without --profile")
+		}
+	})
+
+	t.Run("an invalid --profile-format is rejected", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--profile", "--profile-format", "yaml"}); err == nil {
+			t.Error("expected an error for an invalid --profile-format")
+		}
+	})
+
 	t.Run("user set --parquet option", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--parquet"})
 		if err != nil {
