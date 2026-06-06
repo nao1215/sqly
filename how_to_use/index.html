@@ -1,0 +1,712 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://nao1215.github.io/sqly/how_to_use/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>How to use - sqly documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sqly-behavior" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="sqly documentation" class="md-header__button md-logo" aria-label="sqly documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            sqly documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              How to use
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="sqly documentation" class="md-nav__button md-logo" aria-label="sqly documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    sqly documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#sqly-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sqly behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sqly-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sqly options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execute-sql-in-terminal-sql-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execute sql in terminal: --sql option
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-sql-from-a-file-sql-file-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load SQL from a file: --sql-file option
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-tables-inspect-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect tables: --inspect option
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#write-changes-back-to-files-save-and-save-dir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Write changes back to files: --save and --save-dir
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reuse-imports-across-runs-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reuse imports across runs: --cache
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile-data-quality-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile data quality: --profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compare-two-datasets-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare two datasets: --compare
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-mode-pipe-commands-via-stdin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch mode: pipe commands via stdin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipe-data-into-sqly-stdin-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipe data into sqly: --stdin option
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command history
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change output format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-sql-result-to-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output sql result to file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output sql result to file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-linux-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For linux user
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-windows-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For windows user
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#infer-export-format-and-compression-from-the-output-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Infer export format and compression from the output path
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+  <h1>How to use</h1>
+
+<h3 id="sqly-behavior">sqly behavior</h3>
+<p>If no SQL query is specified with the <code>--sql</code> option, sqly will start the sqly shell. sqly determines the file type to be loaded from the extension when the shell starts and automatically begins importing it into the SQLite3 in-memory database. Multiple files can be loaded simultaneously. The table names will be the file names (without extensions) or the Excel sheet names. If an SQL query is specified with the <code>--sql</code> option, the SQL query result will be displayed in the terminal and sqly will exit without starting the sqly shell.</p>
+<p>Flags may appear before or after the file and directory arguments; <code>sqly --csv data.csv</code> and <code>sqly data.csv --csv</code> are equivalent. A misplaced unknown flag fails with a parse error instead of being read as a file path.</p>
+<p>sqly allows you to change the display mode of SQL results with options. By default, the output is in table format. The output format can be changed to csv (<code>--csv</code>), tsv (<code>--tsv</code>), ltsv (<code>--ltsv</code>), markdown (<code>--markdown</code>), json (<code>--json</code>), or ndjson (<code>--ndjson</code>). Excel (<code>--excel</code>) and Parquet (<code>--parquet</code>) are export-only: they render as csv on screen and write a file only through <code>.dump</code> or <code>--output</code>. Since the output mode can be changed while the sqly shell is running, it is easy to execute <code>sqly sample.csv</code> and then change settings or execute SQL queries within the sqly shell.</p>
+<p>For automation-friendly output, <code>--json-typed</code> and <code>--ndjson-typed</code> (or <code>.mode json-typed</code> / <code>.mode ndjson-typed</code> in the shell) emit native JSON scalars instead of strings: a canonical JSON number becomes a number, <code>true</code>/<code>false</code> become booleans, and a SQL NULL becomes <code>null</code>. A large integer stays lossless and never regresses into scientific notation, while a value with a leading zero such as <code>007</code> remains a string. The default <code>--json</code>/<code>--ndjson</code> keep the legacy string contract. Pair <code>--inspect</code> with <code>--json-typed</code> to apply the same contract to the report's sample rows.</p>
+<h3 id="sqly-options">sqly options</h3>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--help
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>sqly<span class="w"> </span>-<span class="w"> </span>execute<span class="w"> </span>SQL<span class="w"> </span>against<span class="w"> </span>CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire<span class="w"> </span>with<span class="w"> </span>shell
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">[</span>Usage<span class="o">]</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>sqly<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span><span class="o">[</span>FILE_PATH<span class="o">(</span>S<span class="o">)</span><span class="p">|</span>DIRECTORY_PATH<span class="o">(</span>S<span class="o">)]</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="o">[</span>Example<span class="o">]</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>-<span class="w"> </span>run<span class="w"> </span>sqly<span class="w"> </span>shell
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span>sqly
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span>-<span class="w"> </span>Execute<span class="w"> </span>query<span class="w"> </span><span class="k">for</span><span class="w"> </span>csv<span class="w"> </span>file
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s1">&#39;SELECT * FROM sample&#39;</span><span class="w"> </span>./path/to/sample.csv
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="o">[</span>OPTIONS<span class="o">]</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>-c,<span class="w"> </span>--csv<span class="w">             </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>csv<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>-e,<span class="w"> </span>--excel<span class="w">           </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>excel<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>-l,<span class="w"> </span>--ltsv<span class="w">            </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>ltsv<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>-m,<span class="w"> </span>--markdown<span class="w">        </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>markdown<span class="w"> </span>table<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>-t,<span class="w"> </span>--tsv<span class="w">             </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>tsv<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>-j,<span class="w"> </span>--json<span class="w">            </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>json<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>-n,<span class="w"> </span>--ndjson<span class="w">          </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>ndjson<span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>table<span class="o">)</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>-p,<span class="w"> </span>--parquet<span class="w">         </span><span class="nb">export</span><span class="w"> </span>results<span class="w"> </span>as<span class="w"> </span>parquet<span class="w"> </span><span class="o">(</span>export-only<span class="p">;</span><span class="w"> </span>use<span class="w"> </span>with<span class="w"> </span>--output<span class="w"> </span>or<span class="w"> </span>.dump<span class="o">)</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">      </span>--json-typed<span class="w">      </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>json<span class="w"> </span>with<span class="w"> </span>native<span class="w"> </span>scalars<span class="w"> </span><span class="o">(</span>numbers,<span class="w"> </span>booleans,<span class="w"> </span>nulls<span class="o">)</span><span class="w"> </span>instead<span class="w"> </span>of<span class="w"> </span>strings
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">      </span>--ndjson-typed<span class="w">    </span>change<span class="w"> </span>output<span class="w"> </span>format<span class="w"> </span>to<span class="w"> </span>ndjson<span class="w"> </span>with<span class="w"> </span>native<span class="w"> </span>scalars<span class="w"> </span><span class="o">(</span>numbers,<span class="w"> </span>booleans,<span class="w"> </span>nulls<span class="o">)</span><span class="w"> </span>instead<span class="w"> </span>of<span class="w"> </span>strings
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>-S,<span class="w"> </span>--sheet<span class="w"> </span>string<span class="w">    </span>excel<span class="w"> </span>sheet<span class="w"> </span>name<span class="w"> </span>you<span class="w"> </span>want<span class="w"> </span>to<span class="w"> </span>import
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span>--stdin<span class="w"> </span>string<span class="w">    </span>treat<span class="w"> </span>stdin<span class="w"> </span>as<span class="w"> </span>an<span class="w"> </span>input<span class="w"> </span>dataset<span class="w"> </span>of<span class="w"> </span>this<span class="w"> </span>format<span class="w"> </span><span class="o">(</span>csv<span class="p">|</span>tsv<span class="p">|</span>ltsv<span class="p">|</span>json<span class="p">|</span>jsonl<span class="o">)</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">      </span>--stdin-name<span class="w"> </span>string<span class="w">   </span>table<span class="w"> </span>name<span class="w"> </span><span class="k">for</span><span class="w"> </span>the<span class="w"> </span>--stdin<span class="w"> </span>dataset<span class="w"> </span><span class="o">(</span>default<span class="w"> </span><span class="s2">&quot;stdin&quot;</span><span class="o">)</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>-s,<span class="w"> </span>--sql<span class="w"> </span>string<span class="w">      </span>sql<span class="w"> </span>query<span class="w"> </span>you<span class="w"> </span>want<span class="w"> </span>to<span class="w"> </span>execute
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>-f,<span class="w"> </span>--sql-file<span class="w"> </span>string<span class="w">   </span>path<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>file<span class="w"> </span>with<span class="w"> </span>SQL<span class="w"> </span>to<span class="w"> </span>execute<span class="w"> </span><span class="o">(</span>multiline<span class="p">;</span><span class="w"> </span>cannot<span class="w"> </span>be<span class="w"> </span>used<span class="w"> </span>with<span class="w"> </span>--sql<span class="o">)</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>-o,<span class="w"> </span>--output<span class="w"> </span>string<span class="w">   </span>destination<span class="w"> </span>path<span class="w"> </span><span class="k">for</span><span class="w"> </span>SQL<span class="w"> </span>results<span class="w"> </span>specified<span class="w"> </span><span class="k">in</span><span class="w"> </span>--sql<span class="w"> </span>option
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">  </span>-i,<span class="w"> </span>--inspect<span class="w">         </span>print<span class="w"> </span>a<span class="w"> </span>JSON<span class="w"> </span>report<span class="w"> </span>of<span class="w"> </span>imported<span class="w"> </span>tables<span class="w"> </span><span class="o">(</span>schema,<span class="w"> </span>row<span class="w"> </span>counts,<span class="w"> </span>sample<span class="w"> </span>rows<span class="o">)</span><span class="w"> </span>and<span class="w"> </span><span class="nb">exit</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">      </span>--inspect-sample<span class="w"> </span>int<span class="w">  </span>rows<span class="w"> </span>to<span class="w"> </span>include<span class="w"> </span>per<span class="w"> </span>table<span class="w"> </span><span class="k">in</span><span class="w"> </span>--inspect<span class="w"> </span><span class="o">(</span><span class="m">0</span><span class="w"> </span><span class="k">for</span><span class="w"> </span>schema<span class="w"> </span>only<span class="o">)</span><span class="w"> </span><span class="o">(</span>default<span class="w"> </span><span class="m">5</span><span class="o">)</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">      </span>--cache<span class="w"> </span>string<span class="w">        </span>opt-in<span class="w"> </span>import<span class="w"> </span>cache:<span class="w"> </span>reuse<span class="w"> </span>a<span class="w"> </span>SQLite<span class="w"> </span>snapshot<span class="w"> </span>of<span class="w"> </span>the<span class="w"> </span>imported<span class="w"> </span>tables<span class="w"> </span><span class="k">for</span><span class="w"> </span>unchanged<span class="w"> </span>inputs<span class="w"> </span><span class="o">(</span>path<span class="w"> </span>to<span class="w"> </span>the<span class="w"> </span>cache<span class="w"> </span>file<span class="o">)</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">      </span>--cache-clear<span class="w">         </span>delete<span class="w"> </span>any<span class="w"> </span>existing<span class="w"> </span>--cache<span class="w"> </span>before<span class="w"> </span>the<span class="w"> </span>run,<span class="w"> </span>forcing<span class="w"> </span>a<span class="w"> </span>cold<span class="w"> </span>rebuild
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">      </span>--profile<span class="w">             </span>print<span class="w"> </span>a<span class="w"> </span>data-quality<span class="w"> </span>report<span class="w"> </span><span class="o">(</span>row/column<span class="w"> </span>counts,<span class="w"> </span>null/blank<span class="w"> </span>counts,<span class="w"> </span>warnings<span class="o">)</span><span class="w"> </span><span class="k">for</span><span class="w"> </span>each<span class="w"> </span>imported<span class="w"> </span>table,<span class="w"> </span><span class="k">then</span><span class="w"> </span><span class="nb">exit</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">      </span>--profile-format<span class="w"> </span>string<span class="w">   </span>profile<span class="w"> </span>output<span class="w"> </span>format:<span class="w"> </span>json<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>or<span class="w"> </span>text
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">      </span>--compare<span class="w">             </span>compare<span class="w"> </span>two<span class="w"> </span>imported<span class="w"> </span>tables<span class="w"> </span><span class="o">(</span>schema,<span class="w"> </span>row<span class="w"> </span>count,<span class="w"> </span>keyed<span class="w"> </span>rows<span class="o">)</span><span class="w"> </span>and<span class="w"> </span>print<span class="w"> </span>a<span class="w"> </span>report,<span class="w"> </span><span class="k">then</span><span class="w"> </span><span class="nb">exit</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">      </span>--compare-key<span class="w"> </span>string<span class="w">  </span>key<span class="w"> </span>column<span class="w"> </span><span class="k">for</span><span class="w"> </span>keyed<span class="w"> </span>row<span class="w"> </span>comparison<span class="w"> </span><span class="k">in</span><span class="w"> </span>--compare<span class="w"> </span>mode
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">      </span>--compare-tables<span class="w"> </span>string<span class="w">   </span>the<span class="w"> </span>two<span class="w"> </span>tables<span class="w"> </span>to<span class="w"> </span>compare<span class="w"> </span>as<span class="w"> </span><span class="s2">&quot;left,right&quot;</span><span class="w"> </span><span class="o">(</span>default:<span class="w"> </span>the<span class="w"> </span>two<span class="w"> </span>imported<span class="w"> </span>tables<span class="o">)</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">      </span>--compare-format<span class="w"> </span>string<span class="w">   </span>compare<span class="w"> </span>output<span class="w"> </span>format:<span class="w"> </span>json<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>or<span class="w"> </span>text
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">      </span>--save<span class="w">                </span>after<span class="w"> </span>the<span class="w"> </span>run,<span class="w"> </span>write<span class="w"> </span>each<span class="w"> </span>table<span class="w"> </span>back<span class="w"> </span>over<span class="w"> </span>its<span class="w"> </span><span class="nb">source</span><span class="w"> </span>file<span class="w"> </span><span class="o">(</span>requires<span class="w"> </span>--force<span class="o">)</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">      </span>--save-dir<span class="w"> </span>string<span class="w">     </span>after<span class="w"> </span>the<span class="w"> </span>run,<span class="w"> </span>write<span class="w"> </span>each<span class="w"> </span>table<span class="w"> </span>into<span class="w"> </span>this<span class="w"> </span>directory<span class="w"> </span><span class="o">(</span>originals<span class="w"> </span>untouched<span class="o">)</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">      </span>--force<span class="w">               </span>allow<span class="w"> </span>--save<span class="w"> </span>to<span class="w"> </span>overwrite<span class="w"> </span><span class="nb">source</span><span class="w"> </span>files<span class="w"> </span><span class="k">in</span><span class="w"> </span>place
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">            </span>print<span class="w"> </span><span class="nb">help</span><span class="w"> </span>message
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">  </span>-v,<span class="w"> </span>--version<span class="w">         </span>print<span class="w"> </span>sqly<span class="w"> </span>version
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="o">[</span>LICENSE<span class="o">]</span>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">  </span>MIT<span class="w"> </span>LICENSE<span class="w"> </span>-<span class="w"> </span>Copyright<span class="w"> </span><span class="o">(</span>c<span class="o">)</span><span class="w"> </span><span class="m">2022</span><span class="w"> </span>CHIKAMATSU<span class="w"> </span>Naohiro
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">  </span>https://github.com/nao1215/sqly/blob/main/LICENSE
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="o">[</span>CONTACT<span class="o">]</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">  </span>https://github.com/nao1215/sqly/issues
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a>
+</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a>sqly<span class="w"> </span>runs<span class="w"> </span>the<span class="w"> </span>DB<span class="w"> </span><span class="k">in</span><span class="w"> </span>SQLite3<span class="w"> </span><span class="k">in</span>-memory<span class="w"> </span>mode.
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a>So,<span class="w"> </span>SQL<span class="w"> </span>supported<span class="w"> </span>by<span class="w"> </span>sqly<span class="w"> </span>is<span class="w"> </span>the<span class="w"> </span>same<span class="w"> </span>as<span class="w"> </span>SQLite3<span class="w"> </span>syntax.
+</span></code></pre></div>
+<h3 id="execute-sql-in-terminal-sql-option">Execute sql in terminal: --sql option</h3>
+<p><code>--sql</code> option takes an SQL statement as an optional argument.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id&quot;</span><span class="w"> </span>testdata/user.csv<span class="w"> </span>testdata/identifier.csv<span class="w"> </span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>+-----------+-----------+
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="p">|</span><span class="w"> </span>user_name<span class="w"> </span><span class="p">|</span><span class="w"> </span>position<span class="w">  </span><span class="p">|</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>+-----------+-----------+
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">|</span><span class="w"> </span>booker12<span class="w">  </span><span class="p">|</span><span class="w"> </span>developrt<span class="w"> </span><span class="p">|</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">|</span><span class="w"> </span>jenkins46<span class="w"> </span><span class="p">|</span><span class="w"> </span>manager<span class="w">   </span><span class="p">|</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">|</span><span class="w"> </span>smith79<span class="w">   </span><span class="p">|</span><span class="w"> </span>neet<span class="w">      </span><span class="p">|</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>+-----------+-----------+
+</span></code></pre></div>
+<h3 id="load-sql-from-a-file-sql-file-option">Load SQL from a file: --sql-file option</h3>
+<p><code>--sql-file PATH</code> runs SQL read from a file instead of from <code>--sql</code> or stdin. The file may contain multiple statements separated by <code>;</code>, and a statement may span multiple lines, following the same rules as batch stdin mode; a leading header comment is allowed. It cannot be combined with <code>--sql</code>, and a missing, unreadable, or empty file fails with a clear error.</p>
+<p>Because the query comes from a file, stdin is free to carry a dataset. Combine it with <code>--stdin &lt;format&gt;</code> to join piped data:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$<span class="w"> </span>cat<span class="w"> </span>testdata/user.csv<span class="w"> </span><span class="p">|</span><span class="w"> </span>sqly<span class="w"> </span>--stdin<span class="w"> </span>csv<span class="w"> </span>--sql-file<span class="w"> </span>join.sql<span class="w"> </span>testdata/identifier.csv
+</span></code></pre></div>
+<p>where <code>join.sql</code> holds:</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">user_name</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="k">position</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">FROM</span><span class="w"> </span><span class="k">stdin</span><span class="w"> </span><span class="n">s</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">JOIN</span><span class="w"> </span><span class="n">identifier</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">identifier</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">id</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">identifier</span><span class="p">;</span>
+</span></code></pre></div>
+<h3 id="inspect-tables-inspect-option">Inspect tables: --inspect option</h3>
+<p><code>--inspect</code> imports the given files and directories and prints a JSON report of every table, then exits without starting the shell. The report lists each table name, its source path, the column schema, the row count, and a small sample of rows. It gives scripts and LLMs a non-interactive equivalent of <code>.tables</code>, <code>.schema</code>, and <code>.describe</code>. Import progress goes to stderr, so stdout carries only the JSON.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--inspect<span class="w"> </span>testdata/user.csv
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="o">{</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="s2">&quot;tables&quot;</span>:<span class="w"> </span><span class="o">[</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="o">{</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="s2">&quot;name&quot;</span>:<span class="w"> </span><span class="s2">&quot;user&quot;</span>,
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">      </span><span class="s2">&quot;source&quot;</span>:<span class="w"> </span><span class="s2">&quot;testdata/user.csv&quot;</span>,
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="s2">&quot;row_count&quot;</span>:<span class="w"> </span><span class="m">3</span>,
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">      </span><span class="s2">&quot;columns&quot;</span>:<span class="w"> </span><span class="o">[</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">        </span><span class="o">{</span><span class="s2">&quot;name&quot;</span>:<span class="w"> </span><span class="s2">&quot;user_name&quot;</span>,<span class="w"> </span><span class="s2">&quot;type&quot;</span>:<span class="w"> </span><span class="s2">&quot;TEXT&quot;</span>,<span class="w"> </span><span class="s2">&quot;nullable&quot;</span>:<span class="w"> </span>true,<span class="w"> </span><span class="s2">&quot;primary_key&quot;</span>:<span class="w"> </span>false<span class="o">}</span>,
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">        </span><span class="o">{</span><span class="s2">&quot;name&quot;</span>:<span class="w"> </span><span class="s2">&quot;identifier&quot;</span>,<span class="w"> </span><span class="s2">&quot;type&quot;</span>:<span class="w"> </span><span class="s2">&quot;INTEGER&quot;</span>,<span class="w"> </span><span class="s2">&quot;nullable&quot;</span>:<span class="w"> </span>true,<span class="w"> </span><span class="s2">&quot;primary_key&quot;</span>:<span class="w"> </span>false<span class="o">}</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="o">]</span>,
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">      </span><span class="s2">&quot;sample_rows&quot;</span>:<span class="w"> </span><span class="o">[</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">        </span><span class="o">{</span><span class="s2">&quot;user_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;booker12&quot;</span>,<span class="w"> </span><span class="s2">&quot;identifier&quot;</span>:<span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="o">}</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">      </span><span class="o">]</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="o">}</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">  </span><span class="o">]</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="o">}</span>
+</span></code></pre></div>
+<p>Multi-table sources map several tables to one source path: Excel sheets and ACH/Fedwire files.</p>
+<p><code>--inspect-sample N</code> controls how many sample rows each table includes (default 5). Use <code>--inspect-sample 0</code> for a schema-only report, which avoids printing a large sample for wide sources such as Fedwire.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--inspect<span class="w"> </span>--inspect-sample<span class="w"> </span><span class="m">0</span><span class="w"> </span>testdata/customer-transfer.fed
+</span></code></pre></div>
+<h3 id="write-changes-back-to-files-save-and-save-dir">Write changes back to files: --save and --save-dir</h3>
+<p>By default a session is in-memory only: DML such as <code>UPDATE</code>, <code>INSERT</code>, and <code>DELETE</code> changes the loaded tables but never touches the files. Persist changes with explicit, opt-in flags.</p>
+<p><code>--save-dir DIR</code> writes each table into DIR after the run, preserving each source's format and compression and the source file name. The original files are not modified.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;UPDATE user SET first_name = &#39;Rachelle&#39; WHERE identifier = 1&quot;</span><span class="w"> </span>--save-dir<span class="w"> </span>./out<span class="w"> </span>testdata/user.csv
+</span></code></pre></div>
+<p><code>--save</code> overwrites the source files in place. Because it is destructive, it requires <code>--force</code>.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;DELETE FROM user WHERE identifier &gt; 100&quot;</span><span class="w"> </span>--save<span class="w"> </span>--force<span class="w"> </span>testdata/user.csv
+</span></code></pre></div>
+<p>In the interactive shell, <code>.save DIR</code> writes to a directory and <code>.save --force</code> overwrites the sources.</p>
+<p>The save flags apply after <code>--sql</code> and batch runs. Tables that map one to one to a single csv, tsv, ltsv, or parquet source are written individually, and the source's compression (for example <code>.csv.gz</code>) is preserved.</p>
+<p>ACH and Fedwire sources are reconstructed as a whole table set: their related tables (for ACH, the file-header, batches, and entries tables) are rewritten together into one valid <code>.ach</code>/<code>.fed</code> file. Write-back validates that the required companion tables are still present before writing and fails with an explicit error if the set is incomplete. Only in-place <code>UPDATE</code>s to existing rows are persisted; the native ACH/Fedwire format reconstruction does not support adding or removing records. The single-table <code>--output</code>/<code>.dump</code> path still rejects <code>.ach</code>/<code>.fed</code> because those formats need a coordinated record set.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;UPDATE payment_entries SET individual_name = &#39;Updated&#39; WHERE entry_index = 0&quot;</span><span class="w"> </span>--save<span class="w"> </span>--force<span class="w"> </span>payment.ach
+</span></code></pre></div>
+<p>Tables created by SQL, tables imported from a directory, and Excel sources are rejected for write-back with a clear error before anything is written, so a session is never partially saved.</p>
+<h3 id="reuse-imports-across-runs-cache">Reuse imports across runs: --cache</h3>
+<p>For repeated queries against the same large inputs, <code>--cache PATH</code> snapshots the imported tables to a standalone SQLite file. A later run whose inputs are unchanged reloads from the snapshot instead of re-parsing the source files. The cache key is each input file's path, size, and modification time (directories are expanded recursively), so the cache invalidates automatically when a source changes. <code>--cache-clear</code> forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning instead of failing the query. Caching is skipped for <code>--stdin</code> datasets and for ACH/Fedwire inputs. Because the key is path, size, and modification time, an in-place edit that keeps the exact size and modification time would not be detected; use <code>--cache-clear</code> to force a rebuild when in doubt.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--cache<span class="w"> </span>./sqly.cache<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT COUNT(*) FROM big&quot;</span><span class="w"> </span>big.csv
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>$<span class="w"> </span>sqly<span class="w"> </span>--cache<span class="w"> </span>./sqly.cache<span class="w"> </span>--cache-clear<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT COUNT(*) FROM big&quot;</span><span class="w"> </span>big.csv
+</span></code></pre></div>
+<h3 id="profile-data-quality-profile">Profile data quality: --profile</h3>
+<p><code>--profile</code> prints a data-quality report for every imported table without entering the shell, so you can understand unfamiliar data before writing SQL. It reports per-table row and column counts and, per column, null and blank counts, distinct and numeric counts, and safe warnings for mixed numeric/non-numeric values, null-like placeholder text (such as <code>NULL</code> or <code>N/A</code>), and leading or trailing whitespace. JSON is the default automation contract; <code>--profile-format text</code> prints a human-readable summary. It works for files, directories, stdin datasets, and multi-table imports.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--profile<span class="w"> </span>data.csv
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>$<span class="w"> </span>sqly<span class="w"> </span>--profile<span class="w"> </span>--profile-format<span class="w"> </span>text<span class="w"> </span>./data_directory
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>$<span class="w"> </span>cat<span class="w"> </span>data.csv<span class="w"> </span><span class="p">|</span><span class="w"> </span>sqly<span class="w"> </span>--stdin<span class="w"> </span>csv<span class="w"> </span>--profile
+</span></code></pre></div>
+<h3 id="compare-two-datasets-compare">Compare two datasets: --compare</h3>
+<p><code>--compare</code> diffs two imported tables from the command line without entering the shell. It reports schema differences (columns unique to each side and type changes) and a row-count delta. Add <code>--compare-key COL</code> to also diff rows by a key column into added, removed, and modified rows. JSON is the default automation contract; <code>--compare-format text</code> prints a human-readable summary.</p>
+<p>The two tables are the pair you import; use <code>--compare-tables "left,right"</code> to choose the pair explicitly, for example two sheets of one Excel file. Errors are explicit for a missing or non-unique key, a missing named table, or an import that did not produce exactly two tables.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--compare<span class="w"> </span>--compare-key<span class="w"> </span>id<span class="w"> </span>revision1.csv<span class="w"> </span>revision2.csv
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>$<span class="w"> </span>sqly<span class="w"> </span>--compare<span class="w"> </span>--compare-format<span class="w"> </span>text<span class="w"> </span>revision1.csv<span class="w"> </span>revision2.csv
+</span></code></pre></div>
+<h3 id="batch-mode-pipe-commands-via-stdin">Batch mode: pipe commands via stdin</h3>
+<p>When stdin is not a terminal (piped or redirected), sqly reads SQL statements and helper commands from stdin instead of starting the shell. SQL statements end at a top-level <code>;</code> and may span multiple lines, so formatted queries and CTEs work; separate multiple statements with <code>;</code>. Helper commands such as <code>.tables</code> are single-line. A single trailing statement without <code>;</code> still runs. A failed statement makes sqly exit non-zero.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>$<span class="w"> </span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;WITH x AS (\n  SELECT user_name FROM user\n)\nSELECT * FROM x;\n&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sqly<span class="w"> </span>testdata/user.csv
+</span></code></pre></div>
+<h3 id="pipe-data-into-sqly-stdin-option">Pipe data into sqly: --stdin option</h3>
+<p>By default piped stdin is read as SQL and helper commands (batch mode). Use <code>--stdin &lt;format&gt;</code> to treat stdin as an input dataset instead. The format is given explicitly (<code>csv</code>, <code>tsv</code>, <code>ltsv</code>, <code>json</code>, or <code>jsonl</code>) because a pipe has no filename to detect it from. The table defaults to <code>stdin</code>; override it with <code>--stdin-name</code>. Piped data can be joined with file and directory arguments.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>$<span class="w"> </span>cat<span class="w"> </span>testdata/user.csv<span class="w"> </span><span class="p">|</span><span class="w"> </span>sqly<span class="w"> </span>--stdin<span class="w"> </span>csv<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT user_name FROM stdin LIMIT 1&quot;</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>+-----------+
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="p">|</span><span class="w"> </span>user_name<span class="w"> </span><span class="p">|</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>+-----------+
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="p">|</span><span class="w"> </span>booker12<span class="w">  </span><span class="p">|</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>+-----------+
+</span></code></pre></div>
+<h3 id="command-history">Command history</h3>
+<p>The sqly shell persists command history to a SQLite database under the config directory. History is best-effort: if that database cannot be created or written, or stops accepting reads or writes mid-session (for example a read-only config directory in CI or a container), sqly disables history for the rest of the session with a warning and still runs the requested query or command. Set <code>SQLY_HISTORY_DB_PATH</code> to choose a writable location.</p>
+<h3 id="change-output-format">Change output format</h3>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user LIMIT 2&quot;</span><span class="w"> </span>--csv<span class="w"> </span>testdata/user.csv<span class="w"> </span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>user_name,identifier,first_name,last_name
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>booker12,1,Rachel,Booker
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>jenkins46,2,Mary,Jenkins
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user LIMIT 2&quot;</span><span class="w"> </span>--json<span class="w"> </span>testdata/user.csv<span class="w"> </span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="o">[</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">   </span><span class="o">{</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">      </span><span class="s2">&quot;first_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;Rachel&quot;</span>,
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">      </span><span class="s2">&quot;identifier&quot;</span>:<span class="w"> </span><span class="s2">&quot;1&quot;</span>,
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">      </span><span class="s2">&quot;last_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;Booker&quot;</span>,
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">      </span><span class="s2">&quot;user_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;booker12&quot;</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">   </span><span class="o">}</span>,
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">   </span><span class="o">{</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">      </span><span class="s2">&quot;first_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;Mary&quot;</span>,
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">      </span><span class="s2">&quot;identifier&quot;</span>:<span class="w"> </span><span class="s2">&quot;2&quot;</span>,
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">      </span><span class="s2">&quot;last_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;Jenkins&quot;</span>,
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">      </span><span class="s2">&quot;user_name&quot;</span>:<span class="w"> </span><span class="s2">&quot;jenkins46&quot;</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">   </span><span class="o">}</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="o">]</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user LIMIT 2&quot;</span><span class="w"> </span>--json<span class="w"> </span>testdata/user.csv<span class="w"> </span>&gt;<span class="w"> </span>user.json
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a>
+</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user LIMIT 2&quot;</span><span class="w"> </span>--csv<span class="w"> </span>user.json<span class="w"> </span>
+</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a>first_name,identifier,last_name,user_name
+</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a>Rachel,1,Booker,booker12
+</span><span id="__span-14-27"><a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a>Mary,2,Jenkins,jenkins46
+</span></code></pre></div>
+<blockquote>
+<p>[!WARNING]
+The support for JSON is limited. There is a possibility of discontinuing JSON support in the future.</p>
+</blockquote>
+<h3 id="output-sql-result-to-file">Output sql result to file</h3>
+<h4 id="for-linux-user">For linux user</h4>
+<p>The sqly can save SQL execution results to the file using shell redirection. The --csv option outputs SQL execution results in CSV format instead of table format.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user&quot;</span><span class="w"> </span>--csv<span class="w"> </span>testdata/user.csv<span class="w"> </span>&gt;<span class="w"> </span>test.csv
+</span></code></pre></div>
+<h4 id="for-windows-user">For windows user</h4>
+<p>The sqly can save SQL execution results to the file using the --output option. The --output option specifies the destination path for SQL results specified in the --sql option.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user&quot;</span><span class="w"> </span>--output<span class="o">=</span>test.csv<span class="w"> </span>testdata/user.csv<span class="w"> </span>
+</span></code></pre></div>
+<h3 id="infer-export-format-and-compression-from-the-output-path">Infer export format and compression from the output path</h3>
+<p>When no output mode flag is given, sqly infers the export format and compression from the <code>--output</code> path extension, and the shell <code>.dump</code> command applies the same rules.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user&quot;</span><span class="w"> </span>--output<span class="w"> </span>result.parquet<span class="w"> </span>testdata/user.csv
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>$<span class="w"> </span>sqly<span class="w"> </span>--sql<span class="w"> </span><span class="s2">&quot;SELECT * FROM user&quot;</span><span class="w"> </span>--output<span class="w"> </span>result.ndjson.gz<span class="w"> </span>testdata/user.csv
+</span></code></pre></div>
+<p>Text and JSON formats (csv, tsv, ltsv, json, ndjson, markdown) support the compression wrappers <code>.gz</code>, <code>.xz</code>, <code>.zst</code>, <code>.z</code>, <code>.snappy</code>, <code>.s2</code>, and <code>.lz4</code>. An explicit mode flag that disagrees with the path extension is rejected instead of writing a surprising format. Bzip2 output and compression on Parquet or Excel are rejected with a clear error.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
