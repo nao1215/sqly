@@ -220,7 +220,7 @@ func NewArg(args []string) (*Arg, error) {
 	compareFormat := flag.String("compare-format", compareFormatJSON, "compare output format: json (default) or text")
 	flag.BoolVar(&arg.ProfileFlag, "profile", false, "print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit")
 	profileFormat := flag.String("profile-format", compareFormatJSON, "profile output format: json (default) or text")
-	cachePath := flag.String("cache", "", "opt-in import cache: reuse a SQLite snapshot of the imported tables for unchanged inputs (path to the cache file)")
+	cachePath := flag.String("cache", "", "opt-in import cache: reuse a SQLite snapshot of the imported tables when inputs are unchanged (keyed by path+size+mtime; use --cache-clear to force a rebuild)")
 	flag.BoolVar(&arg.CacheClear, "cache-clear", false, "delete any existing --cache before the run, forcing a cold rebuild")
 	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
 	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")

@@ -61,21 +61,51 @@ func TestCompareKeyedRows(t *testing.T) {
 		{"4", "Dave", "50"},  // added
 	})
 
+	cell := func(r compareRow, col string) string {
+		v, ok := r[col]
+		if !ok || v == nil {
+			return "<nil>"
+		}
+		return *v
+	}
+
 	t.Run("classifies added, removed, and modified rows", func(t *testing.T) {
 		t.Parallel()
 		rows, err := compareKeyedRows("l", "r", left, right, "id")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(rows.Added) != 1 || rows.Added[0]["id"] != "4" {
+		if len(rows.Added) != 1 || cell(rows.Added[0], "id") != "4" {
 			t.Errorf("added = %v, want [id=4]", rows.Added)
 		}
-		if len(rows.Removed) != 1 || rows.Removed[0]["id"] != "3" {
+		if len(rows.Removed) != 1 || cell(rows.Removed[0], "id") != "3" {
 			t.Errorf("removed = %v, want [id=3]", rows.Removed)
 		}
 		if len(rows.Modified) != 1 || rows.Modified[0].Key != "1" ||
-			rows.Modified[0].Left["age"] != "30" || rows.Modified[0].Right["age"] != "31" {
+			cell(rows.Modified[0].Left, "age") != "30" || cell(rows.Modified[0].Right, "age") != "31" {
 			t.Errorf("modified = %+v, want key=1 age 30->31", rows.Modified)
+		}
+	})
+
+	t.Run("distinguishes a SQL NULL from an empty string", func(t *testing.T) {
+		t.Parallel()
+		h := model.Header{"id", "v"}
+		l := model.NewTable("l", h, []model.Record{{"1", ""}})
+		l.SetNulls([][]bool{{false, true}}) // v is NULL
+		r := model.NewTable("r", h, []model.Record{{"1", ""}})
+		r.SetNulls([][]bool{{false, false}}) // v is empty string
+		rows, err := compareKeyedRows("l", "r", l, r, "id")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows.Modified) != 1 {
+			t.Fatalf("expected NULL vs \"\" to be a modification, got %+v", rows)
+		}
+		if rows.Modified[0].Left["v"] != nil {
+			t.Errorf("left v should be NULL (nil), got %v", rows.Modified[0].Left["v"])
+		}
+		if rows.Modified[0].Right["v"] == nil || *rows.Modified[0].Right["v"] != "" {
+			t.Errorf("right v should be empty string, got %v", rows.Modified[0].Right["v"])
 		}
 	})
 

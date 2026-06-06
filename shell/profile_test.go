@@ -76,6 +76,8 @@ func TestIsNumericValue(t *testing.T) {
 	cases := map[string]bool{
 		"1": true, "-2.5": true, "1e3": true, "0": true,
 		"abc": false, "": false, "NaN": false, "Inf": false, "1e400": false, "1,000": false,
+		// Go-specific float spellings are not treated as data numbers.
+		"0x1p4": false, "1_000": false,
 	}
 	for in, want := range cases {
 		if got := isNumericValue(in); got != want {

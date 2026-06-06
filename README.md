@@ -343,7 +343,7 @@ $ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # cold: p
 $ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # warm: reloads the snapshot
 ```
 
-Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs.
+Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs. The cache key is path, size, and modification time, so an in-place edit that keeps the exact size and modification time would not be detected; use `--cache-clear` to force a rebuild when in doubt.
 
 ## Profile data quality: --profile
 

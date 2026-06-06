@@ -157,6 +157,48 @@ func TestWriteBack_FedWireRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteBack_ACHFromDirectoryRejected(t *testing.T) {
+	// An ACH file picked up by a directory import is not a source the session
+	// owns directly, so write-back must reject it with the directory-import error
+	// rather than reconstructing a whole-set file.
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "payments")
+	if err := os.Mkdir(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join("testdata", "ppd-debit.ach"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "ppd-debit.ach"), data, 0o600); err != nil { //nolint:gosec // test-controlled temp path
+		t.Fatal(err)
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{sub}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := getExecStdOutput(t, shell.exec,
+		"UPDATE ppd_debit_entries SET individual_name='X' WHERE entry_index=0"); err != nil {
+		t.Fatalf("UPDATE failed: %v", err)
+	}
+
+	var saveErr error
+	withStderr(t, func() {
+		saveErr = shell.commands.saveCommand(context.Background(), shell, []string{forceArg})
+	})
+	if saveErr == nil {
+		t.Fatal("expected a directory-import write-back rejection, got nil")
+	}
+	if !strings.Contains(saveErr.Error(), "directory import") {
+		t.Errorf("error should mention the directory import, got: %v", saveErr)
+	}
+}
+
 func TestWriteBack_ACHRejectsIncompleteSet(t *testing.T) {
 	// Dropping a required companion table makes the ACH set incomplete; write-back
 	// must fail with an explicit error instead of producing a malformed file.

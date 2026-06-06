@@ -48,12 +48,41 @@ func (s *Shell) cacheEnabled(paths []string) bool {
 	if s.argument.CachePath == "" || len(paths) == 0 || s.argument.StdinFormat != "" {
 		return false
 	}
+	// Disable caching when any input is ACH/Fedwire, including one nested inside a
+	// directory argument: a warm cache load restores plain tables but not the
+	// filesql registry those formats need for write-back, so caching them would
+	// silently break a later .save.
 	for _, p := range paths {
-		if model.IsInputOnlyExtension(p) {
+		if containsInputOnlyFile(p) {
 			return false
 		}
 	}
 	return true
+}
+
+// containsInputOnlyFile reports whether p is an ACH/Fedwire file or a directory
+// that contains one (searched recursively). A path that cannot be stat-ed or
+// walked is treated as not input-only; the import step will surface any real
+// access error.
+func containsInputOnlyFile(p string) bool {
+	info, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+	if !info.IsDir() {
+		return model.IsInputOnlyExtension(p)
+	}
+	found := false
+	_ = filepath.WalkDir(p, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil //nolint:nilerr // skip unreadable entries; import will report real errors
+		}
+		if model.IsInputOnlyExtension(path) {
+			found = true
+		}
+		return nil
+	})
+	return found
 }
 
 // loadOrImport runs the import step, using the cache when enabled. On a warm hit

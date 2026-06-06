@@ -16,6 +16,24 @@ import (
 // --profile-format (the default is JSON).
 const outputFormatText = "text"
 
+// outputModeFlagName returns the flag name that selected an output mode, naming
+// the typed JSON variants (--json-typed / --ndjson-typed) rather than the plain
+// base mode, so a conflict error names the flag the user actually passed.
+func outputModeFlagName(o *config.Output) string {
+	if o == nil {
+		return ""
+	}
+	if o.JSONTyped {
+		switch o.Mode {
+		case model.PrintModeJSON:
+			return "json-typed"
+		case model.PrintModeNDJSON:
+			return "ndjson-typed"
+		}
+	}
+	return o.Mode.String()
+}
+
 // compareColumnTypeChange records a column present in both tables whose declared
 // type differs between them.
 type compareColumnTypeChange struct {
@@ -40,20 +58,25 @@ type compareRowCount struct {
 	Delta int64 `json:"delta"`
 }
 
+// compareRow is one row keyed by column name. A nil value is a SQL NULL (emitted
+// as JSON null), distinct from a pointer to "" (an empty string), so a change
+// between NULL and "" is detected and reported.
+type compareRow map[string]*string
+
 // compareModifiedRow describes a key present in both tables whose non-key values
 // differ. Left and Right hold the full row from each side.
 type compareModifiedRow struct {
-	Key   string            `json:"key"`
-	Left  map[string]string `json:"left"`
-	Right map[string]string `json:"right"`
+	Key   string     `json:"key"`
+	Left  compareRow `json:"left"`
+	Right compareRow `json:"right"`
 }
 
 // compareRows is the keyed-row section of a compare report, present only when a
 // key column is given.
 type compareRows struct {
 	Key      string               `json:"key"`
-	Added    []map[string]string  `json:"added"`
-	Removed  []map[string]string  `json:"removed"`
+	Added    []compareRow         `json:"added"`
+	Removed  []compareRow         `json:"removed"`
 	Modified []compareModifiedRow `json:"modified"`
 }
 
@@ -88,7 +111,7 @@ func (s *Shell) validateCompareFlags() error {
 	case s.argument.SaveDir != "":
 		return errors.New("--compare cannot be combined with --save-dir")
 	case s.argument.Output != nil && s.argument.Output.Mode != model.PrintModeTable:
-		return fmt.Errorf("--compare cannot be combined with an output mode flag (--%s)", s.argument.Output.Mode.String())
+		return fmt.Errorf("--compare cannot be combined with an output mode flag (--%s)", outputModeFlagName(s.argument.Output))
 	}
 	return nil
 }
@@ -289,38 +312,38 @@ func compareKeyedRows(leftName, rightName string, left, right *model.Table, key 
 
 	rows := &compareRows{
 		Key:      key,
-		Added:    []map[string]string{},
-		Removed:  []map[string]string{},
+		Added:    []compareRow{},
+		Removed:  []compareRow{},
 		Modified: []compareModifiedRow{},
 	}
 
-	leftKeys := sortedKeys(leftByKey)
-	for _, k := range leftKeys {
-		lrow := leftByKey[k]
-		rrow, ok := rightByKey[k]
+	for _, k := range sortedKeys(leftByKey) {
+		lrow := rowMap(left, leftByKey[k])
+		rIdx, ok := rightByKey[k]
 		if !ok {
-			rows.Removed = append(rows.Removed, rowMap(left.Header(), lrow))
+			rows.Removed = append(rows.Removed, lrow)
 			continue
 		}
-		lm := rowMap(left.Header(), lrow)
-		rm := rowMap(right.Header(), rrow)
-		if !rowMapsEqual(lm, rm) {
-			rows.Modified = append(rows.Modified, compareModifiedRow{Key: k, Left: lm, Right: rm})
+		rrow := rowMap(right, rIdx)
+		if !rowMapsEqual(lrow, rrow) {
+			rows.Modified = append(rows.Modified, compareModifiedRow{Key: k, Left: lrow, Right: rrow})
 		}
 	}
 	for _, k := range sortedKeys(rightByKey) {
 		if _, ok := leftByKey[k]; !ok {
-			rows.Added = append(rows.Added, rowMap(right.Header(), rightByKey[k]))
+			rows.Added = append(rows.Added, rowMap(right, rightByKey[k]))
 		}
 	}
 	return rows, nil
 }
 
-// indexRowsByKey maps each row to its key-column value, rejecting a duplicate key
-// (which would make the keyed comparison ambiguous).
-func indexRowsByKey(t *model.Table, keyIdx int, name, key string) (map[string]model.Record, error) {
-	out := make(map[string]model.Record, len(t.Records()))
-	for _, rec := range t.Records() {
+// indexRowsByKey maps each row's key-column value to its row index, rejecting a
+// duplicate key (which would make the keyed comparison ambiguous). A SQL NULL key
+// is keyed under the empty string, matching how a NULL key renders.
+func indexRowsByKey(t *model.Table, keyIdx int, name, key string) (map[string]int, error) {
+	records := t.Records()
+	out := make(map[string]int, len(records))
+	for i, rec := range records {
 		if keyIdx >= len(rec) {
 			continue
 		}
@@ -328,7 +351,7 @@ func indexRowsByKey(t *model.Table, keyIdx int, name, key string) (map[string]mo
 		if _, dup := out[k]; dup {
 			return nil, fmt.Errorf("compare key %q is not unique in table %s (value %q appears more than once)", key, name, k)
 		}
-		out[k] = rec
+		out[k] = i
 	}
 	return out, nil
 }
@@ -343,24 +366,43 @@ func indexOfColumn(header model.Header, name string) int {
 	return -1
 }
 
-// rowMap pairs a record's values with their column names.
-func rowMap(header model.Header, rec model.Record) map[string]string {
-	m := make(map[string]string, len(header))
+// rowMap pairs the values of the row at rowIdx with their column names,
+// preserving the SQL NULL/empty-string distinction: a NULL cell maps to nil, a
+// real value maps to a pointer to its string.
+func rowMap(t *model.Table, rowIdx int) compareRow {
+	header := t.Header()
+	rec := t.Records()[rowIdx]
+	m := make(compareRow, len(header))
 	for i, h := range header {
+		if t.IsNull(rowIdx, i) {
+			m[h] = nil
+			continue
+		}
 		if i < len(rec) {
-			m[h] = rec[i]
+			v := rec[i]
+			m[h] = &v
 		}
 	}
 	return m
 }
 
-// rowMapsEqual reports whether two row maps have the same keys and values.
-func rowMapsEqual(a, b map[string]string) bool {
+// rowMapsEqual reports whether two row maps have the same keys and values,
+// treating two NULLs (nil) as equal and a NULL as different from any string.
+func rowMapsEqual(a, b compareRow) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for k, v := range a {
-		if bv, ok := b[k]; !ok || bv != v {
+	for k, av := range a {
+		bv, ok := b[k]
+		if !ok {
+			return false
+		}
+		switch {
+		case av == nil && bv == nil:
+			// both NULL: equal
+		case av == nil || bv == nil:
+			return false // one NULL, one not
+		case *av != *bv:
 			return false
 		}
 	}
@@ -368,7 +410,7 @@ func rowMapsEqual(a, b map[string]string) bool {
 }
 
 // sortedKeys returns the keys of a row index in deterministic order.
-func sortedKeys(m map[string]model.Record) []string {
+func sortedKeys(m map[string]int) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

@@ -61,7 +61,7 @@ func (s *Shell) validateProfileFlags() error {
 	case s.argument.SaveDir != "":
 		return errProfileConflict("--save-dir")
 	case s.argument.Output != nil && s.argument.Output.Mode != model.PrintModeTable:
-		return fmt.Errorf("--profile cannot be combined with an output mode flag (--%s)", s.argument.Output.Mode.String())
+		return fmt.Errorf("--profile cannot be combined with an output mode flag (--%s)", outputModeFlagName(s.argument.Output))
 	}
 	return nil
 }
@@ -206,10 +206,15 @@ func profileColumnStats(name, typ string, values []string, nulls []bool) profile
 	return pc
 }
 
-// isNumericValue reports whether s is a finite decimal number. Infinity and NaN
-// spellings are excluded so a column of the literal text "NaN" is not counted as
-// numeric.
+// isNumericValue reports whether s is a finite decimal number. It rejects the
+// Go-specific float spellings ParseFloat also accepts but data rarely means as
+// numbers: hexadecimal floats ("0x1p4"), underscore digit separators
+// ("1_000"), and the Infinity/NaN words. This keeps the profile's numeric count
+// aligned with what a human would call a number.
 func isNumericValue(s string) bool {
+	if strings.ContainsAny(s, "xXpP_") {
+		return false
+	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return false
