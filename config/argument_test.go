@@ -117,6 +117,38 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("user set --json-typed option selects json mode with the typed contract", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--json-typed"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.Output.Mode != model.PrintModeJSON {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeJSON)
+		}
+		if !arg.Output.JSONTyped {
+			t.Error("expected Output.JSONTyped to be true for --json-typed")
+		}
+	})
+
+	t.Run("user set --ndjson-typed option selects ndjson mode with the typed contract", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--ndjson-typed"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.Output.Mode != model.PrintModeNDJSON {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeNDJSON)
+		}
+		if !arg.Output.JSONTyped {
+			t.Error("expected Output.JSONTyped to be true for --ndjson-typed")
+		}
+	})
+
+	t.Run("--json and --json-typed together are rejected as conflicting", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--json", "--json-typed"}); err == nil {
+			t.Error("expected conflicting output mode flags error, got nil")
+		}
+	})
+
 	t.Run("user set --parquet option", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--parquet"})
 		if err != nil {

@@ -656,6 +656,8 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
 		{Text: "json", Description: "sqly command argument: json output format"},
 		{Text: "ndjson", Description: "sqly command argument: ndjson output format"},
+		{Text: "json-typed", Description: "sqly command argument: json output with native scalars"},
+		{Text: "ndjson-typed", Description: "sqly command argument: ndjson output with native scalars"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
 	}
@@ -787,6 +789,11 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		fmt.Fprint(config.Stdout, msg)
 		return nil
 	}
+
+	// Opt JSON/NDJSON output into the typed contract when the session selected a
+	// typed mode (--json-typed/--ndjson-typed or .mode json-typed/ndjson-typed).
+	// The flag is ignored by every non-JSON format.
+	table.SetJSONTyped(s.state.mode.jsonTyped)
 
 	// use --sql option and user want to output table data to file.
 	if s.argument.NeedsOutputToFile() {

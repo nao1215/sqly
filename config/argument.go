@@ -31,6 +31,10 @@ type Output struct {
 	FilePath string
 	// Mode is enum to specify output method
 	Mode model.PrintMode
+	// JSONTyped opts JSON and NDJSON output into the typed contract (native
+	// numbers, booleans, and nulls instead of strings). It is set only by
+	// --json-typed/--ndjson-typed and is ignored unless Mode is JSON or NDJSON.
+	JSONTyped bool
 }
 
 // Arg is a structure for managing options and arguments
@@ -92,6 +96,10 @@ const (
 	outJSON     = "json"
 	outNDJSON   = "ndjson"
 	outParquet  = "parquet"
+	// Typed JSON variants: same JSON/NDJSON format, but native scalars instead of
+	// strings. They select the JSON/NDJSON mode and set Output.JSONTyped.
+	outJSONTyped   = "json-typed"
+	outNDJSONTyped = "ndjson-typed"
 )
 
 // outputFlag is a structure for managing output format options.
@@ -104,6 +112,9 @@ type outputFlag struct {
 	json     bool
 	ndjson   bool
 	parquet  bool
+
+	jsonTyped   bool
+	ndjsonTyped bool
 }
 
 // selectedNames returns the names of the output mode flags that are set. More
@@ -122,6 +133,8 @@ func (of outputFlag) selectedNames() []string {
 		{outJSON, of.json},
 		{outNDJSON, of.ndjson},
 		{outParquet, of.parquet},
+		{outJSONTyped, of.jsonTyped},
+		{outNDJSONTyped, of.ndjsonTyped},
 	}
 	var names []string
 	for _, f := range flags {
@@ -159,6 +172,8 @@ func NewArg(args []string) (*Arg, error) {
 	flag.BoolVarP(&oFlag.json, outJSON, "j", false, "change output format to json (default: table)")
 	flag.BoolVarP(&oFlag.ndjson, outNDJSON, "n", false, "change output format to ndjson (default: table)")
 	flag.BoolVarP(&oFlag.parquet, outParquet, "p", false, "export results as parquet (export-only; use with --output or .dump)")
+	flag.BoolVar(&oFlag.jsonTyped, outJSONTyped, false, "change output format to json with native scalars (numbers, booleans, nulls) instead of strings")
+	flag.BoolVar(&oFlag.ndjsonTyped, outNDJSONTyped, false, "change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
@@ -317,6 +332,12 @@ func newOutput(filePath string, of outputFlag) *Output {
 		output.Mode = model.PrintModeJSON
 	case of.ndjson:
 		output.Mode = model.PrintModeNDJSON
+	case of.jsonTyped:
+		output.Mode = model.PrintModeJSON
+		output.JSONTyped = true
+	case of.ndjsonTyped:
+		output.Mode = model.PrintModeNDJSON
+		output.JSONTyped = true
 	case of.parquet:
 		output.Mode = model.PrintModeParquet
 	default:

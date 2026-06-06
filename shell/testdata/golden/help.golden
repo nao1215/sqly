@@ -26,6 +26,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -j, --json                 change output format to json (default: table)
   -n, --ndjson               change output format to ndjson (default: table)
   -p, --parquet              export results as parquet (export-only; use with --output or .dump)
+      --json-typed           change output format to json with native scalars (numbers, booleans, nulls) instead of strings
+      --ndjson-typed         change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings
   -S, --sheet string         excel sheet name you want to import
       --stdin string         treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
       --stdin-name string    table name for the --stdin dataset (default "stdin")

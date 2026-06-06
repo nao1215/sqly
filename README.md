@@ -112,7 +112,7 @@ Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysq
 
 ```shell
 $ sqly testdata/user.csv
-sqly v0.23.0
+sqly v0.24.0
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
@@ -157,6 +157,16 @@ $ sqly --json --sql "SELECT user_name, identifier FROM user LIMIT 2" testdata/us
 $ sqly --ndjson --sql "SELECT user_name, identifier FROM user LIMIT 2" testdata/user.csv
 {"user_name":"booker12","identifier":"1"}
 {"user_name":"jenkins46","identifier":"2"}
+```
+
+For automation and ML workflows, `--json-typed` and `--ndjson-typed` emit native JSON scalars instead of strings: a value that is a canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`. A large integer is preserved exactly and never falls back to scientific notation; a value with a leading zero (such as `007`) stays a string. The default `--json`/`--ndjson` keep the string contract for compatibility. The same opt-in applies to the `--inspect` sample rows via `--inspect --json-typed`.
+
+```shell
+$ sqly --json-typed --sql "SELECT identifier, user_name FROM user LIMIT 2" testdata/user.csv
+[
+  {"identifier":1,"user_name":"booker12"},
+  {"identifier":2,"user_name":"jenkins46"}
+]
 ```
 
 Excel (`--excel`) and Parquet (`--parquet`) are export-only: they render as CSV on screen and write a real `.xlsx`/`.parquet` file through `--output` or `.dump`. Parquet needs at least one row to infer its schema.
@@ -433,7 +443,7 @@ SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `In
 |--------:|--------:|------------:|--------------:|-------------------:|
 | 100,000 | 12 | 515 ms | 161 MB | 2.82M |
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.23.0. Run `make bench` to reproduce on your machine.
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.24.0. Run `make bench` to reproduce on your machine.
 
 ## Comparison with similar tools
 

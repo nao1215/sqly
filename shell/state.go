@@ -24,7 +24,7 @@ func newState(arg *config.Arg) (*state, error) {
 	}
 	return &state{
 		cwd:  dir,
-		mode: newMode(config.Stdout, arg.Output.Mode),
+		mode: newMode(config.Stdout, arg.Output.Mode, arg.Output.JSONTyped),
 	}, nil
 }
 
@@ -43,18 +43,46 @@ func (s *state) shortCWD() string {
 	return strings.Replace(s.cwd, home, "~", 1)
 }
 
+// Typed JSON output mode names accepted by .mode and shown in the prompt. They
+// mirror the --json-typed/--ndjson-typed CLI flags.
+const (
+	outputModeJSONTyped   = "json-typed"
+	outputModeNDJSONTyped = "ndjson-typed"
+)
+
 // mode is output mode.
 type mode struct {
 	w io.Writer
 	model.PrintMode
+	// jsonTyped, when true and PrintMode is JSON or NDJSON, opts query JSON/NDJSON
+	// output into the typed contract (native numbers, booleans, and nulls). It is
+	// ignored for every other PrintMode.
+	jsonTyped bool
 }
 
 // newMode returns mode.
-func newMode(w io.Writer, m model.PrintMode) *mode {
+func newMode(w io.Writer, m model.PrintMode, jsonTyped bool) *mode {
 	return &mode{
 		w:         w,
 		PrintMode: m,
+		jsonTyped: jsonTyped,
 	}
+}
+
+// displayName returns the user-facing name of the current mode, distinguishing
+// the typed JSON variants ("json-typed"/"ndjson-typed") from the default
+// string-valued JSON modes. It backs the prompt label and the .mode banner so a
+// typed session is visible to the user.
+func (m *mode) displayName() string {
+	if m.jsonTyped {
+		switch m.PrintMode {
+		case model.PrintModeJSON:
+			return outputModeJSONTyped
+		case model.PrintModeNDJSON:
+			return outputModeNDJSONTyped
+		}
+	}
+	return m.String()
 }
 
 // changeOutputModeIfNeeded change output mode.
@@ -65,42 +93,50 @@ func newMode(w io.Writer, m model.PrintMode) *mode {
 // stdout, so a banner there would corrupt it; keeping the status message on
 // stderr preserves stdout purity for every mode.
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
-	if modeName == m.String() {
+	if modeName == m.displayName() {
 		return fmt.Errorf("already %s mode", modeName)
 	}
 
+	// Resolve the requested name to a target PrintMode and typed flag before
+	// mutating anything, so an invalid name leaves the current mode untouched. The
+	// banner suffix flags the dump-only formats whose on-screen output is CSV.
+	var (
+		target model.PrintMode
+		typed  bool
+		suffix string
+	)
 	switch modeName {
 	case model.PrintModeTable.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeTable.String())
-		m.PrintMode = model.PrintModeTable
+		target = model.PrintModeTable
 	case model.PrintModeMarkdownTable.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s table\n", m.String(), model.PrintModeMarkdownTable.String())
-		m.PrintMode = model.PrintModeMarkdownTable
+		target = model.PrintModeMarkdownTable
+		suffix = " table"
 	case model.PrintModeCSV.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeCSV.String())
-		m.PrintMode = model.PrintModeCSV
+		target = model.PrintModeCSV
 	case model.PrintModeTSV.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeTSV.String())
-		m.PrintMode = model.PrintModeTSV
+		target = model.PrintModeTSV
 	case model.PrintModeLTSV.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeLTSV.String())
-		m.PrintMode = model.PrintModeLTSV
+		target = model.PrintModeLTSV
 	case model.PrintModeJSON.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeJSON.String())
-		m.PrintMode = model.PrintModeJSON
+		target = model.PrintModeJSON
 	case model.PrintModeNDJSON.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s\n", m.String(), model.PrintModeNDJSON.String())
-		m.PrintMode = model.PrintModeNDJSON
+		target = model.PrintModeNDJSON
+	case outputModeJSONTyped:
+		target, typed = model.PrintModeJSON, true
+	case outputModeNDJSONTyped:
+		target, typed = model.PrintModeNDJSON, true
 	case model.PrintModeExcel.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
-			m.String(), model.PrintModeExcel.String())
-		m.PrintMode = model.PrintModeExcel
+		target = model.PrintModeExcel
+		suffix = " (active only when executing .dump, otherwise same as csv mode)"
 	case model.PrintModeParquet.String():
-		fmt.Fprintf(config.Stderr, "Change output mode from %s to %s (active only when executing .dump, otherwise same as csv mode)\n",
-			m.String(), model.PrintModeParquet.String())
-		m.PrintMode = model.PrintModeParquet
+		target = model.PrintModeParquet
+		suffix = " (active only when executing .dump, otherwise same as csv mode)"
 	default:
 		return fmt.Errorf("invalid output mode: %s", modeName)
 	}
+
+	fmt.Fprintf(config.Stderr, "Change output mode from %s to %s%s\n", m.displayName(), modeName, suffix)
+	m.PrintMode = target
+	m.jsonTyped = typed
 	return nil
 }
