@@ -82,6 +82,12 @@ type Arg struct {
 	// CompareFormat selects the compare output format: "json" (default, the
 	// automation contract) or "text" (human-readable summary).
 	CompareFormat string
+	// ProfileFlag, when true, runs the non-interactive profile workflow: it prints
+	// a data-quality report (row/column counts, null/blank counts, and value
+	// warnings) for every imported table, then exits without the shell.
+	ProfileFlag bool
+	// ProfileFormat selects the profile output format: "json" (default) or "text".
+	ProfileFormat string
 	// SaveInPlace, when true, writes each table back over its source file after
 	// the run (for --save). It overwrites source files, so it requires Force.
 	SaveInPlace bool
@@ -205,6 +211,8 @@ func NewArg(args []string) (*Arg, error) {
 	compareKey := flag.String("compare-key", "", "key column for keyed row comparison in --compare mode")
 	compareTables := flag.String("compare-tables", "", "the two tables to compare as \"left,right\" (default: the two imported tables)")
 	compareFormat := flag.String("compare-format", compareFormatJSON, "compare output format: json (default) or text")
+	flag.BoolVar(&arg.ProfileFlag, "profile", false, "print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit")
+	profileFormat := flag.String("profile-format", compareFormatJSON, "profile output format: json (default) or text")
 	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
 	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
 	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
@@ -281,6 +289,14 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, fmt.Errorf("--compare-format must be \"json\" or \"text\", got %q", *compareFormat)
 	}
 
+	// --profile-format only shapes --profile output, so it has no effect alone.
+	if flag.Changed("profile-format") && !arg.ProfileFlag {
+		return nil, errProfileFormatWithoutProfile
+	}
+	if arg.ProfileFlag && *profileFormat != compareFormatJSON && *profileFormat != compareFormatText {
+		return nil, fmt.Errorf("--profile-format must be \"json\" or \"text\", got %q", *profileFormat)
+	}
+
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
@@ -312,6 +328,7 @@ func NewArg(args []string) (*Arg, error) {
 	arg.CompareKey = *compareKey
 	arg.CompareTables = *compareTables
 	arg.CompareFormat = *compareFormat
+	arg.ProfileFormat = *profileFormat
 
 	return arg, nil
 }

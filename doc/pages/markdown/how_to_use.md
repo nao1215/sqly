@@ -43,6 +43,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -o, --output string   destination path for SQL results specified in --sql option
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
       --inspect-sample int  rows to include per table in --inspect (0 for schema only) (default 5)
+      --profile             print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit
+      --profile-format string   profile output format: json (default) or text
       --compare             compare two imported tables (schema, row count, keyed rows) and print a report, then exit
       --compare-key string  key column for keyed row comparison in --compare mode
       --compare-tables string   the two tables to compare as "left,right" (default: the two imported tables)
@@ -157,6 +159,16 @@ $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry
 ```
 
 Tables created by SQL, tables imported from a directory, and Excel sources are rejected for write-back with a clear error before anything is written, so a session is never partially saved.
+
+### Profile data quality: --profile
+
+`--profile` prints a data-quality report for every imported table without entering the shell, so you can understand unfamiliar data before writing SQL. It reports per-table row and column counts and, per column, null and blank counts, distinct and numeric counts, and safe warnings for mixed numeric/non-numeric values, null-like placeholder text (such as `NULL` or `N/A`), and leading or trailing whitespace. JSON is the default automation contract; `--profile-format text` prints a human-readable summary. It works for files, directories, stdin datasets, and multi-table imports.
+
+```shell
+$ sqly --profile data.csv
+$ sqly --profile --profile-format text ./data_directory
+$ cat data.csv | sqly --stdin csv --profile
+```
 
 ### Compare two datasets: --compare
 

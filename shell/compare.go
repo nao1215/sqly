@@ -12,6 +12,10 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+// outputFormatText is the human-readable value accepted by --compare-format and
+// --profile-format (the default is JSON).
+const outputFormatText = "text"
+
 // compareColumnTypeChange records a column present in both tables whose declared
 // type differs between them.
 type compareColumnTypeChange struct {
@@ -105,7 +109,7 @@ func (s *Shell) runCompare(ctx context.Context) error {
 		return err
 	}
 
-	if s.argument.CompareFormat == "text" {
+	if s.argument.CompareFormat == outputFormatText {
 		fmt.Fprint(config.Stdout, renderCompareText(report))
 		return nil
 	}

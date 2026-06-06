@@ -56,3 +56,7 @@ var (
 	errEmptyCompareKey             = errors.New("--compare-key requires a non-empty column name")
 	errEmptyCompareTables          = errors.New(`--compare-tables requires a non-empty "left,right" value`)
 )
+
+// errProfileFormatWithoutProfile is returned when --profile-format is set without
+// --profile, so the dependent flag is not silently ignored.
+var errProfileFormatWithoutProfile = errors.New("--profile-format has no effect without --profile")
