@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [v0.24.0](https://github.com/nao1215/sqly/compare/v0.23.0...v0.24.0)
+## [v0.24.0](https://github.com/nao1215/sqly/compare/v0.23.0...v0.24.0) (2026-06-06)
 
 ### Features
 * Opt-In Import Cache: `--cache PATH` snapshots the imported tables to a standalone SQLite file so a repeated run against unchanged inputs reloads from it instead of re-parsing large source files. The cache key is each input file's path, size, and modification time (expanded recursively for directories), so it invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back cleanly to a cold import with a warning instead of failing the query. Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs (whose write-back needs the live import registry).
