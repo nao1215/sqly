@@ -166,6 +166,11 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// --compare is also self-contained; reject conflicting flags up front.
+	if err := s.validateCompareFlags(); err != nil {
+		return err
+	}
+
 	// --output is only honored by the --sql path (a single result written to one
 	// file). Without --sql (no query, batch stdin, --sql-file, or interactive)
 	// the flag was silently ignored, so reject it instead of looking successful.
@@ -189,8 +194,8 @@ func (s *Shell) Run(ctx context.Context) error {
 	// nothing remains to carry a query. Require an explicit query source;
 	// otherwise the dataset is imported and immediately discarded with a success
 	// exit code.
-	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
-		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
+	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag && !s.argument.CompareFlag {
+		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, --inspect, or --compare")
 	}
 
 	var sqlScript string
@@ -227,6 +232,12 @@ func (s *Shell) Run(ctx context.Context) error {
 	// --sql and the interactive/batch paths.
 	if s.argument.InspectFlag {
 		return s.runInspect(ctx)
+	}
+
+	// --compare is a non-interactive discovery path like --inspect: after import
+	// it prints the comparison report and exits.
+	if s.argument.CompareFlag {
+		return s.runCompare(ctx)
 	}
 
 	if err := s.validateSaveFlags(); err != nil {
@@ -370,7 +381,7 @@ func (s *Shell) disableHistory(err error) {
 // prompt: a terminal with no non-interactive action requested (--inspect,
 // --sql, --sql-file). Batch mode (non-TTY) and those flags are non-interactive.
 func (s *Shell) startsInteractiveShell() bool {
-	return s.isTTY() && !s.argument.InspectFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
+	return s.isTTY() && !s.argument.InspectFlag && !s.argument.CompareFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
 }
 
 // init store CSV data to in-memory DB and create table for sqly history.

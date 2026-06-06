@@ -25,6 +25,12 @@ var (
 // table unless --inspect-sample overrides it.
 const defaultInspectSample = 5
 
+// Compare output format values accepted by --compare-format.
+const (
+	compareFormatJSON = "json"
+	compareFormatText = "text"
+)
+
 // Output is configuration for output data to file.
 type Output struct {
 	// FilePath is output destination path
@@ -63,6 +69,19 @@ type Arg struct {
 	// 0 means schema-only (no sample rows), which keeps the report small for
 	// wide or multi-table sources.
 	InspectSample int
+	// CompareFlag, when true, runs the non-interactive compare workflow: it
+	// compares two imported tables (schema, row count, and—when CompareKey is
+	// set—keyed rows) and prints a report, then exits without the shell.
+	CompareFlag bool
+	// CompareKey, when non-empty, is the key column used for keyed row comparison
+	// in compare mode. Empty means schema and row-count comparison only.
+	CompareKey string
+	// CompareTables names the two tables to compare as "left,right". Empty means
+	// compare the two imported tables when exactly two exist.
+	CompareTables string
+	// CompareFormat selects the compare output format: "json" (default, the
+	// automation contract) or "text" (human-readable summary).
+	CompareFormat string
 	// SaveInPlace, when true, writes each table back over its source file after
 	// the run (for --save). It overwrites source files, so it requires Force.
 	SaveInPlace bool
@@ -182,6 +201,10 @@ func NewArg(args []string) (*Arg, error) {
 	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
 	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
 	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "rows to include per table in --inspect (0 for schema only)")
+	flag.BoolVar(&arg.CompareFlag, "compare", false, "compare two imported tables (schema, row count, and keyed rows) and print a report, then exit")
+	compareKey := flag.String("compare-key", "", "key column for keyed row comparison in --compare mode")
+	compareTables := flag.String("compare-tables", "", "the two tables to compare as \"left,right\" (default: the two imported tables)")
+	compareFormat := flag.String("compare-format", compareFormatJSON, "compare output format: json (default) or text")
 	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
 	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
 	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
@@ -233,6 +256,31 @@ func NewArg(args []string) (*Arg, error) {
 		return nil, errForceWithoutSave
 	}
 
+	// The compare sub-flags only shape --compare output, so they have no effect
+	// without --compare. Reject them when set alone instead of silently ignoring.
+	if !arg.CompareFlag {
+		switch {
+		case flag.Changed("compare-key"):
+			return nil, errCompareKeyWithoutCompare
+		case flag.Changed("compare-tables"):
+			return nil, errCompareTablesWithoutCompare
+		case flag.Changed("compare-format"):
+			return nil, errCompareFormatWithoutCompare
+		}
+	}
+	// Reject an explicit empty value for the compare string flags, matching the
+	// other flags whose empty string is the "flag absent" sentinel.
+	if flag.Changed("compare-key") && *compareKey == "" {
+		return nil, errEmptyCompareKey
+	}
+	if flag.Changed("compare-tables") && *compareTables == "" {
+		return nil, errEmptyCompareTables
+	}
+	// --compare-format accepts only the documented values.
+	if arg.CompareFlag && *compareFormat != compareFormatJSON && *compareFormat != compareFormatText {
+		return nil, fmt.Errorf("--compare-format must be \"json\" or \"text\", got %q", *compareFormat)
+	}
+
 	// Validate --stdin-name so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
 	// otherwise create odd hidden files or write outside the temp directory. Ref
@@ -261,6 +309,9 @@ func NewArg(args []string) (*Arg, error) {
 	arg.SQLFilePath = *sqlFile
 	arg.SaveDir = *saveDir
 	arg.InspectSample = *inspectSample
+	arg.CompareKey = *compareKey
+	arg.CompareTables = *compareTables
+	arg.CompareFormat = *compareFormat
 
 	return arg, nil
 }

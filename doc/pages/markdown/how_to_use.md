@@ -43,6 +43,10 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -o, --output string   destination path for SQL results specified in --sql option
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
       --inspect-sample int  rows to include per table in --inspect (0 for schema only) (default 5)
+      --compare             compare two imported tables (schema, row count, keyed rows) and print a report, then exit
+      --compare-key string  key column for keyed row comparison in --compare mode
+      --compare-tables string   the two tables to compare as "left,right" (default: the two imported tables)
+      --compare-format string   compare output format: json (default) or text
       --save                after the run, write each table back over its source file (requires --force)
       --save-dir string     after the run, write each table into this directory (originals untouched)
       --force               allow --save to overwrite source files in place
@@ -153,6 +157,17 @@ $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry
 ```
 
 Tables created by SQL, tables imported from a directory, and Excel sources are rejected for write-back with a clear error before anything is written, so a session is never partially saved.
+
+### Compare two datasets: --compare
+
+`--compare` diffs two imported tables from the command line without entering the shell. It reports schema differences (columns unique to each side and type changes) and a row-count delta. Add `--compare-key COL` to also diff rows by a key column into added, removed, and modified rows. JSON is the default automation contract; `--compare-format text` prints a human-readable summary.
+
+The two tables are the pair you import; use `--compare-tables "left,right"` to choose the pair explicitly, for example two sheets of one Excel file. Errors are explicit for a missing or non-unique key, a missing named table, or an import that did not produce exactly two tables.
+
+```shell
+$ sqly --compare --compare-key id revision1.csv revision2.csv
+$ sqly --compare --compare-format text revision1.csv revision2.csv
+```
 
 ### Batch mode: pipe commands via stdin
 

@@ -1,0 +1,52 @@
+#!/bin/sh
+# shellcheck shell=sh
+#
+# CLI-first compare workflow (issue #276). --compare diffs two imported tables at
+# the main command surface: schema, row count, and (with --compare-key) keyed
+# rows. JSON is the default automation contract; --compare-format text is the
+# human-readable option.
+
+Describe 'sqly --compare workflow'
+  Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
+
+  setup() {
+    WORKDIR=$(mktemp -d)
+    printf 'id,name,age\n1,Alice,30\n2,Bob,25\n3,Carol,40\n' > "$WORKDIR/rev1.csv"
+    printf 'id,name,age\n1,Alice,31\n2,Bob,25\n4,Dave,50\n' > "$WORKDIR/rev2.csv"
+  }
+  cleanup() {
+    rm -rf "$WORKDIR"
+  }
+  BeforeEach 'setup'
+  AfterEach 'cleanup'
+
+  It 'reports schema, row count, and keyed rows as JSON'
+    When run sqly --compare --compare-key id "$WORKDIR/rev1.csv" "$WORKDIR/rev2.csv"
+    The status should be success
+    The output should include '"equal": true'
+    The output should include '"delta": 0'
+    The output should include '"key": "id"'
+    # Carol removed, Dave added, Alice modified.
+    The output should include '"4"'
+    The output should include '"3"'
+  End
+
+  It 'emits a human-readable summary with --compare-format text'
+    When run sqly --compare --compare-key id --compare-format text "$WORKDIR/rev1.csv" "$WORKDIR/rev2.csv"
+    The status should be success
+    The output should include 'schema: identical'
+    The output should include '1 added, 1 removed, 1 modified'
+  End
+
+  It 'rejects a missing key column'
+    When run sqly --compare --compare-key nope "$WORKDIR/rev1.csv" "$WORKDIR/rev2.csv"
+    The status should be failure
+    The stderr should include 'compare key'
+  End
+
+  It 'rejects an ambiguous single-table compare'
+    When run sqly --compare "$WORKDIR/rev1.csv"
+    The status should be failure
+    The stderr should include 'exactly two tables'
+  End
+End

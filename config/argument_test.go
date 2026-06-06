@@ -149,6 +149,47 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("--compare sets the flag and accepts its sub-flags", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--compare", "--compare-key", "id", "--compare-tables", "a,b", "--compare-format", "text", "a.csv", "b.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !arg.CompareFlag {
+			t.Error("expected CompareFlag to be true")
+		}
+		if arg.CompareKey != "id" || arg.CompareTables != "a,b" || arg.CompareFormat != "text" {
+			t.Errorf("compare flags = %q/%q/%q, want id/a,b/text", arg.CompareKey, arg.CompareTables, arg.CompareFormat)
+		}
+	})
+
+	t.Run("compare sub-flags without --compare are rejected", func(t *testing.T) {
+		for _, a := range [][]string{
+			{"sqly", "--compare-key", "id"},
+			{"sqly", "--compare-tables", "a,b"},
+			{"sqly", "--compare-format", "text"},
+		} {
+			if _, err := NewArg(a); err == nil {
+				t.Errorf("expected error for %v without --compare", a)
+			}
+		}
+	})
+
+	t.Run("an invalid --compare-format is rejected", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--compare", "--compare-format", "yaml"}); err == nil {
+			t.Error("expected an error for an invalid --compare-format")
+		}
+	})
+
+	t.Run("--compare-format defaults to json", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--compare", "a.csv", "b.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if arg.CompareFormat != "json" {
+			t.Errorf("CompareFormat = %q, want json", arg.CompareFormat)
+		}
+	})
+
 	t.Run("user set --parquet option", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--parquet"})
 		if err != nil {
