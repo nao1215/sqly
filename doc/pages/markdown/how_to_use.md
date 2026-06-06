@@ -144,7 +144,15 @@ $ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force testdata/u
 
 In the interactive shell, `.save DIR` writes to a directory and `.save --force` overwrites the sources.
 
-The save flags apply after `--sql` and batch runs. Only tables that map one to one to a single csv, tsv, ltsv, or parquet source are written, and the source's compression (for example `.csv.gz`) is preserved. Tables created by SQL, tables imported from a directory, and multi-table sources (Excel, ACH, Fedwire) are rejected with a clear error before anything is written, so a session is never partially saved.
+The save flags apply after `--sql` and batch runs. Tables that map one to one to a single csv, tsv, ltsv, or parquet source are written individually, and the source's compression (for example `.csv.gz`) is preserved.
+
+ACH and Fedwire sources are reconstructed as a whole table set: their related tables (for ACH, the file-header, batches, and entries tables) are rewritten together into one valid `.ach`/`.fed` file. Write-back validates that the required companion tables are still present before writing and fails with an explicit error if the set is incomplete. Only in-place `UPDATE`s to existing rows are persisted; the native ACH/Fedwire format reconstruction does not support adding or removing records. The single-table `--output`/`.dump` path still rejects `.ach`/`.fed` because those formats need a coordinated record set.
+
+```shell
+$ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry_index = 0" --save --force payment.ach
+```
+
+Tables created by SQL, tables imported from a directory, and Excel sources are rejected for write-back with a clear error before anything is written, so a session is never partially saved.
 
 ### Batch mode: pipe commands via stdin
 

@@ -151,12 +151,20 @@ func (s *Shell) finishNonInteractive(ctx context.Context) error {
 	return nil
 }
 
-// writeTarget is a resolved write-back destination for one table.
+// writeTarget is a resolved write-back destination. For a tabular source it
+// maps one table to one file (format/comp set, setKind ""). For a native
+// financial source (ACH/Fedwire) it represents the whole table set reconstructed
+// into a single .ach/.fed file: setKind names the format, baseName is the filesql
+// registry key, and members lists every table in the set so their baselines can
+// be advanced after the write.
 type writeTarget struct {
-	table  string
-	dest   string
-	format model.ExportFormat
-	comp   model.Compression
+	table    string
+	dest     string
+	format   model.ExportFormat
+	comp     model.Compression
+	setKind  string
+	baseName string
+	members  []string
 }
 
 // writeBack persists the current tables to files. When destDir is empty the
@@ -206,9 +214,11 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 	}
 
 	// Count how many tables map to each source so multi-table sources (Excel,
-	// ACH/Fedwire) can be rejected.
+	// ACH/Fedwire) can be rejected, and index the table names for set validation.
 	tablesPerSource := make(map[string]int)
+	currentTables := make(map[string]bool, len(tables))
 	for _, t := range tables {
+		currentTables[t.Name()] = true
 		if src, ok := s.tableSources[t.Name()]; ok {
 			tablesPerSource[src]++
 		}
@@ -221,9 +231,40 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 	// at import, but a future rename could break that assumption).
 	plannedDest := make(map[string]string)
 
+	// First pass: native financial sources (ACH/Fedwire) are reconstructed from a
+	// complete table set into one file, so they are planned per source rather than
+	// per table. financialSetSources marks the sources handled here so the
+	// per-table pass below skips their member tables.
+	financialSetSources := make(map[string]bool)
+	for _, t := range tables {
+		source, ok := s.tableSources[t.Name()]
+		if !ok || financialSetSources[source] {
+			continue
+		}
+		format := model.FinancialWriteFormat(source)
+		if format == "" {
+			continue
+		}
+		financialSetSources[source] = true
+		tgt, problem, skip := s.planFinancialSet(ctx, source, format, currentTables, destDir, plannedDest, skipUnchanged)
+		switch {
+		case problem != "":
+			problems = append(problems, problem)
+		case skip:
+			// No member table changed; nothing to persist for this set.
+		default:
+			plannedDest[tgt.dest] = tgt.baseName
+			targets = append(targets, tgt)
+		}
+	}
+
 	for _, t := range tables {
 		name := t.Name()
 		source, ok := s.tableSources[name]
+		if ok && financialSetSources[source] {
+			// Handled as a whole-set financial target above.
+			continue
+		}
 		if !ok {
 			// A SQL-created scratch table has no source file, so it cannot be
 			// persisted. It is transient session state, not a dataset the user asked
@@ -298,6 +339,75 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 	return targets, nil
 }
 
+// planFinancialSet validates and resolves the write-back target for one native
+// financial source (ACH or Fedwire). It returns the target, or a problem string
+// describing why the set cannot be saved, or skip=true when no member table
+// changed and skipUnchanged is set. The required companion tables must all be
+// present, so a set left incomplete by a DROP is rejected with an explicit error
+// before any file is written, rather than producing a malformed .ach/.fed.
+func (s *Shell) planFinancialSet(ctx context.Context, source, format string, currentTables map[string]bool, destDir string, plannedDest map[string]string, skipUnchanged bool) (writeTarget, string, bool) {
+	base := s.usecases.importer.GetTableNameFromFilePath(source)
+	label := filepath.Base(source)
+
+	// Member tables: every currently present table imported from this source. Used
+	// to detect changes and to advance baselines after a successful write.
+	var members []string
+	for name, src := range s.tableSources {
+		if src == source && currentTables[name] {
+			members = append(members, name)
+		}
+	}
+
+	var required []string
+	switch format {
+	case model.FinancialFormatACH:
+		required = []string{base + "_file_header", base + "_batches", base + "_entries"}
+	case model.FinancialFormatFedWire:
+		required = []string{base + "_message"}
+	}
+	var missing []string
+	for _, r := range required {
+		if !currentTables[r] {
+			missing = append(missing, r)
+		}
+	}
+	if len(missing) > 0 {
+		return writeTarget{}, fmt.Sprintf("%s: incomplete %s set; missing required table(s) %s",
+			label, strings.ToUpper(format), strings.Join(missing, ", ")), false
+	}
+
+	if skipUnchanged {
+		changed := false
+		for _, m := range members {
+			if s.tableChanged(ctx, m) {
+				changed = true
+				break
+			}
+		}
+		if !changed {
+			return writeTarget{}, "", true
+		}
+	}
+
+	dest := source
+	if destDir != "" {
+		dest = filepath.Join(destDir, label)
+		if sameFilePath(dest, source) {
+			return writeTarget{}, fmt.Sprintf("%s: --save-dir destination %s is the source file; use --save --force to overwrite it in place", label, dest), false
+		}
+		if info, statErr := os.Stat(dest); statErr == nil {
+			if info.IsDir() {
+				return writeTarget{}, fmt.Sprintf("%s: destination %s is an existing directory", label, dest), false
+			}
+			return writeTarget{}, fmt.Sprintf("%s: destination %s already exists; remove it or choose another --save-dir", label, dest), false
+		}
+	}
+	if prev, ok := plannedDest[dest]; ok {
+		return writeTarget{}, fmt.Sprintf("%s: destination %s collides with %s", label, dest, prev), false
+	}
+	return writeTarget{table: base, dest: dest, setKind: format, baseName: base, members: members}, "", false
+}
+
 // executeWriteBack writes the planned targets to disk. Callers run planWriteBack
 // first, so by this point every target has been validated.
 func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []writeTarget) error {
@@ -308,6 +418,12 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	}
 
 	for _, tgt := range targets {
+		if tgt.setKind != "" {
+			if err := s.writeFinancialSet(ctx, tgt); err != nil {
+				return err
+			}
+			continue
+		}
 		table, err := s.usecases.metadata.List(ctx, tgt.table)
 		if err != nil {
 			return fmt.Errorf("failed to read table %s: %w", tgt.table, err)
@@ -323,6 +439,29 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 		// output and goes to stderr so stdout stays free of non-data noise.
 		fmt.Fprintf(config.Stderr, "Saved %s to %s\n", tgt.table, tgt.dest)
 	}
+	return nil
+}
+
+// writeFinancialSet reconstructs one ACH/Fedwire file from its table set and
+// advances the baseline of every member table so a later .save in the same
+// session does not rewrite an unchanged file.
+func (s *Shell) writeFinancialSet(ctx context.Context, tgt writeTarget) error {
+	var err error
+	switch tgt.setKind {
+	case model.FinancialFormatACH:
+		err = s.usecases.importer.DumpACHFile(ctx, tgt.baseName, tgt.dest)
+	case model.FinancialFormatFedWire:
+		err = s.usecases.importer.DumpFedWireFile(ctx, tgt.baseName, tgt.dest)
+	default:
+		return fmt.Errorf("unknown financial set kind %q", tgt.setKind)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to save %s set %s to %s: %w", strings.ToUpper(tgt.setKind), tgt.baseName, tgt.dest, err)
+	}
+	for _, m := range tgt.members {
+		s.snapshotBaseline(ctx, m)
+	}
+	fmt.Fprintf(config.Stderr, "Saved %s set %s to %s\n", strings.ToUpper(tgt.setKind), tgt.baseName, tgt.dest)
 	return nil
 }
 

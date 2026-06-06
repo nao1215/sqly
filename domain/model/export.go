@@ -299,19 +299,47 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 	return base + comp.Extension()
 }
 
-// IsInputOnlyExtension reports whether a destination path targets an input-only
-// format that sqly can read but not write: ACH (.ach) and Fedwire (.fed), which
-// require multi-record coordination the export path cannot produce. All trailing
-// compression suffixes are stripped first, so a path that hides the extension
-// behind several codecs (".ach.gz.zst", ".fed.gz.zst") is detected too. It lets
-// --output and .dump reject these destinations instead of silently writing CSV
-// bytes to a misleading path.
+// IsInputOnlyExtension reports whether a destination path targets a format the
+// single-table export path cannot produce: ACH (.ach) and Fedwire (.fed). These
+// are reconstructed from a complete, related table set, not from one table, so
+// `--output` and `.dump` (which write a single table) reject them; the whole-set
+// `--save`/`--save-dir`/`.save` write-back path handles them instead. All
+// trailing compression suffixes are stripped first, so a path that hides the
+// extension behind several codecs (".ach.gz.zst", ".fed.gz.zst") is detected too.
 func IsInputOnlyExtension(path string) bool {
 	switch strings.ToLower(filepath.Ext(stripCompressionSuffixes(path))) {
 	case ".ach", ".fed":
 		return true
 	default:
 		return false
+	}
+}
+
+// Native financial write-back format names returned by FinancialWriteFormat.
+const (
+	// FinancialFormatACH identifies a NACHA ACH (.ach) destination.
+	FinancialFormatACH = "ach"
+	// FinancialFormatFedWire identifies a Fedwire (.fed) destination.
+	FinancialFormatFedWire = "fed"
+)
+
+// FinancialWriteFormat classifies a write-back destination path as the native
+// financial format sqly can reconstruct from a complete table set: ACH (.ach) or
+// Fedwire (.fed). It returns FinancialFormatACH, FinancialFormatFedWire, or "".
+// A compressed path (for example "payment.ach.gz") returns "" because the native
+// ACH/Fedwire writers emit a plain, uncompressed file; sqly does not round-trip a
+// compressed financial source.
+func FinancialWriteFormat(path string) string {
+	if _, ok := CompressionFromExtension(filepath.Ext(path)); ok {
+		return ""
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".ach":
+		return FinancialFormatACH
+	case ".fed":
+		return FinancialFormatFedWire
+	default:
+		return ""
 	}
 }
 

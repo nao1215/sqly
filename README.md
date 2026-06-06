@@ -327,7 +327,12 @@ $ sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir ./out testda
 --save/--save-dir cannot persist "CREATE TABLE backup AS SELECT * FROM user": ... only INSERT/UPDATE/DELETE on imported tables are saved
 ```
 
-Only tables mapping one-to-one to a single CSV, TSV, LTSV, or Parquet source can be written. Tables created by SQL, directory imports, and multi-table sources (Excel, ACH, Fedwire) are rejected with a clear error before anything is written.
+Tabular tables that map one-to-one to a single CSV, TSV, LTSV, or Parquet source are written individually. ACH and Fedwire sources are reconstructed as a whole: their related tables (for ACH, the file-header, batches, and entries tables) are rewritten together into one valid `.ach`/`.fed` file, and `--save`/`--save-dir` validate that the required companion tables are still present before writing, failing with an explicit error if the set is incomplete. ACH/Fedwire write-back persists in-place `UPDATE`s to existing rows; adding or removing records is not supported by the native format reconstruction. Tables created by SQL, directory imports, and Excel sources are still rejected for write-back with a clear error before anything is written.
+
+```shell
+$ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry_index = 0" --save --force payment.ach
+Saved ACH set payment to payment.ach
+```
 
 ## Directory import
 

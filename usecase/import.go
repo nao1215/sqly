@@ -27,4 +27,10 @@ type ImportUsecase interface {
 	QuoteIdentifier(identifier string) string
 	// GetTableNameFromFilePath derives a table name from a file path
 	GetTableNameFromFilePath(filePath string) string
+	// DumpACHFile reconstructs a complete ACH file at outputPath from the table set
+	// registered under baseName, reflecting any UPDATEs applied in the session.
+	DumpACHFile(ctx context.Context, baseName, outputPath string) error
+	// DumpFedWireFile reconstructs a complete Fedwire file at outputPath from the
+	// message table registered under baseName, reflecting any UPDATEs in the session.
+	DumpFedWireFile(ctx context.Context, baseName, outputPath string) error
 }
