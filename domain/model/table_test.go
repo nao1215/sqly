@@ -484,6 +484,101 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 	})
 }
 
+func TestTablePrintJSON_TypedScalars(t *testing.T) {
+	t.Parallel()
+
+	// In typed mode a cell that is a canonical JSON number is emitted as a native
+	// number (large integers verbatim, so no precision loss or scientific
+	// notation), "true"/"false" become native booleans, a SQL NULL becomes null,
+	// and everything else stays a JSON string.
+	header := Header{"i", "f", "b", "n", "empty", "big", "lead", "text"}
+	rec := Record{"42", "-1.5", "true", "", "", "123456789012345678901234567890", "007", "hello"}
+	tbl := NewTable("t", header, []Record{rec})
+	// Column 3 (n) is a SQL NULL; column 4 (empty) is a real empty string.
+	tbl.SetNulls([][]bool{{false, false, false, true, false, false, false, false}})
+	tbl.SetJSONTyped(true)
+
+	t.Run("typed json emits native scalars and keeps non-numbers as strings", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		if err := tbl.Print(out, PrintModeJSON); err != nil {
+			t.Fatal(err)
+		}
+		want := "[\n  {\"i\":42,\"f\":-1.5,\"b\":true,\"n\":null,\"empty\":\"\",\"big\":123456789012345678901234567890,\"lead\":\"007\",\"text\":\"hello\"}\n]\n"
+		if diff := cmp.Diff(out.String(), want); diff != "" {
+			t.Errorf("value is mismatch (-got +want):\n%s", diff)
+		}
+	})
+
+	t.Run("typed ndjson emits native scalars", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		if err := tbl.Print(out, PrintModeNDJSON); err != nil {
+			t.Fatal(err)
+		}
+		want := "{\"i\":42,\"f\":-1.5,\"b\":true,\"n\":null,\"empty\":\"\",\"big\":123456789012345678901234567890,\"lead\":\"007\",\"text\":\"hello\"}\n"
+		if diff := cmp.Diff(out.String(), want); diff != "" {
+			t.Errorf("value is mismatch (-got +want):\n%s", diff)
+		}
+	})
+
+	t.Run("default mode keeps the legacy string contract", func(t *testing.T) {
+		t.Parallel()
+		plain := NewTable("t", header, []Record{rec})
+		plain.SetNulls([][]bool{{false, false, false, true, false, false, false, false}})
+		out := &bytes.Buffer{}
+		if err := plain.Print(out, PrintModeJSON); err != nil {
+			t.Fatal(err)
+		}
+		want := "[\n  {\"i\":\"42\",\"f\":\"-1.5\",\"b\":\"true\",\"n\":null,\"empty\":\"\",\"big\":\"123456789012345678901234567890\",\"lead\":\"007\",\"text\":\"hello\"}\n]\n"
+		if diff := cmp.Diff(out.String(), want); diff != "" {
+			t.Errorf("value is mismatch (-got +want):\n%s", diff)
+		}
+	})
+}
+
+func TestIsCanonicalJSONNumber(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"0", true},
+		{"-0", true},
+		{"42", true},
+		{"-42", true},
+		{"3.14", true},
+		{"-3.14", true},
+		{"1e10", true},
+		{"1E10", true},
+		{"1.5e-3", true},
+		{"-2.0E+8", true},
+		{"123456789012345678901234567890", true},
+		{"", false},
+		{"007", false},
+		{"+1", false},
+		{"1.", false},
+		{".5", false},
+		{"1e", false},
+		{"1.2.3", false},
+		{"0x10", false},
+		{" 1", false},
+		{"1 ", false},
+		{"NaN", false},
+		{"Infinity", false},
+		{"-", false},
+		{"abc", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			t.Parallel()
+			if got := isCanonicalJSONNumber(tt.in); got != tt.want {
+				t.Errorf("isCanonicalJSONNumber(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTableEqual(t *testing.T) {
 	t.Parallel()
 

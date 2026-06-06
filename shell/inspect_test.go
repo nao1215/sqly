@@ -117,6 +117,70 @@ func TestInspect_SingleFile(t *testing.T) {
 	}
 }
 
+func TestInspect_TypedJSONSampleRows(t *testing.T) {
+	// --inspect --json-typed renders the report's sample rows with the typed
+	// contract: a numeric column decodes to a native number, not a string.
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\nBob,25\n")
+
+	shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--json-typed", csv})
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanup()
+
+	out := captureStdout(t, func() {
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	// Decode sample rows as any so the value types are observable.
+	var report struct {
+		Tables []struct {
+			SampleRows []map[string]any `json:"sample_rows"`
+		} `json:"tables"`
+	}
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("inspect output is not valid JSON: %v\n%s", err, out)
+	}
+	if len(report.Tables) != 1 || len(report.Tables[0].SampleRows) == 0 {
+		t.Fatalf("expected sample rows, got %s", out)
+	}
+	row := report.Tables[0].SampleRows[0]
+	if _, ok := row["age"].(float64); !ok {
+		t.Errorf("expected numeric age in typed sample, got %#v (%s)", row["age"], out)
+	}
+	if name, ok := row["name"].(string); !ok || name == "" {
+		t.Errorf("expected string name in typed sample, got %#v", row["name"])
+	}
+}
+
+func TestInspect_RejectsPlainJSONButAllowsTyped(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
+
+	// Plain --json adds nothing to --inspect (already JSON) and is rejected.
+	shellPlain, cleanupPlain, err := newShell(t, []string{"sqly", "--inspect", "--json", csv})
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanupPlain()
+	if err := shellPlain.Run(context.Background()); err == nil {
+		t.Error("expected --inspect --json to be rejected, got nil")
+	}
+
+	// --json-typed is the meaningful opt-in and must be accepted.
+	shellTyped, cleanupTyped, err := newShell(t, []string{"sqly", "--inspect", "--json-typed", csv})
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanupTyped()
+	if err := shellTyped.Run(context.Background()); err != nil {
+		t.Errorf("expected --inspect --json-typed to be accepted, got %v", err)
+	}
+}
+
 func TestInspect_SampleRowsAreLimited(t *testing.T) {
 	dir := t.TempDir()
 	// 10 rows; the sample must be capped below the row count.

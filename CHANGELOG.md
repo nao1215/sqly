@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [v0.24.0](https://github.com/nao1215/sqly/compare/v0.23.0...v0.24.0)
+
+### Features
+* Typed JSON Output Contract: `--json-typed` and `--ndjson-typed` (and the matching `.mode json-typed`/`.mode ndjson-typed`) opt query output into a typed contract that emits native JSON scalars instead of strings. A canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`; a large integer is preserved verbatim so it never regresses into scientific notation, while a value with a leading zero such as `007` stays a string. The default `--json`/`--ndjson` keep the legacy string contract for compatibility. `--inspect --json-typed` applies the same contract to the report's sample rows so the schema metadata and sample payloads agree.
+
 ## [v0.23.0](https://github.com/nao1215/sqly/compare/v0.22.0...v0.23.0) (2026-06-02)
 
 ### Bug Fixes

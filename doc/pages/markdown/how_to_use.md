@@ -6,6 +6,8 @@ Flags may appear before or after the file and directory arguments; `sqly --csv d
 
 sqly allows you to change the display mode of SQL results with options. By default, the output is in table format. The output format can be changed to csv (`--csv`), tsv (`--tsv`), ltsv (`--ltsv`), markdown (`--markdown`), json (`--json`), or ndjson (`--ndjson`). Excel (`--excel`) and Parquet (`--parquet`) are export-only: they render as csv on screen and write a file only through `.dump` or `--output`. Since the output mode can be changed while the sqly shell is running, it is easy to execute `sqly sample.csv` and then change settings or execute SQL queries within the sqly shell.
 
+For automation-friendly output, `--json-typed` and `--ndjson-typed` (or `.mode json-typed` / `.mode ndjson-typed` in the shell) emit native JSON scalars instead of strings: a canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`. A large integer stays lossless and never regresses into scientific notation, while a value with a leading zero such as `007` remains a string. The default `--json`/`--ndjson` keep the legacy string contract. Pair `--inspect` with `--json-typed` to apply the same contract to the report's sample rows.
+
 
 ### sqly options
 
@@ -31,6 +33,8 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -j, --json            change output format to json (default: table)
   -n, --ndjson          change output format to ndjson (default: table)
   -p, --parquet         export results as parquet (export-only; use with --output or .dump)
+      --json-typed      change output format to json with native scalars (numbers, booleans, nulls) instead of strings
+      --ndjson-typed    change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings
   -S, --sheet string    excel sheet name you want to import
       --stdin string    treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
       --stdin-name string   table name for the --stdin dataset (default "stdin")

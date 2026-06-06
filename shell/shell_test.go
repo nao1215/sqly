@@ -2183,6 +2183,61 @@ func TestShellExec_NDJSONModeSwitch(t *testing.T) {
 	}
 }
 
+func TestShellRun_TypedJSONOutputFromCLI(t *testing.T) {
+	// --json-typed renders numeric, boolean, and null values as native JSON
+	// scalars while keeping non-numeric strings as strings, and a large integer
+	// stays lossless (no scientific notation).
+	shell, cleanup, err := newShell(t, []string{
+		"sqly", "--json-typed",
+		"--sql", "SELECT 42 AS i, -1.5 AS f, 'hello' AS s, NULL AS n, '007' AS lead, 9223372036854775807 AS big",
+		filepath.Join("testdata", "actor.csv"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	got := getStdoutForRunFunc(t, shell.Run)
+	want := "[\n  {\"i\":42,\"f\":-1.5,\"s\":\"hello\",\"n\":null,\"lead\":\"007\",\"big\":9223372036854775807}\n]\n"
+	if string(got) != want {
+		t.Fatalf("typed json output mismatch:\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestShellExec_TypedJSONModeSwitch(t *testing.T) {
+	// .mode json-typed switches interactive query output into the typed contract.
+	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := getExecStdOutput(t, shell.exec, ".mode json-typed"); err != nil {
+		t.Fatalf(".mode json-typed failed: %v", err)
+	}
+
+	out, err := getExecStdOutput(t, shell.exec, "SELECT 7 AS n, 'x' AS s")
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(out, &rows); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, out)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1: %s", len(rows), out)
+	}
+	if n, ok := rows[0]["n"].(float64); !ok || n != 7 {
+		t.Fatalf("expected numeric n=7, got %#v", rows[0]["n"])
+	}
+	if s, ok := rows[0]["s"].(string); !ok || s != "x" {
+		t.Fatalf("expected string s=x, got %#v", rows[0]["s"])
+	}
+}
+
 func TestShellExec_SchemaAndDescribe(t *testing.T) {
 	// Regression for: schema inspection commands over an imported CSV.
 	newImportedShell := func(t *testing.T) (*Shell, func()) {

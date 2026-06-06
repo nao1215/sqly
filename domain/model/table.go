@@ -135,6 +135,13 @@ type Table struct {
 	// NULL is emitted as JSON null. nil means "no NULL information"; text formats
 	// ignore it and render every cell as a string.
 	nulls [][]bool
+	// jsonTyped opts JSON/NDJSON output into the typed contract: a cell that is a
+	// canonical JSON number is emitted as a native number, "true"/"false" as a
+	// native boolean, and everything else as a JSON string. It is false by
+	// default so the legacy string contract stays the default; only the explicit
+	// opt-in (--json-typed/--ndjson-typed or .mode json-typed/ndjson-typed) turns
+	// it on. Other output formats ignore it.
+	jsonTyped bool
 }
 
 // NewTable create new Table.
@@ -155,6 +162,16 @@ func NewTable(
 // rather than an empty string. Other output formats ignore it.
 func (t *Table) SetNulls(nulls [][]bool) {
 	t.nulls = nulls
+}
+
+// SetJSONTyped opts JSON and NDJSON output into the typed contract, where a cell
+// that is a canonical JSON number is emitted as a native number (large integers
+// verbatim, so no precision loss or scientific notation), "true"/"false" as a
+// native boolean, a SQL NULL as null, and every other value as a JSON string.
+// It has no effect on non-JSON output formats. The default (false) preserves the
+// legacy contract that emits every non-NULL value as a string.
+func (t *Table) SetJSONTyped(typed bool) {
+	t.jsonTyped = typed
 }
 
 // isNull reports whether the cell at (row, col) is a known SQL NULL.
@@ -515,7 +532,12 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 		if i < len(record) {
 			val = record[i]
 		}
-		value, err := json.Marshal(val)
+		var value []byte
+		if t.jsonTyped {
+			value, err = jsonScalarToken(val)
+		} else {
+			value, err = json.Marshal(val)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode value for column %q: %w", h, err)
 		}
@@ -523,6 +545,83 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	}
 	b.WriteByte('}')
 	return b.Bytes(), nil
+}
+
+// JSON boolean literals recognized by the typed output contract.
+const (
+	jsonLiteralTrue  = "true"
+	jsonLiteralFalse = "false"
+)
+
+// jsonScalarToken returns the JSON token for a cell value in typed output mode.
+// A value that is a canonical JSON number is emitted verbatim, so a large integer
+// stays lossless and never regresses into scientific notation; the JSON literals
+// "true" and "false" become native booleans; everything else is emitted as a JSON
+// string. A SQL NULL is handled by the caller before this is reached.
+func jsonScalarToken(s string) ([]byte, error) {
+	if s == jsonLiteralTrue || s == jsonLiteralFalse {
+		return []byte(s), nil
+	}
+	if isCanonicalJSONNumber(s) {
+		return []byte(s), nil
+	}
+	return json.Marshal(s)
+}
+
+// isCanonicalJSONNumber reports whether s is a number in the exact JSON grammar
+// (RFC 8259): an optional leading minus, an integer part with no redundant
+// leading zero, an optional fraction, and an optional exponent. Emitting only
+// such strings verbatim as JSON numbers keeps the output valid while preserving
+// the original digits, so "007" stays a string and a 30-digit integer is not
+// rounded. Values like "+1", "1.", ".5", "1e", "NaN", or surrounding spaces are
+// rejected and fall back to a JSON string.
+func isCanonicalJSONNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	i, n := 0, len(s)
+	if s[i] == '-' {
+		i++
+		if i == n {
+			return false
+		}
+	}
+	// Integer part: a single "0", or a non-zero digit followed by more digits.
+	switch {
+	case s[i] == '0':
+		i++
+	case s[i] >= '1' && s[i] <= '9':
+		i++
+		for i < n && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	default:
+		return false
+	}
+	// Optional fraction.
+	if i < n && s[i] == '.' {
+		i++
+		if i >= n || s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		for i < n && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	// Optional exponent.
+	if i < n && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < n && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		if i >= n || s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		for i < n && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	return i == n
 }
 
 // duplicateColumnName returns the first column name that appears more than once
