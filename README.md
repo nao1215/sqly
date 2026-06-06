@@ -334,6 +334,23 @@ $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry
 Saved ACH set payment to payment.ach
 ```
 
+## Compare two datasets: --compare
+
+`--compare` diffs two imported tables from the command line, without entering the shell. It reports schema differences (columns unique to each side and type changes) and a row-count delta; add `--compare-key COL` to also diff rows by a key column into added, removed, and modified rows. JSON is the default automation contract; `--compare-format text` prints a human-readable summary.
+
+The two tables are the pair you import; use `--compare-tables "left,right"` to choose the pair explicitly (for example two sheets of one Excel file). Errors are explicit for a missing or non-unique key, a missing named table, or an import that did not produce exactly two tables.
+
+```shell
+$ sqly --compare --compare-key id revision1.csv revision2.csv
+{
+  "left": "revision1",
+  "right": "revision2",
+  "schema": { "equal": true, "left_only_columns": null, "right_only_columns": null, "type_changes": [] },
+  "row_count": { "left": 3, "right": 3, "delta": 0 },
+  "rows": { "key": "id", "added": [ ... ], "removed": [ ... ], "modified": [ ... ] }
+}
+```
+
 ## Directory import
 
 A directory argument imports every supported file under it recursively, and you can mix files and directories.

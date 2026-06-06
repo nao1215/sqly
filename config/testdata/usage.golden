@@ -18,29 +18,33 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
     cat data.csv | sqly --stdin csv --sql-file query.sql
 
 [OPTIONS]
-  -c, --csv                  change output format to csv (default: table)
-  -e, --excel                change output format to excel (default: table)
-  -l, --ltsv                 change output format to ltsv (default: table)
-  -m, --markdown             change output format to markdown table (default: table)
-  -t, --tsv                  change output format to tsv (default: table)
-  -j, --json                 change output format to json (default: table)
-  -n, --ndjson               change output format to ndjson (default: table)
-  -p, --parquet              export results as parquet (export-only; use with --output or .dump)
-      --json-typed           change output format to json with native scalars (numbers, booleans, nulls) instead of strings
-      --ndjson-typed         change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings
-  -S, --sheet string         excel sheet name you want to import
-      --stdin string         treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
-      --stdin-name string    table name for the --stdin dataset (default "stdin")
-  -s, --sql string           sql query you want to execute
-  -f, --sql-file string      path to a file with SQL to execute (multiline; cannot be used with --sql)
-  -o, --output string        destination path for SQL results specified in --sql option
-  -i, --inspect              print a JSON report of imported tables (schema, row counts, sample rows) and exit
-      --inspect-sample int   rows to include per table in --inspect (0 for schema only) (default 5)
-      --save                 after the run, write each table back over its source file (requires --force)
-      --save-dir string      after the run, write each table into this directory (originals untouched)
-      --force                allow --save to overwrite source files in place
-  -h, --help                 print help message
-  -v, --version              print sqly version
+  -c, --csv                     change output format to csv (default: table)
+  -e, --excel                   change output format to excel (default: table)
+  -l, --ltsv                    change output format to ltsv (default: table)
+  -m, --markdown                change output format to markdown table (default: table)
+  -t, --tsv                     change output format to tsv (default: table)
+  -j, --json                    change output format to json (default: table)
+  -n, --ndjson                  change output format to ndjson (default: table)
+  -p, --parquet                 export results as parquet (export-only; use with --output or .dump)
+      --json-typed              change output format to json with native scalars (numbers, booleans, nulls) instead of strings
+      --ndjson-typed            change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings
+  -S, --sheet string            excel sheet name you want to import
+      --stdin string            treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
+      --stdin-name string       table name for the --stdin dataset (default "stdin")
+  -s, --sql string              sql query you want to execute
+  -f, --sql-file string         path to a file with SQL to execute (multiline; cannot be used with --sql)
+  -o, --output string           destination path for SQL results specified in --sql option
+  -i, --inspect                 print a JSON report of imported tables (schema, row counts, sample rows) and exit
+      --inspect-sample int      rows to include per table in --inspect (0 for schema only) (default 5)
+      --compare                 compare two imported tables (schema, row count, and keyed rows) and print a report, then exit
+      --compare-key string      key column for keyed row comparison in --compare mode
+      --compare-tables string   the two tables to compare as "left,right" (default: the two imported tables)
+      --compare-format string   compare output format: json (default) or text (default "json")
+      --save                    after the run, write each table back over its source file (requires --force)
+      --save-dir string         after the run, write each table into this directory (originals untouched)
+      --force                   allow --save to overwrite source files in place
+  -h, --help                    print help message
+  -v, --version                 print sqly version
 
 [LICENSE]
   MIT LICENSE - Copyright (c) 2022 CHIKAMATSU Naohiro
