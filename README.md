@@ -334,6 +334,17 @@ $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry
 Saved ACH set payment to payment.ach
 ```
 
+## Reuse imports: --cache
+
+For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run with unchanged inputs reloads from the snapshot instead of re-parsing the source files, which is much faster for big CSVs. The cache key is each input's path, size, and modification time, so it invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning rather than failing the query.
+
+```shell
+$ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # cold: parses and snapshots
+$ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # warm: reloads the snapshot
+```
+
+Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs.
+
 ## Profile data quality: --profile
 
 `--profile` prints a machine-readable data-quality report for every imported table, so you can understand unfamiliar data before writing SQL. For each table it reports row and column counts and, per column, null and blank counts, distinct and numeric counts, and safe warnings: a mix of numeric and non-numeric values, null-like placeholder text (`NULL`, `N/A`, ...), and leading or trailing whitespace. JSON is the default; `--profile-format text` prints a human-readable summary. It works for files, directories, stdin datasets, and multi-table imports.

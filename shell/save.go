@@ -449,9 +449,9 @@ func (s *Shell) writeFinancialSet(ctx context.Context, tgt writeTarget) error {
 	var err error
 	switch tgt.setKind {
 	case model.FinancialFormatACH:
-		err = s.usecases.importer.DumpACHFile(ctx, tgt.baseName, tgt.dest)
+		err = s.usecases.persistence.DumpACHFile(ctx, tgt.baseName, tgt.dest)
 	case model.FinancialFormatFedWire:
-		err = s.usecases.importer.DumpFedWireFile(ctx, tgt.baseName, tgt.dest)
+		err = s.usecases.persistence.DumpFedWireFile(ctx, tgt.baseName, tgt.dest)
 	default:
 		return fmt.Errorf("unknown financial set kind %q", tgt.setKind)
 	}

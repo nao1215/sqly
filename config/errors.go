@@ -60,3 +60,10 @@ var (
 // errProfileFormatWithoutProfile is returned when --profile-format is set without
 // --profile, so the dependent flag is not silently ignored.
 var errProfileFormatWithoutProfile = errors.New("--profile-format has no effect without --profile")
+
+// errEmptyCache is returned when --cache is given an explicit empty value, and
+// errCacheClearWithoutCache when --cache-clear is set without --cache.
+var (
+	errEmptyCache             = errors.New("--cache requires a non-empty cache file path")
+	errCacheClearWithoutCache = errors.New("--cache-clear has no effect without --cache")
+)

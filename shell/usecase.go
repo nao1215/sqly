@@ -10,12 +10,14 @@ import "github.com/nao1215/sqly/usecase"
 //   - metadata (MetadataUsecase): table listing, header, and record inspection
 //   - history (HistoryUsecase): command history management
 //   - export (ExportUsecase): table export to various file formats
+//   - persistence (PersistenceUsecase): native ACH/Fedwire write-back and import cache
 type Usecases struct {
-	query    usecase.QueryUsecase
-	importer usecase.ImportUsecase
-	metadata usecase.MetadataUsecase
-	history  usecase.HistoryUsecase
-	export   usecase.ExportUsecase
+	query       usecase.QueryUsecase
+	importer    usecase.ImportUsecase
+	metadata    usecase.MetadataUsecase
+	history     usecase.HistoryUsecase
+	export      usecase.ExportUsecase
+	persistence usecase.PersistenceUsecase
 }
 
 // NewUsecases return Usecases with all required usecase dependencies.
@@ -25,12 +27,14 @@ func NewUsecases(
 	metadata usecase.MetadataUsecase,
 	history usecase.HistoryUsecase,
 	export usecase.ExportUsecase,
+	persistence usecase.PersistenceUsecase,
 ) Usecases {
 	return Usecases{
-		query:    query,
-		importer: importer,
-		metadata: metadata,
-		history:  history,
-		export:   export,
+		query:       query,
+		importer:    importer,
+		metadata:    metadata,
+		history:     history,
+		export:      export,
+		persistence: persistence,
 	}
 }

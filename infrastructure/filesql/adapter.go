@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -198,6 +199,93 @@ func (f *FileSQLAdapter) DumpFedWireFile(ctx context.Context, baseName, outputPa
 		return errors.New(errDatabaseNotInit)
 	}
 	return filesql.DumpFedWire(ctx, f.sharedDB, baseName, outputPath)
+}
+
+// SnapshotToCache writes the current session tables to cachePath as a standalone
+// SQLite database, so a later run can reload them without re-parsing the source
+// files. It uses SQLite's VACUUM INTO, which requires the destination not to
+// exist, so any previous cache at cachePath is removed first. The schema and
+// data of every table are preserved exactly.
+func (f *FileSQLAdapter) SnapshotToCache(ctx context.Context, cachePath string) error {
+	if f.sharedDB == nil {
+		return errors.New(errDatabaseNotInit)
+	}
+	if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove stale cache %q: %w", cachePath, err)
+	}
+	// VACUUM INTO takes a string literal, not a bind parameter; the path is
+	// single-quote-escaped via escapeSQLiteLiteral so it cannot break out of the
+	// literal.
+	//nolint:gosec // path is escaped into a SQLite string literal; VACUUM INTO has no parameter form
+	if _, err := f.sharedDB.ExecContext(ctx, "VACUUM INTO '"+escapeSQLiteLiteral(cachePath)+"'"); err != nil {
+		return fmt.Errorf("write cache %q: %w", cachePath, err)
+	}
+	return nil
+}
+
+// LoadFromCache populates the session database from a cache previously written by
+// SnapshotToCache. It attaches the cache file, recreates each user table with its
+// stored schema, and bulk-copies the rows from the attached database, which is
+// far faster than re-parsing large source files. The cache is always detached
+// before returning. A failure leaves the caller free to fall back to a cold
+// import.
+func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) (err error) {
+	if f.sharedDB == nil {
+		return errors.New(errDatabaseNotInit)
+	}
+	if _, statErr := os.Stat(cachePath); statErr != nil {
+		return fmt.Errorf("cache %q is unavailable: %w", cachePath, statErr)
+	}
+	if _, err = f.sharedDB.ExecContext(ctx, "ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS sqly_cache"); err != nil {
+		return fmt.Errorf("attach cache %q: %w", cachePath, err)
+	}
+	defer func() {
+		if _, derr := f.sharedDB.ExecContext(ctx, "DETACH DATABASE sqly_cache"); derr != nil && err == nil {
+			err = fmt.Errorf("detach cache %q: %w", cachePath, derr)
+		}
+	}()
+
+	rows, err := f.sharedDB.QueryContext(ctx,
+		"SELECT name, sql FROM sqly_cache.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+	if err != nil {
+		return fmt.Errorf("read cache schema: %w", err)
+	}
+	type cachedTable struct{ name, ddl string }
+	var tables []cachedTable
+	for rows.Next() {
+		var t cachedTable
+		if scanErr := rows.Scan(&t.name, &t.ddl); scanErr != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan cache schema: %w", scanErr)
+		}
+		tables = append(tables, t)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate cache schema: %w", rowsErr)
+	}
+	_ = rows.Close()
+	if len(tables) == 0 {
+		return errors.New("cache contains no tables")
+	}
+
+	for _, t := range tables {
+		quoted := QuoteIdentifier(t.name)
+		if _, err = f.sharedDB.ExecContext(ctx, t.ddl); err != nil {
+			return fmt.Errorf("recreate cached table %q: %w", t.name, err)
+		}
+		if _, err = f.sharedDB.ExecContext(ctx,
+			fmt.Sprintf("INSERT INTO %s SELECT * FROM sqly_cache.%s", quoted, quoted)); err != nil {
+			return fmt.Errorf("copy cached table %q: %w", t.name, err)
+		}
+	}
+	return nil
+}
+
+// escapeSQLiteLiteral doubles single quotes so a path can be embedded safely in a
+// SQLite string literal (VACUUM INTO and ATTACH take a literal, not a parameter).
+func escapeSQLiteLiteral(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 // Query executes SQL query and returns Table model
