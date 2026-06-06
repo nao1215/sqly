@@ -64,7 +64,7 @@ func (s *Shell) validateInspectFlags() error {
 	case s.inspectTypedSample():
 		return nil
 	case s.argument.Output != nil && s.argument.Output.Mode != model.PrintModeTable:
-		return fmt.Errorf("--inspect cannot be combined with an output mode flag (--%s)", s.argument.Output.Mode.String())
+		return fmt.Errorf("--inspect cannot be combined with an output mode flag (--%s)", outputModeFlagName(s.argument.Output))
 	}
 	return nil
 }

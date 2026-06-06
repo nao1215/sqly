@@ -135,6 +135,34 @@ func TestCache_ClearForcesRebuild(t *testing.T) {
 	}
 }
 
+func TestContainsInputOnlyFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	plain := filepath.Join(dir, "data.csv")
+	if err := os.WriteFile(plain, []byte("a\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if containsInputOnlyFile(plain) {
+		t.Error("a plain CSV must not be input-only")
+	}
+
+	// A directory containing an ACH file must be detected so caching is skipped.
+	sub := filepath.Join(dir, "mixed")
+	if err := os.Mkdir(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// The check is extension-based, so a stub .ach file is enough.
+	if err := os.WriteFile(filepath.Join(sub, "pay.ach"), []byte("stub"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "ok.csv"), []byte("a\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !containsInputOnlyFile(sub) {
+		t.Error("a directory containing an .ach file must be reported as input-only")
+	}
+}
+
 func TestCollectCacheSignatures_DirectoryAndChange(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

@@ -241,6 +241,13 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		if !ok || financialSetSources[source] {
 			continue
 		}
+		// A directory-imported table is not a single editable source the session
+		// owns, even when it happens to be ACH/Fedwire. Leave it for the per-table
+		// pass, which rejects directory imports with a clear error, instead of
+		// reconstructing a whole-set file the user did not point sqly at directly.
+		if s.dirImported[t.Name()] {
+			continue
+		}
 		format := model.FinancialWriteFormat(source)
 		if format == "" {
 			continue
