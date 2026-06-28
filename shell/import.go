@@ -185,7 +185,13 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			continue
 		}
 
-		cleanPath, err := validatePath(path)
+		expanded, err := expandTilde(path)
+		if err != nil {
+			errorMessages = append(errorMessages, fmt.Sprintf("invalid path %s: %v", path, err))
+			continue
+		}
+
+		cleanPath, err := validatePath(expanded)
 		if err != nil {
 			errorMessages = append(errorMessages, fmt.Sprintf("invalid path %s: %v", path, err))
 			continue

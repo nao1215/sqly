@@ -45,7 +45,13 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	if argv[0] == forceArg {
 		return s.writeBack(ctx, "")
 	}
-	return s.writeBack(ctx, argv[0])
+	// Expand a leading "~" so `.save ~/out` writes under the home directory
+	// instead of a literal "~" directory.
+	destDir, err := expandTilde(argv[0])
+	if err != nil {
+		return err
+	}
+	return s.writeBack(ctx, destDir)
 }
 
 // validateSaveFlags checks the --save/--save-dir/--force combination before any

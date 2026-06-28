@@ -17,7 +17,11 @@ func (c CommandList) cdCommand(_ context.Context, s *Shell, argv []string) error
 
 	var target string
 	if len(argv) == 1 {
-		target = argv[0]
+		expanded, err := expandTilde(argv[0])
+		if err != nil {
+			return err
+		}
+		target = expanded
 	} else {
 		// Resolve the home directory cross-platform. os.UserHomeDir reads
 		// %USERPROFILE% on Windows, where $HOME is usually unset.

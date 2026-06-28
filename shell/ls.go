@@ -26,7 +26,11 @@ func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error
 	}
 	path := "."
 	if len(argv) == 1 {
-		path = argv[0]
+		expanded, err := expandTilde(argv[0])
+		if err != nil {
+			return err
+		}
+		path = expanded
 	}
 
 	info, err := os.Stat(path)

@@ -353,6 +353,39 @@ func TestCommandList_cdCommand_StoresAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestCommandList_cdCommand_ExpandsTilde(t *testing.T) {
+	// Regression for: .cd ~ must expand to the home directory instead of
+	// passing a literal "~" to os.Chdir.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("cannot resolve home directory: %v", err)
+	}
+
+	// cdCommand calls os.Chdir directly, mutating the process working directory.
+	// Anchor to a temp dir so t.Chdir restores the original cwd after the test,
+	// keeping other tests' relative testdata/ paths valid.
+	t.Chdir(t.TempDir())
+
+	shell := newBoundaryTestShell(t, Usecases{})
+	commandList := NewCommands()
+
+	if err := commandList.cdCommand(context.Background(), shell, []string{"~"}); err != nil {
+		t.Fatalf("cdCommand(~) returned error: %v", err)
+	}
+
+	wantResolved, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotResolved, err := filepath.EvalSymlinks(shell.state.cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotResolved != wantResolved {
+		t.Fatalf("state.cwd resolved = %q, want home %q", gotResolved, wantResolved)
+	}
+}
+
 func TestShell_getFilePathCompletions_errorHandling(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
