@@ -232,6 +232,61 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 	})
 }
 
+func TestCompletionHiddenPaths(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		".secret/data.csv",
+		".secret/sub/",
+		".secret/sub/nested.csv",
+		"visible.csv",
+	})
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	t.Run("hidden directory is omitted by default", func(t *testing.T) {
+		got := completionTexts(shell.getFilePathCompletions(""))
+		if slices.Contains(got, ".secret/") {
+			t.Errorf("hidden directory should not be suggested by default, got %v", got)
+		}
+	})
+
+	t.Run("explicitly typed hidden prefix offers the hidden directory", func(t *testing.T) {
+		got := completionTexts(shell.getFilePathCompletions(".s"))
+		if !slices.Contains(got, ".secret/") {
+			t.Errorf("expected .secret/ for prefix \".s\", got %v", got)
+		}
+	})
+
+	t.Run("descending into a hidden directory lists its files", func(t *testing.T) {
+		got := completionTexts(shell.getFilePathCompletions(".secret/"))
+		if !slices.Contains(got, ".secret/data.csv") {
+			t.Errorf("expected .secret/data.csv, got %v", got)
+		}
+		if !slices.Contains(got, ".secret/sub/") {
+			t.Errorf("expected nested directory .secret/sub/, got %v", got)
+		}
+	})
+
+	t.Run("descending into a hidden subdirectory lists its files", func(t *testing.T) {
+		got := completionTexts(shell.getFilePathCompletions(".secret/sub/"))
+		if !slices.Contains(got, ".secret/sub/nested.csv") {
+			t.Errorf("expected .secret/sub/nested.csv, got %v", got)
+		}
+	})
+}
+
 func TestCompletionInsideQuotedPath(t *testing.T) {
 	// Note: cannot use t.Parallel() with t.Chdir().
 	tmpDir := t.TempDir()
