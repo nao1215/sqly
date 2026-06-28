@@ -448,6 +448,10 @@ func usage(flag pflag.FlagSet) string {
 	s += "[Usage]\n"
 	s += fmt.Sprintf("  %s [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]\n", color.GreenString("sqly"))
 	s += "\n"
+	s += "  sqly is flag-driven and has no subcommands: use --help and --version,\n"
+	s += "  not \"sqly help\" or \"sqly version\". Helper commands like .tables and\n"
+	s += "  .import run inside the shell or batch stdin mode, not as arguments.\n"
+	s += "\n"
 	s += "[Example]\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run sqly shell"))
 	s += "    sqly\n"

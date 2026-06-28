@@ -3,6 +3,10 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
 [Usage]
   sqly [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]
 
+  sqly is flag-driven and has no subcommands: use --help and --version,
+  not "sqly help" or "sqly version". Helper commands like .tables and
+  .import run inside the shell or batch stdin mode, not as arguments.
+
 [Example]
   - run sqly shell
     sqly

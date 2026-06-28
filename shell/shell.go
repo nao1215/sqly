@@ -176,6 +176,14 @@ func (s *Shell) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// sqly is flag-driven and has no subcommands, so a common first try like
+	// "sqly help" or "sqly version" is otherwise parsed as an input path and fails
+	// with a confusing "path does not exist" import error. Detect that exact
+	// accidental form and point the user at the right flag instead.
+	if hint, ok := positionalSubcommandHint(s.argument.FilePaths); ok {
+		return errors.New(hint)
+	}
+
 	// --sheet only affects Excel imports; reject it up front when no input can
 	// be an Excel file so a typo is not silently ignored.
 	if err := s.validateSheetFlag(); err != nil {
@@ -440,6 +448,32 @@ func (s *Shell) disableHistory(err error) {
 // --sql, --sql-file). Batch mode (non-TTY) and those flags are non-interactive.
 func (s *Shell) startsInteractiveShell() bool {
 	return s.isTTY() && !s.argument.InspectFlag && !s.argument.CompareFlag && !s.argument.ProfileFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
+}
+
+// positionalSubcommandHint reports whether the first positional argument is the
+// accidental subcommand form "help" or "version" (the flags are --help and
+// --version) and returns a correcting hint. Why check os.Stat: a real file or
+// directory actually named "help"/"version" should still import, so the hint
+// fires only when no such path exists. The match is case-insensitive to also
+// catch "HELP"/"Version".
+func positionalSubcommandHint(paths []string) (string, bool) {
+	if len(paths) == 0 {
+		return "", false
+	}
+	first := paths[0]
+	var flag string
+	switch strings.ToLower(first) {
+	case "help":
+		flag = "--help"
+	case "version":
+		flag = "--version"
+	default:
+		return "", false
+	}
+	if _, err := os.Stat(first); err == nil {
+		return "", false // a real path with that name wins
+	}
+	return fmt.Sprintf("sqly is flag-driven and has no subcommands; use %q. Run \"sqly --help\" for usage. Helper commands like .tables and .import run inside the shell or batch stdin.", flag), true
 }
 
 // reportOnly reports whether the run is a non-interactive report mode

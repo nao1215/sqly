@@ -2895,6 +2895,59 @@ func TestShellRun_SQLFileRejectsPipedStdin(t *testing.T) {
 	}
 }
 
+func TestPositionalSubcommandHint(t *testing.T) {
+	t.Run("help with no such file suggests --help", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		hint, ok := positionalSubcommandHint([]string{"help"})
+		if !ok {
+			t.Fatal("expected a hint for 'help', got ok=false")
+		}
+		if !strings.Contains(hint, "--help") {
+			t.Errorf("hint = %q, want it to suggest --help", hint)
+		}
+	})
+
+	t.Run("version with no such file suggests --version", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		hint, ok := positionalSubcommandHint([]string{"version"})
+		if !ok {
+			t.Fatal("expected a hint for 'version', got ok=false")
+		}
+		if !strings.Contains(hint, "--version") {
+			t.Errorf("hint = %q, want it to suggest --version", hint)
+		}
+	})
+
+	t.Run("the match is case-insensitive", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		if _, ok := positionalSubcommandHint([]string{"HELP"}); !ok {
+			t.Error("expected a hint for 'HELP'")
+		}
+	})
+
+	t.Run("a real file named help is treated as a path", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		if err := os.WriteFile("help", []byte("a\n1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := positionalSubcommandHint([]string{"help"}); ok {
+			t.Error("a real file named 'help' should win over the subcommand hint")
+		}
+	})
+
+	t.Run("a normal file argument returns false", func(t *testing.T) {
+		if _, ok := positionalSubcommandHint([]string{"data.csv"}); ok {
+			t.Error("a normal file argument should not produce a hint")
+		}
+	})
+
+	t.Run("no arguments returns false", func(t *testing.T) {
+		if _, ok := positionalSubcommandHint(nil); ok {
+			t.Error("no arguments should not produce a hint")
+		}
+	})
+}
+
 func TestShellStdinImportErrorMessage(t *testing.T) {
 	t.Parallel()
 	const staged = "/tmp/sqly-stdin-85800075/stdin.csv"
