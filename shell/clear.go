@@ -14,7 +14,15 @@ import (
 // headless CI and ties behavior to platform binaries. config.Stdout is a
 // go-colorable writer, which translates these escapes to the Windows console
 // API, so a single sequence works across supported operating systems.
-func (c CommandList) clearCommand(_ context.Context, _ *Shell, _ []string) error {
+//
+// The escapes are emitted only in interactive (TTY) sessions. In batch mode
+// (piped stdin) the same stdout carries machine-readable payloads such as
+// --json/--csv, so writing control sequences there would corrupt the output;
+// .clear becomes a no-op instead.
+func (c CommandList) clearCommand(_ context.Context, s *Shell, _ []string) error {
+	if s != nil && s.isTTY != nil && !s.isTTY() {
+		return nil
+	}
 	fmt.Fprint(config.Stdout, "\x1b[H\x1b[2J\x1b[3J")
 	return nil
 }

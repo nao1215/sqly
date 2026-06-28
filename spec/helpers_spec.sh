@@ -21,14 +21,25 @@ Describe 'sqly shell helper commands'
   End
 
   Describe '.clear'
-    It 'clears the screen in-process without an external command'
-      clear_seq=$(printf '\033[H\033[2J\033[3J')
+    It 'emits no ANSI escapes to stdout in batch mode'
+      # Piped stdin is non-TTY batch mode, where stdout may carry
+      # machine-readable payloads. .clear must stay silent there.
       Data
         #|.clear
       End
       When run sqly
       The status should be success
-      The output should equal "$clear_seq"
+      The output should equal ''
+    End
+
+    It 'keeps --json stdout parseable when .clear precedes a query'
+      Data
+        #|.clear
+        #|SELECT 1 AS x;
+      End
+      When run sqly --json testdata/user.csv
+      The status should be success
+      The line 1 should equal '['
     End
   End
 

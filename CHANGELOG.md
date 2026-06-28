@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Batch-Safe Clear: `.clear` now emits its ANSI clear-screen escapes only in an interactive TTY session. In batch mode (piped stdin) it is a no-op, so machine-readable stdout such as `--json`, `--ndjson`, and `--csv` is no longer corrupted by control sequences.
 * Multi-line Interactive SQL: the shell now buffers a SQL statement across lines and submits on Enter only when it ends with `;`, so a typed or pasted multi-line statement (for example `SELECT ... UNION ALL SELECT ...;`) runs once instead of executing each line separately. Dot-commands stay single-line, and pressing Enter on a blank line force-runs a query typed without `;`.
 * Idempotent SQLite Driver Registration: `config.InitSQLite3()` now guards driver registration with a package-level `sync.Once` instead of a function-local one, so calling it more than once no longer panics with `sql: Register called twice for driver sqlite3`.
 * Prefix-Scoped Import Completion: `.import` tab completion now reads only the directory named by the typed path prefix instead of walking the whole working tree on every keystroke. Directories are offered with a trailing slash so the path can be completed one level at a time, keeping latency proportional to the targeted subtree rather than repository size.

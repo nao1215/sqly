@@ -39,7 +39,7 @@ func Test_clearCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("writes ANSI clear sequence to stdout in-process", func(t *testing.T) {
+	t.Run("writes ANSI clear sequence to stdout in an interactive TTY session", func(t *testing.T) {
 		// Regression for: .clear must clear the screen in-process via ANSI
 		// escapes instead of shelling out to clear/cls.
 		c := NewCommands()
@@ -49,11 +49,31 @@ func Test_clearCommand(t *testing.T) {
 		var buf bytes.Buffer
 		config.Stdout = &buf
 
-		if err := c[".clear"].execute(context.Background(), &Shell{}, []string{}); err != nil {
+		s := &Shell{isTTY: func() bool { return true }}
+		if err := c[".clear"].execute(context.Background(), s, []string{}); err != nil {
 			t.Fatalf("clear command returned error: %v", err)
 		}
 		if !strings.Contains(buf.String(), "\x1b[2J") {
 			t.Fatalf("clear output = %q, want it to contain the ANSI clear-screen escape", buf.String())
+		}
+	})
+
+	t.Run("emits nothing to stdout in non-TTY batch mode", func(t *testing.T) {
+		// Regression: in batch mode (piped stdin) stdout carries machine-readable
+		// payloads such as --json/--csv, so .clear must not inject ANSI escapes.
+		c := NewCommands()
+
+		backup := config.Stdout
+		defer func() { config.Stdout = backup }()
+		var buf bytes.Buffer
+		config.Stdout = &buf
+
+		s := &Shell{isTTY: func() bool { return false }}
+		if err := c[".clear"].execute(context.Background(), s, []string{}); err != nil {
+			t.Fatalf("clear command returned error: %v", err)
+		}
+		if buf.Len() != 0 {
+			t.Fatalf("clear output = %q, want no output in batch mode", buf.String())
 		}
 	})
 
