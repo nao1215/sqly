@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Quoted Import Completion: `.import` tab completion now works while typing a quoted path. After an opening quote (for example `.import "my`), completion matches the path fragment inside the quote and keeps it quoted, closing the quote on a file and leaving it open on a directory so the accepted command stays a single argument.
 * Home-Directory Expansion in Helpers: `.cd`, `.ls`, `.import`, `.dump`, and `.save` now expand a leading `~` (and `~/...`) to the user's home directory before running, so `.cd ~` and `.import ~/data.csv` work instead of failing on a literal `~`. Forms like `~user` or a `~` later in the path are left untouched.
 * Boundary-Safe Home Abbreviation: the prompt now replaces the home directory with `~` only when the working directory equals home or is a real descendant at a path-separator boundary. A sibling such as `/home/nao2` (or `C:\Users\nao-backup` on Windows) that merely shares a byte prefix with `/home/nao` is no longer rewritten into a misleading `~2`.
 * Strict Helper Argument Validation: `.pwd`, `.clear`, and `.exit` now reject unexpected trailing arguments with a clear error instead of ignoring them, matching the other helper commands. A typo such as `.exit now` no longer silently terminates a batch run with status 0.

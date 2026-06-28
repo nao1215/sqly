@@ -639,6 +639,13 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	if len(words) > 0 {
 		// If the line starts with .import, always provide file completions for the last argument
 		if len(words) >= 1 && words[0] == importCommand {
+			// When the in-progress word opens a quote (e.g. .import "my), complete
+			// the path fragment inside the quote and keep it quoted so the accepted
+			// command stays valid. This is the scenario that needs quoting in the
+			// first place: a path with spaces.
+			if quote, rawInner, ok := openQuotePrefix(currentWord); ok {
+				return s.getQuotedFilePathCompletions(rawInner, quote)
+			}
 			fileCompletions := s.getFilePathCompletions(currentWord)
 
 			// For new full-path completion behavior, return all files without filtering
@@ -1171,4 +1178,116 @@ func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
 		}
 	}
 	return suggestions
+}
+
+// openQuotePrefix reports whether word begins a still-open quoted argument (a
+// leading ' or ") with no matching closing quote yet. It returns the opening
+// quote rune and the raw text typed after it. Inside a double quote, a \" or \\
+// escape does not close the quote. A word whose quote is already closed is not
+// an in-progress quoted path, so ok is false.
+func openQuotePrefix(word string) (quote rune, rawInner string, ok bool) {
+	runes := []rune(word)
+	if len(runes) == 0 {
+		return 0, "", false
+	}
+	q := runes[0]
+	if q != '\'' && q != '"' {
+		return 0, "", false
+	}
+	for i := 1; i < len(runes); i++ {
+		if q == '"' && runes[i] == '\\' && i+1 < len(runes) {
+			if next := runes[i+1]; next == '"' || next == '\\' {
+				i++ // skip the escaped character
+				continue
+			}
+		}
+		if runes[i] == q {
+			return 0, "", false // the quote is closed; not an in-progress quoted word
+		}
+	}
+	return q, string(runes[1:]), true
+}
+
+// getQuotedFilePathCompletions returns importable-file and directory suggestions
+// for a path fragment typed inside an open quote. Each suggestion keeps the same
+// quote: a directory keeps the quote open (so the user descends one level at a
+// time) while a file closes it, so the accepted command parses back to a single
+// argument through splitArgs.
+func (s *Shell) getQuotedFilePathCompletions(rawInner string, quote rune) []Suggest {
+	inner := decodeQuotedPath(rawInner, quote)
+	readDir, base, partial := splitDecodedPrefix(inner)
+
+	entries, err := os.ReadDir(readDir)
+	if err != nil {
+		return nil
+	}
+
+	q := string(quote)
+	includeHidden := strings.HasPrefix(partial, ".")
+	var suggestions []Suggest
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") && !includeHidden {
+			continue
+		}
+		if !strings.HasPrefix(name, partial) {
+			continue
+		}
+		// Inside quotes the path is literal, so base and name need no escaping
+		// (filenames containing the quote character itself are not handled).
+		if entry.IsDir() {
+			suggestions = append(suggestions, Suggest{
+				Text:        q + base + name + "/",
+				Description: msgImportableDir,
+			})
+			continue
+		}
+		if s.isValidFileForCompletion(name) {
+			suggestions = append(suggestions, Suggest{
+				Text:        q + base + name + q,
+				Description: msgImportableFile,
+			})
+		}
+	}
+	return suggestions
+}
+
+// decodeQuotedPath decodes the raw text typed inside an open quote into the real
+// path. Single-quoted content is literal; double-quoted content unescapes \" and
+// \\, matching splitArgs.
+func decodeQuotedPath(s string, quote rune) string {
+	if quote != '"' {
+		return s
+	}
+	var b strings.Builder
+	runes := []rune(s)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\\' && i+1 < len(runes) {
+			if next := runes[i+1]; next == '"' || next == '\\' {
+				b.WriteRune(next)
+				i++
+				continue
+			}
+		}
+		b.WriteRune(runes[i])
+	}
+	return b.String()
+}
+
+// splitDecodedPrefix splits an already-decoded path fragment into the directory
+// to scan, the literal prefix to keep on each suggestion, and the partial entry
+// name to match. Both "/" and "\" are accepted as separators.
+func splitDecodedPrefix(p string) (readDir, base, partial string) {
+	idx := strings.LastIndexAny(p, `/\`)
+	if idx < 0 {
+		return ".", "", p
+	}
+	base = p[:idx+1]
+	partial = p[idx+1:]
+	readDir = filepath.FromSlash(strings.ReplaceAll(base, `\`, "/"))
+	if readDir == "" {
+		// A leading separator ("/foo") leaves base empty; scan the filesystem root.
+		readDir = string(os.PathSeparator)
+	}
+	return readDir, base, partial
 }
