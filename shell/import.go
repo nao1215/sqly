@@ -243,6 +243,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		return fmt.Errorf("sheet %q not found in any of the imported workbooks", sheetName)
 	}
 
+	// A successful import can change a table's columns without changing the
+	// table-name set (re-import), so drop the cached completion suggestions.
+	if successCount > 0 {
+		s.invalidateCompletionCache()
+	}
+
 	if len(errorMessages) > 0 {
 		statusOut := s.importStatusWriter()
 		if successCount > 0 {
