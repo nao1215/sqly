@@ -131,17 +131,28 @@ func (s *Shell) profileTable(ctx context.Context, name string) (profileTable, er
 
 	header := table.Header()
 	records := table.Records()
-	cols := make([]profileColumn, 0, len(header))
+
+	// Aggregate per column in a single pass over the rows. Why not build a
+	// per-column values/nulls slice first: that duplicated the whole table once
+	// per column. The accumulators hold only running counts (and the distinct set
+	// the report needs anyway), so profiling no longer scales memory with
+	// columns * rows.
+	profilers := make([]*columnProfiler, len(header))
 	for ci, colName := range header {
-		values := make([]string, len(records))
-		nulls := make([]bool, len(records))
-		for ri, rec := range records {
+		profilers[ci] = newColumnProfiler(colName, typeByName[colName])
+	}
+	for ri, rec := range records {
+		for ci := range header {
+			var v string
 			if ci < len(rec) {
-				values[ri] = rec[ci]
+				v = rec[ci]
 			}
-			nulls[ri] = table.IsNull(ri, ci)
+			profilers[ci].add(v, table.IsNull(ri, ci))
 		}
-		cols = append(cols, profileColumnStats(colName, typeByName[colName], values, nulls))
+	}
+	cols := make([]profileColumn, len(header))
+	for ci := range header {
+		cols[ci] = profilers[ci].result()
 	}
 
 	return profileTable{
@@ -160,50 +171,81 @@ var nullLikeTokens = map[string]struct{}{
 	"null": {}, "n/a": {}, "na": {}, "nil": {}, "none": {}, "#n/a": {}, "nan": {},
 }
 
-// profileColumnStats computes the data-quality summary for one column from its
-// values and NULL mask. It is pure so it can be unit-tested directly. Warnings
-// are only raised where they can be inferred safely: a mix of numeric and
-// non-numeric non-empty values, null-like placeholder text, and values with
-// leading or trailing whitespace.
-func profileColumnStats(name, typ string, values []string, nulls []bool) profileColumn {
-	pc := profileColumn{Name: name, Type: typ, Warnings: []string{}}
-	distinct := make(map[string]struct{})
-	var numeric, nonNumeric, nullLike, whitespace int64
-	for i, v := range values {
-		if i < len(nulls) && nulls[i] {
-			pc.NullCount++
-			continue
-		}
-		if v == "" {
-			pc.BlankCount++
-			continue
-		}
-		distinct[v] = struct{}{}
-		if isNumericValue(v) {
-			numeric++
-		} else {
-			nonNumeric++
-		}
-		if _, ok := nullLikeTokens[strings.ToLower(v)]; ok {
-			nullLike++
-		}
-		if v != strings.TrimSpace(v) {
-			whitespace++
-		}
-	}
-	pc.DistinctCount = int64(len(distinct))
-	pc.NumericCount = numeric
+// columnProfiler accumulates a column's data-quality statistics one value at a
+// time, so profiling can stream rows without copying each column into its own
+// full-length buffer. The distinct set is the only per-value memory it keeps,
+// which the distinct count requires regardless.
+type columnProfiler struct {
+	name, typ                                                      string
+	distinct                                                       map[string]struct{}
+	nullCount, blankCount, numeric, nonNumeric, nullLike, spacecnt int64
+}
 
-	if numeric > 0 && nonNumeric > 0 {
-		pc.Warnings = append(pc.Warnings, fmt.Sprintf("mixed numeric and non-numeric values (%d numeric, %d non-numeric)", numeric, nonNumeric))
+// newColumnProfiler returns a profiler for a single named, typed column.
+func newColumnProfiler(name, typ string) *columnProfiler {
+	return &columnProfiler{name: name, typ: typ, distinct: make(map[string]struct{})}
+}
+
+// add folds one cell value (and whether it is SQL NULL) into the running stats.
+func (c *columnProfiler) add(v string, isNull bool) {
+	if isNull {
+		c.nullCount++
+		return
 	}
-	if nullLike > 0 {
-		pc.Warnings = append(pc.Warnings, fmt.Sprintf("%d value(s) look like null placeholders (e.g. NULL, N/A)", nullLike))
+	if v == "" {
+		c.blankCount++
+		return
 	}
-	if whitespace > 0 {
-		pc.Warnings = append(pc.Warnings, fmt.Sprintf("%d value(s) have leading or trailing whitespace", whitespace))
+	c.distinct[v] = struct{}{}
+	if isNumericValue(v) {
+		c.numeric++
+	} else {
+		c.nonNumeric++
+	}
+	if _, ok := nullLikeTokens[strings.ToLower(v)]; ok {
+		c.nullLike++
+	}
+	if v != strings.TrimSpace(v) {
+		c.spacecnt++
+	}
+}
+
+// result finalizes the accumulated statistics into a profileColumn, raising the
+// same warnings as a full-buffer pass would.
+func (c *columnProfiler) result() profileColumn {
+	pc := profileColumn{
+		Name:          c.name,
+		Type:          c.typ,
+		NullCount:     c.nullCount,
+		BlankCount:    c.blankCount,
+		DistinctCount: int64(len(c.distinct)),
+		NumericCount:  c.numeric,
+		Warnings:      []string{},
+	}
+	if c.numeric > 0 && c.nonNumeric > 0 {
+		pc.Warnings = append(pc.Warnings, fmt.Sprintf("mixed numeric and non-numeric values (%d numeric, %d non-numeric)", c.numeric, c.nonNumeric))
+	}
+	if c.nullLike > 0 {
+		pc.Warnings = append(pc.Warnings, fmt.Sprintf("%d value(s) look like null placeholders (e.g. NULL, N/A)", c.nullLike))
+	}
+	if c.spacecnt > 0 {
+		pc.Warnings = append(pc.Warnings, fmt.Sprintf("%d value(s) have leading or trailing whitespace", c.spacecnt))
 	}
 	return pc
+}
+
+// profileColumnStats computes the data-quality summary for one column from its
+// values and NULL mask. It is pure so it can be unit-tested directly, and shares
+// the same accumulator the streaming path uses. Warnings are only raised where
+// they can be inferred safely: a mix of numeric and non-numeric non-empty
+// values, null-like placeholder text, and values with leading or trailing
+// whitespace.
+func profileColumnStats(name, typ string, values []string, nulls []bool) profileColumn {
+	p := newColumnProfiler(name, typ)
+	for i, v := range values {
+		p.add(v, i < len(nulls) && nulls[i])
+	}
+	return p.result()
 }
 
 // isNumericValue reports whether s is a finite decimal number. It rejects the

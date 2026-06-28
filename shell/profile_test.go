@@ -3,6 +3,7 @@ package shell
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -171,5 +172,85 @@ func TestRunProfile_TextFormat(t *testing.T) {
 	})
 	if !strings.Contains(out, "table nums: 3 rows, 1 columns") {
 		t.Errorf("text output missing table header line:\n%s", out)
+	}
+}
+
+// writeProfileBenchCSV writes a wide, tall CSV and returns its path.
+func writeProfileBenchCSV(tb testing.TB, rows, cols int) string {
+	tb.Helper()
+	dir := tb.TempDir()
+	path := filepath.Join(dir, "big.csv")
+
+	var sb strings.Builder
+	for c := range cols {
+		if c > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, "c%d", c)
+	}
+	sb.WriteByte('\n')
+	for r := range rows {
+		for c := range cols {
+			if c > 0 {
+				sb.WriteByte(',')
+			}
+			fmt.Fprintf(&sb, "v%d", (r+c)%97)
+		}
+		sb.WriteByte('\n')
+	}
+	if err := os.WriteFile(path, []byte(sb.String()), 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	return path
+}
+
+func TestProfileTable_StreamingMatchesFullScan(t *testing.T) {
+	csv := writeProfileBenchCSV(t, 200, 4)
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{csv}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	entry, err := shell.profileTable(context.Background(), "big")
+	if err != nil {
+		t.Fatalf("profileTable: %v", err)
+	}
+
+	if entry.RowCount != 200 || entry.ColumnCount != 4 {
+		t.Fatalf("row/col = %d/%d, want 200/4", entry.RowCount, entry.ColumnCount)
+	}
+	// Each column draws from 97 distinct generated values, so a 200-row column
+	// sees all 97. This confirms the single-pass aggregation matches a full scan.
+	for _, c := range entry.Columns {
+		if c.DistinctCount != 97 {
+			t.Errorf("column %s distinct = %d, want 97", c.Name, c.DistinctCount)
+		}
+		if c.NumericCount != 0 {
+			t.Errorf("column %s numeric = %d, want 0 (values are v-prefixed)", c.Name, c.NumericCount)
+		}
+	}
+}
+
+func BenchmarkProfileTable(b *testing.B) {
+	csv := writeProfileBenchCSV(b, 5000, 8)
+	shell, cleanup, err := newShell(b, []string{"sqly"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{csv}); err != nil {
+		b.Fatalf("import: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := shell.profileTable(context.Background(), "big"); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
