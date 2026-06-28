@@ -255,22 +255,28 @@ func TestCompletionHiddenPaths(t *testing.T) {
 	}
 	defer cleanup()
 
+	// Drive assertions through the .import completion entrypoint the prompt uses,
+	// so the getCompletions routing into the file-path helper is covered too.
+	complete := func(text string) []string {
+		return completionTexts(shell.getCompletions(context.Background(), text))
+	}
+
 	t.Run("hidden directory is omitted by default", func(t *testing.T) {
-		got := completionTexts(shell.getFilePathCompletions(""))
+		got := complete(".import ")
 		if slices.Contains(got, ".secret/") {
 			t.Errorf("hidden directory should not be suggested by default, got %v", got)
 		}
 	})
 
 	t.Run("explicitly typed hidden prefix offers the hidden directory", func(t *testing.T) {
-		got := completionTexts(shell.getFilePathCompletions(".s"))
+		got := complete(".import .s")
 		if !slices.Contains(got, ".secret/") {
-			t.Errorf("expected .secret/ for prefix \".s\", got %v", got)
+			t.Errorf("expected .secret/ for \".import .s\", got %v", got)
 		}
 	})
 
 	t.Run("descending into a hidden directory lists its files", func(t *testing.T) {
-		got := completionTexts(shell.getFilePathCompletions(".secret/"))
+		got := complete(".import .secret/")
 		if !slices.Contains(got, ".secret/data.csv") {
 			t.Errorf("expected .secret/data.csv, got %v", got)
 		}
@@ -280,7 +286,7 @@ func TestCompletionHiddenPaths(t *testing.T) {
 	})
 
 	t.Run("descending into a hidden subdirectory lists its files", func(t *testing.T) {
-		got := completionTexts(shell.getFilePathCompletions(".secret/sub/"))
+		got := complete(".import .secret/sub/")
 		if !slices.Contains(got, ".secret/sub/nested.csv") {
 			t.Errorf("expected .secret/sub/nested.csv, got %v", got)
 		}
