@@ -194,6 +194,45 @@ func (c *MockImportUsecaseIsSupportedFileCall) DoAndReturn(f func(string) bool) 
 	return c
 }
 
+// ListExcelSheetNames mocks base method.
+func (m *MockImportUsecase) ListExcelSheetNames(filePath string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListExcelSheetNames", filePath)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListExcelSheetNames indicates an expected call of ListExcelSheetNames.
+func (mr *MockImportUsecaseMockRecorder) ListExcelSheetNames(filePath any) *MockImportUsecaseListExcelSheetNamesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListExcelSheetNames", reflect.TypeOf((*MockImportUsecase)(nil).ListExcelSheetNames), filePath)
+	return &MockImportUsecaseListExcelSheetNamesCall{Call: call}
+}
+
+// MockImportUsecaseListExcelSheetNamesCall wrap *gomock.Call
+type MockImportUsecaseListExcelSheetNamesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockImportUsecaseListExcelSheetNamesCall) Return(arg0 []string, arg1 error) *MockImportUsecaseListExcelSheetNamesCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockImportUsecaseListExcelSheetNamesCall) Do(f func(string) ([]string, error)) *MockImportUsecaseListExcelSheetNamesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockImportUsecaseListExcelSheetNamesCall) DoAndReturn(f func(string) ([]string, error)) *MockImportUsecaseListExcelSheetNamesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // LoadFiles mocks base method.
 func (m *MockImportUsecase) LoadFiles(ctx context.Context, filePaths ...string) error {
 	m.ctrl.T.Helper()

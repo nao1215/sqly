@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"compress/gzip"
 	"context"
 	"os"
 	"path/filepath"
@@ -238,6 +239,125 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 		got := completionTexts(shell.getFilePathCompletions("plain"))
 		if !slices.Contains(got, "plain.csv") {
 			t.Errorf("plain file should be suggested verbatim, got %v", got)
+		}
+	})
+}
+
+func TestSheetNameCompletion(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	complete := func(text string) []string {
+		return completionTexts(shell.getCompletions(context.Background(), text))
+	}
+
+	simple := filepath.Join("testdata", "sample.xlsx")            // sheet: test_sheet
+	spaced := filepath.Join("testdata", "sheet_with_spaces.xlsx") // sheet: A test
+
+	t.Run("suggests sheet names after --sheet", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet ")
+		if !slices.Contains(got, "test_sheet") {
+			t.Errorf("expected sheet name test_sheet, got %v", got)
+		}
+	})
+
+	t.Run("filters sheet names by the typed prefix", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet te")
+		if !slices.Contains(got, "test_sheet") {
+			t.Errorf("expected test_sheet for prefix te, got %v", got)
+		}
+	})
+
+	t.Run("suggests sheet names for the joined --sheet= form", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet=te")
+		if !slices.Contains(got, "--sheet=test_sheet") {
+			t.Errorf("expected --sheet=test_sheet, got %v", got)
+		}
+	})
+
+	t.Run("escapes a space-containing sheet name so it round-trips", func(t *testing.T) {
+		got := complete(".import " + spaced + " --sheet ")
+		var found string
+		for _, text := range got {
+			argv, err := splitArgs(".import wb.xlsx --sheet " + text)
+			if err == nil && len(argv) == 4 && argv[3] == "A test" {
+				found = text
+			}
+		}
+		if found == "" {
+			t.Fatalf("no sheet suggestion round-trips to \"A test\", got %v", got)
+		}
+	})
+
+	t.Run("honors a quoted sheet-name fragment", func(t *testing.T) {
+		got := complete(".import " + spaced + ` --sheet "A`)
+		if !slices.Contains(got, `"A test"`) {
+			t.Errorf("expected quoted \"A test\", got %v", got)
+		}
+	})
+
+	t.Run("does not fall back to file-path suggestions for an unmatched sheet", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet zzz")
+		for _, text := range got {
+			if strings.Contains(text, "testdata") || strings.HasSuffix(text, ".csv") {
+				t.Errorf("sheet completion must not offer file paths, got %v", got)
+			}
+		}
+	})
+
+	t.Run("resolves a quoted workbook path containing spaces", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "dir with space")
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(spaced)
+		if err != nil {
+			t.Fatal(err)
+		}
+		book := filepath.Join(dir, "book.xlsx")
+		if err := os.WriteFile(book, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		got := complete(`.import "` + book + `" --sheet `)
+		var found bool
+		for _, text := range got {
+			if argv, err := splitArgs(".import wb.xlsx --sheet " + text); err == nil && len(argv) == 4 && argv[3] == "A test" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected sheet A test for a quoted spaced workbook path, got %v", got)
+		}
+	})
+
+	t.Run("reads sheet names from a compressed workbook", func(t *testing.T) {
+		data, err := os.ReadFile(simple)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gzPath := filepath.Join(t.TempDir(), "sample.xlsx.gz")
+		f, err := os.Create(gzPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gw := gzip.NewWriter(f)
+		if _, err := gw.Write(data); err != nil {
+			t.Fatal(err)
+		}
+		if err := gw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		got := complete(".import " + gzPath + " --sheet ")
+		if !slices.Contains(got, "test_sheet") {
+			t.Errorf("expected test_sheet from compressed workbook, got %v", got)
 		}
 	})
 }

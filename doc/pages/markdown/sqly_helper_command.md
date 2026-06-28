@@ -88,6 +88,8 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .import
   - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields
 ```
 
+After `--sheet`, press TAB to complete the sheet names of the first Excel workbook on the line. Quoted and backslash-escaped names with spaces are completed in a form that stays a single argument.
+
 ### ls command
 
 List directory contents (sorted, with a trailing `/` on directories). It runs in-process rather than calling the external `ls`/`dir`, so output is identical on every OS.

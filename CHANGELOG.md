@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### New Features
+* Sheet-Name Completion: `.import WORKBOOK.xlsx --sheet` (and the joined `--sheet=` form) now tab-completes the workbook's sheet names. Names with spaces or non-ASCII characters are completed in a quoted or backslash-escaped form that stays a single argument, and sheet completion does not fall back to file-path suggestions.
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes

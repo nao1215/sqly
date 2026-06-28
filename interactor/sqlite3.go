@@ -171,6 +171,11 @@ func (si *SQLite3Interactor) IsExcelFile(filePath string) bool {
 	return filesql.IsExcelFile(filePath)
 }
 
+// ListExcelSheetNames returns the worksheet names of an Excel workbook.
+func (si *SQLite3Interactor) ListExcelSheetNames(filePath string) ([]string, error) {
+	return filesql.SheetNames(filePath)
+}
+
 // SanitizeForSQL sanitizes a string to be SQL-safe.
 func (si *SQLite3Interactor) SanitizeForSQL(name string) string {
 	return filesql.SanitizeForSQL(name)

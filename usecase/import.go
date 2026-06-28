@@ -21,6 +21,9 @@ type ImportUsecase interface {
 	IsSupportedFile(filePath string) bool
 	// IsExcelFile checks if the file is an Excel format
 	IsExcelFile(filePath string) bool
+	// ListExcelSheetNames returns the worksheet names of an Excel workbook in
+	// workbook order, used for --sheet completion.
+	ListExcelSheetNames(filePath string) ([]string, error)
 	// SanitizeForSQL sanitizes a string to be SQL-safe
 	SanitizeForSQL(name string) string
 	// QuoteIdentifier safely quotes a SQL identifier
