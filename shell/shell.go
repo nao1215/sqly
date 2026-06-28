@@ -1030,12 +1030,12 @@ func ensureNotDirectory(path string) error {
 }
 
 // recordUserRequest record user request in DB.
+//
+// The row id is left to SQLite's AUTOINCREMENT instead of being computed from a
+// full history scan, so each write costs a single insert rather than reading the
+// whole table first.
 func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
-	histories, err := s.usecases.history.List(ctx)
-	if err != nil {
-		return err
-	}
-	if err := s.usecases.history.Create(ctx, model.NewHistory(len(histories)+1, request)); err != nil {
+	if err := s.usecases.history.Create(ctx, model.NewHistory(0, request)); err != nil {
 		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil
