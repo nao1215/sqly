@@ -4,6 +4,8 @@ If no SQL query is specified with the `--sql` option, sqly will start the sqly s
 
 Flags may appear before or after the file and directory arguments; `sqly --csv data.csv` and `sqly data.csv --csv` are equivalent. A misplaced unknown flag fails with a parse error instead of being read as a file path.
 
+sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version`, not `sqly help` or `sqly version`; those forms are read as input paths, and sqly will point you to the right flag. Helper commands such as `.tables` and `.import` run inside the interactive shell or batch stdin mode, not as command-line arguments.
+
 sqly allows you to change the display mode of SQL results with options. By default, the output is in table format. The output format can be changed to csv (`--csv`), tsv (`--tsv`), ltsv (`--ltsv`), markdown (`--markdown`), json (`--json`), or ndjson (`--ndjson`). Excel (`--excel`) and Parquet (`--parquet`) are export-only: they render as csv on screen and write a file only through `.dump` or `--output`. Since the output mode can be changed while the sqly shell is running, it is easy to execute `sqly sample.csv` and then change settings or execute SQL queries within the sqly shell.
 
 For automation-friendly output, `--json-typed` and `--ndjson-typed` (or `.mode json-typed` / `.mode ndjson-typed` in the shell) emit native JSON scalars instead of strings: a canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`. A large integer stays lossless and never regresses into scientific notation, while a value with a leading zero such as `007` remains a string. The default `--json`/`--ndjson` keep the legacy string contract. Pair `--inspect` with `--json-typed` to apply the same contract to the report's sample rows.
@@ -17,6 +19,10 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
 
 [Usage]
   sqly [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]
+
+  sqly is flag-driven and has no subcommands: use --help and --version,
+  not "sqly help" or "sqly version". Helper commands like .tables and
+  .import run inside the shell or batch stdin mode, not as arguments.
 
 [Example]
   - run sqly shell

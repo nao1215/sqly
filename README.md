@@ -21,6 +21,8 @@ sqly --sql "SELECT * FROM data" data.csv.gz
 sqly --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv
 ```
 
+sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version`, not `sqly help` or `sqly version` (those are read as input paths). Helper commands such as `.tables` and `.import` run inside the interactive shell or batch stdin mode, not as command-line arguments.
+
 ## Install
 
 ```shell

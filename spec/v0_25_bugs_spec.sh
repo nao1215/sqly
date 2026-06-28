@@ -131,4 +131,21 @@ Describe 'sqly v0.25.0 binary regressions'
     The output should include '"tables"'
     The stderr should not include 'Successfully imported'
   End
+
+  # sqly is flag-driven; the accidental subcommand forms "sqly help" / "sqly
+  # version" must point at the right flag instead of failing as an import path.
+  It 'guides "sqly help" to --help instead of an import error'
+    When run sqly help
+    The status should be failure
+    The stderr should include '--help'
+    The stderr should include 'no subcommands'
+    The stderr should not include 'path does not exist'
+  End
+
+  It 'guides "sqly version" to --version instead of an import error'
+    When run sqly version
+    The status should be failure
+    The stderr should include '--version'
+    The stderr should not include 'path does not exist'
+  End
 End
