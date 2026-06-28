@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"testing/quick"
 
@@ -196,4 +197,33 @@ func equalStringSet(a, b []string) bool {
 	sort.Strings(as)
 	sort.Strings(bs)
 	return reflect.DeepEqual(as, bs)
+}
+
+// TestSplitCompletionPrefixProperties checks the invariants splitCompletionPrefix
+// must hold for any typed prefix: the kept base concatenated with the partial
+// reconstructs the input exactly, the partial never spans a directory separator,
+// and the base is either empty or ends on a separator. These guarantee that
+// suggestions built as base+name preserve precisely what the user typed.
+func TestSplitCompletionPrefixProperties(t *testing.T) {
+	t.Parallel()
+
+	property := func(prefix string) bool {
+		readDir, base, partial := splitCompletionPrefix(prefix)
+
+		if base+partial != prefix {
+			return false
+		}
+		if strings.ContainsAny(partial, `/\`) {
+			return false
+		}
+		if base != "" && !strings.HasSuffix(base, "/") && !strings.HasSuffix(base, `\`) {
+			return false
+		}
+		// readDir is the base when present, otherwise the current directory or
+		// the filesystem root for a lone leading separator; it is never empty.
+		return readDir != ""
+	}
+	if err := quick.Check(property, featureQuickConfig()); err != nil {
+		t.Error(err)
+	}
 }

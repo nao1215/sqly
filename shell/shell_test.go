@@ -1070,8 +1070,8 @@ func TestShellExec(t *testing.T) {
 	})
 }
 
-func newShell(t *testing.T, args []string) (*Shell, func(), error) {
-	t.Helper()
+func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
+	tb.Helper()
 	arg, err := config.NewArg(args)
 	if err != nil {
 		return nil, nil, err
