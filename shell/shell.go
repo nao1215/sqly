@@ -132,6 +132,7 @@ func NewShell(
 				prompt.WithMemoryHistory(historySize),
 				prompt.WithTheme(prompt.ThemeNightOwl),
 				prompt.WithMultiline(true),
+				prompt.WithIsComplete(sqlInputComplete),
 			)
 		},
 		stdin:          os.Stdin,
@@ -539,6 +540,35 @@ func (s *Shell) prompt(p promptSession) (string, error) {
 
 func (s *Shell) promptPrefix() string {
 	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.displayName())
+}
+
+// sqlInputComplete reports whether the interactive buffer holds a statement
+// ready to run, so the prompt submits on Enter instead of continuing on a new
+// line. Without this, every newline submits, splitting a pasted or typed
+// multi-line statement into separate executions.
+//
+// SQL is complete when it ends with ";". A dot-command (".tables", ".import",
+// ...) and an empty buffer also submit. Pressing Enter on a blank continuation
+// line force-submits whatever is buffered, so a query typed without a trailing
+// ";" still runs without forcing the user to add one.
+func sqlInputComplete(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return true
+	}
+	if strings.HasPrefix(trimmed, ".") {
+		return true
+	}
+	if strings.HasSuffix(trimmed, ";") {
+		return true
+	}
+	// The current line is the text after the last newline. When it is blank the
+	// user pressed Enter on an empty continuation line, which force-submits.
+	lastLine := input
+	if i := strings.LastIndexByte(input, '\n'); i >= 0 {
+		lastLine = input[i+1:]
+	}
+	return strings.TrimSpace(lastLine) == ""
 }
 
 // Suggest is a local struct to maintain compatibility with old code structure

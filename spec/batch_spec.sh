@@ -71,6 +71,21 @@ Describe 'sqly batch mode (piped stdin)'
       The output should include 'booker12'
     End
 
+    It 'runs a multiline UNION ALL across bare newlines as one statement'
+      Data
+        #|.mode csv
+        #|SELECT 1 AS n
+        #|UNION ALL
+        #|SELECT 2;
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The line 1 should equal 'n'
+      The line 2 should equal '1'
+      The line 3 should equal '2'
+      The stderr should include 'Change output mode'
+    End
+
     It 'runs a multiline WITH (CTE) query'
       Data
         #|WITH x AS (

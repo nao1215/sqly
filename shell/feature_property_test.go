@@ -227,3 +227,37 @@ func TestSplitCompletionPrefixProperties(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestSQLInputCompleteProperties checks the invariants of the interactive
+// multiline submit predicate: a ";"-terminated statement is always complete, a
+// blank continuation line always force-submits, and a bare single-line query
+// (no ";", not a dot-command) is never treated as complete on its own.
+func TestSQLInputCompleteProperties(t *testing.T) {
+	t.Parallel()
+
+	terminated := func(body string, trailing uint8) bool {
+		in := body + ";" + strings.Repeat(" ", int(trailing%4))
+		return sqlInputComplete(in)
+	}
+	if err := quick.Check(terminated, featureQuickConfig()); err != nil {
+		t.Errorf("semicolon-terminated input must be complete: %v", err)
+	}
+
+	blankLineSubmits := func(body string) bool {
+		return sqlInputComplete(body + "\n")
+	}
+	if err := quick.Check(blankLineSubmits, featureQuickConfig()); err != nil {
+		t.Errorf("blank continuation line must force submit: %v", err)
+	}
+
+	bareSingleLineContinues := func(word string) bool {
+		w := strings.TrimSpace(strings.NewReplacer("\n", "", ";", "").Replace(word))
+		if w == "" || strings.HasPrefix(w, ".") {
+			return true // empty and dot-commands are complete by design
+		}
+		return !sqlInputComplete(w)
+	}
+	if err := quick.Check(bareSingleLineContinues, featureQuickConfig()); err != nil {
+		t.Errorf("bare single-line query must continue, not submit: %v", err)
+	}
+}
