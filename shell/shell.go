@@ -46,6 +46,7 @@ const (
 
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
+	msgExcelSheet     = "Excel sheet"
 )
 
 // Shell is main class of the sqly command.
@@ -609,6 +610,15 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	// escaped word boundary (enabled with WithWordEscape) used to accept the
 	// completion, so the directory portion is not lost when descending.
 	currentWord := currentCompletionWord(text)
+
+	// .import --sheet completion: when the in-progress token is the value of the
+	// --sheet flag, suggest the workbook's sheet names instead of file paths. This
+	// runs before path completion so the sheet value is not treated as a path.
+	if cmdWords := strings.Fields(text); len(cmdWords) >= 1 && cmdWords[0] == importCommand {
+		if wb, partial, quote, joined, ok := s.sheetCompletionContext(cmdWords, currentWord); ok {
+			return s.getSheetCompletions(wb, partial, quote, joined)
+		}
+	}
 
 	// Command-aware path completion: the path-taking helper commands complete
 	// filesystem paths at their path argument. .cd and .save target a directory,
@@ -1175,6 +1185,87 @@ func keepDirsOnly(suggestions []Suggest, dirsOnly bool) []Suggest {
 		}
 	}
 	return filtered
+}
+
+// sheetCompletionContext reports whether the in-progress token is the value of
+// a .import --sheet flag (separated "--sheet NAME" or joined "--sheet=NAME"),
+// and if so returns the workbook to read sheet names from, the typed sheet
+// fragment, the opening quote rune (0 if unquoted), and whether the joined form
+// is used. The workbook is the first Excel file among the typed arguments, so
+// the behavior is deterministic when several files are present.
+func (s *Shell) sheetCompletionContext(words []string, currentWord string) (workbook, partial string, quote rune, joined, ok bool) {
+	switch {
+	case strings.HasPrefix(currentWord, sheetFlagAssign): // --sheet=...
+		joined = true
+		raw := strings.TrimPrefix(currentWord, sheetFlagAssign)
+		quote, partial = decodeSheetPartial(raw)
+	default:
+		// Separated form: the token immediately before the in-progress word is
+		// --sheet. A trailing space leaves currentWord empty with --sheet last.
+		prev := ""
+		if currentWord == "" {
+			prev = words[len(words)-1]
+		} else if len(words) >= 2 {
+			prev = words[len(words)-2]
+		}
+		if prev != sheetFlag {
+			return "", "", 0, false, false
+		}
+		quote, partial = decodeSheetPartial(currentWord)
+	}
+
+	for _, w := range words[1:] {
+		if w == sheetFlag || strings.HasPrefix(w, sheetFlagAssign) || strings.HasPrefix(w, "--") {
+			continue
+		}
+		token, err := expandTilde(unescapeCompletionPath(strings.Trim(w, `"'`)))
+		if err == nil && s.usecases.importer.IsExcelFile(token) {
+			workbook = token
+			break
+		}
+	}
+	if workbook == "" {
+		return "", "", 0, false, false
+	}
+	return workbook, partial, quote, joined, true
+}
+
+// decodeSheetPartial decodes a typed --sheet fragment into the opening quote
+// rune (0 if unquoted) and the literal sheet-name prefix to match.
+func decodeSheetPartial(raw string) (quote rune, partial string) {
+	if q, inner, openOK := openQuotePrefix(raw); openOK {
+		return q, decodeQuotedPath(inner, q)
+	}
+	return 0, unescapeCompletionPath(raw)
+}
+
+// getSheetCompletions returns sheet-name suggestions for a workbook, matching
+// the typed partial. Suggestions preserve the input style so the accepted
+// command stays valid: a quoted fragment is re-quoted, an unquoted fragment is
+// backslash-escaped, and the joined form keeps the --sheet= prefix.
+func (s *Shell) getSheetCompletions(workbook, partial string, quote rune, joined bool) []Suggest {
+	names, err := s.usecases.importer.ListExcelSheetNames(workbook)
+	if err != nil {
+		return nil
+	}
+	var suggestions []Suggest
+	for _, name := range names {
+		if !strings.HasPrefix(name, partial) {
+			continue
+		}
+		var text string
+		if quote != 0 {
+			q := string(quote)
+			text = q + name + q
+		} else {
+			text = escapeCompletionPath(name)
+		}
+		if joined {
+			text = sheetFlagAssign + text
+		}
+		suggestions = append(suggestions, Suggest{Text: text, Description: msgExcelSheet})
+	}
+	return suggestions
 }
 
 // getFilePathCompletions returns importable-file and directory suggestions

@@ -17,6 +17,7 @@ import (
 
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/xuri/excelize/v2"
 )
 
 const (
@@ -601,6 +602,19 @@ func IsExcelFile(filePath string) bool {
 	}
 
 	return strings.HasSuffix(lower, ".xlsx")
+}
+
+// SheetNames returns the worksheet names of an Excel (.xlsx) workbook in their
+// in-workbook order. It is used for interactive --sheet completion. Compressed
+// workbooks are not opened here (excelize reads a plain .xlsx), so they return
+// an error and the caller simply offers no sheet suggestions.
+func SheetNames(filePath string) ([]string, error) {
+	f, err := excelize.OpenFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open Excel file %s: %w", filePath, err)
+	}
+	defer func() { _ = f.Close() }()
+	return f.GetSheetList(), nil
 }
 
 // generateRandomName generates a random 4-byte hex string.

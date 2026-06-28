@@ -242,6 +242,72 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 	})
 }
 
+func TestSheetNameCompletion(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	complete := func(text string) []string {
+		return completionTexts(shell.getCompletions(context.Background(), text))
+	}
+
+	simple := filepath.Join("testdata", "sample.xlsx")            // sheet: test_sheet
+	spaced := filepath.Join("testdata", "sheet_with_spaces.xlsx") // sheet: A test
+
+	t.Run("suggests sheet names after --sheet", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet ")
+		if !slices.Contains(got, "test_sheet") {
+			t.Errorf("expected sheet name test_sheet, got %v", got)
+		}
+	})
+
+	t.Run("filters sheet names by the typed prefix", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet te")
+		if !slices.Contains(got, "test_sheet") {
+			t.Errorf("expected test_sheet for prefix te, got %v", got)
+		}
+	})
+
+	t.Run("suggests sheet names for the joined --sheet= form", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet=te")
+		if !slices.Contains(got, "--sheet=test_sheet") {
+			t.Errorf("expected --sheet=test_sheet, got %v", got)
+		}
+	})
+
+	t.Run("escapes a space-containing sheet name so it round-trips", func(t *testing.T) {
+		got := complete(".import " + spaced + " --sheet ")
+		var found string
+		for _, text := range got {
+			argv, err := splitArgs(".import wb.xlsx --sheet " + text)
+			if err == nil && len(argv) == 4 && argv[3] == "A test" {
+				found = text
+			}
+		}
+		if found == "" {
+			t.Fatalf("no sheet suggestion round-trips to \"A test\", got %v", got)
+		}
+	})
+
+	t.Run("honors a quoted sheet-name fragment", func(t *testing.T) {
+		got := complete(".import " + spaced + ` --sheet "A`)
+		if !slices.Contains(got, `"A test"`) {
+			t.Errorf("expected quoted \"A test\", got %v", got)
+		}
+	})
+
+	t.Run("does not fall back to file-path suggestions for an unmatched sheet", func(t *testing.T) {
+		got := complete(".import " + simple + " --sheet zzz")
+		for _, text := range got {
+			if strings.Contains(text, "testdata") || strings.HasSuffix(text, ".csv") {
+				t.Errorf("sheet completion must not offer file paths, got %v", got)
+			}
+		}
+	})
+}
+
 func TestCompletionRespectsCursorPositionForHelperPath(t *testing.T) {
 	// Note: cannot use t.Parallel() with t.Chdir().
 	tmpDir := t.TempDir()
