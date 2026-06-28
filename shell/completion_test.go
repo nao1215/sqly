@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"compress/gzip"
 	"context"
 	"os"
 	"path/filepath"
@@ -304,6 +305,59 @@ func TestSheetNameCompletion(t *testing.T) {
 			if strings.Contains(text, "testdata") || strings.HasSuffix(text, ".csv") {
 				t.Errorf("sheet completion must not offer file paths, got %v", got)
 			}
+		}
+	})
+
+	t.Run("resolves a quoted workbook path containing spaces", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "dir with space")
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(spaced)
+		if err != nil {
+			t.Fatal(err)
+		}
+		book := filepath.Join(dir, "book.xlsx")
+		if err := os.WriteFile(book, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		got := complete(`.import "` + book + `" --sheet `)
+		var found bool
+		for _, text := range got {
+			if argv, err := splitArgs(".import wb.xlsx --sheet " + text); err == nil && len(argv) == 4 && argv[3] == "A test" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected sheet A test for a quoted spaced workbook path, got %v", got)
+		}
+	})
+
+	t.Run("reads sheet names from a compressed workbook", func(t *testing.T) {
+		data, err := os.ReadFile(simple)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gzPath := filepath.Join(t.TempDir(), "sample.xlsx.gz")
+		f, err := os.Create(gzPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gw := gzip.NewWriter(f)
+		if _, err := gw.Write(data); err != nil {
+			t.Fatal(err)
+		}
+		if err := gw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		got := complete(".import " + gzPath + " --sheet ")
+		if !slices.Contains(got, "test_sheet") {
+			t.Errorf("expected test_sheet from compressed workbook, got %v", got)
 		}
 	})
 }

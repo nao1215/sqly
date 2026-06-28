@@ -611,11 +611,17 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	// completion, so the directory portion is not lost when descending.
 	currentWord := currentCompletionWord(text)
 
+	// Split the already-typed part of the line into shell-aware tokens so a
+	// quoted or escaped earlier argument (for example a workbook path with
+	// spaces) stays one token. completed excludes the in-progress word; its index
+	// is therefore len(completed).
+	completed := completedCommandWords(text, currentWord)
+
 	// .import --sheet completion: when the in-progress token is the value of the
 	// --sheet flag, suggest the workbook's sheet names instead of file paths. This
 	// runs before path completion so the sheet value is not treated as a path.
-	if cmdWords := strings.Fields(text); len(cmdWords) >= 1 && cmdWords[0] == importCommand {
-		if wb, partial, quote, joined, ok := s.sheetCompletionContext(cmdWords, currentWord); ok {
+	if len(completed) >= 1 && completed[0] == importCommand {
+		if wb, partial, quote, joined, ok := s.sheetCompletionContext(completed, currentWord); ok {
 			return s.getSheetCompletions(wb, partial, quote, joined)
 		}
 	}
@@ -625,12 +631,9 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	// so only directories are offered; .ls/.dump/.import also offer importable
 	// files. This runs before the generic path detection so a directory-only
 	// command is never given file suggestions.
-	if cmdWords := strings.Fields(text); len(cmdWords) >= 1 {
-		if pathArg, multi, dirsOnly, ok := pathCommandSpec(cmdWords[0]); ok {
-			argIndex := len(cmdWords) - 1
-			if currentWord == "" {
-				argIndex = len(cmdWords) // a trailing space starts the next argument
-			}
+	if len(completed) >= 1 {
+		if pathArg, multi, dirsOnly, ok := pathCommandSpec(completed[0]); ok {
+			argIndex := len(completed) // the in-progress word is the next argument
 			if argIndex == pathArg || (multi && argIndex >= pathArg) {
 				if quote, rawInner, ok := openQuotePrefix(currentWord); ok {
 					return keepDirsOnly(s.getQuotedFilePathCompletions(rawInner, quote), dirsOnly)
@@ -1191,34 +1194,27 @@ func keepDirsOnly(suggestions []Suggest, dirsOnly bool) []Suggest {
 // a .import --sheet flag (separated "--sheet NAME" or joined "--sheet=NAME"),
 // and if so returns the workbook to read sheet names from, the typed sheet
 // fragment, the opening quote rune (0 if unquoted), and whether the joined form
-// is used. The workbook is the first Excel file among the typed arguments, so
-// the behavior is deterministic when several files are present.
-func (s *Shell) sheetCompletionContext(words []string, currentWord string) (workbook, partial string, quote rune, joined, ok bool) {
+// is used. completed holds the already-typed tokens (shell-decoded, excluding
+// the in-progress word). The workbook is the first Excel file among them, so the
+// behavior is deterministic when several files are present.
+func (s *Shell) sheetCompletionContext(completed []string, currentWord string) (workbook, partial string, quote rune, joined, ok bool) {
 	switch {
 	case strings.HasPrefix(currentWord, sheetFlagAssign): // --sheet=...
 		joined = true
-		raw := strings.TrimPrefix(currentWord, sheetFlagAssign)
-		quote, partial = decodeSheetPartial(raw)
-	default:
-		// Separated form: the token immediately before the in-progress word is
-		// --sheet. A trailing space leaves currentWord empty with --sheet last.
-		prev := ""
-		if currentWord == "" {
-			prev = words[len(words)-1]
-		} else if len(words) >= 2 {
-			prev = words[len(words)-2]
-		}
-		if prev != sheetFlag {
-			return "", "", 0, false, false
-		}
+		quote, partial = decodeSheetPartial(strings.TrimPrefix(currentWord, sheetFlagAssign))
+	case completed[len(completed)-1] == sheetFlag: // separated "--sheet NAME"
 		quote, partial = decodeSheetPartial(currentWord)
+	default:
+		return "", "", 0, false, false
 	}
 
-	for _, w := range words[1:] {
+	// completed tokens are already shell-decoded, so a quoted/escaped workbook
+	// path with spaces is one intact token here.
+	for _, w := range completed[1:] {
 		if w == sheetFlag || strings.HasPrefix(w, sheetFlagAssign) || strings.HasPrefix(w, "--") {
 			continue
 		}
-		token, err := expandTilde(unescapeCompletionPath(strings.Trim(w, `"'`)))
+		token, err := expandTilde(w)
 		if err == nil && s.usecases.importer.IsExcelFile(token) {
 			workbook = token
 			break
@@ -1228,6 +1224,20 @@ func (s *Shell) sheetCompletionContext(words []string, currentWord string) (work
 		return "", "", 0, false, false
 	}
 	return workbook, partial, quote, joined, true
+}
+
+// completedCommandWords splits the already-typed portion of text (everything
+// before the in-progress word) into shell-aware tokens, so a quoted or escaped
+// earlier argument stays a single decoded token. It falls back to whitespace
+// splitting only if the prefix cannot be tokenized (an unterminated quote in an
+// earlier token), keeping completion functional rather than empty.
+func completedCommandWords(text, currentWord string) []string {
+	prefix := strings.TrimSuffix(text, currentWord)
+	args, err := splitArgs(prefix)
+	if err != nil {
+		return strings.Fields(prefix)
+	}
+	return args
 }
 
 // decodeSheetPartial decodes a typed --sheet fragment into the opening quote
