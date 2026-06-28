@@ -43,6 +43,9 @@
 * Clean Ctrl-D Exit: pressing Ctrl-D (EOF) in the interactive shell now exits cleanly like `.exit` instead of printing a raw `EOF` line. Both EOF spellings the prompt library reports (Ctrl-D on an empty line and a closed input stream) are treated as a normal termination.
 * Symlink-Resolved System-Path Guard: import path validation now rejects a symlink whose canonical target is a blocked system location (such as a link to `/etc/hosts`), not only a directly typed system path. It also normalizes the macOS `/private` prefix, while standard Unix pseudo-files (`/dev/stdin`, `/proc/self/fd/*`) keep importing.
 
+### Documentation
+* Hermetic E2E Harness: the ShellSpec suite now runs through `scripts/run_e2e.sh`, which builds the binary and runs the suite in a throwaway temp-backed HOME and config sandbox, so it never reads or writes the developer's real config directory and local and CI runs are identical. `make test-e2e` and the CI job invoke the suite only through this wrapper.
+
 ### Dependencies
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.8 for the `ActionClearScreen` key action that backs the Ctrl+L clear-screen binding.
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.7 for the `WithIsComplete` multiline submit predicate and the `WithWordEscape` option that lets completion treat backslash-escaped whitespace as part of a word.
