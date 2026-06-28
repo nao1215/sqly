@@ -3343,6 +3343,32 @@ func TestAbbreviateHome(t *testing.T) {
 	}
 }
 
+func TestSqlyKeyMap(t *testing.T) {
+	t.Parallel()
+
+	km := sqlyKeyMap()
+
+	tests := []struct {
+		name string
+		key  rune
+		want prompt.KeyAction
+	}{
+		{name: "Ctrl+P navigates to the previous command", key: '\x10', want: prompt.ActionHistoryUp},
+		{name: "Ctrl+N navigates to the next command", key: '\x0e', want: prompt.ActionHistoryDown},
+		{name: "Ctrl+A still moves to the line start (default preserved)", key: '\x01', want: prompt.ActionMoveHome},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := km.GetAction(tt.key); got != tt.want {
+				t.Errorf("GetAction(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestShellExec_SchemaQualifiedTempView covers the helper-command surface added
 // for v0.20.0 hardening: schema-qualified names, TEMP tables, and views.
 func TestShellExec_SchemaQualifiedTempView(t *testing.T) {

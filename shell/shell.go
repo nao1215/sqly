@@ -135,6 +135,7 @@ func NewShell(
 				prompt.WithMultiline(true),
 				prompt.WithIsComplete(sqlInputComplete),
 				prompt.WithWordEscape(),
+				prompt.WithKeyMap(sqlyKeyMap()),
 			)
 		},
 		stdin:          os.Stdin,
@@ -358,6 +359,17 @@ func (s *Shell) communicate(ctx context.Context) error {
 			continue
 		}
 	}
+}
+
+// sqlyKeyMap returns the prompt key map with the Emacs-style control shortcuts
+// the sqly shell documents on top of the prompt library defaults. The library
+// already binds Ctrl+A/E/K/U/W/R and the arrow keys; this adds the control-key
+// equivalents the docs advertise: Ctrl+P/Ctrl+N for history navigation.
+func sqlyKeyMap() *prompt.KeyMap {
+	km := prompt.NewDefaultKeyMap()
+	km.Bind('\x10', prompt.ActionHistoryUp)   // Ctrl+P: previous command
+	km.Bind('\x0e', prompt.ActionHistoryDown) // Ctrl+N: next command
+	return km
 }
 
 func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
