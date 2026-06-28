@@ -3357,6 +3357,7 @@ func TestSqlyKeyMap(t *testing.T) {
 		{name: "Ctrl+N navigates to the next command", key: '\x0e', want: prompt.ActionHistoryDown},
 		{name: "Ctrl+F moves the cursor forward one character", key: '\x06', want: prompt.ActionMoveRight},
 		{name: "Ctrl+B moves the cursor backward one character", key: '\x02', want: prompt.ActionMoveLeft},
+		{name: "Ctrl+L clears the screen", key: '\x0c', want: prompt.ActionClearScreen},
 		{name: "Ctrl+A still moves to the line start (default preserved)", key: '\x01', want: prompt.ActionMoveHome},
 	}
 

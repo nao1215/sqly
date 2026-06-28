@@ -364,14 +364,15 @@ func (s *Shell) communicate(ctx context.Context) error {
 // sqlyKeyMap returns the prompt key map with the Emacs-style control shortcuts
 // the sqly shell documents on top of the prompt library defaults. The library
 // already binds Ctrl+A/E/K/U/W/R and the arrow keys; this adds the control-key
-// equivalents the docs advertise: Ctrl+P/Ctrl+N for history navigation and
-// Ctrl+F/Ctrl+B for character movement.
+// equivalents the docs advertise: Ctrl+P/Ctrl+N for history navigation,
+// Ctrl+F/Ctrl+B for character movement, and Ctrl+L to clear the screen.
 func sqlyKeyMap() *prompt.KeyMap {
 	km := prompt.NewDefaultKeyMap()
 	km.Bind('\x10', prompt.ActionHistoryUp)   // Ctrl+P: previous command
 	km.Bind('\x0e', prompt.ActionHistoryDown) // Ctrl+N: next command
 	km.Bind('\x06', prompt.ActionMoveRight)   // Ctrl+F: forward one character
 	km.Bind('\x02', prompt.ActionMoveLeft)    // Ctrl+B: backward one character
+	km.Bind('\x0c', prompt.ActionClearScreen) // Ctrl+L: clear the screen
 	return km
 }
 
