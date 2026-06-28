@@ -74,6 +74,8 @@ changelog:
 # Software Bill of Materials for every release archive.
 sboms:
   - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
 # Keyless artifact signing with cosign. Signing the checksums file transitively
 # covers every published artifact.
 signs:

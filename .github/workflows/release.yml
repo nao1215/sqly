@@ -28,6 +28,9 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: "go.mod"
+          # Disable the shared module/build cache in this privileged, OIDC-enabled
+          # release job to avoid cache-poisoning from lower-privilege workflows.
+          cache: false
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
       - name: Install Syft (SBOM generator)
@@ -35,7 +38,8 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
-          version: latest
+          # Pin the GoReleaser CLI to a fixed version so the release is reproducible.
+          version: "v2.16.0"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,3 +54,5 @@ jobs:
             dist/*.rpm
             dist/*.apk
             dist/checksums.txt
+            dist/*.sbom.json
+            dist/checksums.txt.sigstore.json
