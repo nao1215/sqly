@@ -164,7 +164,7 @@ func TestCompareKeyedRows_SwapProperty(t *testing.T) {
 func TestProfileColumnStats_PartitionProperty(t *testing.T) {
 	t.Parallel()
 	property := func(values []string, nulls []bool) bool {
-		pc := profileColumnStats("c", "TEXT", values, nulls)
+		pc := columnStats("c", "TEXT", values, nulls)
 		var nullN, blankN, nonEmpty int64
 		for i, v := range values {
 			switch {
