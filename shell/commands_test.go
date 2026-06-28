@@ -381,8 +381,9 @@ func TestShell_getFilePathCompletions_errorHandling(t *testing.T) {
 		}()
 	}
 
-	// Test completion - should work normally
-	completions := shell.getFilePathCompletions(".import ")
+	// Test completion - should work normally. An empty prefix scopes to the
+	// current directory.
+	completions := shell.getFilePathCompletions("")
 
 	if len(completions) == 0 {
 		t.Error("Expected some completions in test directory")
@@ -471,27 +472,36 @@ func TestShell_getFilePathCompletions_edgeCases(t *testing.T) {
 		}()
 	}()
 
-	// Test completion
-	completions := shell.getFilePathCompletions(".import ")
+	// An empty prefix scopes to the current directory: the subdirectory is
+	// offered (so the user can descend) while the hidden directory is skipped.
+	topLevel := shell.getFilePathCompletions("")
+	foundSubdir := false
+	foundHiddenDir := false
+	for _, comp := range topLevel {
+		switch filepath.ToSlash(comp.Text) {
+		case "subdir/":
+			foundSubdir = true
+		case ".hidden/":
+			foundHiddenDir = true
+		}
+	}
+	if !foundSubdir {
+		t.Error("Expected to find subdir/ at the top level")
+	}
+	if foundHiddenDir {
+		t.Error("Should not find .hidden/ directory at the top level")
+	}
 
-	// Should find nested file but not hidden file
+	// Descending into the subdirectory lists its importable files.
+	nested := shell.getFilePathCompletions("subdir/")
 	foundNested := false
-	foundHidden := false
-
-	for _, comp := range completions {
+	for _, comp := range nested {
 		if filepath.ToSlash(comp.Text) == "subdir/nested.csv" {
 			foundNested = true
 		}
-		if filepath.ToSlash(comp.Text) == ".hidden/hidden.csv" {
-			foundHidden = true
-		}
 	}
-
 	if !foundNested {
-		t.Error("Expected to find nested.csv in subdir")
-	}
-	if foundHidden {
-		t.Error("Should not find hidden.csv in .hidden directory")
+		t.Error("Expected to find nested.csv when scoping to subdir/")
 	}
 }
 

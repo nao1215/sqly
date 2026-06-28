@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,6 +21,132 @@ func hasSuggestionText(suggestions []Suggest, text string) bool {
 		}
 	}
 	return false
+}
+
+// makeTree creates files and directories under the current working directory.
+// A trailing slash marks a directory; everything else is created as an empty file.
+func makeTree(t *testing.T, paths []string) {
+	t.Helper()
+	for _, p := range paths {
+		if strings.HasSuffix(p, "/") {
+			if err := os.MkdirAll(filepath.Clean(p), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		f, err := os.Create(filepath.Clean(p))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func completionTexts(suggestions []Suggest) []string {
+	texts := make([]string, 0, len(suggestions))
+	for _, s := range suggestions {
+		texts = append(texts, s.Text)
+	}
+	return texts
+}
+
+func TestGetFilePathCompletionsScopedToTypedPrefix(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		"top.csv",
+		"testdata/actor.csv",
+		"testdata/sample.tsv",
+		"testdata/nested/deep.csv",
+		"other/ignore.csv",
+	})
+
+	tests := []struct {
+		name    string
+		prefix  string
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "empty prefix lists only the current directory, not nested files",
+			prefix:  "",
+			want:    []string{"top.csv", "testdata/", "other/"},
+			notWant: []string{"testdata/actor.csv", "testdata/nested/deep.csv"},
+		},
+		{
+			name:    "directory prefix lists entries inside that directory only",
+			prefix:  "testdata/",
+			want:    []string{"testdata/actor.csv", "testdata/sample.tsv", "testdata/nested/"},
+			notWant: []string{"testdata/nested/deep.csv", "top.csv", "other/"},
+		},
+		{
+			name:    "partial filename narrows to matching entries in the directory",
+			prefix:  "testdata/ac",
+			want:    []string{"testdata/actor.csv"},
+			notWant: []string{"testdata/sample.tsv", "testdata/nested/"},
+		},
+		{
+			name:    "partial directory name suggests the directory, not its nested files",
+			prefix:  "testd",
+			want:    []string{"testdata/"},
+			notWant: []string{"testdata/actor.csv", "testdata/nested/deep.csv"},
+		},
+		{
+			name:    "nested directory prefix scopes traversal to that subtree",
+			prefix:  "testdata/nested/",
+			want:    []string{"testdata/nested/deep.csv"},
+			notWant: []string{"testdata/actor.csv", "top.csv"},
+		},
+		{
+			// The directory must resolve even though the prefix uses a backslash;
+			// suggestions keep the separator the user typed.
+			name:    "backslash separator resolves the directory on every OS",
+			prefix:  `testdata\`,
+			want:    []string{"testdata/actor.csv", "testdata/sample.tsv"},
+			notWant: []string{"top.csv"},
+		},
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// slash normalizes separators so the backslash case asserts the same way on
+	// every OS (filepath.ToSlash rewrites "\" to "/" only on Windows).
+	slash := func(s string) string { return strings.ReplaceAll(s, `\`, "/") }
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, text := range completionTexts(shell.getFilePathCompletions(tt.prefix)) {
+				got = append(got, slash(text))
+			}
+			for _, w := range tt.want {
+				if !slices.Contains(got, slash(w)) {
+					t.Errorf("prefix %q: want completion %q, got %v", tt.prefix, w, got)
+				}
+			}
+			for _, nw := range tt.notWant {
+				if slices.Contains(got, slash(nw)) {
+					t.Errorf("prefix %q: did not want completion %q, got %v", tt.prefix, nw, got)
+				}
+			}
+		})
+	}
 }
 
 func TestImportCompleterDebug(t *testing.T) {
@@ -65,60 +192,53 @@ func TestImportCompleterDebug(t *testing.T) {
 	}
 	defer shellCleanup()
 
-	// Test different states of completion
+	// Completion is scoped to the directory named by the typed prefix: a bare
+	// ".import" or a partial directory name offers the directory, and only after
+	// descending into it do the files inside appear.
 	testCases := []struct {
-		name              string
-		text              string
-		expectedFilenames []string
+		name     string
+		text     string
+		expected []string
 	}{
 		{
-			name:              "All importable files should be shown",
-			text:              ".import ",
-			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
+			name:     "bare .import offers the top-level directory",
+			text:     ".import ",
+			expected: []string{"testdata/"},
 		},
 		{
-			name:              "All importable files should be shown (any input)",
-			text:              ".import testdata/",
-			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
+			name:     "directory prefix lists the files inside it",
+			text:     ".import testdata/",
+			expected: []string{"testdata/actor.csv", "testdata/sample.csv"},
 		},
 		{
-			name:              "All importable files should be shown (partial input)",
-			text:              ".import testd",
-			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
+			name:     "partial directory name offers the directory",
+			text:     ".import testd",
+			expected: []string{"testdata/"},
 		},
 		{
-			name:              "All importable files should be shown (any path)",
-			text:              ".import testdata",
-			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
+			name:     "directory name without separator offers the directory",
+			text:     ".import testdata",
+			expected: []string{"testdata/"},
 		},
 		{
-			name:              "All importable files should be shown (partial filename)",
-			text:              ".import testdata/a",
-			expectedFilenames: []string{"testdata/actor.csv", "testdata/sample.csv"},
+			name:     "partial filename narrows to the matching file",
+			text:     ".import testdata/a",
+			expected: []string{"testdata/actor.csv"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fileCompletions := shell.getFilePathCompletions(tc.text)
+			completions := shell.getCompletions(context.Background(), tc.text)
 
 			t.Logf("Input: '%s'", tc.text)
-			t.Logf("Completions: %d", len(fileCompletions))
-			for i, c := range fileCompletions {
+			for i, c := range completions {
 				t.Logf("  %d: Text='%s', Desc='%s'", i, c.Text, c.Description)
 			}
 
-			// Verify expected files are present
-			for _, expectedFile := range tc.expectedFilenames {
-				found := false
-				for _, completion := range fileCompletions {
-					if completion.Text == expectedFile {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected completion '%s' not found in results for input '%s'", expectedFile, tc.text)
+			for _, expected := range tc.expected {
+				if !hasSuggestionText(completions, expected) {
+					t.Errorf("Expected completion '%s' not found for input '%s'", expected, tc.text)
 				}
 			}
 		})
@@ -359,84 +479,43 @@ func TestGoPromptCompletionBehavior(t *testing.T) {
 }
 
 func TestRealDirectoryCompletion(t *testing.T) {
-	// Test with actual directory structure using new full-path completion behavior
+	// Exercise scoped completion against the real package directory, which has a
+	// testdata/ subdirectory holding importable sample files.
 
-	// Create a shell instance
 	shell, shellCleanup, shellErr := newShell(t, []string{"sqly"})
 	if shellErr != nil {
 		t.Fatal(shellErr)
 	}
 	defer shellCleanup()
 
-	// Test cases for new full-path completion behavior
-	// All inputs should show the same complete list of importable files
-	testCases := []struct {
-		name               string
-		input              string
-		minExpectedFiles   int      // Minimum number of files expected
-		mustContainSamples []string // Sample files that must be present
-	}{
-		{
-			name:               "All importable files should be shown regardless of input",
-			input:              ".import ",
-			minExpectedFiles:   1,                               // Should find at least some importable files
-			mustContainSamples: []string{"testdata/sample.csv"}, // This file should exist
-		},
-		{
-			name:               "All importable files should be shown with any input",
-			input:              ".import testdata",
-			minExpectedFiles:   1,
-			mustContainSamples: []string{"testdata/sample.csv"},
-		},
-		{
-			name:               "All importable files shown even with non-matching prefix",
-			input:              ".import nonexistent",
-			minExpectedFiles:   1, // Still shows all files
-			mustContainSamples: []string{"testdata/sample.csv"},
-		},
-	}
+	t.Run("bare .import offers the testdata directory, not its files", func(t *testing.T) {
+		got := completionTexts(shell.getFilePathCompletions(""))
+		if !slices.Contains(got, "testdata/") {
+			t.Errorf("expected testdata/ directory in completions, got %v", got)
+		}
+		if slices.Contains(got, "testdata/sample.csv") {
+			t.Errorf("did not expect nested file testdata/sample.csv at the top level, got %v", got)
+		}
+	})
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			completions := shell.getFilePathCompletions(tc.input)
-
-			t.Logf("Input: '%s'", tc.input)
-			t.Logf("Got %d completions:", len(completions))
-			for i, c := range completions {
-				t.Logf("  %d: '%s' - %s", i, c.Text, c.Description)
+	t.Run("descending into testdata lists its importable files", func(t *testing.T) {
+		completions := shell.getFilePathCompletions("testdata/")
+		got := completionTexts(completions)
+		if !slices.Contains(got, "testdata/sample.csv") {
+			t.Errorf("expected testdata/sample.csv in completions, got %v", got)
+		}
+		for _, comp := range completions {
+			if !strings.HasSuffix(comp.Text, "/") && comp.Description != msgImportableFile {
+				t.Errorf("file %q has description %q, want %q", comp.Text, comp.Description, msgImportableFile)
 			}
+		}
+	})
 
-			// Verify minimum number of files
-			if len(completions) < tc.minExpectedFiles {
-				t.Errorf("Expected at least %d completions, got %d", tc.minExpectedFiles, len(completions))
-			}
-
-			// Verify all completions are files with correct description
-			for _, comp := range completions {
-				if comp.Description != "Importable file" {
-					t.Errorf("Expected description 'Importable file', got '%s'", comp.Description)
-				}
-				// Should not be directories (ending with /)
-				if strings.HasSuffix(comp.Text, "/") {
-					t.Errorf("Expected file path but got directory: '%s'", comp.Text)
-				}
-			}
-
-			// Check required sample files are present
-			for _, expectedFile := range tc.mustContainSamples {
-				found := false
-				for _, comp := range completions {
-					if comp.Text == expectedFile {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected to find sample file '%s' in completions", expectedFile)
-				}
-			}
-		})
-	}
+	t.Run("non-matching prefix yields no completions", func(t *testing.T) {
+		if got := shell.getFilePathCompletions("nonexistent"); len(got) != 0 {
+			t.Errorf("expected no completions for non-matching prefix, got %v", completionTexts(got))
+		}
+	})
 }
 
 func TestFilePathCompletions(t *testing.T) {
@@ -497,20 +576,16 @@ func TestFilePathCompletions(t *testing.T) {
 		name     string
 		input    string
 		expected []string
+		excluded []string
 	}{
 		{
-			name:  "All importable files should be shown",
-			input: "",
-			expected: []string{
-				"testdata/sample.csv",
-				"testdata/sample.tsv",
-				"testdata/sample.ltsv",
-				"testdata/sample.xlsx",
-				"testdata/compressed.csv.gz",
-			},
+			name:     "empty prefix lists top-level directories only",
+			input:    "",
+			expected: []string{"testdata/", "docs/"},
+			excluded: []string{"testdata/sample.csv", "config.yaml"},
 		},
 		{
-			name:  "All importable files should be shown (with directory input)",
+			name:  "directory prefix lists importable files inside it",
 			input: "testdata/",
 			expected: []string{
 				"testdata/sample.csv",
@@ -521,74 +596,42 @@ func TestFilePathCompletions(t *testing.T) {
 			},
 		},
 		{
-			name:  "All importable files should be shown (with partial filename)",
+			name:  "partial filename narrows to matching files",
 			input: "testdata/sample",
 			expected: []string{
 				"testdata/sample.csv",
 				"testdata/sample.tsv",
 				"testdata/sample.ltsv",
 				"testdata/sample.xlsx",
-				"testdata/compressed.csv.gz",
 			},
+			excluded: []string{"testdata/compressed.csv.gz"},
 		},
 		{
-			name:  "All importable files should be shown (with partial directory)",
-			input: "test",
-			expected: []string{
-				"testdata/sample.csv",
-				"testdata/sample.tsv",
-				"testdata/sample.ltsv",
-				"testdata/sample.xlsx",
-				"testdata/compressed.csv.gz",
-			},
+			name:     "partial directory name offers the directory only",
+			input:    "test",
+			expected: []string{"testdata/"},
+			excluded: []string{"testdata/sample.csv"},
 		},
 		{
-			name:  "All importable files should be shown (with .import command)",
-			input: ".import testdata/",
-			expected: []string{
-				"testdata/sample.csv",
-				"testdata/sample.tsv",
-				"testdata/sample.ltsv",
-				"testdata/sample.xlsx",
-				"testdata/compressed.csv.gz",
-			},
+			name:     "directory without importable files yields no file suggestions",
+			input:    "docs/",
+			excluded: []string{"docs/readme.md"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			completions := shell.getFilePathCompletions(tt.input)
+			results := completionTexts(shell.getFilePathCompletions(tt.input))
+			t.Logf("Input %q -> %v", tt.input, results)
 
-			// Debug: log what files actually exist
-			entries, err := os.ReadDir(".")
-			if err != nil {
-				t.Logf("Failed to read current directory: %v", err)
-				return
-			}
-			t.Logf("Current directory contents:")
-			for _, entry := range entries {
-				t.Logf("  %s (dir: %v)", entry.Name(), entry.IsDir())
-			}
-
-			if testDataEntries, err := os.ReadDir("testdata"); err == nil {
-				t.Logf("testdata directory contents:")
-				for _, entry := range testDataEntries {
-					t.Logf("  testdata/%s (dir: %v, valid: %v)", entry.Name(), entry.IsDir(), shell.isValidFileForCompletion(entry.Name()))
+			for _, expected := range tt.expected {
+				if !slices.Contains(results, expected) {
+					t.Errorf("Expected completion '%s' not found in results: %v", expected, results)
 				}
 			}
-
-			// Extract completion texts
-			var results []string
-			for _, c := range completions {
-				results = append(results, c.Text)
-			}
-			t.Logf("Got %d completions: %v", len(completions), results)
-
-			// Check if all expected completions are present
-			for _, expected := range tt.expected {
-				found := slices.Contains(results, expected)
-				if !found {
-					t.Errorf("Expected completion '%s' not found in results: %v", expected, results)
+			for _, excluded := range tt.excluded {
+				if slices.Contains(results, excluded) {
+					t.Errorf("Did not expect completion '%s' in results: %v", excluded, results)
 				}
 			}
 		})
@@ -652,63 +695,59 @@ func TestCompleterIntegration(t *testing.T) {
 	defer cleanup()
 
 	testCases := []struct {
-		name             string
-		input            string
-		minExpectedFiles int
-		mustHaveFileType bool // Must contain at least one importable file
+		name     string
+		input    string
+		wantDir  bool // expect at least one directory suggestion
+		wantFile bool // expect at least one importable-file suggestion
+		wantText string
 	}{
 		{
-			name:             "Import command should show all importable files",
-			input:            ".import ",
-			minExpectedFiles: 1,
-			mustHaveFileType: true,
+			name:     "bare .import offers the testdata directory",
+			input:    ".import ",
+			wantDir:  true,
+			wantText: "testdata/",
 		},
 		{
-			name:             "Import with prefix should still show all importable files",
-			input:            ".import testdata",
-			minExpectedFiles: 1,
-			mustHaveFileType: true,
+			name:     "partial directory name offers the directory",
+			input:    ".import testd",
+			wantDir:  true,
+			wantText: "testdata/",
 		},
 		{
-			name:             "Import with any prefix shows all importable files",
-			input:            ".import golden",
-			minExpectedFiles: 1,
-			mustHaveFileType: true,
+			name:     "descending into testdata offers importable files",
+			input:    ".import testdata/",
+			wantFile: true,
+			wantText: "testdata/sample.csv",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Use the new getCompletions method
 			completions := shell.getCompletions(context.Background(), tc.input)
 
 			t.Logf("Input: '%s'", tc.input)
-			t.Logf("Got %d completions:", len(completions))
 			for i, c := range completions {
 				t.Logf("  %d: '%s' - %s", i, c.Text, c.Description)
 			}
 
-			// Verify minimum number of completions
-			if len(completions) < tc.minExpectedFiles {
-				t.Errorf("Expected at least %d completions, got %d", tc.minExpectedFiles, len(completions))
+			if !hasSuggestionText(completions, tc.wantText) {
+				t.Errorf("expected completion %q for input %q", tc.wantText, tc.input)
 			}
 
-			// If we expect importable files, verify they exist
-			if tc.mustHaveFileType {
-				foundImportableFile := false
-				for _, comp := range completions {
-					if comp.Description == "Importable file" {
-						foundImportableFile = true
-						// Verify it's a file path, not directory
-						if strings.HasSuffix(comp.Text, "/") {
-							t.Errorf("Expected file path but got directory: '%s'", comp.Text)
-						}
-						break
-					}
+			hasDir, hasFile := false, false
+			for _, comp := range completions {
+				switch comp.Description {
+				case msgImportableDir:
+					hasDir = true
+				case msgImportableFile:
+					hasFile = true
 				}
-				if !foundImportableFile {
-					t.Error("Expected to find at least one importable file completion")
-				}
+			}
+			if tc.wantDir && !hasDir {
+				t.Error("expected at least one directory suggestion")
+			}
+			if tc.wantFile && !hasFile {
+				t.Error("expected at least one importable file suggestion")
 			}
 		})
 	}
@@ -901,4 +940,47 @@ func TestCompleterEdgeCases(t *testing.T) {
 			// Just verify we got a valid response (len cannot be negative)
 		})
 	}
+}
+
+// BenchmarkGetFilePathCompletions measures completion against a large synthetic
+// directory tree. The fix scopes traversal to the targeted directory, so latency
+// should track that single directory rather than the whole tree. The benchmark
+// compares completing inside one leaf directory against listing the shallow root,
+// making any regression to whole-tree scanning measurable.
+func BenchmarkGetFilePathCompletions(b *testing.B) {
+	b.Chdir(b.TempDir())
+
+	// Build a wide and deep tree: 50 top-level directories, each with 50 files.
+	const dirs, filesPerDir = 50, 50
+	for d := range dirs {
+		dir := filepath.Join("data", "dir"+strconv.Itoa(d))
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			b.Fatal(err)
+		}
+		for f := range filesPerDir {
+			name := filepath.Join(dir, "file"+strconv.Itoa(f)+".csv")
+			if err := os.WriteFile(name, []byte("a\n"), 0o600); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+
+	shell, cleanup, err := newShell(b, []string{"sqly"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer cleanup()
+
+	leaf := filepath.ToSlash(filepath.Join("data", "dir25")) + "/"
+
+	b.Run("leaf directory", func(b *testing.B) {
+		for b.Loop() {
+			_ = shell.getFilePathCompletions(leaf)
+		}
+	})
+	b.Run("root directory", func(b *testing.B) {
+		for b.Loop() {
+			_ = shell.getFilePathCompletions("")
+		}
+	})
 }

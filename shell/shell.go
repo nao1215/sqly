@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +45,7 @@ const (
 	saveCommand     = ".save"
 
 	msgImportableFile = "Importable file"
+	msgImportableDir  = "Directory"
 )
 
 // Shell is main class of the sqly command.
@@ -934,37 +934,72 @@ func (s *Shell) isValidFileForCompletion(filename string) bool {
 	return s.usecases.importer.IsSupportedFile(filename)
 }
 
-// getFilePathCompletions returns file path completions for importable files (recursive)
-func (s *Shell) getFilePathCompletions(_ string) []Suggest {
+// splitCompletionPrefix splits a typed path prefix into the directory to scan,
+// the leading text to keep on each suggestion (so completions preserve exactly
+// what the user typed), and the partial entry name to match.
+//
+// It accepts both "/" and "\" as separators so completion behaves the same on
+// every OS. Examples (POSIX): "" -> ".", "", ""; "testdata/sa" -> "testdata/",
+// "testdata/", "sa"; "testdata" -> ".", "", "testdata".
+func splitCompletionPrefix(prefix string) (readDir, base, partial string) {
+	idx := strings.LastIndexAny(prefix, `/\`)
+	if idx < 0 {
+		return ".", "", prefix
+	}
+	base = prefix[:idx+1]
+	partial = prefix[idx+1:]
+	readDir = base
+	if readDir == "" {
+		// A leading separator ("/foo") leaves base empty; scan the filesystem root.
+		readDir = string(os.PathSeparator)
+	}
+	return readDir, base, partial
+}
+
+// getFilePathCompletions returns importable-file and directory suggestions
+// scoped to the directory named by prefix. It reads only that directory rather
+// than walking the whole working tree, so latency tracks the targeted subtree,
+// not repository size. Directories are suggested with a trailing slash so the
+// user can descend one level at a time, the same way a shell completes paths.
+// Hidden entries are skipped unless the user types a leading dot.
+func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
+	readDir, base, partial := splitCompletionPrefix(prefix)
+
+	// splitCompletionPrefix accepts both separators so Windows paths work, but
+	// the raw readDir may still carry a backslash on POSIX (e.g. "testdata\").
+	// Convert it to the local separator so os.ReadDir resolves the real directory
+	// instead of silently failing on a literal name.
+	readDir = filepath.FromSlash(strings.ReplaceAll(readDir, `\`, "/"))
+
+	entries, err := os.ReadDir(readDir)
+	if err != nil {
+		return nil
+	}
+
+	includeHidden := strings.HasPrefix(partial, ".")
 	var suggestions []Suggest
-
-	// Walk the current directory tree to find all importable files
-	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err // Return error to stop walking
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") && !includeHidden {
+			continue
+		}
+		if !strings.HasPrefix(name, partial) {
+			continue
 		}
 
-		// Skip hidden directories and files (unless explicitly requested)
-		// But don't skip the current directory "."
-		if strings.HasPrefix(d.Name(), ".") && d.Name() != "." {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// For files, check if they are importable
-		if !d.IsDir() && s.isValidFileForCompletion(d.Name()) {
+		if entry.IsDir() {
 			suggestions = append(suggestions, Suggest{
-				Text:        filepath.ToSlash(path),
+				Text:        filepath.ToSlash(base + name + "/"),
+				Description: msgImportableDir,
+			})
+			continue
+		}
+		if s.isValidFileForCompletion(name) {
+			suggestions = append(suggestions, Suggest{
+				Text:        filepath.ToSlash(base + name),
 				Description: msgImportableFile,
 			})
 		}
-
-		return nil
-	})
-	if err != nil {
-		return nil
 	}
 	return suggestions
 }
