@@ -1311,9 +1311,10 @@ func TestShellRun_TerminalStartupFailureIsGracefulAndQuiet(t *testing.T) {
 	}
 	defer cleanup()
 
+	wantCause := errors.New("open /dev/tty: no such device or address")
 	shell.isTTY = func() bool { return true }
 	shell.newPrompt = func(string, func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
-		return nil, errors.New("open /dev/tty: no such device or address")
+		return nil, wantCause
 	}
 
 	backupStdout := config.Stdout
@@ -1328,8 +1329,9 @@ func TestShellRun_TerminalStartupFailureIsGracefulAndQuiet(t *testing.T) {
 	if !strings.Contains(runErr.Error(), "interactive shell") || !strings.Contains(runErr.Error(), "terminal") {
 		t.Errorf("error = %q, want it to explain the terminal requirement", runErr.Error())
 	}
-	// The underlying cause is preserved for callers that inspect it.
-	if !strings.Contains(runErr.Error(), "/dev/tty") {
+	// The underlying cause is preserved (wrapped with %w) for callers that
+	// inspect it with errors.Is.
+	if !errors.Is(runErr, wantCause) {
 		t.Errorf("error = %q, want it to wrap the underlying /dev/tty cause", runErr.Error())
 	}
 	// The welcome banner must not have been printed before the failure.
