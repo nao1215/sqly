@@ -41,10 +41,46 @@
     {
       "login": "Marukome0743",
       "name": "まるこめ",
-      "avatar_url": "https://avatars.githubusercontent.com/u/113521295?v=4",
+      "avatar_url": "https://avatars.githubusercontent.com/u/146040408?v=4",
       "profile": "https://github.com/Marukome0743",
       "contributions": [
         "code"
+      ]
+    },
+    {
+      "login": "jedvardsson",
+      "name": "Jon Edvardsson",
+      "avatar_url": "https://avatars.githubusercontent.com/u/672606?v=4",
+      "profile": "https://github.com/jedvardsson",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "jgstew",
+      "name": "JGStew",
+      "avatar_url": "https://avatars.githubusercontent.com/u/2439367?v=4",
+      "profile": "https://github.com/jgstew",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "ricardoseriani",
+      "name": "Ricardo Seriani",
+      "avatar_url": "https://avatars.githubusercontent.com/u/3369718?v=4",
+      "profile": "https://github.com/ricardoseriani",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "SnowleopardXI",
+      "name": "Ephraim Steve Micaiah",
+      "avatar_url": "https://avatars.githubusercontent.com/u/69493681?v=4",
+      "profile": "https://github.com/SnowleopardXI",
+      "contributions": [
+        "bug"
       ]
     }
   ],
