@@ -1508,6 +1508,66 @@ func TestShell_getRegularCompletions_dependsOnMetadataUsecase(t *testing.T) {
 	}
 }
 
+func TestShell_getRegularCompletions_cachesTableHeaders(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+
+	tables := []*model.Table{
+		model.NewTable("users", nil, nil),
+		model.NewTable("orders", nil, nil),
+	}
+	// TablesName is cheap and may run per keystroke, but each table's header must
+	// be fetched only once across repeated completions thanks to the cache.
+	metadata.EXPECT().TablesName(gomock.Any()).Return(tables, nil).AnyTimes()
+	metadata.EXPECT().Header(gomock.Any(), "users").Return(
+		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil).Times(1)
+	metadata.EXPECT().Header(gomock.Any(), "orders").Return(
+		model.NewTable("orders", model.NewHeader([]string{"id", "total"}), nil), nil).Times(1)
+
+	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
+
+	// Simulate many keystrokes; gomock fails if Header runs more than once per table.
+	for i := 0; i < 6; i++ {
+		_ = s.getRegularCompletions(context.Background(), "SEL")
+	}
+}
+
+func TestShell_getRegularCompletions_skipsMetadataForDotCommand(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	// No TablesName/Header expectations: a dot-command line must not query schema,
+	// so any such call fails the test via gomock's unexpected-call check.
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+
+	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
+
+	completions := s.getRegularCompletions(context.Background(), ".he")
+	if !hasSuggestionText(completions, ".help") {
+		t.Fatalf("expected .help command suggestion for \".he\", got %#v", completions)
+	}
+}
+
+func BenchmarkRegularCompletionManyTables(b *testing.B) {
+	ctrl := gomock.NewController(b)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+
+	const tableCount = 50
+	tables := make([]*model.Table, 0, tableCount)
+	for i := 0; i < tableCount; i++ {
+		name := "table" + strconv.Itoa(i)
+		tables = append(tables, model.NewTable(name, nil, nil))
+		metadata.EXPECT().Header(gomock.Any(), name).Return(
+			model.NewTable(name, model.NewHeader([]string{"col_a", "col_b", "col_c", "col_d"}), nil), nil).AnyTimes()
+	}
+	metadata.EXPECT().TablesName(gomock.Any()).Return(tables, nil).AnyTimes()
+
+	s := newBoundaryTestShell(&testing.T{}, Usecases{metadata: metadata})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = s.getRegularCompletions(context.Background(), "SEL")
+	}
+}
+
 func TestShell_getFilePathCompletions_dependsOnImportUsecase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	importer := mock.NewMockImportUsecase(ctrl)

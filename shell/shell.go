@@ -96,6 +96,13 @@ type Shell struct {
 	// to stdout only after write-back succeeds, so a run that fails during
 	// write-back leaves stdout free of success counts.
 	pendingAffected []string
+	// completionTableKey fingerprints the table-name set the cached table/column
+	// completion suggestions were built from. completionTableCols holds those
+	// suggestions. Together they let interactive completion reuse table and column
+	// metadata across keystrokes instead of querying every table's header on each
+	// one, rebuilding only when the table set changes (or after an import).
+	completionTableKey  string
+	completionTableCols []Suggest
 }
 
 type promptSession interface {
@@ -778,43 +785,12 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		})
 	}
 
-	tables, err := s.usecases.metadata.TablesName(ctx)
-	if err != nil {
-		// Get current word for filtering
-		lastSpace := strings.LastIndex(input, " ")
-		var currentWord string
-		if lastSpace >= 0 {
-			currentWord = input[lastSpace+1:]
-		} else {
-			currentWord = input
-		}
-		return filterHasPrefix(suggest, currentWord, true)
+	// A line still typing a dot-command (no argument yet) never references tables
+	// or columns, so skip the table/column metadata entirely for it.
+	if !isTypingDotCommand(input) {
+		suggest = append(suggest, s.tableColumnSuggestions(ctx)...)
 	}
-	for _, v := range tables {
-		suggest = append(suggest, Suggest{
-			Text:        v.Name(),
-			Description: "table: " + v.Name(),
-		})
 
-		table, err := s.usecases.metadata.Header(ctx, v.Name())
-		if err != nil {
-			// Get current word for filtering
-			lastSpace := strings.LastIndex(input, " ")
-			var currentWord string
-			if lastSpace >= 0 {
-				currentWord = input[lastSpace+1:]
-			} else {
-				currentWord = input
-			}
-			return filterHasPrefix(suggest, currentWord, true)
-		}
-		for _, h := range table.Header() {
-			suggest = append(suggest, Suggest{
-				Text:        h,
-				Description: "header: " + h + " column in " + v.Name() + " table",
-			})
-		}
-	}
 	// Get current word for filtering
 	lastSpace := strings.LastIndex(input, " ")
 	var currentWord string
@@ -824,6 +800,72 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		currentWord = input
 	}
 	return filterHasPrefix(suggest, currentWord, true)
+}
+
+// isTypingDotCommand reports whether input is a helper dot-command name still
+// being typed (starts with "." and has no whitespace yet), such as ".he". Such a
+// line cannot reference a table or column, so completion can skip schema lookups.
+func isTypingDotCommand(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, ".") && !strings.ContainsAny(trimmed, " \t")
+}
+
+// tableColumnSuggestions returns table-name and column-header completion
+// suggestions, cached by the current table-name set. The headers are fetched
+// only when that set changes, so consecutive keystrokes reuse the cache instead
+// of querying every table's header on each one. Returns nil if the table list
+// cannot be read.
+func (s *Shell) tableColumnSuggestions(ctx context.Context) []Suggest {
+	tables, err := s.usecases.metadata.TablesName(ctx)
+	if err != nil {
+		return nil
+	}
+
+	key := completionTableKey(tables)
+	if key == s.completionTableKey && s.completionTableCols != nil {
+		return s.completionTableCols
+	}
+
+	var out []Suggest
+	for _, v := range tables {
+		out = append(out, Suggest{
+			Text:        v.Name(),
+			Description: "table: " + v.Name(),
+		})
+
+		header, err := s.usecases.metadata.Header(ctx, v.Name())
+		if err != nil {
+			continue
+		}
+		for _, h := range header.Header() {
+			out = append(out, Suggest{
+				Text:        h,
+				Description: "header: " + h + " column in " + v.Name() + " table",
+			})
+		}
+	}
+
+	s.completionTableKey = key
+	s.completionTableCols = out
+	return out
+}
+
+// completionTableKey builds a fingerprint of the table-name set used to decide
+// whether the cached completion suggestions are still valid.
+func completionTableKey(tables []*model.Table) string {
+	names := make([]string, 0, len(tables))
+	for _, t := range tables {
+		names = append(names, t.Name())
+	}
+	return strings.Join(names, "\x00")
+}
+
+// invalidateCompletionCache drops the cached table/column completion
+// suggestions, forcing the next completion to rebuild them. It is called after an
+// import, which can change a table's columns without changing the table-name set.
+func (s *Shell) invalidateCompletionCache() {
+	s.completionTableKey = ""
+	s.completionTableCols = nil
 }
 
 // exec execute sqly helper command or sql query.
