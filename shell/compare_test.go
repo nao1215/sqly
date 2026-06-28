@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/interactor/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestCompareSchemas(t *testing.T) {
@@ -126,6 +129,49 @@ func TestCompareKeyedRows(t *testing.T) {
 			t.Error("expected an error for a duplicate key value")
 		}
 	})
+}
+
+func TestResolveCompareTables_PreservesImportOrder(t *testing.T) {
+	t.Parallel()
+	// With exactly two imported tables and no --compare-tables override, the
+	// left/right pair must follow the import (CLI input) order that TablesName
+	// returns, not an alphabetical re-sort. Here "users" is imported before "user"
+	// even though it sorts after it.
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	metadata.EXPECT().TablesName(gomock.Any()).Return([]*model.Table{
+		model.NewTable("users", nil, nil),
+		model.NewTable("user", nil, nil),
+	}, nil)
+
+	s := &Shell{usecases: Usecases{metadata: metadata}, argument: &config.Arg{}}
+	left, right, err := s.resolveCompareTables(context.Background())
+	if err != nil {
+		t.Fatalf("resolveCompareTables: %v", err)
+	}
+	if left != "users" || right != "user" {
+		t.Errorf("left,right = %q,%q, want users,user (CLI input order preserved)", left, right)
+	}
+}
+
+func TestRunCompare_PreservesCLIInputOrder(t *testing.T) {
+	// End-to-end: passing zebra.csv before ant.csv must report zebra as the left
+	// side even though "ant" sorts first, so the left/right direction follows the
+	// command the user typed.
+	dir := t.TempDir()
+	left := filepath.Join(dir, "zebra.csv")
+	right := filepath.Join(dir, "ant.csv")
+	if err := os.WriteFile(left, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(right, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runCompareJSON(t, []string{"sqly", "--compare", left, right})
+	if report.Left != "zebra" || report.Right != "ant" {
+		t.Errorf("left,right = %q,%q, want zebra,ant (CLI input order preserved)", report.Left, report.Right)
+	}
 }
 
 // runCompareJSON builds a shell from args, runs it, and decodes the JSON report.
