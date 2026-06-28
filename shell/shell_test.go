@@ -1300,6 +1300,44 @@ func (h historyUsecaseStub) List(context.Context) (model.Histories, error) {
 	return h.histories, h.listErr
 }
 
+func TestShellRun_TerminalStartupFailureIsGracefulAndQuiet(t *testing.T) {
+	// Regression for #653: when the prompt backend cannot open a terminal
+	// (e.g. /dev/tty is unavailable), interactive startup must fail with a clear
+	// error and must not print the welcome banner first, so it does not look like
+	// the shell started and then crashed.
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	shell.isTTY = func() bool { return true }
+	shell.newPrompt = func(string, func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return nil, errors.New("open /dev/tty: no such device or address")
+	}
+
+	backupStdout := config.Stdout
+	defer func() { config.Stdout = backupStdout }()
+	var stdout bytes.Buffer
+	config.Stdout = &stdout
+
+	runErr := shell.Run(context.Background())
+	if runErr == nil {
+		t.Fatal("Run returned nil for a terminal-startup failure, want an error")
+	}
+	if !strings.Contains(runErr.Error(), "interactive shell") || !strings.Contains(runErr.Error(), "terminal") {
+		t.Errorf("error = %q, want it to explain the terminal requirement", runErr.Error())
+	}
+	// The underlying cause is preserved for callers that inspect it.
+	if !strings.Contains(runErr.Error(), "/dev/tty") {
+		t.Errorf("error = %q, want it to wrap the underlying /dev/tty cause", runErr.Error())
+	}
+	// The welcome banner must not have been printed before the failure.
+	if strings.Contains(stdout.String(), "enter \"SQL query\"") {
+		t.Errorf("welcome banner was printed before the terminal-startup failure: %q", stdout.String())
+	}
+}
+
 func TestShellCommunicate_ReusesPromptSessionForMultilineSQL(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
