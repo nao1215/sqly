@@ -40,6 +40,17 @@ Describe 'sqly .import with space-containing paths'
     The output should include 'alpha'
   End
 
+  It 'imports a file inside a space-containing directory when escaped'
+    Data
+      #|.import testdata/space\ dir/nested.csv
+      #|SELECT label FROM nested ORDER BY score;
+    End
+    When run sqly
+    The status should be success
+    The output should include 'gamma'
+    The output should include 'delta'
+  End
+
   It 'splits an unquoted space path into two failing arguments'
     Data
       #|.import testdata/space name.csv

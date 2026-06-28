@@ -232,6 +232,58 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 	})
 }
 
+func TestCompletionDescendsIntoSpaceContainingDirectory(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		"my dir/inner file.csv",
+		"my dir/plain.csv",
+	})
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	// After accepting "my\ dir/", the buffer holds an escaped prefix. Completion
+	// must decode it to read the real "my dir/" directory while keeping the escaped
+	// base on the suggestion so it round-trips through splitArgs.
+	roundTrips := func(t *testing.T, suggestions []Suggest, wantPath string) {
+		t.Helper()
+		for _, s := range suggestions {
+			argv, err := splitArgs(".import " + s.Text)
+			if err == nil && len(argv) == 2 && argv[1] == wantPath {
+				return
+			}
+		}
+		t.Fatalf("no completion round-trips to %q; got %v", wantPath, completionTexts(suggestions))
+	}
+
+	t.Run("listing an escaped space directory yields its files", func(t *testing.T) {
+		got := shell.getFilePathCompletions(`my\ dir/`)
+		roundTrips(t, got, "my dir/inner file.csv")
+		roundTrips(t, got, "my dir/plain.csv")
+	})
+
+	t.Run("partial inside an escaped space directory narrows to the match", func(t *testing.T) {
+		got := shell.getFilePathCompletions(`my\ dir/in`)
+		roundTrips(t, got, "my dir/inner file.csv")
+	})
+
+	t.Run("import completer descends into an escaped space directory", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), `.import my\ dir/in`)
+		roundTrips(t, got, "my dir/inner file.csv")
+	})
+}
+
 func TestImportCompleterDebug(t *testing.T) {
 	// Test the actual completer function behavior for .import commands
 	tmpDir := t.TempDir()

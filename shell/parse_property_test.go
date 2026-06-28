@@ -100,6 +100,48 @@ func TestEscapeCompletionPath_RoundTripProperty(t *testing.T) {
 	}
 }
 
+// TestUnescapeCompletionPath_InvertsEscapeProperty asserts the metamorphic
+// relation unescapeCompletionPath(escapeCompletionPath(name)) == name, so the
+// completion code can escape a name for display and decode it for filesystem
+// lookups without drift.
+func TestUnescapeCompletionPath_InvertsEscapeProperty(t *testing.T) {
+	property := func(name pathName) bool {
+		return unescapeCompletionPath(escapeCompletionPath(string(name))) == string(name)
+	}
+	if err := quick.Check(property, shellQuickConfig()); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestSplitCompletionPrefix_SplitsAtRealSeparator asserts that an escaped space
+// before a "/" does not fool the splitter into cutting at the escaping backslash:
+// the base keeps the escaped directory and the partial is the entry fragment.
+func TestSplitCompletionPrefix_SplitsAtRealSeparator(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		prefix      string
+		wantBase    string
+		wantPartial string
+	}{
+		{name: "escaped space then slash splits at the slash", prefix: `my\ dir/in`, wantBase: `my\ dir/`, wantPartial: "in"},
+		{name: "escaped space without a slash is one partial", prefix: `my\ dir`, wantBase: "", wantPartial: `my\ dir`},
+		{name: "plain nested path splits at the slash", prefix: "testdata/ac", wantBase: "testdata/", wantPartial: "ac"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, base, partial := splitCompletionPrefix(tt.prefix)
+			if base != tt.wantBase || partial != tt.wantPartial {
+				t.Errorf("splitCompletionPrefix(%q) = base %q, partial %q; want base %q, partial %q",
+					tt.prefix, base, partial, tt.wantBase, tt.wantPartial)
+			}
+		})
+	}
+}
+
 // TestSplitArgs_NeverPanicsProperty asserts splitArgs returns (slice,nil) or
 // (nil,err) for arbitrary input without panicking. Robustness guard for the
 // tokenizer against untrusted shell input.

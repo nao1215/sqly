@@ -133,6 +133,7 @@ func NewShell(
 				prompt.WithTheme(prompt.ThemeNightOwl),
 				prompt.WithMultiline(true),
 				prompt.WithIsComplete(sqlInputComplete),
+				prompt.WithWordEscape(),
 			)
 		},
 		stdin:          os.Stdin,
@@ -596,14 +597,11 @@ func (s *Shell) completerNew(ctx context.Context, input string) []prompt.Suggest
 // getCompletions returns suggestions for auto-completion.
 func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	text := input
-	// Get current word by finding last space and taking everything after
-	lastSpace := strings.LastIndex(text, " ")
-	var currentWord string
-	if lastSpace >= 0 {
-		currentWord = text[lastSpace+1:]
-	} else {
-		currentWord = text
-	}
+	// Get the current word, treating backslash-escaped whitespace as part of it so
+	// a path like "my\ dir/in" stays one word. This matches the prompt library's
+	// escaped word boundary (enabled with WithWordEscape) used to accept the
+	// completion, so the directory portion is not lost when descending.
+	currentWord := currentCompletionWord(text)
 	// Check if we're dealing with a file path (contains / or \ or starts with common path patterns)
 	isFilePath := strings.Contains(currentWord, "/") ||
 		strings.Contains(currentWord, `\`) || // Windows path separator support
@@ -965,14 +963,17 @@ func (s *Shell) isValidFileForCompletion(filename string) bool {
 }
 
 // splitCompletionPrefix splits a typed path prefix into the directory to scan,
-// the leading text to keep on each suggestion (so completions preserve exactly
-// what the user typed), and the partial entry name to match.
+// the leading text to keep on each suggestion (so completions preserve what the
+// user typed), and the partial entry name to match. The prefix may carry
+// backslash-escaped whitespace (for example "my\ dir/in"); the escaped base is
+// returned verbatim so suggestions keep round-tripping, while the partial is
+// matched after decoding.
 //
 // It accepts both "/" and "\" as separators so completion behaves the same on
 // every OS. Examples (POSIX): "" -> ".", "", ""; "testdata/sa" -> "testdata/",
 // "testdata/", "sa"; "testdata" -> ".", "", "testdata".
 func splitCompletionPrefix(prefix string) (readDir, base, partial string) {
-	idx := strings.LastIndexAny(prefix, `/\`)
+	idx := lastUnescapedSeparator(prefix)
 	if idx < 0 {
 		return ".", "", prefix
 	}
@@ -984,6 +985,88 @@ func splitCompletionPrefix(prefix string) (readDir, base, partial string) {
 		readDir = string(os.PathSeparator)
 	}
 	return readDir, base, partial
+}
+
+// currentCompletionWord returns the word at the end of input used to build
+// completions. Whitespace that is backslash-escaped (preceded by an odd number of
+// backslashes) is part of the word, so "my\ dir/in" is one word while an
+// unescaped space ends it. It mirrors the prompt library's escaped word boundary.
+func currentCompletionWord(text string) string {
+	runes := []rune(text)
+	if len(runes) == 0 {
+		return ""
+	}
+	last := len(runes) - 1
+	if isUnescapedWhitespace(runes, last) {
+		return ""
+	}
+	start := 0
+	for i := last; i >= 0; i-- {
+		if isUnescapedWhitespace(runes, i) {
+			start = i + 1
+			break
+		}
+	}
+	return string(runes[start:])
+}
+
+// isUnescapedWhitespace reports whether runes[i] is a space, tab, or newline that
+// is not backslash-escaped (an even number of backslashes precede it).
+func isUnescapedWhitespace(runes []rune, i int) bool {
+	if r := runes[i]; r != ' ' && r != '\t' && r != '\n' {
+		return false
+	}
+	backslashes := 0
+	for j := i - 1; j >= 0 && runes[j] == '\\'; j-- {
+		backslashes++
+	}
+	return backslashes%2 == 0
+}
+
+// lastUnescapedSeparator returns the byte index of the last path separator in an
+// escaped completion prefix, or -1. A backslash that escapes the following
+// character (whitespace, quote, or backslash) is not a separator; a lone
+// backslash is treated as a Windows separator. This keeps "my\ dir/in" splitting
+// at the "/" rather than at the escaping backslash.
+func lastUnescapedSeparator(prefix string) int {
+	last := -1
+	for i := 0; i < len(prefix); i++ {
+		switch prefix[i] {
+		case '\\':
+			if i+1 < len(prefix) {
+				switch prefix[i+1] {
+				case ' ', '\t', '\\', '\'', '"':
+					i++ // skip the escaped character
+					continue
+				}
+			}
+			last = i
+		case '/':
+			last = i
+		}
+	}
+	return last
+}
+
+// unescapeCompletionPath reverses escapeCompletionPath, decoding a typed or
+// accepted prefix back to a real path for filesystem lookups. It mirrors how
+// splitArgs consumes a backslash: only before whitespace, a quote, or another
+// backslash; a lone backslash stays literal (a Windows separator).
+func unescapeCompletionPath(s string) string {
+	var b strings.Builder
+	runes := []rune(s)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\\' && i+1 < len(runes) {
+			switch next := runes[i+1]; next {
+			case ' ', '\t', '\\', '\'', '"':
+				b.WriteRune(next)
+				i++
+				continue
+			}
+		}
+		b.WriteRune(runes[i])
+	}
+	return b.String()
 }
 
 // escapeCompletionPath backslash-escapes the characters that splitArgs treats as
@@ -1008,6 +1091,33 @@ func escapeCompletionPath(path string) string {
 	return b.String()
 }
 
+// slashifyBase normalizes the separators in a completion base to "/" without
+// disturbing the backslashes that escape whitespace or quotes. filepath.ToSlash
+// cannot be used here because on Windows it would rewrite an escape such as
+// "my\ dir/" into "my/ dir/", breaking the round-trip; this converts only genuine
+// separator backslashes.
+func slashifyBase(base string) string {
+	var b strings.Builder
+	runes := []rune(base)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\\' {
+			if i+1 < len(runes) {
+				switch next := runes[i+1]; next {
+				case ' ', '\t', '\\', '\'', '"':
+					b.WriteRune('\\')
+					b.WriteRune(next)
+					i++
+					continue
+				}
+			}
+			b.WriteRune('/') // a lone backslash is a path separator
+			continue
+		}
+		b.WriteRune(runes[i])
+	}
+	return b.String()
+}
+
 // getFilePathCompletions returns importable-file and directory suggestions
 // scoped to the directory named by prefix. It reads only that directory rather
 // than walking the whole working tree, so latency tracks the targeted subtree,
@@ -1017,11 +1127,12 @@ func escapeCompletionPath(path string) string {
 func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
 	readDir, base, partial := splitCompletionPrefix(prefix)
 
-	// splitCompletionPrefix accepts both separators so Windows paths work, but
-	// the raw readDir may still carry a backslash on POSIX (e.g. "testdata\").
-	// Convert it to the local separator so os.ReadDir resolves the real directory
-	// instead of silently failing on a literal name.
-	readDir = filepath.FromSlash(strings.ReplaceAll(readDir, `\`, "/"))
+	// readDir and partial come from the escaped prefix, so decode them before
+	// touching the filesystem: an escaped space ("my\ dir/") names the real
+	// directory "my dir/". base stays escaped so each suggestion round-trips
+	// through splitArgs; a remaining backslash is a Windows separator mapped to "/".
+	readDir = filepath.FromSlash(strings.ReplaceAll(unescapeCompletionPath(readDir), `\`, "/"))
+	partial = unescapeCompletionPath(partial)
 
 	entries, err := os.ReadDir(readDir)
 	if err != nil {
@@ -1043,14 +1154,14 @@ func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
 		// library prefix-matches, so escaping it would corrupt the match.
 		if entry.IsDir() {
 			suggestions = append(suggestions, Suggest{
-				Text:        filepath.ToSlash(base) + escapeCompletionPath(name) + "/",
+				Text:        slashifyBase(base) + escapeCompletionPath(name) + "/",
 				Description: msgImportableDir,
 			})
 			continue
 		}
 		if s.isValidFileForCompletion(name) {
 			suggestions = append(suggestions, Suggest{
-				Text:        filepath.ToSlash(base) + escapeCompletionPath(name),
+				Text:        slashifyBase(base) + escapeCompletionPath(name),
 				Description: msgImportableFile,
 			})
 		}

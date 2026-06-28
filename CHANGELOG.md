@@ -7,6 +7,7 @@
 * Idempotent SQLite Driver Registration: `config.InitSQLite3()` now guards driver registration with a package-level `sync.Once` instead of a function-local one, so calling it more than once no longer panics with `sql: Register called twice for driver sqlite3`.
 * Prefix-Scoped Import Completion: `.import` tab completion now reads only the directory named by the typed path prefix instead of walking the whole working tree on every keystroke. Directories are offered with a trailing slash so the path can be completed one level at a time, keeping latency proportional to the targeted subtree rather than repository size.
 * Space-Safe Import Completion: `.import` tab completion now backslash-escapes spaces and shell-special characters, so accepting a path like `my data.csv` inserts `my\ data.csv` and reaches `.import` as a single argument. Escaping (not quoting) is used so the suggestion still prefix-matches the typed word.
+* Completion Into Space-Containing Directories: `.import` tab completion now descends into a directory whose name contains a space. The escaped prefix (for example `my\ dir/`) is decoded to read the real directory while the escaped form is kept on each suggestion, so nested files complete and still round-trip through the command parser.
 * Compare Input Order: `--compare` without `--compare-tables` now keeps the left/right direction in the order the inputs were given on the command line, instead of sorting the table names alphabetically.
 * Typed JSON Mode Shell UX: switching to `.mode json-typed`/`.mode ndjson-typed` now shows the typed mode name in the prompt label and the `.mode` current-mode banner instead of the plain `json`/`ndjson`, and `.mode` lists both typed variants.
 * Content-Aware Import Cache Key: `--cache` now keys invalidation on each input file's path, size, and a SHA-256 content hash instead of path, size, and modification time. A source rewritten in place with different but same-length content and its original mtime restored is now detected and the cache rebuilt, so a warm run can no longer return stale rows for a modified file.
@@ -14,7 +15,7 @@
 * Symlink-Resolved System-Path Guard: import path validation now rejects a symlink whose canonical target is a blocked system location (such as a link to `/etc/hosts`), not only a directly typed system path. It also normalizes the macOS `/private` prefix, while standard Unix pseudo-files (`/dev/stdin`, `/proc/self/fd/*`) keep importing.
 
 ### Dependencies
-* Prompt: upgrade `github.com/nao1215/prompt` to v0.0.6 for the `WithIsComplete` multiline submit predicate that powers multi-line SQL buffering.
+* Prompt: upgrade `github.com/nao1215/prompt` to v0.0.7 for the `WithIsComplete` multiline submit predicate and the `WithWordEscape` option that lets completion treat backslash-escaped whitespace as part of a word.
 
 ## [v0.24.0](https://github.com/nao1215/sqly/compare/v0.23.0...v0.24.0) (2026-06-06)
 
