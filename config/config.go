@@ -31,11 +31,14 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
-	if err := cfg.CreateDir(); err != nil {
-		return nil, err
-	}
-
+	// Only create the default config directory when history falls back to the
+	// default location. When SQLY_HISTORY_DB_PATH is set the caller routed
+	// history elsewhere, so creating the XDG directory would be a useless side
+	// effect.
 	if cfg.HistoryDBPath == "" {
+		if err := cfg.CreateDir(); err != nil {
+			return nil, err
+		}
 		cfg.HistoryDBPath = filepath.Join(cfg.Dir(), "history.db")
 	}
 	return &cfg, nil

@@ -7,6 +7,7 @@
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes
+* No Stray Config Directory: `NewConfig` no longer creates the default XDG config directory when `SQLY_HISTORY_DB_PATH` is set, so routing history elsewhere has no unnecessary filesystem side effect.
 * Clear-Screen Control Key: the interactive shell now binds the documented Ctrl+L key to clear the screen, redrawing the prompt with the current input preserved.
 * History Control Keys: the interactive shell now binds the documented Ctrl+P and Ctrl+N keys to previous/next command history, matching the arrow keys.
 * Cursor Movement Control Keys: the interactive shell now binds the documented Ctrl+F and Ctrl+B keys to move the cursor forward/backward one character, matching the arrow keys.
