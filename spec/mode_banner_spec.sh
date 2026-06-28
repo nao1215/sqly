@@ -39,6 +39,7 @@ Describe 'sqly .mode banner routing'
     End
     When run sqly testdata/user.csv
     The status should be success
+    The output should not include 'Change output mode'
     The stderr should include 'Change output mode from table to json-typed'
     The output should include '"n":7'
     The output should include '"s":"x"'
