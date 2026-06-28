@@ -5,6 +5,14 @@ on:
     tags:
       - "v*"
 
+# id-token: keyless cosign signing + provenance via GitHub OIDC.
+# attestations: publish build provenance for the release artifacts.
+# contents: create the GitHub Release and upload assets.
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
 jobs:
   release:
     name: Release
@@ -12,18 +20,39 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: "go.mod"
+          # Disable the shared module/build cache in this privileged, OIDC-enabled
+          # release job to avoid cache-poisoning from lower-privilege workflows.
+          cache: false
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      - name: Install Syft (SBOM generator)
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
-          version: latest
+          # Pin the GoReleaser CLI to a fixed version so the release is reproducible.
+          version: "v2.16.0"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/checksums.txt
+            dist/*.sbom.json
+            dist/checksums.txt.sigstore.json
