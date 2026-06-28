@@ -7,6 +7,7 @@
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes
+* Leaner Keyed Compare: `--compare --compare-key` now converts each side to its keyed rows and releases the raw table before loading the other, so the two full tables are no longer held in memory at the same time.
 * Single-Pass Profiling: `--profile` now aggregates each column's statistics in a single pass over the rows instead of copying the whole table into a per-column values and nulls slice, so its memory no longer scales with columns times rows.
 * Single-Insert History Writes: each interactive command's history write is now a single insert that relies on SQLite AUTOINCREMENT, instead of scanning the entire history table to compute the next id. History preloading at startup still reads the table once.
 * Cached Completion Metadata: interactive SQL completion now caches table and column suggestions keyed on the current table-name set, so it no longer queries every table's header on each keystroke. A line still typing a dot-command skips schema lookups entirely, and the cache refreshes when the table set changes or after an import.
