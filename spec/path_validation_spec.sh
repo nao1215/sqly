@@ -34,4 +34,23 @@ Describe 'sqly input path validation'
     The output should include 'user_name'
     The stderr should not include 'dangerous path pattern'
   End
+
+  # A symlink alias to a blocked system file must be rejected just like the
+  # direct path; otherwise the guard only checks the typed string, not the real
+  # target.
+  It 'rejects a symlink alias that resolves to a blocked system path'
+    Skip if 'no /etc/hosts on this host' test ! -e /etc/hosts
+    ln -sf /etc/hosts "$WORK/hosts_alias.csv"
+    When run sqly --inspect "$WORK/hosts_alias.csv"
+    The status should be failure
+    The stderr should include 'system directory not allowed'
+  End
+
+  It 'imports a symlink alias that resolves to an ordinary user file'
+    cp testdata/user.csv "$WORK/real.csv"
+    ln -sf "$WORK/real.csv" "$WORK/user_alias.csv"
+    When run sqly --inspect "$WORK/user_alias.csv"
+    The status should be success
+    The output should include 'user_name'
+  End
 End

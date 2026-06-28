@@ -784,18 +784,49 @@ func validatePath(path string) (string, error) {
 		}
 	}
 
-	// Prevent access to system directories on Unix-like systems
+	// Prevent access to system directories on Unix-like systems. Validate both
+	// the raw absolute path and its symlink-resolved target, so a symlink to
+	// /etc/hosts is rejected like the direct path. EvalSymlinks only resolves
+	// existing paths, so its error is ignored for paths that do not exist yet.
 	absPath, err := filepath.Abs(cleanPath)
-	if err == nil && !isAllowedPseudoFile(absPath) { // Only check if we can resolve the absolute path
-		systemDirs := []string{"/etc", "/proc", "/sys", "/dev", "/boot"}
-		for _, sysDir := range systemDirs {
-			if absPath == sysDir || strings.HasPrefix(absPath, sysDir+"/") {
+	if err == nil {
+		if isBlockedSystemPath(absPath) {
+			return "", fmt.Errorf("access to system directory not allowed: %s", path)
+		}
+		// Skip symlink resolution for allowed pseudo-files: their fd aliases
+		// (e.g. /dev/stdin, /proc/self/fd/0) legitimately resolve to devices or
+		// pipes under /dev or /proc, which would otherwise look blocked.
+		if !isAllowedPseudoFile(absPath) {
+			if resolved, rerr := filepath.EvalSymlinks(absPath); rerr == nil && isBlockedSystemPath(resolved) {
 				return "", fmt.Errorf("access to system directory not allowed: %s", path)
 			}
 		}
 	}
 
 	return cleanPath, nil
+}
+
+// isBlockedSystemPath reports whether absPath (already absolute) targets a
+// protected OS directory such as /etc, /proc, or /dev. On macOS these live under
+// /private (/etc is a symlink to /private/etc), so a /private-prefixed resolved
+// target is normalized before comparison. Allowed Unix pseudo-files are not
+// treated as blocked.
+func isBlockedSystemPath(absPath string) bool {
+	if isAllowedPseudoFile(absPath) {
+		return false
+	}
+	candidates := []string{absPath}
+	if stripped, ok := strings.CutPrefix(absPath, "/private"); ok && strings.HasPrefix(stripped, "/") {
+		candidates = append(candidates, stripped)
+	}
+	for _, p := range candidates {
+		for _, sysDir := range []string{"/etc", "/proc", "/sys", "/dev", "/boot"} {
+			if p == sysDir || strings.HasPrefix(p, sysDir+"/") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // stagePseudoFileAsCSV stages an extensionless Unix pseudo-file (e.g. /dev/stdin,
