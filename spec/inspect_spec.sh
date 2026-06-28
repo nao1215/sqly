@@ -24,7 +24,7 @@ Describe 'sqly --inspect'
     The output should include 'ppd-debit.ach'
   End
 
-  It 'keeps stdout as pure JSON for a directory and sends progress to stderr'
+  It 'keeps stdout as pure JSON for a directory and stays quiet on stderr'
     work_dir=$(mktemp -d)
     export work_dir
     cp testdata/user.csv "$work_dir/a.csv"
@@ -37,7 +37,8 @@ Describe 'sqly --inspect'
     # Each table reports its real source file, not the directory path.
     The output should include '/a.csv'
     The output should include '/b.csv'
-    The stderr should include 'Successfully imported'
+    # Report-only modes stay quiet on stderr after a successful import.
+    The stderr should not include 'Successfully imported'
     rm -rf "$work_dir"
   End
 

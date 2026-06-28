@@ -134,7 +134,8 @@ Describe 'sqly v0.18.0 binary bug fixes'
       When run sqly --inspect "$work"
       The status should be success
       The output should include '2023-data.csv'
-      The stderr should include 'Successfully imported'
+      # Report-only modes stay quiet on stderr after a successful import.
+      The stderr should not include 'Successfully imported'
       rm -rf "$work"
     End
 

@@ -115,4 +115,20 @@ Describe 'sqly v0.25.0 binary regressions'
     The status should be failure
     The stderr should include '.save requires'
   End
+
+  # Report-only modes must stay quiet on stderr after a successful directory import,
+  # so the structured report is the only noteworthy output of a clean run.
+  It 'keeps --inspect quiet on stderr after a successful directory import'
+    When run sqly --inspect "$PROJECT_ROOT/testdata/space dir"
+    The status should be success
+    The output should include '"tables"'
+    The stderr should not include 'Successfully imported'
+  End
+
+  It 'keeps --profile quiet on stderr after a successful directory import'
+    When run sqly --profile "$PROJECT_ROOT/testdata/space dir"
+    The status should be success
+    The output should include '"tables"'
+    The stderr should not include 'Successfully imported'
+  End
 End

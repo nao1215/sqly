@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -296,6 +297,83 @@ func TestInspect_Directory(t *testing.T) {
 			t.Errorf("table %q source = %q, want file %q", tbl.Name, tbl.Source, want[tbl.Name])
 		}
 	}
+}
+
+func TestReportOnly_DirectoryImportQuietOnStderr(t *testing.T) {
+	// Regression for #662: a successful directory import must not print its
+	// progress banner to stderr in report-only modes (--inspect, --compare,
+	// --profile). The structured report is the only intended output of a clean run.
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "data")
+	if err := os.Mkdir(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeCSV(t, sub, "one.csv", "a\n1\n")
+	writeCSV(t, sub, "two.csv", "b\n2\n")
+
+	runCapturingStderr := func(t *testing.T, args []string) string {
+		t.Helper()
+		shell, cleanup, err := newShell(t, args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		return captureStderr(t, func() {
+			_ = captureStdout(t, func() {
+				if err := shell.Run(context.Background()); err != nil {
+					t.Fatalf("Run: %v", err)
+				}
+			})
+		})
+	}
+
+	t.Run("--inspect stays quiet on a successful directory import", func(t *testing.T) {
+		stderr := runCapturingStderr(t, []string{"sqly", "--inspect", sub})
+		if strings.Contains(stderr, "Successfully imported") {
+			t.Errorf("--inspect directory import should be quiet on stderr, got %q", stderr)
+		}
+	})
+
+	t.Run("--profile stays quiet on a successful directory import", func(t *testing.T) {
+		stderr := runCapturingStderr(t, []string{"sqly", "--profile", sub})
+		if strings.Contains(stderr, "Successfully imported") {
+			t.Errorf("--profile directory import should be quiet on stderr, got %q", stderr)
+		}
+	})
+
+	t.Run("--compare stays quiet on a successful directory import", func(t *testing.T) {
+		// The directory imports exactly two tables, so --compare needs no
+		// --compare-tables to pick a left/right pair.
+		stderr := runCapturingStderr(t, []string{"sqly", "--compare", sub})
+		if strings.Contains(stderr, "Successfully imported") {
+			t.Errorf("--compare directory import should be quiet on stderr, got %q", stderr)
+		}
+	})
+
+	t.Run("a normal directory import still prints the banner on stderr", func(t *testing.T) {
+		stderr := runCapturingStderr(t, []string{"sqly", "--csv", "--sql", "SELECT COUNT(*) FROM one", sub})
+		if !strings.Contains(stderr, "Successfully imported") {
+			t.Errorf("a non-report directory import should still print the banner, got %q", stderr)
+		}
+	})
+
+	t.Run("--inspect still surfaces import warnings on stderr", func(t *testing.T) {
+		wsub := filepath.Join(t.TempDir(), "data")
+		if err := os.Mkdir(wsub, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		// A file named after a SQLite keyword produces a keyword table-name warning,
+		// which must still print even though the success banner is suppressed.
+		writeCSV(t, wsub, "select.csv", "a\n1\n")
+		stderr := runCapturingStderr(t, []string{"sqly", "--inspect", wsub})
+		if strings.Contains(stderr, "Successfully imported") {
+			t.Errorf("--inspect directory import should be quiet on stderr, got %q", stderr)
+		}
+		if !strings.Contains(stderr, "warning") {
+			t.Errorf("--inspect should still surface import warnings on stderr, got %q", stderr)
+		}
+	})
 }
 
 func TestWriteBack_RejectsDirectoryImport(t *testing.T) {

@@ -442,6 +442,14 @@ func (s *Shell) startsInteractiveShell() bool {
 	return s.isTTY() && !s.argument.InspectFlag && !s.argument.CompareFlag && !s.argument.ProfileFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
 }
 
+// reportOnly reports whether the run is a non-interactive report mode
+// (--inspect, --compare, --profile) whose only intended output is the structured
+// report. Successful import progress banners are suppressed in these modes so a
+// clean run stays quiet on stderr; warnings and errors still print.
+func (s *Shell) reportOnly() bool {
+	return s.argument.InspectFlag || s.argument.CompareFlag || s.argument.ProfileFlag
+}
+
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init(ctx context.Context) error {
 	// History is best-effort: a read-only or unwritable history DB (CI,
