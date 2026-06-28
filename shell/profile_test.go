@@ -10,6 +10,17 @@ import (
 	"testing"
 )
 
+// columnStats folds the given values and NULL mask through the streaming
+// columnProfiler, so the unit tests exercise the same accumulator the profiling
+// path uses.
+func columnStats(name, typ string, values []string, nulls []bool) profileColumn {
+	p := newColumnProfiler(name, typ)
+	for i, v := range values {
+		p.add(v, i < len(nulls) && nulls[i])
+	}
+	return p.result()
+}
+
 func TestProfileColumnStats(t *testing.T) {
 	t.Parallel()
 
@@ -19,7 +30,7 @@ func TestProfileColumnStats(t *testing.T) {
 		nulls := []bool{false, false, false, false, false}
 		// Mark index 4 ("x") as a real NULL to separate null from blank.
 		nulls[4] = true
-		got := profileColumnStats("c", "TEXT", values, nulls)
+		got := columnStats("counts", "TEXT", values, nulls)
 		if got.NullCount != 1 {
 			t.Errorf("null_count = %d, want 1", got.NullCount)
 		}
@@ -37,7 +48,7 @@ func TestProfileColumnStats(t *testing.T) {
 
 	t.Run("warns on a mix of numeric and non-numeric values", func(t *testing.T) {
 		t.Parallel()
-		got := profileColumnStats("c", "TEXT", []string{"1", "2", "abc"}, []bool{false, false, false})
+		got := columnStats("c", "TEXT", []string{"1", "2", "abc"}, []bool{false, false, false})
 		if !hasWarningContaining(got.Warnings, "mixed numeric") {
 			t.Errorf("expected a mixed-type warning, got %v", got.Warnings)
 		}
@@ -45,7 +56,7 @@ func TestProfileColumnStats(t *testing.T) {
 
 	t.Run("warns on null-like placeholder text and surrounding whitespace", func(t *testing.T) {
 		t.Parallel()
-		got := profileColumnStats("c", "TEXT", []string{"N/A", " hi "}, []bool{false, false})
+		got := columnStats("c", "TEXT", []string{"N/A", " hi "}, []bool{false, false})
 		if !hasWarningContaining(got.Warnings, "null placeholders") {
 			t.Errorf("expected a null-placeholder warning, got %v", got.Warnings)
 		}
@@ -56,7 +67,7 @@ func TestProfileColumnStats(t *testing.T) {
 
 	t.Run("clean numeric column has no warnings", func(t *testing.T) {
 		t.Parallel()
-		got := profileColumnStats("c", "INTEGER", []string{"1", "2", "3"}, []bool{false, false, false})
+		got := columnStats("c", "INTEGER", []string{"1", "2", "3"}, []bool{false, false, false})
 		if len(got.Warnings) != 0 {
 			t.Errorf("expected no warnings, got %v", got.Warnings)
 		}

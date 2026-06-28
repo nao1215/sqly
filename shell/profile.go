@@ -234,20 +234,6 @@ func (c *columnProfiler) result() profileColumn {
 	return pc
 }
 
-// profileColumnStats computes the data-quality summary for one column from its
-// values and NULL mask. It is pure so it can be unit-tested directly, and shares
-// the same accumulator the streaming path uses. Warnings are only raised where
-// they can be inferred safely: a mix of numeric and non-numeric non-empty
-// values, null-like placeholder text, and values with leading or trailing
-// whitespace.
-func profileColumnStats(name, typ string, values []string, nulls []bool) profileColumn {
-	p := newColumnProfiler(name, typ)
-	for i, v := range values {
-		p.add(v, i < len(nulls) && nulls[i])
-	}
-	return p.result()
-}
-
 // isNumericValue reports whether s is a finite decimal number. It rejects the
 // Go-specific float spellings ParseFloat also accepts but data rarely means as
 // numbers: hexadecimal floats ("0x1p4"), underscore digit separators
