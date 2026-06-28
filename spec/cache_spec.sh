@@ -35,6 +35,17 @@ Describe 'sqly --cache import cache'
     The stderr should not include 'cache: reused'
   End
 
+  It 'invalidates the cache when content changes but size and mtime do not (issue #592)'
+    # Rewrite the source with different same-length content and restore the
+    # original mtime. A size+mtime signature would miss the edit and reuse stale
+    # data; a content hash must catch it.
+    When run sh -c "printf 'id,name\n1,Alice\n2,Bob\n' > '$WORKDIR/d.csv' && cp -p '$WORKDIR/d.csv' '$WORKDIR/ref.csv' && '$SQLY_BIN' --cache '$CACHE' --sql \"SELECT group_concat(name, ',') AS names FROM d\" '$WORKDIR/d.csv' >/dev/null && printf 'id,name\n1,Carol\n2,Eve\n' > '$WORKDIR/d.csv' && touch -r '$WORKDIR/ref.csv' '$WORKDIR/d.csv' && '$SQLY_BIN' --cache '$CACHE' --sql \"SELECT group_concat(name, ',') AS names FROM d\" '$WORKDIR/d.csv'"
+    The status should be success
+    The output should include 'Carol,Eve'
+    The output should not include 'Alice,Bob'
+    The stderr should not include 'cache: reused'
+  End
+
   It 'falls back to a cold import when the cache path is unwritable'
     # A non-empty directory at the cache path cannot be written as a SQLite file.
     When run sh -c "mkdir -p '$CACHE' && touch '$CACHE/keep' && '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' '$WORKDIR/data.csv'"

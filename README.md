@@ -360,14 +360,14 @@ Saved ACH set payment to payment.ach
 
 ## Reuse imports: --cache
 
-For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run with unchanged inputs reloads from the snapshot instead of re-parsing the source files, which is much faster for big CSVs. The cache key is each input's path, size, and modification time, so it invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning rather than failing the query.
+For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run with unchanged inputs reloads from the snapshot instead of re-parsing the source files, which is much faster for big CSVs. The cache key is each input's path, size, and a SHA-256 hash of its contents, so it invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning rather than failing the query.
 
 ```shell
 $ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # cold: parses and snapshots
 $ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # warm: reloads the snapshot
 ```
 
-Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs. The cache key is path, size, and modification time, so an in-place edit that keeps the exact size and modification time would not be detected; use `--cache-clear` to force a rebuild when in doubt.
+Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs. Because the cache key includes a SHA-256 content hash, an in-place edit is detected even when the file's size and modification time are unchanged.
 
 ## Profile data quality: --profile
 

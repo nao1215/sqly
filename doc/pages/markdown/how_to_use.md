@@ -164,7 +164,7 @@ Tables created by SQL, tables imported from a directory, and Excel sources are r
 
 ### Reuse imports across runs: --cache
 
-For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run whose inputs are unchanged reloads from the snapshot instead of re-parsing the source files. The cache key is each input file's path, size, and modification time (directories are expanded recursively), so the cache invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning instead of failing the query. Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs. Because the key is path, size, and modification time, an in-place edit that keeps the exact size and modification time would not be detected; use `--cache-clear` to force a rebuild when in doubt.
+For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run whose inputs are unchanged reloads from the snapshot instead of re-parsing the source files. The cache key is each input file's path, size, and a SHA-256 hash of its contents (directories are expanded recursively), so the cache invalidates automatically whenever a source changes, including an in-place edit that keeps the same size and modification time. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning instead of failing the query. Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs.
 
 ```shell
 $ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv

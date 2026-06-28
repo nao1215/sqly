@@ -2,8 +2,11 @@ package shell
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,16 +16,20 @@ import (
 )
 
 // cacheManifestVersion is the manifest schema version. A mismatch invalidates the
-// cache so an older cache layout is rebuilt rather than misread.
-const cacheManifestVersion = 1
+// cache so an older cache layout is rebuilt rather than misread. Version 2 added a
+// content hash to the source signature (issue #592); a version 1 manifest is
+// treated as stale and rebuilt.
+const cacheManifestVersion = 2
 
 // cacheSource is the invalidation signature of one input file: its absolute path,
-// size, and modification time. A change in size or mtime invalidates the cache.
+// size, and a SHA-256 hash of its contents. The content hash detects edits that
+// leave the file size and modification time unchanged, which a size+mtime
+// signature would miss and so reuse stale cached data (issue #592).
 type cacheSource struct {
 	Path string `json:"path"`
 	Size int64  `json:"size"`
-	// ModTime is the source modification time in Unix nanoseconds.
-	ModTime int64 `json:"mod_time"`
+	// Hash is the hex-encoded SHA-256 digest of the file contents.
+	Hash string `json:"hash"`
 }
 
 // cacheManifest records what an import cache contains and the inputs it was built
@@ -216,7 +223,11 @@ func collectCacheSignatures(paths []string) ([]cacheSource, error) {
 		if err != nil {
 			return err
 		}
-		sigs = append(sigs, cacheSource{Path: abs, Size: info.Size(), ModTime: info.ModTime().UnixNano()})
+		hash, err := hashFile(abs)
+		if err != nil {
+			return err
+		}
+		sigs = append(sigs, cacheSource{Path: abs, Size: info.Size(), Hash: hash})
 		return nil
 	}
 	for _, p := range paths {
@@ -247,8 +258,24 @@ func collectCacheSignatures(paths []string) ([]cacheSource, error) {
 	return sigs, nil
 }
 
+// hashFile returns the hex-encoded SHA-256 digest of a file's contents. It
+// streams the file through the hash so memory use stays constant regardless of
+// file size.
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path) //nolint:gosec // cache inputs are paths the user passed on the command line
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 // cacheSignaturesMatch reports whether two signature sets are identical (same
-// files, sizes, and modification times). Either set is assumed sorted by path.
+// files, sizes, and content hashes). Either set is assumed sorted by path.
 func cacheSignaturesMatch(a, b []cacheSource) bool {
 	if len(a) != len(b) {
 		return false
