@@ -149,6 +149,89 @@ func TestGetFilePathCompletionsScopedToTypedPrefix(t *testing.T) {
 	}
 }
 
+func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		"my data.csv",
+		"my dir/",
+		"my dir/inner file.csv",
+		"plain.csv",
+	})
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	// A completion candidate must round-trip through splitArgs, otherwise the
+	// accepted command line is re-tokenized and a single path becomes many.
+	roundTrip := func(t *testing.T, suggestionText, wantPath string) {
+		t.Helper()
+		argv, err := splitArgs(".import " + suggestionText)
+		if err != nil {
+			t.Fatalf("splitArgs(%q) error: %v", ".import "+suggestionText, err)
+		}
+		if len(argv) != 2 {
+			t.Fatalf("splitArgs(%q) = %#v, want 2 tokens", ".import "+suggestionText, argv)
+		}
+		if argv[1] != wantPath {
+			t.Fatalf("splitArgs(%q) path = %q, want %q", ".import "+suggestionText, argv[1], wantPath)
+		}
+	}
+
+	findSuggestion := func(t *testing.T, suggestions []Suggest, wantPath string) string {
+		t.Helper()
+		for _, s := range suggestions {
+			argv, err := splitArgs(".import " + s.Text)
+			if err != nil {
+				continue
+			}
+			if len(argv) == 2 && argv[1] == wantPath {
+				return s.Text
+			}
+		}
+		t.Fatalf("no completion round-trips to %q; got %v", wantPath, completionTexts(suggestions))
+		return ""
+	}
+
+	t.Run("space-containing file is escaped so it round-trips to a single path", func(t *testing.T) {
+		got := shell.getFilePathCompletions("my")
+		text := findSuggestion(t, got, "my data.csv")
+		if !strings.Contains(text, `\ `) {
+			t.Errorf("suggestion %q is not backslash-escaped", text)
+		}
+		roundTrip(t, text, "my data.csv")
+	})
+
+	t.Run("space-containing directory is escaped so it round-trips to a single path", func(t *testing.T) {
+		got := shell.getFilePathCompletions("my")
+		text := findSuggestion(t, got, "my dir/")
+		roundTrip(t, text, "my dir/")
+	})
+
+	t.Run("import completer escapes the space so a single argument reaches .import", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), ".import my")
+		text := findSuggestion(t, got, "my data.csv")
+		roundTrip(t, text, "my data.csv")
+	})
+
+	t.Run("plain file without special characters is left untouched", func(t *testing.T) {
+		got := completionTexts(shell.getFilePathCompletions("plain"))
+		if !slices.Contains(got, "plain.csv") {
+			t.Errorf("plain file should be suggested verbatim, got %v", got)
+		}
+	})
+}
+
 func TestImportCompleterDebug(t *testing.T) {
 	// Test the actual completer function behavior for .import commands
 	tmpDir := t.TempDir()
