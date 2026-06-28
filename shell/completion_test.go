@@ -232,6 +232,71 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 	})
 }
 
+func TestCompletionSuggestsDirectoryArguments(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	if err := os.MkdirAll("datadir", 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("datadir", "a.csv"), []byte("id,name\n1,foo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("plain.csv", []byte("id\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	t.Run("partial directory name is offered as a directory candidate", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), ".import data")
+		var dir *Suggest
+		for i := range got {
+			if got[i].Text == "datadir/" {
+				dir = &got[i]
+			}
+		}
+		if dir == nil {
+			t.Fatalf("expected directory candidate \"datadir/\", got %v", completionTexts(got))
+		}
+		// A directory candidate is distinguished from a file by the trailing slash
+		// and the directory description.
+		if dir.Description != msgImportableDir {
+			t.Errorf("directory description = %q, want %q", dir.Description, msgImportableDir)
+		}
+	})
+
+	t.Run("a completed directory argument can be imported directly", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), ".import data")
+		var dirArg string
+		for _, s := range got {
+			if s.Text == "datadir/" {
+				argv, err := splitArgs(".import " + s.Text)
+				if err != nil || len(argv) != 2 {
+					t.Fatalf("directory suggestion does not round-trip: %v", err)
+				}
+				dirArg = argv[1]
+			}
+		}
+		if dirArg == "" {
+			t.Fatal("no directory suggestion found")
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{dirArg}); err != nil {
+			t.Fatalf("importing completed directory %q failed: %v", dirArg, err)
+		}
+	})
+}
+
 func TestCompletionHiddenPaths(t *testing.T) {
 	// Note: cannot use t.Parallel() with t.Chdir().
 	tmpDir := t.TempDir()
