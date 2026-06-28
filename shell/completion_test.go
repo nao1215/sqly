@@ -232,6 +232,78 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 	})
 }
 
+func TestCompletionInsideQuotedPath(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		"my data.csv",
+		"my dir/",
+		"my dir/inner.csv",
+	})
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	// A quoted suggestion must round-trip through splitArgs to one argument so the
+	// accepted command stays valid.
+	findSuggestion := func(t *testing.T, suggestions []Suggest, wantPath string) string {
+		t.Helper()
+		for _, s := range suggestions {
+			argv, err := splitArgs(".import " + s.Text)
+			if err != nil {
+				continue
+			}
+			if len(argv) == 2 && argv[1] == wantPath {
+				return s.Text
+			}
+		}
+		t.Fatalf("no completion round-trips to %q; got %v", wantPath, completionTexts(suggestions))
+		return ""
+	}
+
+	t.Run("double-quoted prefix completes a space-containing file", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), `.import "my`)
+		text := findSuggestion(t, got, "my data.csv")
+		if !strings.HasPrefix(text, `"my`) {
+			t.Errorf("suggestion %q should keep the opening double quote", text)
+		}
+		if !strings.HasSuffix(text, `"`) {
+			t.Errorf("suggestion %q should close the double quote on a file", text)
+		}
+	})
+
+	t.Run("single-quoted prefix completes a space-containing file", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), `.import 'my`)
+		text := findSuggestion(t, got, "my data.csv")
+		if !strings.HasPrefix(text, `'my`) {
+			t.Errorf("suggestion %q should keep the opening single quote", text)
+		}
+	})
+
+	t.Run("quoted directory keeps the quote open to descend", func(t *testing.T) {
+		got := shell.getCompletions(context.Background(), `.import "my`)
+		var dirText string
+		for _, s := range got {
+			if s.Text == `"my dir/` {
+				dirText = s.Text
+			}
+		}
+		if dirText == "" {
+			t.Fatalf("expected an open-quoted directory suggestion, got %v", completionTexts(got))
+		}
+	})
+}
+
 func TestCompletionDescendsIntoSpaceContainingDirectory(t *testing.T) {
 	// Note: cannot use t.Parallel() with t.Chdir().
 	tmpDir := t.TempDir()
