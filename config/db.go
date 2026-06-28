@@ -56,10 +56,14 @@ func NewInMemHistoryDB() (HistoryDB, func(), error) {
 	return HistoryDB(db), func() { _ = db.Close() }, nil // #nosec G104
 }
 
-// InitSQLite3 registers the sqlite3 driver.
+// sqlite3RegisterOnce is package-level rather than function-local so repeated
+// InitSQLite3 calls register the sqlite3 driver exactly once; database/sql
+// panics with "Register called twice" otherwise.
+var sqlite3RegisterOnce sync.Once
+
+// InitSQLite3 registers the sqlite3 driver. It is safe to call multiple times.
 func InitSQLite3() {
-	var once sync.Once
-	once.Do(func() {
+	sqlite3RegisterOnce.Do(func() {
 		sql.Register("sqlite3", sqliteDriver{Driver: &sqlite.Driver{}})
 	})
 }

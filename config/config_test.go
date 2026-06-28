@@ -49,6 +49,19 @@ func isDir(t *testing.T, path string) bool {
 	return info.IsDir()
 }
 
+func TestInitSQLite3Idempotent(t *testing.T) {
+	// Registering the sqlite3 driver more than once must not panic with
+	// "sql: Register called twice". The driver registry is process-global, so
+	// this cannot run in parallel with code that registers drivers.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("InitSQLite3 panicked when called repeatedly: %v", r)
+		}
+	}()
+	InitSQLite3()
+	InitSQLite3()
+}
+
 func TestIsInputFromTTY(t *testing.T) {
 	// Under `go test` stdin is not a terminal, so this must report false and,
 	// most importantly, never panic. This guards the non-TTY batch-mode switch.
