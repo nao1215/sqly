@@ -46,6 +46,7 @@
 ### Documentation
 * Docs-Sync Guardrail: a new test asserts that every `make <target>` command shown in the contributor docs (`README.md`, `CONTRIBUTING.md`, `doc/pages/markdown/build_and_test.md`) is a real Makefile target, so a stale setup instruction is caught in CI. It also fixes the stale `make install tools` command in `build_and_test.md`, which is now `make tools`.
 * Pull-Request Template: add `.github/pull_request_template.md` with a short checklist (tests, lint, docs, CHANGELOG, cross-platform impact) so the project's change bar is reinforced when a PR is opened.
+* Hermetic E2E Harness: the ShellSpec suite now runs through `scripts/run_e2e.sh`, which builds the binary and runs the suite in a throwaway temp-backed HOME and config sandbox, so it never reads or writes the developer's real config directory and local and CI runs are identical. `make test-e2e` and the CI job invoke the suite only through this wrapper.
 
 ### Dependencies
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.8 for the `ActionClearScreen` key action that backs the Ctrl+L clear-screen binding.
