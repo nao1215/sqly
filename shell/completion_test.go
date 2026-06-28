@@ -109,6 +109,14 @@ func TestGetFilePathCompletionsScopedToTypedPrefix(t *testing.T) {
 			want:    []string{"testdata/nested/deep.csv"},
 			notWant: []string{"testdata/actor.csv", "top.csv"},
 		},
+		{
+			// The directory must resolve even though the prefix uses a backslash;
+			// suggestions keep the separator the user typed.
+			name:    "backslash separator resolves the directory on every OS",
+			prefix:  `testdata\`,
+			want:    []string{"testdata/actor.csv", "testdata/sample.tsv"},
+			notWant: []string{"top.csv"},
+		},
 	}
 
 	shell, cleanup, err := newShell(t, []string{"sqly"})
@@ -117,16 +125,23 @@ func TestGetFilePathCompletionsScopedToTypedPrefix(t *testing.T) {
 	}
 	defer cleanup()
 
+	// slash normalizes separators so the backslash case asserts the same way on
+	// every OS (filepath.ToSlash rewrites "\" to "/" only on Windows).
+	slash := func(s string) string { return strings.ReplaceAll(s, `\`, "/") }
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := completionTexts(shell.getFilePathCompletions(tt.prefix))
+			var got []string
+			for _, text := range completionTexts(shell.getFilePathCompletions(tt.prefix)) {
+				got = append(got, slash(text))
+			}
 			for _, w := range tt.want {
-				if !slices.Contains(got, w) {
+				if !slices.Contains(got, slash(w)) {
 					t.Errorf("prefix %q: want completion %q, got %v", tt.prefix, w, got)
 				}
 			}
 			for _, nw := range tt.notWant {
-				if slices.Contains(got, nw) {
+				if slices.Contains(got, slash(nw)) {
 					t.Errorf("prefix %q: did not want completion %q, got %v", tt.prefix, nw, got)
 				}
 			}

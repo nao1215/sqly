@@ -965,6 +965,12 @@ func splitCompletionPrefix(prefix string) (readDir, base, partial string) {
 func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
 	readDir, base, partial := splitCompletionPrefix(prefix)
 
+	// splitCompletionPrefix accepts both separators so Windows paths work, but
+	// the raw readDir may still carry a backslash on POSIX (e.g. "testdata\").
+	// Convert it to the local separator so os.ReadDir resolves the real directory
+	// instead of silently failing on a literal name.
+	readDir = filepath.FromSlash(strings.ReplaceAll(readDir, `\`, "/"))
+
 	entries, err := os.ReadDir(readDir)
 	if err != nil {
 		return nil
