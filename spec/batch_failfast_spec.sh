@@ -55,8 +55,11 @@ Describe 'sqly batch fail-fast'
   End
 
   It 'does not write back for empty stdin with --save --force'
+    # Empty stdin now fails with the no-statements hint, but it must still return
+    # before write-back so the source file is left untouched.
     When run sqly "$WORK/u.csv" --save --force
-    The status should be success
+    The status should be failure
+    The stderr should include 'no TTY detected'
     The stderr should not include 'Saved'
     The contents of file "$WORK/u.csv" should equal "$(cat testdata/user.csv)"
   End
