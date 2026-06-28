@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Hidden Path Import Completion: `.import` tab completion stays hidden-by-default but now traverses a hidden directory once its prefix is typed explicitly, so `.import .secret/` lists the importable files inside it. Regression tests lock this in for both hidden files and nested hidden directories.
 * Quoted Import Completion: `.import` tab completion now works while typing a quoted path. After an opening quote (for example `.import "my`), completion matches the path fragment inside the quote and keeps it quoted, closing the quote on a file and leaving it open on a directory so the accepted command stays a single argument.
 * Home-Directory Expansion in Helpers: `.cd`, `.ls`, `.import`, `.dump`, and `.save` now expand a leading `~` (and `~/...`) to the user's home directory before running, so `.cd ~` and `.import ~/data.csv` work instead of failing on a literal `~`. Forms like `~user` or a `~` later in the path are left untouched.
 * Boundary-Safe Home Abbreviation: the prompt now replaces the home directory with `~` only when the working directory equals home or is a real descendant at a path-separator boundary. A sibling such as `/home/nao2` (or `C:\Users\nao-backup` on Windows) that merely shares a byte prefix with `/home/nao` is no longer rewritten into a misleading `~2`.
