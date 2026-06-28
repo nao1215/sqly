@@ -23,6 +23,6 @@ Describe 'sqly v0.25.0 binary regressions'
   It 'rejects an explicit empty --sql value'
     When run sqly --sql '' "$PROJECT_ROOT/testdata/user.csv"
     The status should be failure
-    The stderr should include '--sql'
+    The stderr should include '--sql requires a non-empty SQL statement'
   End
 End
