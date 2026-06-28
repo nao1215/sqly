@@ -44,9 +44,9 @@ func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
 		model.NewRecord([]string{"1"}),
 	})
 
-	// First command: the history read succeeds but the write fails as if the DB
-	// became read-only after startup. The query must still run.
-	history.EXPECT().List(gomock.Any()).Return(model.Histories{}, nil)
+	// First command: the history write fails as if the DB became read-only after
+	// startup. The write is a single insert (no preceding List scan), and the
+	// query must still run.
 	history.EXPECT().Create(gomock.Any(), gomock.Any()).
 		Return(errors.New("attempt to write a readonly database"))
 	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(table, int64(0), nil)
@@ -74,7 +74,7 @@ func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
 	})
 }
 
-func TestExec_HistoryReadFailureAlsoDisablesHistory(t *testing.T) {
+func TestExec_HistoryWriteDoesNotScanHistory(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	history := mock.NewMockHistoryUsecase(ctrl)
 	query := mock.NewMockQueryUsecase(ctrl)
@@ -83,9 +83,9 @@ func TestExec_HistoryReadFailureAlsoDisablesHistory(t *testing.T) {
 		model.NewRecord([]string{"1"}),
 	})
 
-	// The history read itself fails (e.g. the DB file vanished); the command must
-	// still run and history is disabled for the rest of the session.
-	history.EXPECT().List(gomock.Any()).Return(model.Histories{}, errors.New("disk I/O error"))
+	// A history write is a single insert: it must not call List to compute an id.
+	// No List expectation is set, so gomock fails the test if List is called.
+	history.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
 	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(table, int64(0), nil)
 
 	s := newBoundaryTestShell(t, Usecases{history: history, query: query})
@@ -93,12 +93,12 @@ func TestExec_HistoryReadFailureAlsoDisablesHistory(t *testing.T) {
 
 	_ = captureStdout(t, func() {
 		if err := s.exec(context.Background(), "SELECT 1"); err != nil {
-			t.Fatalf("exec aborted on a best-effort history read failure: %v", err)
+			t.Fatalf("exec returned error: %v", err)
 		}
 	})
 
-	if s.historyEnabled {
-		t.Error("historyEnabled should be false after a runtime history read failure")
+	if !s.historyEnabled {
+		t.Error("historyEnabled should remain true after a successful history write")
 	}
 }
 

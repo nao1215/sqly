@@ -8,7 +8,6 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
-	infra "github.com/nao1215/sqly/infrastructure"
 )
 
 // _ historyRepository implement HistoryRepository
@@ -58,7 +57,11 @@ func (h *historyRepository) Create(ctx context.Context, t *model.Table) error {
 	defer func() { _ = tx.Rollback() }()
 
 	for _, v := range t.Records() {
-		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
+		// Insert only the request and let SQLite's AUTOINCREMENT assign the id, so
+		// a write never depends on a caller-computed id from a full table scan. The
+		// request is the last column of the history table (id, request).
+		request := v[len(v)-1]
+		if _, err := tx.ExecContext(ctx, "INSERT INTO `history` (`request`) VALUES (?)", request); err != nil {
 			return err
 		}
 	}

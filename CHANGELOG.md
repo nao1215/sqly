@@ -7,6 +7,7 @@
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes
+* Single-Insert History Writes: each interactive command's history write is now a single insert that relies on SQLite AUTOINCREMENT, instead of scanning the entire history table to compute the next id. History preloading at startup still reads the table once.
 * Cached Completion Metadata: interactive SQL completion now caches table and column suggestions keyed on the current table-name set, so it no longer queries every table's header on each keystroke. A line still typing a dot-command skips schema lookups entirely, and the cache refreshes when the table set changes or after an import.
 * No Stray Config Directory: `NewConfig` no longer creates the default XDG config directory when `SQLY_HISTORY_DB_PATH` is set, so routing history elsewhere has no unnecessary filesystem side effect.
 * Clear-Screen Control Key: the interactive shell now binds the documented Ctrl+L key to clear the screen, redrawing the prompt with the current input preserved.
