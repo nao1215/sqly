@@ -21,6 +21,7 @@ var errInvalidStdinName = errors.New("--stdin-name must be a valid table name: l
 // silently behave like the flag was never passed instead of surfacing the
 // malformed value.
 var (
+	errEmptyQuery   = errors.New("--sql requires a non-empty SQL statement")
 	errEmptyOutput  = errors.New("--output requires a non-empty destination path")
 	errEmptySQLFile = errors.New("--sql-file requires a non-empty file path")
 	errEmptySaveDir = errors.New("--save-dir requires a non-empty directory path")

@@ -241,6 +241,9 @@ func NewArg(args []string) (*Arg, error) {
 	// Reject other flags given an explicit empty value for the same reason: each
 	// flag's empty string is the "flag absent" sentinel, so an explicit "" would
 	// otherwise be silently ignored.
+	if flag.Changed("sql") && *query == "" {
+		return nil, errEmptyQuery
+	}
 	if flag.Changed("output") && *output == "" {
 		return nil, errEmptyOutput
 	}
