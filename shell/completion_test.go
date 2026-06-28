@@ -1527,7 +1527,7 @@ func TestShell_getRegularCompletions_cachesTableHeaders(t *testing.T) {
 	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
 
 	// Simulate many keystrokes; gomock fails if Header runs more than once per table.
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		_ = s.getRegularCompletions(context.Background(), "SEL")
 	}
 }
@@ -1552,7 +1552,7 @@ func BenchmarkRegularCompletionManyTables(b *testing.B) {
 
 	const tableCount = 50
 	tables := make([]*model.Table, 0, tableCount)
-	for i := 0; i < tableCount; i++ {
+	for i := range tableCount {
 		name := "table" + strconv.Itoa(i)
 		tables = append(tables, model.NewTable(name, nil, nil))
 		metadata.EXPECT().Header(gomock.Any(), name).Return(
@@ -1563,7 +1563,7 @@ func BenchmarkRegularCompletionManyTables(b *testing.B) {
 	s := newBoundaryTestShell(&testing.T{}, Usecases{metadata: metadata})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = s.getRegularCompletions(context.Background(), "SEL")
 	}
 }
