@@ -300,6 +300,39 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 			t.Errorf("Expected 'data' table, got %s", tables[0].Name())
 		}
 	})
+
+	t.Run("returns tables in creation order, not alphabetical", func(t *testing.T) {
+		t.Parallel()
+
+		memoryDB, cleanup, err := config.NewInMemDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		r := NewSQLite3Repository(memoryDB)
+
+		// Create "zebra" before "ant" so creation order and alphabetical order
+		// disagree; --compare relies on TablesName preserving creation (import) order.
+		for _, name := range []string{"zebra", "ant"} {
+			table := model.NewTable(name, model.Header{"id"}, []model.Record{{"1"}})
+			if err := r.CreateTable(context.Background(), table); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		tables, err := r.TablesName(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := make([]string, len(tables))
+		for i, table := range tables {
+			got[i] = table.Name()
+		}
+		if len(got) != 2 || got[0] != "zebra" || got[1] != "ant" {
+			t.Errorf("TablesName order = %v, want [zebra ant] (creation order)", got)
+		}
+	})
 }
 
 func newSampleRepo(t *testing.T) repository.SQLite3Repository {

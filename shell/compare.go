@@ -181,7 +181,7 @@ func (s *Shell) resolveCompareTables(ctx context.Context) (string, string, error
 	case 0:
 		return "", "", errors.New("no tables to compare: provide two inputs or use --compare-tables")
 	case 2:
-		// Return tables in creation order, which is the CLI input order, so left/right
+		// TablesName returns tables in import order (CLI input order), so left/right
 		// follow the order the user typed. --compare-tables overrides the pair and order.
 		return names[0], names[1], nil
 	default:

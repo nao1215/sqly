@@ -42,8 +42,11 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 	return tx.Commit()
 }
 
-// TablesName return all table name.
+// TablesName return all table name in import order.
 // Internal tables (sqlite_* and query_result_*) are excluded from the result.
+// Rows are ordered by sqlite_master.rowid, which is assigned in CREATE order, so
+// the result follows the order the source files were imported. Callers such as
+// --compare rely on this to keep left/right matching the CLI input order.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -52,7 +55,7 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 	defer func() { _ = tx.Rollback() }()
 
 	rows, err := tx.QueryContext(ctx,
-		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%'")
+		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' ORDER BY rowid")
 	if err != nil {
 		return nil, err
 	}
