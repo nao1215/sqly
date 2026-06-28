@@ -1339,13 +1339,17 @@ func TestImportCompletionAbsolutePathThenImportSucceeds(t *testing.T) {
 	ctx := context.Background()
 	suggestions := shell.getCompletions(ctx, ".import "+filepath.Join(targetDir, "act"))
 
+	// Suggestions slash-normalize separators, so compare against the slashified
+	// target path. The completed text keeps "/"; Go's os calls accept it on
+	// Windows, so importing it still resolves the file.
+	wantPath := filepath.ToSlash(csvPath)
 	completed := ""
 	for _, s := range suggestions {
 		argv, splitErr := splitArgs(".import " + s.Text)
 		if splitErr != nil || len(argv) != 2 {
 			continue
 		}
-		if argv[1] == csvPath {
+		if filepath.ToSlash(argv[1]) == wantPath {
 			completed = argv[1]
 			break
 		}
