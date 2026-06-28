@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Home-Path Import Completion: `.import` tab completion now expands a leading `~/` to the home directory for the lookup while keeping the suggestion rendered as `~/file.csv`, so home-directory paths complete the same way relative and absolute paths do. The accepted `~/...` argument is expanded again at import time.
 * Directory Import Completion: `.import` tab completion offers directory candidates with a trailing slash, so a directory import target (for example `datadir/`) is discoverable and can be accepted and imported directly, not just descended into. Regression tests lock the directory-candidate behavior in.
 * Hidden Path Import Completion: `.import` tab completion stays hidden-by-default but now traverses a hidden directory once its prefix is typed explicitly, so `.import .secret/` lists the importable files inside it. Regression tests lock this in for both hidden files and nested hidden directories.
 * Quoted Import Completion: `.import` tab completion now works while typing a quoted path. After an opening quote (for example `.import "my`), completion matches the path fragment inside the quote and keeps it quoted, closing the quote on a file and leaving it open on a directory so the accepted command stays a single argument.

@@ -297,6 +297,62 @@ func TestCompletionSuggestsDirectoryArguments(t *testing.T) {
 	})
 }
 
+func TestCompletionExpandsTildeHomePaths(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Setenv/t.Chdir.
+	home := t.TempDir()
+	// os.UserHomeDir reads $HOME on Unix and %USERPROFILE% on Windows; set both so
+	// the expansion targets the temp home on every platform.
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	if err := os.WriteFile(filepath.Join(home, "home.csv"), []byte("id\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "homedir"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run from an unrelated directory so "~/" is the only way to reach the file.
+	t.Chdir(t.TempDir())
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	complete := func(text string) []string {
+		return completionTexts(shell.getCompletions(context.Background(), text))
+	}
+
+	t.Run("tilde-slash prefix completes a home-directory file", func(t *testing.T) {
+		got := complete(".import ~/h")
+		if !slices.Contains(got, "~/home.csv") {
+			t.Errorf("expected ~/home.csv for \".import ~/h\", got %v", got)
+		}
+		if !slices.Contains(got, "~/homedir/") {
+			t.Errorf("expected ~/homedir/ for \".import ~/h\", got %v", got)
+		}
+	})
+
+	t.Run("bare tilde-slash lists the home directory", func(t *testing.T) {
+		got := complete(".import ~/")
+		if !slices.Contains(got, "~/home.csv") {
+			t.Errorf("expected ~/home.csv for \".import ~/\", got %v", got)
+		}
+	})
+
+	t.Run("a completed tilde path imports after expansion", func(t *testing.T) {
+		got := complete(".import ~/h")
+		if !slices.Contains(got, "~/home.csv") {
+			t.Fatalf("missing ~/home.csv suggestion: %v", got)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{"~/home.csv"}); err != nil {
+			t.Fatalf("importing completed ~/home.csv failed: %v", err)
+		}
+	})
+}
+
 func TestCompletionHiddenPaths(t *testing.T) {
 	// Note: cannot use t.Parallel() with t.Chdir().
 	tmpDir := t.TempDir()
