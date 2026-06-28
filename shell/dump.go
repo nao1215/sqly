@@ -37,6 +37,14 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		return errors.New(".dump requires a non-empty destination path")
 	}
 
+	// Expand a leading "~" so `.dump table ~/out.csv` writes under the home
+	// directory instead of a literal "~" file.
+	expandedPath, err := expandTilde(userPath)
+	if err != nil {
+		return err
+	}
+	userPath = expandedPath
+
 	// Block round-trip export to ACH/Fedwire format before normalization. These
 	// formats require multi-record coordination that .dump cannot provide.
 	// Exporting ACH/Fedwire tables to CSV/TSV/etc via .dump is fine. The check

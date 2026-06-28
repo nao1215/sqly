@@ -20,6 +20,40 @@ Describe 'sqly shell helper commands'
     End
   End
 
+  Describe '~ home-directory expansion'
+    # Point HOME at a throwaway directory so the expansion is verifiable
+    # without touching the real home. A CSV lives inside it for .import.
+    setup() {
+      TILDE_HOME="$(mktemp -d)"
+      export TILDE_HOME
+      export HOME="$TILDE_HOME"
+      printf 'id,name\n1,foo\n' > "$TILDE_HOME/sqly_tilde.csv"
+    }
+    cleanup() { rm -rf "${TILDE_HOME:-}"; }
+    Before 'setup'
+    After 'cleanup'
+
+    It 'expands a bare ~ in .cd to the home directory'
+      Data
+        #|.cd ~
+        #|.pwd
+      End
+      When run sqly
+      The status should be success
+      The output should include "$(basename "$TILDE_HOME")"
+    End
+
+    It 'expands ~/file in .import'
+      Data
+        #|.import ~/sqly_tilde.csv
+        #|.tables
+      End
+      When run sqly
+      The status should be success
+      The output should include 'sqly_tilde'
+    End
+  End
+
   Describe '.clear'
     It 'emits no ANSI escapes to stdout in batch mode'
       # Piped stdin is non-TTY batch mode, where stdout may carry
