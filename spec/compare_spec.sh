@@ -49,4 +49,22 @@ Describe 'sqly --compare workflow'
     The status should be failure
     The stderr should include 'exactly two tables'
   End
+
+  It 'follows CLI input order for left and right, not table-name sorting'
+    # zebra is given first, ant second; the report must keep that direction even
+    # though "ant" sorts before "zebra".
+    printf 'id,name\n1,Alice\n' > "$WORKDIR/zebra.csv"
+    printf 'id,name\n1,Alice\n' > "$WORKDIR/ant.csv"
+    When run sqly --compare --compare-format text "$WORKDIR/zebra.csv" "$WORKDIR/ant.csv"
+    The status should be success
+    The line 1 should equal 'compare zebra -> ant'
+  End
+
+  It 'reverses left and right when the inputs are swapped'
+    printf 'id,name\n1,Alice\n' > "$WORKDIR/zebra.csv"
+    printf 'id,name\n1,Alice\n' > "$WORKDIR/ant.csv"
+    When run sqly --compare --compare-format text "$WORKDIR/ant.csv" "$WORKDIR/zebra.csv"
+    The status should be success
+    The line 1 should equal 'compare ant -> zebra'
+  End
 End
