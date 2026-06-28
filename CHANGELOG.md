@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Boundary-Safe Home Abbreviation: the prompt now replaces the home directory with `~` only when the working directory equals home or is a real descendant at a path-separator boundary. A sibling such as `/home/nao2` (or `C:\Users\nao-backup` on Windows) that merely shares a byte prefix with `/home/nao` is no longer rewritten into a misleading `~2`.
 * Strict Helper Argument Validation: `.pwd`, `.clear`, and `.exit` now reject unexpected trailing arguments with a clear error instead of ignoring them, matching the other helper commands. A typo such as `.exit now` no longer silently terminates a batch run with status 0.
 * Batch-Safe Clear: `.clear` now emits its ANSI clear-screen escapes only in an interactive TTY session. In batch mode (piped stdin) it is a no-op, so machine-readable stdout such as `--json`, `--ndjson`, and `--csv` is no longer corrupted by control sequences.
 * Multi-line Interactive SQL: the shell now buffers a SQL statement across lines and submits on Enter only when it ends with `;`, so a typed or pasted multi-line statement (for example `SELECT ... UNION ALL SELECT ...;`) runs once instead of executing each line separately. Dot-commands stay single-line, and pressing Enter on a blank line force-runs a query typed without `;`.
