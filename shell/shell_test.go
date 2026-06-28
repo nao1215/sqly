@@ -3279,6 +3279,70 @@ func TestShell_shortCWD(t *testing.T) {
 	}
 }
 
+func TestAbbreviateHome(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cwd  string
+		home string
+		want string
+	}{
+		{
+			name: "cwd equal to home returns tilde",
+			cwd:  "/home/nao",
+			home: "/home/nao",
+			want: "~",
+		},
+		{
+			name: "cwd inside home is abbreviated at the separator boundary",
+			cwd:  "/home/nao/project",
+			home: "/home/nao",
+			want: "~/project",
+		},
+		{
+			name: "sibling sharing only the byte prefix is left unchanged",
+			cwd:  "/home/nao2/project",
+			home: "/home/nao",
+			want: "/home/nao2/project",
+		},
+		{
+			name: "windows cwd inside home is abbreviated",
+			cwd:  `C:\Users\nao\project`,
+			home: `C:\Users\nao`,
+			want: `~\project`,
+		},
+		{
+			name: "windows sibling sharing the prefix is left unchanged",
+			cwd:  `C:\Users\nao-backup\project`,
+			home: `C:\Users\nao`,
+			want: `C:\Users\nao-backup\project`,
+		},
+		{
+			name: "empty home leaves cwd unchanged",
+			cwd:  "/home/nao/project",
+			home: "",
+			want: "/home/nao/project",
+		},
+		{
+			name: "trailing separator on home still abbreviates a descendant",
+			cwd:  "/home/nao/project",
+			home: "/home/nao/",
+			want: "~/project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := abbreviateHome(tt.cwd, tt.home); got != tt.want {
+				t.Errorf("abbreviateHome(%q, %q) = %q, want %q", tt.cwd, tt.home, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestShellExec_SchemaQualifiedTempView covers the helper-command surface added
 // for v0.20.0 hardening: schema-qualified names, TEMP tables, and views.
 func TestShellExec_SchemaQualifiedTempView(t *testing.T) {

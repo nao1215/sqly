@@ -37,10 +37,29 @@ func (s *state) shortCWD() string {
 	if err != nil || home == "" {
 		return s.cwd
 	}
-	if s.cwd == home {
+	return abbreviateHome(s.cwd, home)
+}
+
+// abbreviateHome replaces a leading home-directory prefix in cwd with "~". The
+// prefix is only replaced when cwd equals home or is a real descendant of home
+// at a path-separator boundary. Why not a plain string replace: that rewrites a
+// sibling such as "/home/nao2" into "~2" when home is "/home/nao". Both "/" and
+// "\\" are accepted as boundaries so the check is correct for Unix and Windows
+// paths regardless of the host OS.
+func abbreviateHome(cwd, home string) string {
+	home = strings.TrimRight(home, `/\`)
+	if home == "" {
+		return cwd
+	}
+	if cwd == home {
 		return "~"
 	}
-	return strings.Replace(s.cwd, home, "~", 1)
+	if strings.HasPrefix(cwd, home) {
+		if rest := cwd[len(home):]; rest[0] == '/' || rest[0] == '\\' {
+			return "~" + rest
+		}
+	}
+	return cwd
 }
 
 // Typed JSON output mode names accepted by .mode and shown in the prompt. They
