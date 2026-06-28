@@ -3,8 +3,10 @@ package shell
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -288,4 +290,89 @@ func TestRunCompare_Errors(t *testing.T) {
 			t.Error("expected an error for a missing named table")
 		}
 	})
+}
+
+// writeKeyedCompareBenchCSVs writes two large keyed CSVs that differ by a few
+// added, removed, and modified rows, returning their paths.
+func writeKeyedCompareBenchCSVs(tb testing.TB, rows int) (string, string) {
+	tb.Helper()
+	dir := tb.TempDir()
+	left := filepath.Join(dir, "kleft.csv")
+	right := filepath.Join(dir, "kright.csv")
+
+	var lb, rb strings.Builder
+	lb.WriteString("id,name,score\n")
+	rb.WriteString("id,name,score\n")
+	for i := range rows {
+		fmt.Fprintf(&lb, "%d,name%d,%d\n", i, i, i%100)
+		// Shift the score on every 10th row (modified) and drop the last row on
+		// the right while adding one fresh id, so the diff has work to do.
+		score := i % 100
+		if i%10 == 0 {
+			score++
+		}
+		if i != rows-1 {
+			fmt.Fprintf(&rb, "%d,name%d,%d\n", i, i, score)
+		}
+	}
+	fmt.Fprintf(&rb, "%d,fresh,1\n", rows+1)
+
+	if err := os.WriteFile(left, []byte(lb.String()), 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	if err := os.WriteFile(right, []byte(rb.String()), 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	return left, right
+}
+
+func TestBuildCompareReport_KeyedDiff(t *testing.T) {
+	left, right := writeKeyedCompareBenchCSVs(t, 50)
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	report, err := shell.buildCompareReport(context.Background(), "kleft", "kright", "id")
+	if err != nil {
+		t.Fatalf("buildCompareReport: %v", err)
+	}
+	if report.Rows == nil {
+		t.Fatal("expected keyed rows section")
+	}
+	// Right drops the last row (1 removed), adds one fresh id (1 added), and
+	// shifts the score on ids 0,10,20,30,40 (5 modified).
+	if len(report.Rows.Removed) != 1 {
+		t.Errorf("removed = %d, want 1", len(report.Rows.Removed))
+	}
+	if len(report.Rows.Added) != 1 {
+		t.Errorf("added = %d, want 1", len(report.Rows.Added))
+	}
+	if len(report.Rows.Modified) != 5 {
+		t.Errorf("modified = %d, want 5", len(report.Rows.Modified))
+	}
+}
+
+func BenchmarkBuildCompareReportKeyed(b *testing.B) {
+	left, right := writeKeyedCompareBenchCSVs(b, 5000)
+	shell, cleanup, err := newShell(b, []string{"sqly"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		b.Fatalf("import: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := shell.buildCompareReport(context.Background(), "kleft", "kright", "id"); err != nil {
+			b.Fatal(err)
+		}
+	}
 }

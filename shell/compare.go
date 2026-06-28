@@ -219,21 +219,32 @@ func (s *Shell) buildCompareReport(ctx context.Context, left, right, key string)
 	}
 
 	if key != "" {
-		leftTable, err := s.selectAll(ctx, left)
+		// Convert each side to its keyed rows and release the raw table before
+		// loading the other, so the two full *model.Table results never live at the
+		// same time. Peak memory is one table plus the keyed map instead of both
+		// tables plus two index maps.
+		leftByKey, err := s.keyedRows(ctx, left, key)
 		if err != nil {
 			return compareReport{}, err
 		}
-		rightTable, err := s.selectAll(ctx, right)
+		rightByKey, err := s.keyedRows(ctx, right, key)
 		if err != nil {
 			return compareReport{}, err
 		}
-		rows, err := compareKeyedRows(left, right, leftTable, rightTable, key)
-		if err != nil {
-			return compareReport{}, err
-		}
-		report.Rows = rows
+		report.Rows = diffKeyedRows(key, leftByKey, rightByKey)
 	}
 	return report, nil
+}
+
+// keyedRows loads a table and indexes its rows by the key column, returning a
+// keyed map and releasing the raw table. Keeping only the keyed map lets the
+// caller load the two sides one at a time instead of holding both full tables.
+func (s *Shell) keyedRows(ctx context.Context, name, key string) (map[string]compareRow, error) {
+	table, err := s.selectAll(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return keyedRowsFromTable(table, key, name)
 }
 
 // selectAll returns every row of a table for row-level comparison.
@@ -292,57 +303,28 @@ func compareSchemas(left, right []inspectColumn) compareSchema {
 // differing value). The key column must exist in both tables and be unique on
 // each side, otherwise the comparison is ambiguous and an error is returned.
 func compareKeyedRows(leftName, rightName string, left, right *model.Table, key string) (*compareRows, error) {
-	leftIdx := indexOfColumn(left.Header(), key)
-	if leftIdx < 0 {
-		return nil, fmt.Errorf("compare key %q not found in table %s", key, leftName)
-	}
-	rightIdx := indexOfColumn(right.Header(), key)
-	if rightIdx < 0 {
-		return nil, fmt.Errorf("compare key %q not found in table %s", key, rightName)
-	}
-
-	leftByKey, err := indexRowsByKey(left, leftIdx, leftName, key)
+	leftByKey, err := keyedRowsFromTable(left, key, leftName)
 	if err != nil {
 		return nil, err
 	}
-	rightByKey, err := indexRowsByKey(right, rightIdx, rightName, key)
+	rightByKey, err := keyedRowsFromTable(right, key, rightName)
 	if err != nil {
 		return nil, err
 	}
-
-	rows := &compareRows{
-		Key:      key,
-		Added:    []compareRow{},
-		Removed:  []compareRow{},
-		Modified: []compareModifiedRow{},
-	}
-
-	for _, k := range sortedKeys(leftByKey) {
-		lrow := rowMap(left, leftByKey[k])
-		rIdx, ok := rightByKey[k]
-		if !ok {
-			rows.Removed = append(rows.Removed, lrow)
-			continue
-		}
-		rrow := rowMap(right, rIdx)
-		if !rowMapsEqual(lrow, rrow) {
-			rows.Modified = append(rows.Modified, compareModifiedRow{Key: k, Left: lrow, Right: rrow})
-		}
-	}
-	for _, k := range sortedKeys(rightByKey) {
-		if _, ok := leftByKey[k]; !ok {
-			rows.Added = append(rows.Added, rowMap(right, rightByKey[k]))
-		}
-	}
-	return rows, nil
+	return diffKeyedRows(key, leftByKey, rightByKey), nil
 }
 
-// indexRowsByKey maps each row's key-column value to its row index, rejecting a
-// duplicate key (which would make the keyed comparison ambiguous). A SQL NULL key
-// is keyed under the empty string, matching how a NULL key renders.
-func indexRowsByKey(t *model.Table, keyIdx int, name, key string) (map[string]int, error) {
+// keyedRowsFromTable indexes a table's rows by the key column's value, rejecting
+// a duplicate key (which would make the keyed comparison ambiguous). A SQL NULL
+// key is keyed under the empty string, matching how a NULL key renders. Each row
+// is materialized into a compareRow so the source table can be released.
+func keyedRowsFromTable(t *model.Table, key, name string) (map[string]compareRow, error) {
+	keyIdx := indexOfColumn(t.Header(), key)
+	if keyIdx < 0 {
+		return nil, fmt.Errorf("compare key %q not found in table %s", key, name)
+	}
 	records := t.Records()
-	out := make(map[string]int, len(records))
+	out := make(map[string]compareRow, len(records))
 	for i, rec := range records {
 		if keyIdx >= len(rec) {
 			continue
@@ -351,9 +333,39 @@ func indexRowsByKey(t *model.Table, keyIdx int, name, key string) (map[string]in
 		if _, dup := out[k]; dup {
 			return nil, fmt.Errorf("compare key %q is not unique in table %s (value %q appears more than once)", key, name, k)
 		}
-		out[k] = i
+		out[k] = rowMap(t, i)
 	}
 	return out, nil
+}
+
+// diffKeyedRows builds the keyed row diff from two already-indexed sides. Removed
+// and modified rows follow the left side's sorted keys, added rows the right
+// side's, so the report is deterministic.
+func diffKeyedRows(key string, leftByKey, rightByKey map[string]compareRow) *compareRows {
+	rows := &compareRows{
+		Key:      key,
+		Added:    []compareRow{},
+		Removed:  []compareRow{},
+		Modified: []compareModifiedRow{},
+	}
+
+	for _, k := range sortedKeys(leftByKey) {
+		lrow := leftByKey[k]
+		rrow, ok := rightByKey[k]
+		if !ok {
+			rows.Removed = append(rows.Removed, lrow)
+			continue
+		}
+		if !rowMapsEqual(lrow, rrow) {
+			rows.Modified = append(rows.Modified, compareModifiedRow{Key: k, Left: lrow, Right: rrow})
+		}
+	}
+	for _, k := range sortedKeys(rightByKey) {
+		if _, ok := leftByKey[k]; !ok {
+			rows.Added = append(rows.Added, rightByKey[k])
+		}
+	}
+	return rows
 }
 
 // indexOfColumn returns the position of name in header, or -1.
@@ -409,8 +421,8 @@ func rowMapsEqual(a, b compareRow) bool {
 	return true
 }
 
-// sortedKeys returns the keys of a row index in deterministic order.
-func sortedKeys(m map[string]int) []string {
+// sortedKeys returns the keys of a string-keyed map in deterministic order.
+func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
