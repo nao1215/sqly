@@ -349,8 +349,10 @@ func (s *Shell) Run(ctx context.Context) error {
 		return s.finishNonInteractive(ctx)
 	}
 
-	// Start shell
-	s.printWelcomeMessage()
+	// Start shell. The welcome banner is printed inside communicate, only after
+	// the prompt session is created, so a terminal-backend failure (no usable
+	// /dev/tty) reports a clear error instead of looking like the shell started
+	// and then crashed right after the banner.
 	return s.communicate(ctx)
 }
 
@@ -360,13 +362,21 @@ func (s *Shell) Run(ctx context.Context) error {
 func (s *Shell) communicate(ctx context.Context) error {
 	p, err := s.newPromptSession(ctx)
 	if err != nil {
-		return err
+		// The interactive prompt needs a usable terminal (it opens /dev/tty).
+		// When that backend is unavailable (some PTY wrappers, headless
+		// containers, IDE terminals), report the requirement clearly and point at
+		// the non-interactive modes, instead of surfacing a raw "open /dev/tty"
+		// error after the welcome banner already printed.
+		return fmt.Errorf("cannot start the interactive shell: no usable terminal (%w). Run a query non-interactively, e.g. sqly --sql \"SELECT ...\" file.csv, or pipe SQL/commands via stdin", err)
 	}
 	defer func() {
 		if err := p.Close(); err != nil {
 			fmt.Fprintf(config.Stderr, "failed to close prompt session: %v\n", err)
 		}
 	}()
+
+	// The prompt session is ready, so it is now safe to announce the shell.
+	s.printWelcomeMessage()
 
 	for {
 		input, err := s.prompt(p)
