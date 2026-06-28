@@ -481,6 +481,29 @@ func (s *Shell) markDirImported(name string) {
 }
 
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
+// stdinImportErrorMessage renders an import failure for the staged --stdin
+// dataset with the random temp staging path replaced by a stable
+// "stdin (--stdin FORMAT)" reference. ok is false when displayPath is not the
+// staged stdin file, so a normal file import keeps its real path and error
+// wrapping. The candidate paths (the cleaned path and the path actually handed
+// to filesql, plus their temp directories) are all scrubbed because filesql
+// embeds the path it streamed inside its own error text.
+func (s *Shell) stdinImportErrorMessage(displayPath string, err error, candidates ...string) (string, bool) {
+	if s.stdinStagedPath == "" || displayPath != s.stdinStagedPath {
+		return "", false
+	}
+	label := fmt.Sprintf("stdin (--stdin %s)", s.argument.StdinFormat)
+	msg := fmt.Sprintf("failed to import file %s: %v", label, err)
+	for _, p := range append(candidates, displayPath) {
+		if p == "" {
+			continue
+		}
+		msg = strings.ReplaceAll(msg, p, label)
+		msg = strings.ReplaceAll(msg, filepath.Dir(p), label)
+	}
+	return msg, true
+}
+
 func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetName string) error {
 	// loadPath is the path actually handed to filesql. It differs from cleanPath
 	// only for an extensionless pseudo-file (e.g. /dev/stdin, /proc/self/fd/0),
@@ -504,6 +527,12 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	existingTables := tableNameSet(before)
 
 	if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
+		// A failed --stdin import would otherwise leak the random staging temp
+		// path (in both this wrapper and the path filesql embeds in its own
+		// error). Map it back to a stable "stdin (--stdin FORMAT)" reference.
+		if msg, ok := s.stdinImportErrorMessage(displayPath, err, cleanPath, loadPath); ok {
+			return errors.New(msg)
+		}
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
 

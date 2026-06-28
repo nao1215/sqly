@@ -74,6 +74,11 @@ type Shell struct {
 	// disabled for the session if the history DB cannot be created or written,
 	// so automation does not fail on a read-only config location.
 	historyEnabled bool
+	// stdinStagedPath is the temporary staging file a --stdin dataset is written
+	// to before import. It is recorded so import error reporting can map that
+	// random path (and the temp dir filesql embeds in its own error) back to a
+	// stable "stdin" reference, instead of leaking the implementation detail.
+	stdinStagedPath string
 	// tableSources maps an imported table name to the source path it came from.
 	// It is populated on every import and used by the --inspect report and by
 	// write-back (.save) to map a table back to its source file.
@@ -448,6 +453,7 @@ func (s *Shell) init(ctx context.Context) error {
 
 	paths := s.argument.FilePaths
 	stdinAbsPath := ""
+	stagedStdinPath := ""
 	// When --stdin is set, stage piped stdin as a dataset file and import it
 	// alongside the file/directory arguments so it can be queried and joined.
 	if s.argument.StdinFormat != "" {
@@ -461,6 +467,7 @@ func (s *Shell) init(ctx context.Context) error {
 			return err
 		}
 		defer cleanup()
+		stagedStdinPath = stdinPath
 		if abs, err := filepath.Abs(stdinPath); err == nil {
 			stdinAbsPath = abs
 		} else {
@@ -472,6 +479,10 @@ func (s *Shell) init(ctx context.Context) error {
 	if len(paths) == 0 {
 		return nil
 	}
+	// Record the staged path so import error reporting can map it (and the random
+	// temp dir filesql embeds in its own error) back to a stable "stdin"
+	// reference instead of leaking the implementation-detail path.
+	s.stdinStagedPath = stagedStdinPath
 	importErr := s.loadOrImport(ctx, paths)
 	// Re-point any stdin-derived table's source from the ephemeral temp path to
 	// a stable "stdin" marker, so --inspect does not leak the temp path

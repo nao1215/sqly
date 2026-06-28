@@ -2860,6 +2860,35 @@ func TestShellRun_SQLFileRejectsPipedStdin(t *testing.T) {
 	}
 }
 
+func TestShellStdinImportErrorMessage(t *testing.T) {
+	t.Parallel()
+	const staged = "/tmp/sqly-stdin-85800075/stdin.csv"
+	s := &Shell{argument: &config.Arg{StdinFormat: "csv"}, stdinStagedPath: staged}
+
+	t.Run("non-stdin path keeps its real path and reports ok=false", func(t *testing.T) {
+		t.Parallel()
+		msg, ok := s.stdinImportErrorMessage("data.csv", errors.New("boom"), "data.csv")
+		if ok {
+			t.Fatalf("ok = true for a non-stdin path, want false (msg=%q)", msg)
+		}
+	})
+
+	t.Run("maps the staged temp path and the path filesql embeds to stdin", func(t *testing.T) {
+		t.Parallel()
+		inner := errors.New("filesql: parsing failed: failed to stream file " + staged + ": filesql: empty data source: file is empty")
+		msg, ok := s.stdinImportErrorMessage(staged, inner, staged, staged)
+		if !ok {
+			t.Fatal("ok = false for the staged stdin path, want true")
+		}
+		if strings.Contains(msg, "sqly-stdin-") {
+			t.Errorf("message still leaks the temp path: %q", msg)
+		}
+		if !strings.Contains(msg, "stdin (--stdin csv)") {
+			t.Errorf("message does not mention stdin: %q", msg)
+		}
+	})
+}
+
 func TestShellRun_NonInteractiveNoStatementsHint(t *testing.T) {
 	// Regression for #659: a non-TTY run that executes nothing (empty stdin, with
 	// no --sql/--sql-file) must surface a hint and fail instead of exiting 0

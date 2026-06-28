@@ -40,4 +40,13 @@ Describe 'sqly v0.25.0 binary regressions'
     The status should be failure
     The stderr should include 'no TTY detected'
   End
+
+  # A failing --stdin import must describe the input as stdin, not leak the random
+  # internal staging temp path (which is noisy and changes every run).
+  It 'reports a stable stdin reference instead of the staging temp path'
+    When run sh -c "printf '' | \"$SQLY_BIN\" --stdin csv --sql 'SELECT COUNT(*) FROM stdin'"
+    The status should be failure
+    The stderr should include 'stdin'
+    The stderr should not include 'sqly-stdin-'
+  End
 End
