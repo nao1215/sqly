@@ -43,6 +43,13 @@ curl -fsSL https://git.io/shellspec | sh -s 0.28.1 --yes
 make test-e2e
 ```
 
+There is also a pure-Go binary smoke harness that runs the same way on Linux,
+macOS, and Windows (handy when a change affects path handling or startup):
+
+```shell
+make smoke
+```
+
 ### 5. Regenerate code when you touch DI or templates
 sqly uses Google Wire for dependency injection. After changing `di/wire.go` or
 anything covered by `go:generate`, regenerate and verify:

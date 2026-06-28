@@ -46,6 +46,8 @@
 ### Documentation
 * Docs-Sync Guardrail: a new test asserts that every `make <target>` command shown in the contributor docs (`README.md`, `CONTRIBUTING.md`, `doc/pages/markdown/build_and_test.md`) is a real Makefile target, so a stale setup instruction is caught in CI. It also fixes the stale `make install tools` command in `build_and_test.md`, which is now `make tools`.
 * Pull-Request Template: add `.github/pull_request_template.md` with a short checklist (tests, lint, docs, CHANGELOG, cross-platform impact) so the project's change bar is reinforced when a PR is opened.
+* Windows Binary Smoke Coverage: a new pure-Go smoke harness (`e2e/smoke_test.go`, run with `make smoke` or the `smoke` build tag) builds the real binary and drives helper commands, output formats, stdout/stderr separation, and the startup hint through stdin and flags. A CI job runs it on Windows, macOS, and Linux, giving Windows the binary-level coverage the shell-based suite cannot.
+* Release Artifact Smoke Coverage: a new CI workflow builds GoReleaser artifacts in snapshot mode (no publishing, signing, or SBOM) on every PR and push, then `scripts/smoke_artifacts.sh` checks that the expected archives and OS packages exist, the host archive extracts, and the extracted binary runs, so packaging regressions are caught before a release tag is cut.
 
 ### Dependencies
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.8 for the `ActionClearScreen` key action that backs the Ctrl+L clear-screen binding.

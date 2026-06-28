@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e demo clean vet fmt chkfmt
+.PHONY: build test test-e2e smoke demo clean vet fmt chkfmt
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
@@ -36,6 +36,9 @@ demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, 
 
 bench: ## Start benchmark
 	env GOOS=$(GOOS) go test -bench=BenchmarkImport100000Records -benchmem
+
+smoke: ## Run Go binary smoke tests (portable; runs on Linux, macOS, Windows)
+	go test -tags smoke ./e2e/...
 
 coverage-tree: test ## Generate coverage tree
 	grep -v 'github.com/nao1215/sqly/interactor/mock' cover.out | grep -v 'github.com/nao1215/sqly/infrastructure/mock' > cover.tmp

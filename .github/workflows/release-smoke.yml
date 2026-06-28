@@ -1,0 +1,41 @@
+name: Release Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Build the release artifacts in snapshot mode (no publishing, signing, or SBOM)
+# and validate them on every PR and push, so archive-layout and packaging
+# regressions are caught before a real release tag is cut instead of at tag time.
+permissions:
+  contents: read
+
+jobs:
+  release-smoke:
+    name: release artifact smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: "go.mod"
+
+      - name: Build snapshot artifacts
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+        with:
+          # Match the version used by the real release workflow for parity.
+          version: "v2.16.0"
+          args: release --snapshot --clean --skip=sign,sbom,publish
+
+      - name: Validate artifacts
+        run: sh scripts/smoke_artifacts.sh
