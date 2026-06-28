@@ -15,7 +15,7 @@ cd sqly
 If you execute the following command, the tools are installed.  The tools are used for linting, formatting, and testing.
 
 ```shell
-make install tools
+make tools
 ```
 
 | Tool | Description |
