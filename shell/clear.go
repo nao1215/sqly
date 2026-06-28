@@ -19,7 +19,10 @@ import (
 // (piped stdin) the same stdout carries machine-readable payloads such as
 // --json/--csv, so writing control sequences there would corrupt the output;
 // .clear becomes a no-op instead.
-func (c CommandList) clearCommand(_ context.Context, s *Shell, _ []string) error {
+func (c CommandList) clearCommand(_ context.Context, s *Shell, argv []string) error {
+	if len(argv) > 0 {
+		return fmt.Errorf(".clear takes no arguments, got %d", len(argv))
+	}
 	if s != nil && s.isTTY != nil && !s.isTTY() {
 		return nil
 	}

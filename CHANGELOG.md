@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Strict Helper Argument Validation: `.pwd`, `.clear`, and `.exit` now reject unexpected trailing arguments with a clear error instead of ignoring them, matching the other helper commands. A typo such as `.exit now` no longer silently terminates a batch run with status 0.
 * Batch-Safe Clear: `.clear` now emits its ANSI clear-screen escapes only in an interactive TTY session. In batch mode (piped stdin) it is a no-op, so machine-readable stdout such as `--json`, `--ndjson`, and `--csv` is no longer corrupted by control sequences.
 * Multi-line Interactive SQL: the shell now buffers a SQL statement across lines and submits on Enter only when it ends with `;`, so a typed or pasted multi-line statement (for example `SELECT ... UNION ALL SELECT ...;`) runs once instead of executing each line separately. Dot-commands stay single-line, and pressing Enter on a blank line force-runs a query typed without `;`.
 * Idempotent SQLite Driver Registration: `config.InitSQLite3()` now guards driver registration with a package-level `sync.Once` instead of a function-local one, so calling it more than once no longer panics with `sql: Register called twice for driver sqlite3`.

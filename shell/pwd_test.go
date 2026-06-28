@@ -39,4 +39,16 @@ func TestCommandList_pwdCommand(t *testing.T) {
 			t.Error(diff)
 		}
 	})
+
+	t.Run("rejects unexpected extra arguments", func(t *testing.T) {
+		c := CommandList{}
+
+		err := c.pwdCommand(context.Background(), nil, []string{"extra"})
+		if err == nil {
+			t.Fatal("expected error for extra argument, got nil")
+		}
+		if !strings.Contains(err.Error(), ".pwd") {
+			t.Errorf("error %q should mention .pwd", err.Error())
+		}
+	})
 }

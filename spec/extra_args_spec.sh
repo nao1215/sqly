@@ -42,4 +42,32 @@ Describe 'sqly helper commands reject extra args'
     The status should be failure
     The stderr should include '.mode'
   End
+
+  It 'rejects .pwd with an extra argument'
+    Data
+      #|.pwd extra
+    End
+    When run sqly testdata/user.csv
+    The status should be failure
+    The stderr should include '.pwd'
+  End
+
+  It 'rejects .clear with an extra argument'
+    Data
+      #|.clear extra
+    End
+    When run sqly testdata/user.csv
+    The status should be failure
+    The stderr should include '.clear'
+  End
+
+  It 'does not let .exit with an extra argument silently terminate the batch'
+    Data
+      #|.exit extra
+      #|SELECT 1;
+    End
+    When run sqly testdata/user.csv
+    The status should be failure
+    The stderr should include '.exit'
+  End
 End

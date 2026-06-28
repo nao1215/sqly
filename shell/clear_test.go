@@ -77,6 +77,19 @@ func Test_clearCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects unexpected extra arguments", func(t *testing.T) {
+		t.Parallel()
+
+		c := NewCommands()
+		err := c[".clear"].execute(context.Background(), &Shell{}, []string{"extra"})
+		if err == nil {
+			t.Fatal("expected error for extra argument, got nil")
+		}
+		if !strings.Contains(err.Error(), ".clear") {
+			t.Errorf("error %q should mention .clear", err.Error())
+		}
+	})
+
 	t.Run("clear command executes without panic", func(t *testing.T) {
 		t.Parallel()
 
