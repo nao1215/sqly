@@ -538,7 +538,7 @@ func (s *Shell) prompt(p promptSession) (string, error) {
 }
 
 func (s *Shell) promptPrefix() string {
-	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String())
+	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.displayName())
 }
 
 // Suggest is a local struct to maintain compatibility with old code structure
@@ -685,8 +685,8 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
 		{Text: "json", Description: "sqly command argument: json output format"},
 		{Text: "ndjson", Description: "sqly command argument: ndjson output format"},
-		{Text: "json-typed", Description: "sqly command argument: json output with native scalars"},
-		{Text: "ndjson-typed", Description: "sqly command argument: ndjson output with native scalars"},
+		{Text: outputModeJSONTyped, Description: "sqly command argument: json output with native scalars"},
+		{Text: outputModeNDJSONTyped, Description: "sqly command argument: ndjson output with native scalars"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
 	}

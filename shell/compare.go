@@ -26,9 +26,9 @@ func outputModeFlagName(o *config.Output) string {
 	if o.JSONTyped {
 		switch o.Mode {
 		case model.PrintModeJSON:
-			return "json-typed"
+			return outputModeJSONTyped
 		case model.PrintModeNDJSON:
-			return "ndjson-typed"
+			return outputModeNDJSONTyped
 		}
 	}
 	return o.Mode.String()
