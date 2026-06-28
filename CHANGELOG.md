@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 
 ### New Features
 * Flag-Driven Subcommand Hint: `sqly help` and `sqly version` (and case variants) now print a short hint pointing at `--help`/`--version` and exit non-zero, instead of a confusing "path does not exist" import error. A real file or directory named `help`/`version` still imports. The help text and docs also note that sqly has no subcommands.
