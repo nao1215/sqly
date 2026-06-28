@@ -4,6 +4,7 @@
 
 ### Bug Fixes
 * Content-Aware Import Cache Key: `--cache` now keys invalidation on each input file's path, size, and a SHA-256 content hash instead of path, size, and modification time. A source rewritten in place with different but same-length content and its original mtime restored is now detected and the cache rebuilt, so a warm run can no longer return stale rows for a modified file.
+* Clean Ctrl-D Exit: pressing Ctrl-D (EOF) in the interactive shell now exits cleanly like `.exit` instead of printing a raw `EOF` line. Both EOF spellings the prompt library reports (Ctrl-D on an empty line and a closed input stream) are treated as a normal termination.
 * Symlink-Resolved System-Path Guard: import path validation now rejects a symlink whose canonical target is a blocked system location (such as a link to `/etc/hosts`), not only a directly typed system path. It also normalizes the macOS `/private` prefix, while standard Unix pseudo-files (`/dev/stdin`, `/proc/self/fd/*`) keep importing.
 
 ## [v0.24.0](https://github.com/nao1215/sqly/compare/v0.23.0...v0.24.0) (2026-06-06)
