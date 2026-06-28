@@ -361,7 +361,7 @@ func (s *Shell) communicate(ctx context.Context) error {
 
 func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 	p, err := s.newPrompt(s.promptPrefix(), func(d prompt.Document) []prompt.Suggestion {
-		return s.completerNew(ctx, d.Text)
+		return s.completeDocument(ctx, d)
 	})
 	if err != nil {
 		return nil, err
@@ -592,6 +592,13 @@ func (s *Shell) completerNew(ctx context.Context, input string) []prompt.Suggest
 	}
 
 	return completions
+}
+
+// completeDocument returns completions for the token at the cursor. It uses the
+// text before the cursor (not the whole line) so editing an earlier token and
+// pressing TAB completes that token instead of the line ending.
+func (s *Shell) completeDocument(ctx context.Context, d prompt.Document) []prompt.Suggestion {
+	return s.completerNew(ctx, d.TextBeforeCursor())
 }
 
 // getCompletions returns suggestions for auto-completion.

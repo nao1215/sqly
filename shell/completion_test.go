@@ -9,10 +9,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/interactor/mock"
 	"go.uber.org/mock/gomock"
 )
+
+// promptSuggestionTexts extracts the Text of each prompt.Suggestion.
+func promptSuggestionTexts(suggestions []prompt.Suggestion) []string {
+	texts := make([]string, 0, len(suggestions))
+	for _, s := range suggestions {
+		texts = append(texts, s.Text)
+	}
+	return texts
+}
 
 func hasSuggestionText(suggestions []Suggest, text string) bool {
 	for _, suggestion := range suggestions {
@@ -230,6 +240,68 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 			t.Errorf("plain file should be suggested verbatim, got %v", got)
 		}
 	})
+}
+
+func TestCompletionRespectsCursorPositionForHelperPath(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		"datadir/",
+		"datadir/inner.csv",
+	})
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	// Cursor sits right after the first argument "data", with trailing text still
+	// present. Completion must target the token under the cursor, not the line end.
+	text := ".import data other.csv"
+	cursor := len(".import data")
+	d := prompt.Document{Text: text, CursorPosition: cursor}
+
+	got := promptSuggestionTexts(shell.completeDocument(context.Background(), d))
+	if !slices.Contains(got, "datadir/") {
+		t.Errorf("expected datadir/ when completing the token under the cursor, got %v", got)
+	}
+}
+
+func TestCompletionRespectsCursorPositionForSQLIdentifier(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "user.csv")}); err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+
+	// Cursor is inside the earlier identifier "identi", before " FROM user".
+	text := "SELECT identi FROM user"
+	cursor := len("SELECT identi")
+	d := prompt.Document{Text: text, CursorPosition: cursor}
+
+	got := promptSuggestionTexts(shell.completeDocument(context.Background(), d))
+	if !slices.Contains(got, "identifier") {
+		t.Errorf("expected the identifier column completing the token at the cursor, got %v", got)
+	}
+
+	// Completing the whole line (cursor ignored) filters by the trailing "user",
+	// so it would not surface "identifier"; this contrast proves cursor-awareness.
+	full := promptSuggestionTexts(shell.completerNew(context.Background(), text))
+	if slices.Contains(full, "identifier") {
+		t.Errorf("line-end completion unexpectedly surfaced identifier: %v", full)
+	}
 }
 
 func TestPathCompletionForHelperCommands(t *testing.T) {
