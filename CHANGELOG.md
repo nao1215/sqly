@@ -7,6 +7,7 @@
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes
+* Clear-Screen Control Key: the interactive shell now binds the documented Ctrl+L key to clear the screen, redrawing the prompt with the current input preserved.
 * History Control Keys: the interactive shell now binds the documented Ctrl+P and Ctrl+N keys to previous/next command history, matching the arrow keys.
 * Cursor Movement Control Keys: the interactive shell now binds the documented Ctrl+F and Ctrl+B keys to move the cursor forward/backward one character, matching the arrow keys.
 * Cursor-Aware Completion: tab completion now uses the text before the cursor instead of the whole line, so moving the cursor back into an earlier path, table name, or SQL identifier and pressing TAB completes the token under the cursor rather than the line ending.
@@ -31,6 +32,7 @@
 * Symlink-Resolved System-Path Guard: import path validation now rejects a symlink whose canonical target is a blocked system location (such as a link to `/etc/hosts`), not only a directly typed system path. It also normalizes the macOS `/private` prefix, while standard Unix pseudo-files (`/dev/stdin`, `/proc/self/fd/*`) keep importing.
 
 ### Dependencies
+* Prompt: upgrade `github.com/nao1215/prompt` to v0.0.8 for the `ActionClearScreen` key action that backs the Ctrl+L clear-screen binding.
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.7 for the `WithIsComplete` multiline submit predicate and the `WithWordEscape` option that lets completion treat backslash-escaped whitespace as part of a word.
 
 ## [v0.24.0](https://github.com/nao1215/sqly/compare/v0.23.0...v0.24.0) (2026-06-06)
