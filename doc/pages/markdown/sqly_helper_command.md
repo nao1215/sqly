@@ -121,6 +121,8 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .mode
   ltsv
   json
   ndjson
+  json-typed ※ json output with native numbers, booleans, and nulls
+  ndjson-typed ※ ndjson output with native numbers, booleans, and nulls
   excel ※ active only when executing .dump, otherwise same as csv mode
   parquet ※ active only when executing .dump, otherwise same as csv mode
 ```

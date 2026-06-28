@@ -2300,6 +2300,67 @@ func TestShellExec_TypedJSONModeSwitch(t *testing.T) {
 	}
 }
 
+func TestShell_promptPrefixReflectsTypedJSONMode(t *testing.T) {
+	// The prompt label must distinguish the typed JSON variants from the plain
+	// json/ndjson modes so a typed session is visible at the prompt.
+	tests := []struct {
+		name string
+		mode string
+		want string
+	}{
+		{name: "json-typed mode shows (json-typed) in prompt", mode: "json-typed", want: "(json-typed)"},
+		{name: "ndjson-typed mode shows (ndjson-typed) in prompt", mode: "ndjson-typed", want: "(ndjson-typed)"},
+		{name: "plain json mode still shows (json) in prompt", mode: "json", want: "(json)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			if err := shell.state.mode.changeOutputModeIfNeeded(tt.mode); err != nil {
+				t.Fatalf("changeOutputModeIfNeeded(%q): %v", tt.mode, err)
+			}
+			if prefix := shell.promptPrefix(); !strings.Contains(prefix, tt.want) {
+				t.Errorf("promptPrefix() = %q, want it to contain %q", prefix, tt.want)
+			}
+		})
+	}
+}
+
+func TestCommandList_modeCommand_listsTypedJSONVariants(t *testing.T) {
+	// `.mode` with no argument prints the current mode and the selectable mode
+	// list. Both must surface the typed JSON variants so the user can discover and
+	// confirm them.
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if err := shell.state.mode.changeOutputModeIfNeeded("json-typed"); err != nil {
+		t.Fatalf("changeOutputModeIfNeeded: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := shell.commands.modeCommand(context.Background(), shell, nil); err != nil {
+			t.Fatalf("modeCommand: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "current mode=json-typed") {
+		t.Errorf("`.mode` banner = %q, want it to contain %q", out, "current mode=json-typed")
+	}
+	if !strings.Contains(out, "json-typed") {
+		t.Errorf("`.mode` list = %q, want it to list json-typed", out)
+	}
+	if !strings.Contains(out, "ndjson-typed") {
+		t.Errorf("`.mode` list = %q, want it to list ndjson-typed", out)
+	}
+}
+
 func TestShellExec_SchemaAndDescribe(t *testing.T) {
 	// Regression for: schema inspection commands over an imported CSV.
 	newImportedShell := func(t *testing.T) (*Shell, func()) {

@@ -31,4 +31,16 @@ Describe 'sqly .mode banner routing'
     The output should not include 'Change output mode'
     The stderr should include 'Change output mode from table to ndjson'
   End
+
+  It 'reports the typed mode by name and emits typed output after .mode json-typed'
+    Data
+      #|.mode json-typed
+      #|SELECT 7 AS n, 'x' AS s
+    End
+    When run sqly testdata/user.csv
+    The status should be success
+    The stderr should include 'Change output mode from table to json-typed'
+    The output should include '"n":7'
+    The output should include '"s":"x"'
+  End
 End
