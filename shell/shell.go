@@ -1145,6 +1145,15 @@ func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
 	readDir = filepath.FromSlash(strings.ReplaceAll(unescapeCompletionPath(readDir), `\`, "/"))
 	partial = unescapeCompletionPath(partial)
 
+	// Expand a leading "~" so a home-directory prefix enumerates the real home
+	// directory for the lookup. base keeps the typed "~/" so suggestions render as
+	// "~/file.csv"; .import expands the tilde again at execution time.
+	expandedReadDir, err := expandTilde(readDir)
+	if err != nil {
+		return nil
+	}
+	readDir = expandedReadDir
+
 	entries, err := os.ReadDir(readDir)
 	if err != nil {
 		return nil
