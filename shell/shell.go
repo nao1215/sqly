@@ -602,6 +602,27 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	// escaped word boundary (enabled with WithWordEscape) used to accept the
 	// completion, so the directory portion is not lost when descending.
 	currentWord := currentCompletionWord(text)
+
+	// Command-aware path completion: the path-taking helper commands complete
+	// filesystem paths at their path argument. .cd and .save target a directory,
+	// so only directories are offered; .ls/.dump/.import also offer importable
+	// files. This runs before the generic path detection so a directory-only
+	// command is never given file suggestions.
+	if cmdWords := strings.Fields(text); len(cmdWords) >= 1 {
+		if pathArg, multi, dirsOnly, ok := pathCommandSpec(cmdWords[0]); ok {
+			argIndex := len(cmdWords) - 1
+			if currentWord == "" {
+				argIndex = len(cmdWords) // a trailing space starts the next argument
+			}
+			if argIndex == pathArg || (multi && argIndex >= pathArg) {
+				if quote, rawInner, ok := openQuotePrefix(currentWord); ok {
+					return keepDirsOnly(s.getQuotedFilePathCompletions(rawInner, quote), dirsOnly)
+				}
+				return keepDirsOnly(s.getFilePathCompletions(currentWord), dirsOnly)
+			}
+		}
+	}
+
 	// Check if we're dealing with a file path (contains / or \ or starts with common path patterns)
 	isFilePath := strings.Contains(currentWord, "/") ||
 		strings.Contains(currentWord, `\`) || // Windows path separator support
@@ -634,25 +655,9 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	}
 
 	// Check if this might be at the end where we expect a file path
-	// (after SQL query or after .import command)
+	// (after a SQL query). Helper-command path completion is handled above.
 	words := strings.Fields(text)
 	if len(words) > 0 {
-		// If the line starts with .import, always provide file completions for the last argument
-		if len(words) >= 1 && words[0] == importCommand {
-			// When the in-progress word opens a quote (e.g. .import "my), complete
-			// the path fragment inside the quote and keep it quoted so the accepted
-			// command stays valid. This is the scenario that needs quoting in the
-			// first place: a path with spaces.
-			if quote, rawInner, ok := openQuotePrefix(currentWord); ok {
-				return s.getQuotedFilePathCompletions(rawInner, quote)
-			}
-			fileCompletions := s.getFilePathCompletions(currentWord)
-
-			// For new full-path completion behavior, return all files without filtering
-			// This ensures users see all importable files regardless of input
-			return fileCompletions
-		}
-
 		// If we have a SQL query and the current word might be a filename
 		if strings.Contains(strings.ToUpper(text), "FROM") ||
 			strings.Contains(strings.ToUpper(text), "SELECT") {
@@ -1127,6 +1132,42 @@ func slashifyBase(base string) string {
 		b.WriteRune(runes[i])
 	}
 	return b.String()
+}
+
+// pathCommandSpec reports how a helper command participates in path completion:
+// the 0-based argument index where the path is typed (the command itself is
+// index 0), whether multiple trailing paths are accepted, and whether only
+// directories are offered. ok is false for commands that take no path.
+func pathCommandSpec(cmd string) (pathArg int, multi, dirsOnly, ok bool) {
+	switch cmd {
+	case importCommand: // .import FILE...
+		return 1, true, false, true
+	case lsCommand: // .ls PATH
+		return 1, false, false, true
+	case cdCommand: // .cd DIR
+		return 1, false, true, true
+	case saveCommand: // .save DIR
+		return 1, false, true, true
+	case dumpCommand: // .dump TABLE PATH
+		return 2, false, false, true
+	}
+	return 0, false, false, false
+}
+
+// keepDirsOnly drops file suggestions when a command targets a directory (.cd,
+// .save). Directory suggestions carry a trailing "/", so they are kept while
+// files are filtered out. When dirsOnly is false the suggestions pass through.
+func keepDirsOnly(suggestions []Suggest, dirsOnly bool) []Suggest {
+	if !dirsOnly {
+		return suggestions
+	}
+	filtered := make([]Suggest, 0, len(suggestions))
+	for _, sg := range suggestions {
+		if strings.HasSuffix(sg.Text, "/") {
+			filtered = append(filtered, sg)
+		}
+	}
+	return filtered
 }
 
 // getFilePathCompletions returns importable-file and directory suggestions

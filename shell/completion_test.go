@@ -232,6 +232,77 @@ func TestCompletionEscapesSpaceContainingPaths(t *testing.T) {
 	})
 }
 
+func TestPathCompletionForHelperCommands(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	makeTree(t, []string{
+		"datadir/",
+		"datadir/inner.csv",
+		"report.csv",
+	})
+
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+
+	complete := func(text string) []string {
+		return completionTexts(shell.getCompletions(context.Background(), text))
+	}
+
+	t.Run(".cd completes directories only", func(t *testing.T) {
+		got := complete(".cd data")
+		if !slices.Contains(got, "datadir/") {
+			t.Errorf("expected datadir/ for \".cd data\", got %v", got)
+		}
+		if slices.Contains(got, "report.csv") {
+			t.Errorf(".cd should not offer files, got %v", got)
+		}
+	})
+
+	t.Run(".save completes directories only", func(t *testing.T) {
+		got := complete(".save data")
+		if !slices.Contains(got, "datadir/") {
+			t.Errorf("expected datadir/ for \".save data\", got %v", got)
+		}
+		if slices.Contains(got, "report.csv") {
+			t.Errorf(".save should not offer files, got %v", got)
+		}
+	})
+
+	t.Run(".ls completes files and directories", func(t *testing.T) {
+		got := complete(".ls ")
+		if !slices.Contains(got, "datadir/") {
+			t.Errorf("expected datadir/ for \".ls \", got %v", got)
+		}
+		if !slices.Contains(got, "report.csv") {
+			t.Errorf("expected report.csv for \".ls \", got %v", got)
+		}
+	})
+
+	t.Run(".dump completes the destination path after the table argument", func(t *testing.T) {
+		got := complete(".dump mytable data")
+		if !slices.Contains(got, "datadir/") {
+			t.Errorf("expected datadir/ for \".dump mytable data\", got %v", got)
+		}
+	})
+
+	t.Run(".dump does not path-complete the table-name argument", func(t *testing.T) {
+		got := complete(".dump data")
+		if slices.Contains(got, "datadir/") {
+			t.Errorf(".dump should not path-complete the table name, got %v", got)
+		}
+	})
+}
+
 func TestCompletionSuggestsDirectoryArguments(t *testing.T) {
 	// Note: cannot use t.Parallel() with t.Chdir().
 	tmpDir := t.TempDir()
