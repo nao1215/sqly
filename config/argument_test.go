@@ -372,6 +372,16 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit empty --sql is rejected", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--sql", "", "testdata/user.csv"})
+		if err == nil {
+			t.Fatal("expected an error for an explicit empty --sql, got nil")
+		}
+		if !errors.Is(err, errEmptyQuery) {
+			t.Errorf("mismatch error got=%v, want=%v", err, errEmptyQuery)
+		}
+	})
+
 	t.Run("explicit empty --output is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1 AS x", "--output", ""})
 		if err == nil {

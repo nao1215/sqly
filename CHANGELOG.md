@@ -7,6 +7,7 @@
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes
+* Reject Empty --sql: an explicit empty `--sql ""` now fails fast with a clear validation error instead of silently running no query and exiting 0, matching the other string flags that already reject explicit empty values.
 * Leaner Keyed Compare: `--compare --compare-key` now converts each side to its keyed rows and releases the raw table before loading the other, so the two full tables are no longer held in memory at the same time.
 * Single-Pass Profiling: `--profile` now aggregates each column's statistics in a single pass over the rows instead of copying the whole table into a per-column values and nulls slice, so its memory no longer scales with columns times rows.
 * Single-Insert History Writes: each interactive command's history write is now a single insert that relies on SQLite AUTOINCREMENT, instead of scanning the entire history table to compute the next id. History preloading at startup still reads the table once.
