@@ -33,6 +33,30 @@ brew install nao1215/tap/sqly
 
 Runs on Windows, macOS, and Linux. Requires Go 1.25 or later when building from source.
 
+## Verifying release integrity
+Every release ships supply-chain metadata so you can verify what you download:
+
+- Signed checksums: `checksums.txt` is signed with [cosign](https://github.com/sigstore/cosign) (keyless), producing `checksums.txt.sigstore.json`.
+- SBOM: an SPDX Software Bill of Materials is attached to each release archive.
+- Build provenance: SLSA build provenance is attested via GitHub OIDC.
+
+Verify the signed checksums (then check your archive against `checksums.txt`):
+
+```shell
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp 'https://github.com/nao1215/sqly/\.github/workflows/release\.yml@refs/tags/.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+```
+
+Verify the build provenance of a downloaded artifact with the GitHub CLI:
+
+```shell
+gh attestation verify sqly_<version>_<os>_<arch>.tar.gz --repo nao1215/sqly
+```
+
 ## Run SQL: --sql
 
 Pass file or directory paths as arguments; sqly imports each one and names the table after the file (so `user.csv` becomes table `user`).
