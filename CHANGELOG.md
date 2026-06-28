@@ -7,6 +7,7 @@
 * Path Completion for More Helpers: tab completion now completes filesystem paths for `.cd`, `.ls`, `.dump`, and `.save`, not only `.import`. `.cd` and `.save` offer directories only, `.ls` offers files and directories, and `.dump` completes the destination path after the table-name argument.
 
 ### Bug Fixes
+* History Control Keys: the interactive shell now binds the documented Ctrl+P and Ctrl+N keys to previous/next command history, matching the arrow keys.
 * Cursor-Aware Completion: tab completion now uses the text before the cursor instead of the whole line, so moving the cursor back into an earlier path, table name, or SQL identifier and pressing TAB completes the token under the cursor rather than the line ending.
 * Home-Path Import Completion: `.import` tab completion now expands a leading `~/` to the home directory for the lookup while keeping the suggestion rendered as `~/file.csv`, so home-directory paths complete the same way relative and absolute paths do. The accepted `~/...` argument is expanded again at import time.
 * Directory Import Completion: `.import` tab completion offers directory candidates with a trailing slash, so a directory import target (for example `datadir/`) is discoverable and can be accepted and imported directly, not just descended into. Regression tests lock the directory-candidate behavior in.
