@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/nao1215/sqly/config"
@@ -13,9 +14,9 @@ import (
 // the current output mode, so `.mode json` yields structured column metadata.
 func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .describe TABLE_NAME")
-		return nil
+		// A missing required argument is a command error so a batch script fails
+		// fast instead of skipping the command and exiting 0.
+		return errors.New(".describe requires a table name\n[Usage]\n  .describe TABLE_NAME")
 	}
 	if len(argv) > 1 {
 		return fmt.Errorf(".describe accepts a single table name, got %d arguments", len(argv))

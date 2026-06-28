@@ -49,4 +49,70 @@ Describe 'sqly v0.25.0 binary regressions'
     The stderr should include 'stdin'
     The stderr should not include 'sqly-stdin-'
   End
+
+  # A helper command missing a required argument must fail the batch run (non-zero
+  # exit) instead of printing usage and continuing as if it succeeded.
+  It 'fails batch mode when .schema is missing its table name'
+    Data
+      #|.schema
+      #|SELECT 1;
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.schema requires'
+  End
+
+  It 'fails batch mode when .header is missing its table name'
+    Data
+      #|.header
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.header requires'
+  End
+
+  It 'fails batch mode when .describe is missing its table name'
+    Data
+      #|.describe
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.describe requires'
+  End
+
+  It 'fails batch mode when .mode is missing its mode name'
+    Data
+      #|.mode
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.mode requires'
+  End
+
+  It 'fails batch mode when .dump is missing its destination'
+    Data
+      #|.dump
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.dump requires'
+  End
+
+  It 'fails batch mode when .import is missing its path'
+    Data
+      #|.import
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.import requires'
+  End
+
+  It 'fails batch mode when .save is missing its argument'
+    Data
+      #|.save
+    End
+    When run sqly "$PROJECT_ROOT/testdata/user.csv"
+    The status should be failure
+    The stderr should include '.save requires'
+  End
 End

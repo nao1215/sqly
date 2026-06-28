@@ -20,12 +20,15 @@ const forceArg = "--force"
 // ".save --force" overwrites the source files in place.
 func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) != 1 {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .save DIRECTORY   write each table into DIRECTORY (originals untouched)")
-		fmt.Fprintln(config.Stdout, "  .save --force     overwrite each table's source file in place")
-		fmt.Fprintln(config.Stdout, "[Note]")
-		fmt.Fprintln(config.Stdout, "  Only csv/tsv/ltsv/parquet sources are written; compression is preserved.")
-		return nil
+		// A missing or extra argument is a command error so a batch script fails
+		// fast instead of skipping the save and exiting 0. The usage and note ride
+		// on the error path.
+		return errors.New(".save requires a single argument: a directory or --force\n" +
+			"[Usage]\n" +
+			"  .save DIRECTORY   write each table into DIRECTORY (originals untouched)\n" +
+			"  .save --force     overwrite each table's source file in place\n" +
+			"[Note]\n" +
+			"  Only csv/tsv/ltsv/parquet sources are written; compression is preserved")
 	}
 	// Reject an empty destination so `.save ""` is not treated as an in-place
 	// save, which would bypass the --force safeguard.

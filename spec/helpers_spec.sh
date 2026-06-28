@@ -101,14 +101,16 @@ Describe 'sqly shell helper commands'
   End
 
   Describe '.mode'
-    It 'lists json and ndjson modes'
+    It 'fails on a missing mode name but still lists the modes'
+      # A missing mode name is a command error so a batch script fails fast, but
+      # the error still carries the mode list on stderr for discovery.
       Data
         #|.mode
       End
       When run sqly testdata/user.csv
-      The status should be success
-      The output should include 'json'
-      The output should include 'ndjson'
+      The status should be failure
+      The stderr should include 'json'
+      The stderr should include 'ndjson'
     End
   End
 End
