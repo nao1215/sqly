@@ -42,6 +42,10 @@
 * Clean Ctrl-D Exit: pressing Ctrl-D (EOF) in the interactive shell now exits cleanly like `.exit` instead of printing a raw `EOF` line. Both EOF spellings the prompt library reports (Ctrl-D on an empty line and a closed input stream) are treated as a normal termination.
 * Symlink-Resolved System-Path Guard: import path validation now rejects a symlink whose canonical target is a blocked system location (such as a link to `/etc/hosts`), not only a directly typed system path. It also normalizes the macOS `/private` prefix, while standard Unix pseudo-files (`/dev/stdin`, `/proc/self/fd/*`) keep importing.
 
+### Documentation
+* Docs-Sync Guardrail: a new test asserts that every `make <target>` command shown in the contributor docs (`README.md`, `CONTRIBUTING.md`, `doc/pages/markdown/build_and_test.md`) is a real Makefile target, so a stale setup instruction is caught in CI. It also fixes the stale `make install tools` command in `build_and_test.md`, which is now `make tools`.
+* Pull-Request Template: add `.github/pull_request_template.md` with a short checklist (tests, lint, docs, CHANGELOG, cross-platform impact) so the project's change bar is reinforced when a PR is opened.
+
 ### Dependencies
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.8 for the `ActionClearScreen` key action that backs the Ctrl+L clear-screen binding.
 * Prompt: upgrade `github.com/nao1215/prompt` to v0.0.7 for the `WithIsComplete` multiline submit predicate and the `WithWordEscape` option that lets completion treat backslash-escaped whitespace as part of a word.
