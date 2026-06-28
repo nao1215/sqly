@@ -28,8 +28,40 @@ func TestCache_WarmHitReusesSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "data.csv")
 	cache := filepath.Join(dir, "snap.cache")
-	// Two rows with single-character values so the file can be edited later
-	// without changing its byte length (keeping the cache signature identical).
+	if err := os.WriteFile(src, []byte("id,v\n1,a\n2,b\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cold run populates the cache.
+	cold := runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT v FROM data WHERE id=1", src})
+	if !strings.Contains(cold, "a") {
+		t.Fatalf("cold run = %q, want value a", cold)
+	}
+	if _, err := os.Stat(cache); err != nil {
+		t.Fatalf("expected cache file at %s: %v", cache, err)
+	}
+
+	// A second run over the unchanged source must reuse the cache and emit the
+	// reuse banner on stderr.
+	warmErr := captureStderr(t, func() {
+		warm := runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT v FROM data WHERE id=1", src})
+		if !strings.Contains(warm, "a") {
+			t.Errorf("warm run = %q, want value a", warm)
+		}
+	})
+	if !strings.Contains(warmErr, "cache: reused") {
+		t.Errorf("warm run stderr = %q, want it to include 'cache: reused'", warmErr)
+	}
+}
+
+// TestCache_InvalidatesWhenContentChangesSameSizeAndMTime reproduces issue #592:
+// a source rewritten with different but same-length content and its original
+// mtime restored must invalidate the cache, not reuse stale data.
+func TestCache_InvalidatesWhenContentChangesSameSizeAndMTime(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "data.csv")
+	cache := filepath.Join(dir, "snap.cache")
+	// Single-character values so the edit keeps the file's byte length identical.
 	if err := os.WriteFile(src, []byte("id,v\n1,a\n2,b\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -44,13 +76,9 @@ func TestCache_WarmHitReusesSnapshot(t *testing.T) {
 	if !strings.Contains(cold, "a") {
 		t.Fatalf("cold run = %q, want value a", cold)
 	}
-	if _, err := os.Stat(cache); err != nil {
-		t.Fatalf("expected cache file at %s: %v", cache, err)
-	}
 
-	// Edit the source in place, keeping the same byte length, then restore the
-	// modification time so the cache signature still matches. A warm run must
-	// return the cached value 'a', proving it did not re-read the source.
+	// Rewrite with same length and restore the mtime: size and mtime are
+	// unchanged, so only a content hash can detect the edit.
 	if err := os.WriteFile(src, []byte("id,v\n1,Z\n2,b\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -58,9 +86,14 @@ func TestCache_WarmHitReusesSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	warm := runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT v FROM data WHERE id=1", src})
-	if !strings.Contains(warm, "a") || strings.Contains(warm, "Z") {
-		t.Errorf("warm run = %q, want cached value a (not the edited Z)", warm)
+	stderr := captureStderr(t, func() {
+		got := runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT v FROM data WHERE id=1", src})
+		if !strings.Contains(got, "Z") {
+			t.Errorf("after content change = %q, want the new value Z (cache must invalidate)", got)
+		}
+	})
+	if strings.Contains(stderr, "cache: reused") {
+		t.Errorf("stderr = %q, want no 'cache: reused' after a content change", stderr)
 	}
 }
 
