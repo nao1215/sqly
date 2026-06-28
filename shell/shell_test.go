@@ -1213,6 +1213,9 @@ type fakePromptSession struct {
 	runCalls        int
 	initialPrefix   string
 	capturedSuggest []prompt.Suggestion
+	// exhaustErr is returned once results are exhausted. It defaults to io.EOF,
+	// modeling Ctrl-D; set it to prompt.ErrEOF to model a closed input stream.
+	exhaustErr error
 }
 
 func (f *fakePromptSession) AddHistory(history string) {
@@ -1226,6 +1229,9 @@ func (f *fakePromptSession) Close() error {
 
 func (f *fakePromptSession) Run() (string, error) {
 	if f.runCalls >= len(f.results) {
+		if f.exhaustErr != nil {
+			return "", f.exhaustErr
+		}
 		return "", io.EOF
 	}
 
@@ -1349,6 +1355,62 @@ func TestShellCommunicate_ReusesPromptSessionForMultilineSQL(t *testing.T) {
 	}
 	if !strings.Contains(queryOutput.String(), "1") || !strings.Contains(queryOutput.String(), "2") {
 		t.Fatalf("multiline SQL output missing expected rows: %q", queryOutput.String())
+	}
+}
+
+// TestShellCommunicate_EOFExitsCleanly covers issue #594: Ctrl-D / EOF must end
+// the interactive shell cleanly, like ".exit", without returning an error or
+// leaking raw "EOF" text to the user. Both EOF spellings the prompt library can
+// report are exercised: io.EOF (Ctrl-D on an empty line) and prompt.ErrEOF (the
+// input stream was closed).
+func TestShellCommunicate_EOFExitsCleanly(t *testing.T) {
+	tests := []struct {
+		name string
+		eof  error
+	}{
+		{name: "Ctrl-D returns io.EOF", eof: io.EOF},
+		{name: "closed stream returns prompt.ErrEOF", eof: prompt.ErrEOF},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			fakePrompt := &fakePromptSession{exhaustErr: tt.eof}
+			shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+				fakePrompt.initialPrefix = prefix
+				return fakePrompt, nil
+			}
+
+			backupStdout := config.Stdout
+			backupStderr := config.Stderr
+			defer func() {
+				config.Stdout = backupStdout
+				config.Stderr = backupStderr
+			}()
+			var stdout, stderr bytes.Buffer
+			config.Stdout = &stdout
+			config.Stderr = &stderr
+
+			terminal := captureOSStdout(t, func() {
+				if err := shell.communicate(context.Background()); err != nil {
+					t.Fatalf("communicate returned %v on EOF, want a clean exit (nil)", err)
+				}
+			})
+
+			if strings.Contains(stderr.String(), "EOF") {
+				t.Errorf("stderr leaked EOF text: %q", stderr.String())
+			}
+			if strings.Contains(stdout.String(), "EOF") || strings.Contains(terminal, "EOF") {
+				t.Errorf("output leaked EOF text: stdout=%q terminal=%q", stdout.String(), terminal)
+			}
+			if fakePrompt.closeCalls != 1 {
+				t.Errorf("prompt close calls = %d, want 1 (session closed on EOF exit)", fakePrompt.closeCalls)
+			}
+		})
 	}
 }
 

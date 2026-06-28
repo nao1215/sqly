@@ -338,6 +338,13 @@ func (s *Shell) communicate(ctx context.Context) error {
 	for {
 		input, err := s.prompt(p)
 		if err != nil {
+			// Ctrl-D / EOF ends the session like ".exit": a normal exit, not a
+			// user-facing error. The prompt library reports this as io.EOF
+			// (Ctrl-D on an empty line) or prompt.ErrEOF (input stream closed);
+			// treat both as a clean termination so no raw "EOF" text leaks out.
+			if errors.Is(err, io.EOF) || errors.Is(err, prompt.ErrEOF) {
+				return nil
+			}
 			return err
 		}
 		if err = s.exec(ctx, input); err != nil {
