@@ -626,8 +626,10 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 				// When we're at the end of a path, return completions as-is
 				return fileCompletions
 			}
-			// Otherwise, filter based on the current word
-			return filterHasPrefix(fileCompletions, currentWord, true)
+			// Suggestions use "/" (slashifyBase), so slashify the word too;
+			// otherwise a Windows-style prefix such as "C:\dir\fi" never
+			// prefix-matches "C:/dir/file.csv".
+			return filterHasPrefix(fileCompletions, slashifyBase(currentWord), true)
 		}
 	}
 
@@ -652,10 +654,12 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 				// Try file completion as a fallback
 				fileCompletions := s.getFilePathCompletions(currentWord)
 				if len(fileCompletions) > 0 {
-					// Mix with regular completions
+					// Slashify the word so a Windows-style prefix matches the
+					// slash-normalized suggestions; table and keyword prefixes
+					// have no backslash, so they are unaffected.
 					regularCompletions := s.getRegularCompletions(ctx, input)
 					regularCompletions = append(regularCompletions, fileCompletions...)
-					return filterHasPrefix(regularCompletions, currentWord, true)
+					return filterHasPrefix(regularCompletions, slashifyBase(currentWord), true)
 				}
 			}
 		}

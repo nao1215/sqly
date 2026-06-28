@@ -1119,3 +1119,256 @@ func BenchmarkGetFilePathCompletions(b *testing.B) {
 		}
 	})
 }
+
+// slashSeparators rewrites backslashes to forward slashes so completion
+// assertions read the same on every OS: suggestions normalize separators to "/"
+// regardless of what the user typed.
+func slashSeparators(s string) string { return strings.ReplaceAll(s, `\`, "/") }
+
+// TestGetFilePathCompletionsAbsolutePathUsesTypedDirAsRoot guards the core of the
+// absolute-path bug: completion must enumerate the directory named by the typed
+// prefix, not recursively walk the working directory. A decoy file sitting in the
+// working directory must never surface when the prefix points somewhere else.
+func TestGetFilePathCompletionsAbsolutePathUsesTypedDirAsRoot(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	targetDir := t.TempDir()
+	makeTree(t, []string{
+		filepath.Join(targetDir, "other.csv"),
+		filepath.Join(targetDir, "report.tsv"),
+		filepath.Join(targetDir, "nested") + "/",
+	})
+
+	workDir := t.TempDir()
+	makeTree(t, []string{filepath.Join(workDir, "decoy.csv")})
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(workDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	collect := func(prefix string) []string {
+		suggestions := shell.getFilePathCompletions(prefix)
+		got := make([]string, 0, len(suggestions))
+		for _, s := range suggestions {
+			got = append(got, slashSeparators(s.Text))
+		}
+		return got
+	}
+
+	t.Run("absolute partial filename matches only the entry rooted at the typed dir", func(t *testing.T) {
+		got := collect(filepath.Join(targetDir, "o"))
+		want := slashSeparators(filepath.Join(targetDir, "other.csv"))
+		if !slices.Contains(got, want) {
+			t.Errorf("want %q, got %v", want, got)
+		}
+		if slices.Contains(got, slashSeparators(filepath.Join(workDir, "decoy.csv"))) {
+			t.Errorf("working-directory file leaked into absolute-path completion: %v", got)
+		}
+	})
+
+	t.Run("absolute directory prefix enumerates that directory", func(t *testing.T) {
+		got := collect(targetDir + string(os.PathSeparator))
+		for _, want := range []string{
+			slashSeparators(filepath.Join(targetDir, "other.csv")),
+			slashSeparators(filepath.Join(targetDir, "report.tsv")),
+			slashSeparators(filepath.Join(targetDir, "nested")) + "/",
+		} {
+			if !slices.Contains(got, want) {
+				t.Errorf("want %q, got %v", want, got)
+			}
+		}
+	})
+}
+
+// TestGetFilePathCompletionsRelativeDotPaths guards that "./" and "../" prefixes
+// complete within those directories instead of falling back to a recursive scan
+// of the working tree.
+func TestGetFilePathCompletionsRelativeDotPaths(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	root := t.TempDir()
+	makeTree(t, []string{
+		filepath.Join(root, "sibling.csv"),
+		filepath.Join(root, "work") + "/",
+		filepath.Join(root, "work", "inside.csv"),
+	})
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(filepath.Join(root, "work"))
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	texts := func(prefix string) []string {
+		suggestions := shell.getFilePathCompletions(prefix)
+		got := make([]string, 0, len(suggestions))
+		for _, s := range suggestions {
+			got = append(got, slashSeparators(s.Text))
+		}
+		return got
+	}
+
+	t.Run("./ lists files in the current directory", func(t *testing.T) {
+		got := texts("./")
+		if !slices.Contains(got, "./inside.csv") {
+			t.Errorf("want ./inside.csv, got %v", got)
+		}
+	})
+
+	t.Run("../ lists files in the parent directory", func(t *testing.T) {
+		got := texts("../")
+		if !slices.Contains(got, "../sibling.csv") {
+			t.Errorf("want ../sibling.csv, got %v", got)
+		}
+	})
+
+	t.Run("../ with a partial name narrows to the parent entry", func(t *testing.T) {
+		got := texts("../sib")
+		if !slices.Contains(got, "../sibling.csv") {
+			t.Errorf("want ../sibling.csv, got %v", got)
+		}
+	})
+}
+
+// TestSplitCompletionPrefixWindowsDriveLetter guards the splitting logic for
+// Windows drive-letter paths so the search root is the typed directory, not "."
+// This runs on every OS because the split is pure string handling.
+func TestSplitCompletionPrefixWindowsDriveLetter(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		prefix      string
+		wantReadDir string
+		wantBase    string
+		wantPartial string
+	}{
+		{
+			name:        "drive-letter path splits at the last backslash",
+			prefix:      `C:\data\rep`,
+			wantReadDir: `C:\data\`,
+			wantBase:    `C:\data\`,
+			wantPartial: "rep",
+		},
+		{
+			name:        "drive root keeps the trailing backslash as the search dir",
+			prefix:      `C:\d`,
+			wantReadDir: `C:\`,
+			wantBase:    `C:\`,
+			wantPartial: "d",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			readDir, base, partial := splitCompletionPrefix(tt.prefix)
+			if readDir != tt.wantReadDir || base != tt.wantBase || partial != tt.wantPartial {
+				t.Errorf("splitCompletionPrefix(%q) = (%q, %q, %q), want (%q, %q, %q)",
+					tt.prefix, readDir, base, partial, tt.wantReadDir, tt.wantBase, tt.wantPartial)
+			}
+		})
+	}
+}
+
+// TestGetCompletionsBackslashPathPrefixStaysCompletable guards that a
+// Windows-style path prefix survives prefix filtering. Suggestions normalize
+// separators to "/", so the filter must compare against a slashified word;
+// otherwise the detected backslash path is filtered out and never completes.
+// The relative form resolves on every OS, so this regression runs everywhere.
+func TestGetCompletionsBackslashPathPrefixStaysCompletable(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+	makeTree(t, []string{"testdata/actor.csv", "testdata/sample.tsv"})
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	got := completionTexts(shell.getCompletions(context.Background(), `.import testdata\ac`))
+	if !slices.Contains(got, "testdata/actor.csv") {
+		t.Errorf("backslash path prefix dropped the matching completion: got %v", got)
+	}
+}
+
+// TestImportCompletionAbsolutePathThenImportSucceeds is the end-to-end regression
+// from the bug report: completing an absolute .import path must yield a command
+// line that imports successfully, even when the working directory is unrelated.
+func TestImportCompletionAbsolutePathThenImportSucceeds(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	targetDir := t.TempDir()
+	csvPath := filepath.Join(targetDir, "actors.csv")
+	if err := os.WriteFile(csvPath, []byte("id,name\n1,alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run from an unrelated directory so a recursive "." scan could not find the
+	// file; only honoring the typed absolute path can complete it.
+	workDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(workDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+	suggestions := shell.getCompletions(ctx, ".import "+filepath.Join(targetDir, "act"))
+
+	// Suggestions slash-normalize separators, so compare against the slashified
+	// target path. The completed text keeps "/"; Go's os calls accept it on
+	// Windows, so importing it still resolves the file.
+	wantPath := filepath.ToSlash(csvPath)
+	completed := ""
+	for _, s := range suggestions {
+		argv, splitErr := splitArgs(".import " + s.Text)
+		if splitErr != nil || len(argv) != 2 {
+			continue
+		}
+		if filepath.ToSlash(argv[1]) == wantPath {
+			completed = argv[1]
+			break
+		}
+	}
+	if completed == "" {
+		t.Fatalf("absolute path %q was not offered as a completion; suggestions=%v",
+			csvPath, completionTexts(suggestions))
+	}
+
+	if err := shell.commands.importCommand(ctx, shell, []string{completed}); err != nil {
+		t.Fatalf("importCommand(%q) failed: %v", completed, err)
+	}
+
+	tables := mustTables(ctx, shell)
+	names := make([]string, 0, len(tables))
+	for _, tbl := range tables {
+		names = append(names, tbl.Name())
+	}
+	if !slices.Contains(names, "actors") {
+		t.Errorf("imported tables = %v, want to include %q", names, "actors")
+	}
+}
