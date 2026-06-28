@@ -1981,8 +1981,10 @@ func TestShellRunBatch_EmptyStdinSkipsSave(t *testing.T) {
 	defer func() { config.Stderr = backupStderr }()
 	config.Stderr = &bytes.Buffer{}
 
-	if err := shell.Run(context.Background()); err != nil {
-		t.Fatalf("empty batch Run returned error: %v", err)
+	// An empty batch now fails with the no-statements hint, but it must still
+	// return before write-back so the source file is never rewritten.
+	if err := shell.Run(context.Background()); !errors.Is(err, errNoStatements) {
+		t.Fatalf("empty batch Run error = %v, want errNoStatements", err)
 	}
 	got, err := os.ReadFile(filepath.Clean(src))
 	if err != nil {
@@ -2855,6 +2857,33 @@ func TestShellRun_SQLFileRejectsPipedStdin(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "stdin") {
 		t.Fatalf("error = %q, want it to mention stdin", err.Error())
+	}
+}
+
+func TestShellRun_NonInteractiveNoStatementsHint(t *testing.T) {
+	// Regression for #659: a non-TTY run that executes nothing (empty stdin, with
+	// no --sql/--sql-file) must surface a hint and fail instead of exiting 0
+	// silently, so a headless wrapper does not mistake the no-op for success.
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{name: "no file arguments", args: []string{"sqly"}},
+		{name: "with a file argument", args: []string{"sqly", filepath.Join("testdata", "actor.csv")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			shell.isTTY = func() bool { return false }
+			shell.stdin = strings.NewReader("")
+
+			if err := shell.Run(context.Background()); !errors.Is(err, errNoStatements) {
+				t.Fatalf("Run error = %v, want errNoStatements", err)
+			}
+		})
 	}
 }
 

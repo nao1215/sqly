@@ -49,6 +49,12 @@ const (
 	msgExcelSheet     = "Excel sheet"
 )
 
+// errNoStatements is returned by a non-interactive run that reads stdin in batch
+// mode but executes nothing (no TTY and empty or comment-only stdin, with no
+// --sql/--sql-file). Without it the run would exit 0 silently, so a headless
+// wrapper or CI job could mistake a no-op for a completed query.
+var errNoStatements = errors.New("no TTY detected and no SQL was received on stdin; pipe a SQL query or sqly command, or pass --sql/--sql-file (run with --help for usage)")
+
 // Shell is main class of the sqly command.
 // Shell is the interface to the user and requests processing from the usecase layer.
 type Shell struct {
@@ -319,10 +325,13 @@ func (s *Shell) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// Skip write-back when nothing ran (e.g. empty stdin), so an empty batch
-		// does not trigger --save/--save-dir side effects.
+		// A non-interactive run that executed nothing (no TTY and empty or
+		// comment-only stdin, with no --sql/--sql-file) is a silent no-op that
+		// still exits 0, so headless wrappers and CI mistake it for a completed
+		// query. Surface a hint and fail instead. Returning before write-back also
+		// keeps an empty --save/--save-dir batch from rewriting source files.
 		if !ranAny {
-			return nil
+			return errNoStatements
 		}
 		return s.finishNonInteractive(ctx)
 	}

@@ -25,4 +25,19 @@ Describe 'sqly v0.25.0 binary regressions'
     The status should be failure
     The stderr should include '--sql requires a non-empty SQL statement'
   End
+
+  # A non-interactive run that receives no statements (no TTY, empty stdin, no
+  # --sql/--sql-file) must surface a hint and exit non-zero instead of looking
+  # successful while doing nothing.
+  It 'reports a hint when non-interactive run gets empty stdin and no file'
+    When run sh -c "printf '' | \"$SQLY_BIN\""
+    The status should be failure
+    The stderr should include 'no TTY detected'
+  End
+
+  It 'reports a hint when non-interactive run gets empty stdin with a file'
+    When run sh -c "printf '' | \"$SQLY_BIN\" \"$PROJECT_ROOT/testdata/user.csv\""
+    The status should be failure
+    The stderr should include 'no TTY detected'
+  End
 End
