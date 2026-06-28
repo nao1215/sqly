@@ -39,6 +39,26 @@ actor:Morgan Freeman    best_movie:The Dark Knight
 ```
 
 
+### Multi-line SQL input
+
+The sqly shell buffers a SQL statement across lines so a multi-line or pasted
+query runs as one statement. Enter submits when the statement ends with `;`;
+otherwise the newline continues the statement. A line beginning with a dot
+(`.tables`, `.import`, ...) is a single-line command and runs on Enter. To run a
+query without typing `;`, press Enter on a blank continuation line.
+
+```shell
+sqly:~/github/github.com/nao1215/sqly(table)$  SELECT actor
+                                               FROM actor
+                                               ORDER BY actor
+                                               LIMIT 1;
++---------------+
+|     actor     |
++---------------+
+| Harrison Ford |
++---------------+
+```
+
 ### Key Binding for sqly-shell
 
 |Key Binding	|Description|

@@ -3804,3 +3804,35 @@ func TestRunDirectSQLAllowsSingleStatementWithTrailingSemicolon(t *testing.T) {
 		t.Fatalf("single statement with trailing semicolon should run, got: %v", runErr)
 	}
 }
+
+func TestSQLInputComplete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"empty buffer submits", "", true},
+		{"whitespace-only buffer submits", "   \n\t", true},
+		{"dot command submits on enter", ".tables", true},
+		{"single statement without terminator continues", "SELECT 1", false},
+		{"statement ending with semicolon submits", "SELECT 1;", true},
+		{"semicolon after trailing spaces submits", "SELECT 1;   ", true},
+		{"first line of multiline statement continues", "SELECT 1", false},
+		{"middle line of multiline statement continues", "SELECT 1\nUNION ALL", false},
+		{"multiline statement terminated by semicolon submits", "SELECT 1\nUNION ALL\nSELECT 2;", true},
+		{"blank continuation line force-submits buffered query", "SELECT 1\n", true},
+		{"blank continuation line with spaces force-submits", "SELECT 1\n   ", true},
+		{"open paren without terminator continues", "SELECT * FROM (", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := sqlInputComplete(tt.input); got != tt.want {
+				t.Errorf("sqlInputComplete(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
