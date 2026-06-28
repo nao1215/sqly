@@ -95,13 +95,13 @@ func docMakeTargets(path string) ([]docMakeRef, error) {
 			cmd := strings.TrimSpace(line)
 			cmd = strings.TrimPrefix(cmd, "$ ")
 			cmd = strings.TrimSpace(cmd)
-			if target, ok := firstMakeTarget(cmd); ok {
+			for _, target := range makeCommandTargets(cmd) {
 				refs = append(refs, docMakeRef{target: target, line: lineNo})
 			}
 			continue
 		}
 		for _, m := range inlineMake.FindAllStringSubmatch(line, -1) {
-			if target, ok := firstMakeTarget("make " + m[1]); ok {
+			for _, target := range makeCommandTargets("make " + m[1]) {
 				refs = append(refs, docMakeRef{target: target, line: lineNo})
 			}
 		}
@@ -109,19 +109,32 @@ func docMakeTargets(path string) ([]docMakeRef, error) {
 	return refs, scanner.Err()
 }
 
-// firstMakeTarget reports the first non-flag argument of a "make ..." command,
-// which names the target being invoked. It returns ok=false when the command is
-// not a make invocation or carries no target (a bare "make").
-func firstMakeTarget(cmd string) (string, bool) {
+// makeValueFlags are the GNU make short options that consume the following token
+// as their value (for example `make -C docs build`), so that token names a path
+// or file, not a target.
+var makeValueFlags = map[string]bool{"-C": true, "-f": true, "-I": true, "-o": true, "-W": true}
+
+// makeCommandTargets returns every target named by a "make ..." command. It skips
+// flags, the values of value-taking flags (-C/-f/-I/-o/-W), and variable
+// overrides (NAME=value), so a command like `make -C docs build lint` yields
+// ["build", "lint"]. A command that is not a make invocation, or a bare `make`,
+// yields nothing.
+func makeCommandTargets(cmd string) []string {
 	fields := strings.Fields(cmd)
 	if len(fields) < 2 || fields[0] != "make" {
-		return "", false
+		return nil
 	}
-	for _, f := range fields[1:] {
-		if strings.HasPrefix(f, "-") || strings.Contains(f, "=") {
-			continue // skip flags and variable overrides
+	var targets []string
+	for i := 1; i < len(fields); i++ {
+		f := fields[i]
+		if makeValueFlags[f] {
+			i++ // this flag consumes the next token as its value
+			continue
 		}
-		return f, true
+		if strings.HasPrefix(f, "-") || strings.Contains(f, "=") {
+			continue // other flags and variable overrides are not targets
+		}
+		targets = append(targets, f)
 	}
-	return "", false
+	return targets
 }
