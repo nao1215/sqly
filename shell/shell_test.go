@@ -207,14 +207,14 @@ func TestShellExec(t *testing.T) {
 		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := getExecStdOutput(t, shell.exec, ".header")
-		if err != nil {
-			t.Fatal(err)
+		// A missing table name is a command error so batch mode fails fast.
+		err = shell.exec(context.Background(), ".header")
+		if err == nil {
+			t.Fatal(".header without a table name returned nil, want an error")
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "header_not_specify_table", got)
+		if !strings.Contains(err.Error(), ".header requires a table name") {
+			t.Errorf("error = %q, want it to mention the missing table name", err.Error())
+		}
 	})
 
 	t.Run("execute .mode: csv to table", func(t *testing.T) {
@@ -376,14 +376,14 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".mode")
-		if err != nil {
-			t.Fatal(err)
+		// A missing mode name is a command error so batch mode fails fast.
+		err = shell.exec(context.Background(), ".mode")
+		if err == nil {
+			t.Fatal(".mode without a mode name returned nil, want an error")
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_without_arg", got)
+		if !strings.Contains(err.Error(), ".mode requires a mode name") {
+			t.Errorf("error = %q, want it to mention the missing mode name", err.Error())
+		}
 	})
 
 	t.Run("execute .help", func(t *testing.T) {
@@ -476,14 +476,14 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		got, err := getExecStdOutput(t, shell.exec, ".import")
-		if err != nil {
-			t.Fatal(err)
+		// A missing path argument is a command error so batch mode fails fast.
+		err = shell.exec(context.Background(), ".import")
+		if err == nil {
+			t.Fatal(".import without an argument returned nil, want an error")
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "import_without_arg", got)
+		if !strings.Contains(err.Error(), ".import requires at least one file or directory path") {
+			t.Errorf("error = %q, want it to mention the missing path", err.Error())
+		}
 	})
 
 	t.Run("execute .import not support file", func(t *testing.T) {
@@ -648,14 +648,14 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := getExecStdOutput(t, shell.exec, ".dump sample")
-		if err != nil {
-			t.Fatal(err)
+		// A missing destination path is a command error so batch mode fails fast.
+		err = shell.exec(context.Background(), ".dump sample")
+		if err == nil {
+			t.Fatal(".dump with too few arguments returned nil, want an error")
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_with_few_arg", got)
+		if !strings.Contains(err.Error(), ".dump requires a table name and a destination path") {
+			t.Errorf("error = %q, want it to mention the missing destination", err.Error())
+		}
 	})
 
 	t.Run("execute .dump not exist table", func(t *testing.T) {
@@ -2332,10 +2332,46 @@ func TestShell_promptPrefixReflectsTypedJSONMode(t *testing.T) {
 	}
 }
 
+func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
+	// Regression for #661: a helper command missing a required argument must
+	// return an error (so batch mode fails fast) instead of printing usage and
+	// returning nil. The usage text rides on the error message.
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	for _, tc := range []struct {
+		name string
+		run  func() error
+		want string
+	}{
+		{"schema", func() error { return shell.commands.schemaCommand(context.Background(), shell, nil) }, ".schema requires"},
+		{"header", func() error { return shell.commands.headerCommand(context.Background(), shell, nil) }, ".header requires"},
+		{"describe", func() error { return shell.commands.describeCommand(context.Background(), shell, nil) }, ".describe requires"},
+		{"mode", func() error { return shell.commands.modeCommand(context.Background(), shell, nil) }, ".mode requires"},
+		{"dump", func() error { return shell.commands.dumpCommand(context.Background(), shell, nil) }, ".dump requires"},
+		{"save", func() error { return shell.commands.saveCommand(context.Background(), shell, nil) }, ".save requires"},
+		{"import", func() error { return shell.commands.importCommand(context.Background(), shell, nil) }, ".import requires"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			if err == nil {
+				t.Fatalf(".%s with no argument returned nil, want an error", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
 func TestCommandList_modeCommand_listsTypedJSONVariants(t *testing.T) {
-	// `.mode` with no argument prints the current mode and the selectable mode
-	// list. Both must surface the typed JSON variants so the user can discover and
-	// confirm them.
+	// `.mode` with no argument is a missing-argument command error so a batch
+	// script fails fast, but the error still carries the current mode and the
+	// selectable mode list (including the typed JSON variants) so an interactive
+	// user can discover and confirm them.
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -2346,20 +2382,19 @@ func TestCommandList_modeCommand_listsTypedJSONVariants(t *testing.T) {
 		t.Fatalf("changeOutputModeIfNeeded: %v", err)
 	}
 
-	out := captureStdout(t, func() {
-		if err := shell.commands.modeCommand(context.Background(), shell, nil); err != nil {
-			t.Fatalf("modeCommand: %v", err)
-		}
-	})
-
-	if !strings.Contains(out, "current mode=json-typed") {
-		t.Errorf("`.mode` banner = %q, want it to contain %q", out, "current mode=json-typed")
+	err = shell.commands.modeCommand(context.Background(), shell, nil)
+	if err == nil {
+		t.Fatal("modeCommand with no argument returned nil, want a missing-argument error")
 	}
-	if !strings.Contains(out, "json-typed") {
-		t.Errorf("`.mode` list = %q, want it to list json-typed", out)
+	msg := err.Error()
+	if !strings.Contains(msg, "current mode=json-typed") {
+		t.Errorf("`.mode` error = %q, want it to contain %q", msg, "current mode=json-typed")
 	}
-	if !strings.Contains(out, "ndjson-typed") {
-		t.Errorf("`.mode` list = %q, want it to list ndjson-typed", out)
+	if !strings.Contains(msg, "json-typed") {
+		t.Errorf("`.mode` error = %q, want it to list json-typed", msg)
+	}
+	if !strings.Contains(msg, "ndjson-typed") {
+		t.Errorf("`.mode` error = %q, want it to list ndjson-typed", msg)
 	}
 }
 

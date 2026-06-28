@@ -131,8 +131,9 @@ func importPaths(argv []string) []string {
 // and --sheet filtering is scoped to the correct Excel file.
 func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		printImportUsage()
-		return nil
+		// A missing path argument is a command error so a batch script fails fast
+		// instead of skipping the import and exiting 0. The usage rides on the error.
+		return errors.New(".import requires at least one file or directory path\n" + importUsageText())
 	}
 
 	// Reject an explicit empty helper --sheet value (separated `--sheet ""` or
@@ -1000,19 +1001,21 @@ func helperSheetExplicitlyEmpty(argv []string) bool {
 	return false
 }
 
-// printImportUsage print import command usage.
-func printImportUsage() {
-	fmt.Fprintln(config.Stdout, "[Usage]")
-	fmt.Fprintln(config.Stdout, "  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet NAME | --sheet=NAME]")
-	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Quote arguments that contain spaces: .import \"my data.csv\" or --sheet \"Q1 Sales\"")
-	fmt.Fprintln(config.Stdout, "")
-	fmt.Fprintln(config.Stdout, "  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed")
-	fmt.Fprintln(config.Stdout, "  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4")
-	fmt.Fprintln(config.Stdout, "  - Files and directories can be mixed in arguments")
-	fmt.Fprintln(config.Stdout, "  - Directories are automatically detected and all supported files are imported")
-	fmt.Fprintln(config.Stdout, "  - If import multiple files/directories, separate them with spaces")
-	fmt.Fprintln(config.Stdout, "  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)")
-	fmt.Fprintln(config.Stdout, "  - Use --sheet to import only a specific sheet from Excel files (works with files and directories)")
-	fmt.Fprintln(config.Stdout, "  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields")
+// importUsageText returns the .import command usage block. It is attached to the
+// error returned for a missing path argument so a batch script fails fast
+// instead of skipping the import and exiting 0.
+func importUsageText() string {
+	return "[Usage]\n" +
+		"  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet NAME | --sheet=NAME]\n" +
+		"\n" +
+		"  - Quote arguments that contain spaces: .import \"my data.csv\" or --sheet \"Q1 Sales\"\n" +
+		"\n" +
+		"  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed\n" +
+		"  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4\n" +
+		"  - Files and directories can be mixed in arguments\n" +
+		"  - Directories are automatically detected and all supported files are imported\n" +
+		"  - If import multiple files/directories, separate them with spaces\n" +
+		"  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)\n" +
+		"  - Use --sheet to import only a specific sheet from Excel files (works with files and directories)\n" +
+		"  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields"
 }

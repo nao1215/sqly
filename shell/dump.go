@@ -16,16 +16,19 @@ import (
 func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) error {
 	const expectedArgLen = 2
 	if len(argv) != expectedArgLen {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .dump TABLE_NAME FILE_PATH")
-		fmt.Fprintln(config.Stdout, "[Note]")
-		fmt.Fprintln(config.Stdout, "  The format comes from .mode. When .mode is table, it is inferred from the")
-		fmt.Fprintln(config.Stdout, "  file extension (e.g. .tsv, .parquet), falling back to CSV (written to the")
-		fmt.Fprintln(config.Stdout, "  path as given) when the extension is unknown.")
-		fmt.Fprintln(config.Stdout, "  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).")
-		fmt.Fprintln(config.Stdout, "  A .mode that disagrees with the extension is rejected instead of normalizing.")
-		fmt.Fprintln(config.Stdout, "  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.")
-		return nil
+		// A missing or extra argument is a command error so a batch script fails
+		// fast instead of skipping the dump and exiting 0. The usage and notes ride
+		// on the error path.
+		return errors.New(".dump requires a table name and a destination path\n" +
+			"[Usage]\n" +
+			"  .dump TABLE_NAME FILE_PATH\n" +
+			"[Note]\n" +
+			"  The format comes from .mode. When .mode is table, it is inferred from the\n" +
+			"  file extension (e.g. .tsv, .parquet), falling back to CSV (written to the\n" +
+			"  path as given) when the extension is unknown.\n" +
+			"  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).\n" +
+			"  A .mode that disagrees with the extension is rejected instead of normalizing.\n" +
+			"  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format")
 	}
 
 	tableName := argv[0]

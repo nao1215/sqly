@@ -1,9 +1,0 @@
-[Usage]
-  .dump TABLE_NAME FILE_PATH
-[Note]
-  The format comes from .mode. When .mode is table, it is inferred from the
-  file extension (e.g. .tsv, .parquet), falling back to CSV (written to the
-  path as given) when the extension is unknown.
-  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).
-  A .mode that disagrees with the extension is rejected instead of normalizing.
-  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.

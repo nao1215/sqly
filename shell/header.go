@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -14,9 +15,9 @@ import (
 // headerCommand print table header.
 func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .header TABLE_NAME")
-		return nil
+		// A missing required argument is a command error so a batch script fails
+		// fast instead of skipping the command and exiting 0.
+		return errors.New(".header requires a table name\n[Usage]\n  .header TABLE_NAME")
 	}
 	if len(argv) > 1 {
 		return fmt.Errorf(".header accepts a single table name, got %d arguments", len(argv))

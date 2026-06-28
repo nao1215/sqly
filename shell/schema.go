@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -18,9 +19,10 @@ import (
 // which is more readable than wrapping a multi-column DDL string in a cell.
 func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintln(config.Stdout, "[Usage]")
-		fmt.Fprintln(config.Stdout, "  .schema TABLE_NAME")
-		return nil
+		// A missing required argument is a command error, not a no-op: returning
+		// nil here would let a batch script continue and exit 0 after silently
+		// skipping the command. The usage text rides on the error path instead.
+		return errors.New(".schema requires a table name\n[Usage]\n  .schema TABLE_NAME")
 	}
 	if len(argv) > 1 {
 		return fmt.Errorf(".schema accepts a single table name, got %d arguments", len(argv))
