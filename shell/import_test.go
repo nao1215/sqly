@@ -997,6 +997,48 @@ func TestValidatePath_Import(t *testing.T) {
 	}
 }
 
+// TestValidatePath_Symlink verifies that the system-directory guard follows
+// symlinks: an alias to a blocked target must be rejected just like the direct
+// path, while an alias to an ordinary user file must still import. The guard
+// normalizes the macOS /private prefix, so this runs on Linux and macOS alike.
+func TestValidatePath_Symlink(t *testing.T) {
+	if runtime.GOOS == config.Windows {
+		t.Skip("Unix-only system directory check")
+	}
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	t.Run("symlink alias to /etc/hosts is rejected like the direct path", func(t *testing.T) {
+		t.Parallel()
+		if _, err := os.Stat("/etc/hosts"); err != nil {
+			t.Skip("/etc/hosts is not present on this host")
+		}
+		link := filepath.Join(dir, "hosts_alias.csv")
+		if err := os.Symlink("/etc/hosts", link); err != nil {
+			t.Fatalf("os.Symlink: %v", err)
+		}
+		if _, err := validatePath(link); err == nil {
+			t.Errorf("validatePath(%q) = nil error, want rejection of a symlink to a blocked system path", link)
+		}
+	})
+
+	t.Run("symlink to an ordinary user file is accepted", func(t *testing.T) {
+		t.Parallel()
+		target := filepath.Join(dir, "real.csv")
+		if err := os.WriteFile(target, []byte("a,b\n1,2\n"), 0o600); err != nil {
+			t.Fatalf("os.WriteFile: %v", err)
+		}
+		link := filepath.Join(dir, "user_alias.csv")
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatalf("os.Symlink: %v", err)
+		}
+		if _, err := validatePath(link); err != nil {
+			t.Errorf("validatePath(%q) = %v, want nil for a symlink to a user file", link, err)
+		}
+	})
+}
+
 func TestDiffTableNames(t *testing.T) {
 	t.Parallel()
 
