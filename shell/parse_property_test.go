@@ -66,6 +66,40 @@ func TestSplitArgs_DoubleQuoteRoundTripProperty(t *testing.T) {
 	}
 }
 
+// pathName generates a filename biased toward the characters escapeCompletionPath
+// must handle: spaces, tabs, quotes, and backslashes. Newline and carriage return
+// are excluded because escapeCompletionPath intentionally does not encode them:
+// splitArgs cannot decode an escaped newline.
+type pathName string
+
+// Generate implements quick.Generator.
+func (pathName) Generate(r *rand.Rand, _ int) reflect.Value {
+	alphabet := []rune(`ab12 ` + "\t" + `"'\.-_`)
+	n := r.Intn(8) + 1 // never empty: a completion always names something
+	var b strings.Builder
+	for range n {
+		b.WriteRune(alphabet[r.Intn(len(alphabet))])
+	}
+	return reflect.ValueOf(pathName(b.String()))
+}
+
+// TestEscapeCompletionPath_RoundTripProperty asserts the metamorphic relation
+// splitArgs(".import " + escapeCompletionPath(name))[1] == name. An accepted
+// completion is re-tokenized by exec, so escaping must let any entry name survive
+// as a single argument.
+func TestEscapeCompletionPath_RoundTripProperty(t *testing.T) {
+	property := func(name pathName) bool {
+		argv, err := splitArgs(".import " + escapeCompletionPath(string(name)))
+		if err != nil {
+			return false
+		}
+		return len(argv) == 2 && argv[1] == string(name)
+	}
+	if err := quick.Check(property, shellQuickConfig()); err != nil {
+		t.Error(err)
+	}
+}
+
 // TestSplitArgs_NeverPanicsProperty asserts splitArgs returns (slice,nil) or
 // (nil,err) for arbitrary input without panicking. Robustness guard for the
 // tokenizer against untrusted shell input.

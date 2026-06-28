@@ -986,6 +986,28 @@ func splitCompletionPrefix(prefix string) (readDir, base, partial string) {
 	return readDir, base, partial
 }
 
+// escapeCompletionPath backslash-escapes the characters that splitArgs treats as
+// token boundaries or quoting syntax, so an accepted completion survives the
+// re-tokenization that exec performs on the command line. Without this, a path
+// such as "my data.csv" is inserted verbatim and splitArgs would split it into
+// two arguments, both reported as missing files.
+//
+// Backslash escaping is used instead of wrapping the path in quotes because the
+// prompt library accepts a suggestion by prefix-matching it against the typed
+// word (strings.HasPrefix(suggestion, word)). A leading quote would break that
+// match; an escape keeps the typed prefix intact.
+func escapeCompletionPath(path string) string {
+	var b strings.Builder
+	for _, r := range path {
+		switch r {
+		case ' ', '\t', '\\', '\'', '"':
+			b.WriteRune('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // getFilePathCompletions returns importable-file and directory suggestions
 // scoped to the directory named by prefix. It reads only that directory rather
 // than walking the whole working tree, so latency tracks the targeted subtree,
@@ -1017,16 +1039,18 @@ func (s *Shell) getFilePathCompletions(prefix string) []Suggest {
 			continue
 		}
 
+		// Escape only the entry name; base is the verbatim typed prefix the prompt
+		// library prefix-matches, so escaping it would corrupt the match.
 		if entry.IsDir() {
 			suggestions = append(suggestions, Suggest{
-				Text:        filepath.ToSlash(base + name + "/"),
+				Text:        filepath.ToSlash(base) + escapeCompletionPath(name) + "/",
 				Description: msgImportableDir,
 			})
 			continue
 		}
 		if s.isValidFileForCompletion(name) {
 			suggestions = append(suggestions, Suggest{
-				Text:        filepath.ToSlash(base + name),
+				Text:        filepath.ToSlash(base) + escapeCompletionPath(name),
 				Description: msgImportableFile,
 			})
 		}
