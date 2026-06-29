@@ -140,6 +140,72 @@ func TestDumpTableToParquet_PreservesNumericLookingText(t *testing.T) {
 	}
 }
 
+// reimportColumn writes the parquet file back via filesql and returns the named
+// column's values as sql.NullString, so a test can tell a SQL NULL apart from an
+// empty string after a round-trip.
+func reimportColumn(t *testing.T, parquetPath, tableName, column string) []sql.NullString {
+	t.Helper()
+	db, err := libfilesql.OpenContext(context.Background(), parquetPath)
+	if err != nil {
+		t.Fatalf("reimport parquet: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.QueryContext(context.Background(), "SELECT "+column+" FROM "+tableName)
+	if err != nil {
+		t.Fatalf("select %s: %v", column, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []sql.NullString
+	for rows.Next() {
+		var v sql.NullString
+		if err := rows.Scan(&v); err != nil {
+			t.Fatalf("scan %s: %v", column, err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestDumpTableToParquet_PreservesNull locks issue #686: a SQL NULL cell must
+// stay NULL after a parquet round-trip instead of collapsing to an empty string,
+// so NULL and "" remain distinguishable in machine-readable output.
+func TestDumpTableToParquet_PreservesNull(t *testing.T) {
+	t.Parallel()
+
+	table := model.NewTable("nulls", model.Header{"id", "name"}, []model.Record{
+		{"", "A"}, // id is SQL NULL
+		{"", "B"}, // id is an empty string
+		{"1", "C"},
+	})
+	table.SetNulls([][]bool{
+		{true, false},
+		{false, false},
+		{false, false},
+	})
+	out := filepath.Join(t.TempDir(), "nulls.parquet")
+
+	if err := DumpTableToParquet(out, table); err != nil {
+		t.Fatalf("DumpTableToParquet: %v", err)
+	}
+
+	ids := reimportColumn(t, out, "nulls", "id")
+	if len(ids) != 3 {
+		t.Fatalf("reimported %d rows, want 3", len(ids))
+	}
+	if ids[0].Valid {
+		t.Errorf("row 0 id = %q, want SQL NULL", ids[0].String)
+	}
+	if !ids[1].Valid || ids[1].String != "" {
+		t.Errorf("row 1 id = %#v, want an empty string (not NULL)", ids[1])
+	}
+	if !ids[2].Valid || ids[2].String != "1" {
+		t.Errorf("row 2 id = %#v, want \"1\"", ids[2])
+	}
+}
+
 // TestDumpTableToParquet_EmptyResult covers the empty-result behavior: Parquet
 // needs at least one row to infer its schema, so exporting an empty result
 // returns a clear error rather than writing an unreadable file.

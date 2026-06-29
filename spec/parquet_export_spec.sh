@@ -71,6 +71,20 @@ Describe 'sqly parquet export'
     End
   End
 
+  Describe 'NULL fidelity'
+    # A SQL NULL exported to Parquet must reload as NULL, staying distinct from an
+    # empty string, so --json-typed emits null rather than "".
+    It 'preserves SQL NULL through a parquet round-trip'
+      out_dir=$(mktemp -d)
+      export out_dir
+      When run sh -c "'$SQLY_BIN' --parquet --output '$out_dir/n.parquet' --sql \"SELECT CAST(NULL AS TEXT) AS id, 'A' AS name UNION ALL SELECT '1' AS id, 'B' AS name\" >/dev/null 2>&1; '$SQLY_BIN' --json-typed --sql 'SELECT * FROM n' '$out_dir/n.parquet'"
+      The status should be success
+      The output should include '"id":null'
+      The output should not include '"id":""'
+      rm -rf "$out_dir"
+    End
+  End
+
   Describe 'empty result'
     It 'reports a clear error when exporting an empty result'
       out_dir=$(mktemp -d)

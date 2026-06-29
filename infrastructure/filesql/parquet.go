@@ -57,8 +57,8 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	if err != nil {
 		return fmt.Errorf("begin staging transaction: %w", err)
 	}
-	for _, record := range table.Records() {
-		if _, err = tx.ExecContext(ctx, infra.GenerateInsertStatement(table.Name(), record)); err != nil {
+	for rowIdx := range table.Records() {
+		if _, err = tx.ExecContext(ctx, parquetInsertStatement(table, rowIdx)); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("insert into staging table: %w", err)
 		}
@@ -102,6 +102,33 @@ func parquetStagingCreateTable(t *model.Table) string {
 			b.WriteString(", ")
 		}
 		b.WriteString(infra.Quote(col) + " TEXT")
+	}
+	b.WriteString(");")
+	return b.String()
+}
+
+// parquetInsertStatement builds the INSERT for one staged row, emitting SQL NULL
+// for cells the table marks as NULL. The shared GenerateInsertStatement only sees
+// the []string record and single-quotes every cell, which collapses a NULL into
+// an empty string; consulting table.IsNull here keeps NULL and "" distinct
+// through the parquet round-trip.
+func parquetInsertStatement(t *model.Table, rowIdx int) string {
+	record := t.Records()[rowIdx]
+	var b strings.Builder
+	b.WriteString("INSERT INTO " + infra.Quote(t.Name()) + " VALUES (")
+	for col := range t.Header() {
+		if col > 0 {
+			b.WriteString(", ")
+		}
+		if t.IsNull(rowIdx, col) {
+			b.WriteString("NULL")
+			continue
+		}
+		var v string
+		if col < len(record) {
+			v = record[col]
+		}
+		b.WriteString(infra.SingleQuote(v))
 	}
 	b.WriteString(");")
 	return b.String()
