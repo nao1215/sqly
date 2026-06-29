@@ -2476,6 +2476,45 @@ func TestShellExec_SchemaAndDescribe(t *testing.T) {
 		}
 	})
 
+	t.Run(".schema V returns the stored CREATE VIEW for view v, case-insensitively", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		if _, err := getExecStdOutput(t, shell.exec, "CREATE VIEW v AS SELECT 1 AS x"); err != nil {
+			t.Fatalf("create view: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema V")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := string(got)
+		if !strings.Contains(out, "CREATE VIEW") {
+			t.Fatalf(".schema V should return the stored CREATE VIEW, got: %q", out)
+		}
+		if strings.Contains(out, "CREATE TABLE") {
+			t.Fatalf(".schema V fell back to a synthesized CREATE TABLE: %q", out)
+		}
+	})
+
+	t.Run(".schema CT returns the stored DDL with constraints for table ct, case-insensitively", func(t *testing.T) {
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		if _, err := getExecStdOutput(t, shell.exec, "CREATE TABLE ct (id INTEGER PRIMARY KEY, code TEXT UNIQUE)"); err != nil {
+			t.Fatalf("create table: %v", err)
+		}
+		got, err := getExecStdOutput(t, shell.exec, ".schema CT")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := string(got)
+		// The synthesized fallback cannot reconstruct a UNIQUE constraint, so its
+		// presence proves the stored DDL was returned rather than a reconstruction.
+		if !strings.Contains(out, "UNIQUE") {
+			t.Fatalf(".schema CT lost the stored UNIQUE constraint, got: %q", out)
+		}
+	})
+
 	t.Run(".describe sample lists columns in definition order with types", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
