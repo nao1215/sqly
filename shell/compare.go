@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -242,42 +243,345 @@ func (s *Shell) buildCompareReport(ctx context.Context, left, right, key string)
 	}
 
 	if key != "" {
-		// Convert each side to its keyed rows and release the raw table before
-		// loading the other, so the two full *model.Table results never live at the
-		// same time. Peak memory is one table plus the keyed map instead of both
-		// tables plus two index maps.
-		leftByKey, err := s.keyedRows(ctx, left, key)
+		rows, err := s.diffKeyedRowsSQL(ctx, left, right, key, leftCols, rightCols)
 		if err != nil {
 			return compareReport{}, err
 		}
-		rightByKey, err := s.keyedRows(ctx, right, key)
-		if err != nil {
-			return compareReport{}, err
-		}
-		report.Rows = diffKeyedRows(key, leftByKey, rightByKey)
+		report.Rows = rows
 	}
 	return report, nil
 }
 
-// keyedRows loads a table and indexes its rows by the key column, returning a
-// keyed map and releasing the raw table. Keeping only the keyed map lets the
-// caller load the two sides one at a time instead of holding both full tables.
-func (s *Shell) keyedRows(ctx context.Context, name, key string) (map[string]compareRow, error) {
-	table, err := s.selectAll(ctx, name)
+// diffKeyedRowsSQL builds the keyed-row diff by computing the key sets and the
+// modified-key set in the in-memory SQLite database, then materializing only the
+// rows that appear in the report (added, removed, modified). Unchanged rows never
+// enter Go, so peak memory scales with the size of the diff and the key set rather
+// than with both full tables.
+//
+// Modified detection is done by SQLite, not by a Go-side hash: a fingerprint can
+// map two genuinely different rows to the same value (an FNV collision, or two
+// different cell splits with the same delimiter-joined bytes), which would
+// silently report a real change as unchanged. Instead the two tables are joined on
+// the key expression and a row is modified when any shared column is not NULL-safe
+// equal on its TEXT projection, which mirrors rowMapsEqual exactly (two NULLs are
+// equal, a NULL differs from any value, and values compare as strings). The output
+// is identical to the in-memory diffKeyedRows path.
+func (s *Shell) diffKeyedRowsSQL(ctx context.Context, left, right, key string, leftCols, rightCols []inspectColumn) (*compareRows, error) {
+	leftKeyCol, err := resolveKeyColumn(leftCols, key, left)
 	if err != nil {
 		return nil, err
 	}
-	return keyedRowsFromTable(table, key, name)
+	rightKeyCol, err := resolveKeyColumn(rightCols, key, right)
+	if err != nil {
+		return nil, err
+	}
+
+	leftKeys, err := s.keySet(ctx, left, leftKeyCol)
+	if err != nil {
+		return nil, err
+	}
+	rightKeys, err := s.keySet(ctx, right, rightKeyCol)
+	if err != nil {
+		return nil, err
+	}
+
+	var removedKeys, addedKeys []string
+	for _, k := range sortedKeys(leftKeys) {
+		if _, ok := rightKeys[k]; !ok {
+			removedKeys = append(removedKeys, k)
+		}
+	}
+	for _, k := range sortedKeys(rightKeys) {
+		if _, ok := leftKeys[k]; !ok {
+			addedKeys = append(addedKeys, k)
+		}
+	}
+
+	modifiedSet, err := s.modifiedKeys(ctx, left, right, leftKeyCol, rightKeyCol, leftCols, rightCols)
+	if err != nil {
+		return nil, err
+	}
+	// Emit modified keys in the left side's sorted-key order, matching the
+	// in-memory path which walks the left keys.
+	var modifiedKeys []string
+	for _, k := range sortedKeys(leftKeys) {
+		if _, ok := modifiedSet[k]; ok {
+			modifiedKeys = append(modifiedKeys, k)
+		}
+	}
+
+	// Materialize only the rows the report needs.
+	leftWanted := unionKeySet(removedKeys, modifiedKeys)
+	leftRows, err := s.rowsForKeys(ctx, left, leftKeyCol, leftCols, leftWanted)
+	if err != nil {
+		return nil, err
+	}
+	rightWanted := unionKeySet(addedKeys, modifiedKeys)
+	rightRows, err := s.rowsForKeys(ctx, right, rightKeyCol, rightCols, rightWanted)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := &compareRows{
+		Key:      key,
+		Added:    []compareRow{},
+		Removed:  []compareRow{},
+		Modified: []compareModifiedRow{},
+	}
+	for _, k := range removedKeys {
+		rows.Removed = append(rows.Removed, leftRows[k])
+	}
+	for _, k := range addedKeys {
+		rows.Added = append(rows.Added, rightRows[k])
+	}
+	for _, k := range modifiedKeys {
+		rows.Modified = append(rows.Modified, compareModifiedRow{Key: k, Left: leftRows[k], Right: rightRows[k]})
+	}
+	return rows, nil
 }
 
-// selectAll returns every row of a table for row-level comparison.
-func (s *Shell) selectAll(ctx context.Context, name string) (*model.Table, error) {
-	quoted := s.usecases.importer.QuoteIdentifier(name)
-	table, err := s.usecases.query.Query(ctx, "SELECT * FROM "+quoted)
+// keySet streams only the key column of a table and returns the distinct key
+// strings, rejecting a duplicate key in row order so the comparison stays
+// unambiguous and the error names the same value the in-memory path would report.
+// Row data is not read, so the memory cost is one string per key.
+func (s *Shell) keySet(ctx context.Context, name, keyCol string) (map[string]struct{}, error) {
+	quote := s.usecases.importer.QuoteIdentifier
+	out := make(map[string]struct{})
+	err := s.usecases.query.QueryStream(ctx,
+		"SELECT "+keyExpr(quote(keyCol))+" FROM "+quote(name),
+		func(record []string, _ []bool) error {
+			if len(record) == 0 {
+				return nil
+			}
+			k := record[0]
+			if _, dup := out[k]; dup {
+				return duplicateKeyError(keyCol, name, k)
+			}
+			out[k] = struct{}{}
+			return nil
+		})
 	if err != nil {
-		return nil, fmt.Errorf("failed to read rows of %s: %w", name, err)
+		return nil, err
 	}
-	return table, nil
+	return out, nil
+}
+
+// modifiedKeys returns the set of shared keys whose rows differ. When the column
+// name sets match, SQLite finds them by joining the two tables on the key
+// expression and keeping rows where any shared column differs under a NULL-safe
+// TEXT comparison. The join uses an expression index on each side's key so it runs
+// in roughly O(rows) rather than as a nested-loop scan; the indexes are dropped
+// afterward so a read-only compare leaves no schema changes. When the column name
+// sets differ, the in-memory path treats every shared row as modified regardless
+// of values, so the value comparison is skipped.
+func (s *Shell) modifiedKeys(ctx context.Context, left, right, leftKeyCol, rightKeyCol string, leftCols, rightCols []inspectColumn) (map[string]struct{}, error) {
+	quote := s.usecases.importer.QuoteIdentifier
+	leftKeyExpr := keyExpr("l." + quote(leftKeyCol))
+	rightKeyExpr := keyExpr("r." + quote(rightKeyCol))
+
+	var where string
+	if sameColumnNames(leftCols, rightCols) {
+		conds := make([]string, 0, len(leftCols))
+		for _, c := range leftCols {
+			col := quote(c.Name)
+			// Compare the TEXT projection so the result matches rowMapsEqual, which
+			// compares cell strings; CAST keeps NULL as NULL so IS NOT stays NULL-safe.
+			conds = append(conds, "CAST(l."+col+" AS TEXT) IS NOT CAST(r."+col+" AS TEXT)")
+		}
+		if len(conds) == 0 {
+			return map[string]struct{}{}, nil
+		}
+		where = strings.Join(conds, " OR ")
+	} else {
+		// Different column sets: every shared key is modified.
+		where = "1=1"
+	}
+
+	dropIndexes, err := s.createCompareKeyIndexes(ctx, left, right, leftKeyCol, rightKeyCol)
+	if err != nil {
+		return nil, err
+	}
+	defer dropIndexes()
+
+	out := make(map[string]struct{})
+	query := "SELECT " + leftKeyExpr + " FROM " + quote(left) + " AS l JOIN " + quote(right) +
+		" AS r ON " + leftKeyExpr + " = " + rightKeyExpr + " WHERE " + where
+	err = s.usecases.query.QueryStream(ctx, query, func(record []string, _ []bool) error {
+		if len(record) > 0 {
+			out[record[0]] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// compareIndexSeq makes each compare-key index name unique within the process.
+// It is a monotonic counter used only to mint a fresh identifier, not shared
+// application state, so the cleanup can never collide with (and then drop) an
+// index the user created.
+var compareIndexSeq atomic.Uint64
+
+// createCompareKeyIndexes adds an expression index on each side's key so the
+// modified-keys join can use it, and returns a cleanup that drops both. Each name
+// carries a fresh per-call counter so it cannot clash with a user index; CREATE
+// is issued without IF NOT EXISTS so an unexpected clash fails loudly instead of
+// silently reusing (and later dropping) someone else's index. The cleanup drops
+// only the indexes this call created; a drop error is surfaced as a warning rather
+// than swallowed, though it is otherwise harmless since the index lives only in
+// this process's in-memory database.
+func (s *Shell) createCompareKeyIndexes(ctx context.Context, left, right, leftKeyCol, rightKeyCol string) (func(), error) {
+	quote := s.usecases.importer.QuoteIdentifier
+	leftIdx := s.compareIndexName(left)
+	rightIdx := s.compareIndexName(right)
+
+	if _, err := s.usecases.query.Exec(ctx,
+		"CREATE INDEX "+quote(leftIdx)+" ON "+quote(left)+" ("+keyExpr(quote(leftKeyCol))+")"); err != nil {
+		return func() {}, fmt.Errorf("failed to index compare key of %s: %w", left, err)
+	}
+	if _, err := s.usecases.query.Exec(ctx,
+		"CREATE INDEX "+quote(rightIdx)+" ON "+quote(right)+" ("+keyExpr(quote(rightKeyCol))+")"); err != nil {
+		s.dropCompareKeyIndex(ctx, leftIdx)
+		return func() {}, fmt.Errorf("failed to index compare key of %s: %w", right, err)
+	}
+	return func() {
+		s.dropCompareKeyIndex(ctx, leftIdx)
+		s.dropCompareKeyIndex(ctx, rightIdx)
+	}, nil
+}
+
+// compareIndexName mints a unique index name for a compare key, combining the
+// sanitized table name (for readability) with a fresh process-wide counter (for
+// uniqueness).
+func (s *Shell) compareIndexName(table string) string {
+	return fmt.Sprintf("sqly_compare_idx_%s_%d", s.usecases.importer.SanitizeForSQL(table), compareIndexSeq.Add(1))
+}
+
+// dropCompareKeyIndex drops an index this compare created, warning on failure
+// instead of swallowing the error. A leftover index is harmless because the
+// database is in memory and discarded at exit, but a silent failure would hide a
+// real problem.
+func (s *Shell) dropCompareKeyIndex(ctx context.Context, name string) {
+	if _, err := s.usecases.query.Exec(ctx, "DROP INDEX "+s.usecases.importer.QuoteIdentifier(name)); err != nil {
+		fmt.Fprintf(config.Stderr, "warning: failed to drop temporary compare index %s: %v\n", name, err)
+	}
+}
+
+// duplicateKeyError reports a duplicate key value with the same message the
+// in-memory path uses, so the comparison fails the same way.
+func duplicateKeyError(keyCol, name, value string) error {
+	return fmt.Errorf("compare key %q is not unique in table %s (value %q appears more than once)", keyCol, name, value)
+}
+
+// keyExpr renders the SQL text of a row's key: the key cell cast to TEXT with a
+// SQL NULL mapped to the empty string. This matches the in-memory key, where a
+// NULL key and an empty-string key share the same map key.
+func keyExpr(quotedCol string) string {
+	return "COALESCE(CAST(" + quotedCol + " AS TEXT), '')"
+}
+
+// unionKeySet returns the union of the given key slices as a set.
+func unionKeySet(groups ...[]string) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, g := range groups {
+		for _, k := range g {
+			out[k] = struct{}{}
+		}
+	}
+	return out
+}
+
+// streamKeyedRows streams a table once, invoking fn with each row's key string
+// (the COALESCE-to-empty text of the key cell), its cells, and its SQL NULL flags.
+// The key is appended as a trailing column so the callback can classify a row
+// without a second lookup. The leading columns line up with cols, which comes from
+// PRAGMA table_info in the same order as SELECT *.
+func (s *Shell) streamKeyedRows(ctx context.Context, name, keyCol string, cols []inspectColumn, fn func(key string, record []string, nulls []bool) error) error {
+	quote := s.usecases.importer.QuoteIdentifier
+	quotedTable := quote(name)
+	quotedKey := quote(keyCol)
+	keyIdx := len(cols) // the appended key expression is the last column
+	return s.usecases.query.QueryStream(ctx,
+		"SELECT *, "+keyExpr(quotedKey)+" FROM "+quotedTable,
+		func(record []string, nulls []bool) error {
+			if keyIdx >= len(record) {
+				return fmt.Errorf("compare key expression missing while streaming table %s", name)
+			}
+			return fn(record[keyIdx], record, nulls)
+		})
+}
+
+// recordToCompareRow pairs a streamed row's cells with their column names,
+// preserving the SQL NULL/empty-string distinction the same way rowMap does: a
+// NULL cell maps to nil, a value maps to a pointer to its string.
+func recordToCompareRow(cols []inspectColumn, record []string, nulls []bool) compareRow {
+	row := make(compareRow, len(cols))
+	for i, c := range cols {
+		if i >= len(record) {
+			break
+		}
+		if i < len(nulls) && nulls[i] {
+			row[c.Name] = nil
+			continue
+		}
+		v := record[i]
+		row[c.Name] = &v
+	}
+	return row
+}
+
+// rowsForKeys streams a table once and returns the rows whose key is in wanted,
+// each as a compareRow. Rows not in the diff are skipped, so only the wanted rows
+// are copied into Go.
+func (s *Shell) rowsForKeys(ctx context.Context, name, keyCol string, cols []inspectColumn, wanted map[string]struct{}) (map[string]compareRow, error) {
+	if len(wanted) == 0 {
+		return map[string]compareRow{}, nil
+	}
+	out := make(map[string]compareRow, len(wanted))
+	err := s.streamKeyedRows(ctx, name, keyCol, cols, func(k string, record []string, nulls []bool) error {
+		if _, ok := wanted[k]; !ok {
+			return nil
+		}
+		out[k] = recordToCompareRow(cols, record, nulls)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// resolveKeyColumn finds the key column in a table's columns case-insensitively,
+// following SQLite identifier semantics where "ID" resolves the column "id". It
+// returns the canonical stored name so later quoting matches the real column.
+func resolveKeyColumn(cols []inspectColumn, key, name string) (string, error) {
+	for _, c := range cols {
+		if strings.EqualFold(c.Name, key) {
+			return c.Name, nil
+		}
+	}
+	return "", fmt.Errorf("compare key %q not found in table %s", key, name)
+}
+
+// sameColumnNames reports whether two column lists have the same set of names.
+// The in-memory diff treats rows with different column sets as always modified,
+// so the SQL path can only compare values column-by-column when the sets match.
+func sameColumnNames(left, right []inspectColumn) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	set := make(map[string]struct{}, len(left))
+	for _, c := range left {
+		set[c.Name] = struct{}{}
+	}
+	for _, c := range right {
+		if _, ok := set[c.Name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // compareSchemas reports the column-level differences between two schemas: which
