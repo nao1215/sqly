@@ -183,6 +183,20 @@ func (of outputFlag) selectedNames() []string {
 // Therefore, create a new FlagSet() and add it to pflags.
 // Ref. https://stackoverflow.com/questions/61216174/how-to-test-cli-flags-currently-failing-with-flag-redefined
 func NewArg(args []string) (*Arg, error) {
+	// Tag every failure as an ArgError in one place so the top-level command can
+	// distinguish a bad invocation (which the user fixes on the command line) from
+	// a genuine shell-start failure, without each return site repeating the wrap.
+	arg, err := newArg(args)
+	if err != nil {
+		return nil, newArgError(err)
+	}
+	return arg, nil
+}
+
+// newArg parses args into an *Arg, returning the raw parse and validation errors.
+// NewArg wraps those errors as ArgError; this function stays unwrapped so the
+// individual sentinel errors remain easy to read and compare here.
+func newArg(args []string) (*Arg, error) {
 	if len(args) == 0 {
 		return nil, ErrEmptyArg
 	}

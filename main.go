@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -26,18 +27,28 @@ func main() {
 func run(args []string) int {
 	shell, cleanup, err := di.NewShell(args)
 	if err != nil {
-		fmt.Fprintf(
-			os.Stderr,
-			"%s: %v\n",
-			"failed to initialize sqly shell",
-			err)
+		fmt.Fprintln(config.Stderr, startupErrorMessage(err))
 		return 1
 	}
 	defer cleanup()
 
 	if err := shell.Run(context.Background()); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		fmt.Fprintf(config.Stderr, "%v\n", err)
 		return 1
 	}
 	return 0
+}
+
+// startupErrorMessage renders the stderr line for an error returned by
+// di.NewShell. A config.ArgError is a bad CLI invocation (unknown flag,
+// conflicting flags, malformed value), so it is shown as-is; the "failed to
+// initialize sqly shell" prefix is reserved for genuine startup failures
+// (database, history file, working directory) so it does not misdirect a user
+// whose command line was simply wrong.
+func startupErrorMessage(err error) string {
+	var argErr *config.ArgError
+	if errors.As(err, &argErr) {
+		return err.Error()
+	}
+	return "failed to initialize sqly shell: " + err.Error()
 }
