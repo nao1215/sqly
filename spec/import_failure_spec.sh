@@ -13,6 +13,17 @@ Describe 'sqly import failure handling'
     The status should be failure
     The output should equal ''
     The stderr should include 'failed to import'
+    # The final error line carries the failing path, not just the bullet list.
+    The stderr should include 'inputs failed to import: path does not exist'
+  End
+
+  It 'names the failed count and first path when every input fails'
+    When run sqly --sql "SELECT 1" /no/such/a.csv /no/such/b.csv
+    The status should be failure
+    The output should equal ''
+    The stderr should include 'all 2 import(s) failed'
+    The stderr should include '/no/such/a.csv'
+    The stderr should include '+1 more'
   End
 
   It 'fails --inspect on a partial import'

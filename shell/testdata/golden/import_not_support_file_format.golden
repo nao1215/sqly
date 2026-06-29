@@ -1,1 +1,1 @@
-all import attempts failed
+all 1 import(s) failed: unsupported file format: sample.not_support (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)

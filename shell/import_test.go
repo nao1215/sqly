@@ -278,12 +278,86 @@ func TestImportCommand_EmptyDirDoesNotMaskFileError(t *testing.T) {
 	emptyDir := t.TempDir()
 	ctx := context.Background()
 
-	// .import emptydir missing.csv — both should fail, returning "all import attempts failed"
+	// .import emptydir missing.csv — both should fail, returning an all-failed error.
 	cmds := s.commands
 	err = cmds.importCommand(ctx, s, []string{emptyDir, "missing.csv"})
 	if err == nil {
 		t.Error("expected error when all imports fail, got nil")
 	}
+}
+
+func TestSummarizeImportErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		messages []string
+		want     string
+	}{
+		{"no messages yields an empty summary", nil, ""},
+		{"a single message is returned unchanged", []string{"path does not exist: a.csv"}, "path does not exist: a.csv"},
+		{"multiple messages report the first and a remaining count", []string{"path does not exist: a.csv", "path does not exist: b.csv", "permission denied accessing path: c.csv"}, "path does not exist: a.csv (+2 more)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := summarizeImportErrors(tt.messages); got != tt.want {
+				t.Errorf("summarizeImportErrors(%v) = %q, want %q", tt.messages, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestImportCommand_TopLevelErrorCarriesDetail(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("all-failed error names the count and the first failing path", func(t *testing.T) {
+		s, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		var importErr error
+		captureStderr(t, func() {
+			importErr = s.commands.importCommand(ctx, s, []string{"missing_a.csv", "missing_b.csv"})
+		})
+		if importErr == nil {
+			t.Fatal("expected an error when all imports fail")
+		}
+		got := importErr.Error()
+		if !strings.Contains(got, "all 2 import(s) failed") {
+			t.Errorf("error %q should report the failed count", got)
+		}
+		if !strings.Contains(got, "missing_a.csv") {
+			t.Errorf("error %q should name the first failing path", got)
+		}
+		if !strings.Contains(got, "+1 more") {
+			t.Errorf("error %q should summarize the remaining failures", got)
+		}
+	})
+
+	t.Run("partial-failed error keeps the sentinel and names the failing path", func(t *testing.T) {
+		s, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		var importErr error
+		captureStderr(t, func() {
+			importErr = s.commands.importCommand(ctx, s, []string{"testdata/user.csv", "missing_b.csv"})
+		})
+		if importErr == nil {
+			t.Fatal("expected an error when one input fails")
+		}
+		if !errors.Is(importErr, errPartialImport) {
+			t.Errorf("partial import error must remain detectable via errPartialImport: %v", importErr)
+		}
+		if !strings.Contains(importErr.Error(), "missing_b.csv") {
+			t.Errorf("error %q should name the failing path", importErr.Error())
+		}
+	})
 }
 
 func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
