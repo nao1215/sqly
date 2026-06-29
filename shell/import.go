@@ -260,17 +260,36 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		for _, errMsg := range errorMessages {
 			fmt.Fprintf(statusOut, "  - %s\n", errMsg)
 		}
+		// Also carry the per-input detail in the returned error, since wrappers and
+		// logs often surface only the final error line; a generic message would
+		// drop context already computed here.
+		summary := summarizeImportErrors(errorMessages)
 		if successCount == 0 {
-			return errors.New("all import attempts failed")
+			return fmt.Errorf("all %d import(s) failed: %s", len(errorMessages), summary)
 		}
-		// An explicitly requested input failed even though others succeeded.
-		// Return a partial-failure error so non-interactive runs exit non-zero
-		// (); the interactive shell tolerates it and starts
-		// with the tables that did load.
-		return errPartialImport
+		// A requested input failed while others succeeded. Wrap errPartialImport so
+		// non-interactive runs exit non-zero and callers can detect the sentinel
+		// with errors.Is, while the message names the failing inputs; the
+		// interactive shell tolerates it and starts with the tables that loaded.
+		return fmt.Errorf("%w: %s", errPartialImport, summary)
 	}
 
 	return nil
+}
+
+// summarizeImportErrors condenses per-input failure messages into one line for
+// the returned error: the first failure plus a "(+N more)" count when several
+// inputs failed. The full list still goes to stderr; this keeps the final error
+// line informative when only it is surfaced.
+func summarizeImportErrors(messages []string) string {
+	switch len(messages) {
+	case 0:
+		return ""
+	case 1:
+		return messages[0]
+	default:
+		return fmt.Sprintf("%s (+%d more)", messages[0], len(messages)-1)
+	}
 }
 
 // importDirectory loads every supported file in a directory into the database,
