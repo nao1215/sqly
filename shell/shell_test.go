@@ -1951,6 +1951,52 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	}
 }
 
+func TestPartialImportStartupMessage(t *testing.T) {
+	t.Parallel()
+
+	got := partialImportStartupMessage(2, 1)
+	for _, want := range []string{"partial data", "2 of 3", "1 failed", "ready to query"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("partialImportStartupMessage(2, 1) = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+func TestShellRun_InteractivePartialImportWarning(t *testing.T) {
+	// A partial startup import still opens the interactive shell. The final
+	// warning must explain the shell state (started, some tables available,
+	// details above) instead of the bare partial-import error.
+	shell, cleanup, err := newShell(t, []string{"sqly", "testdata/user.csv", "missing_input.csv"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	shell.isTTY = func() bool { return true }
+	// Stop right after the startup warning so the test does not block on a prompt.
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return nil, errors.New("stop before interactive loop")
+	}
+
+	backupStderr := config.Stderr
+	defer func() { config.Stderr = backupStderr }()
+	var stderr bytes.Buffer
+	config.Stderr = &stderr
+
+	_ = shell.Run(context.Background())
+
+	got := stderr.String()
+	if !strings.Contains(got, "started with partial data") {
+		t.Errorf("stderr = %q, want it to explain the partial-import shell state", got)
+	}
+	if !strings.Contains(got, "1 of 2 inputs imported") {
+		t.Errorf("stderr = %q, want it to report the import counts", got)
+	}
+	if !strings.Contains(got, "ready to query") {
+		t.Errorf("stderr = %q, want it to say the loaded tables are usable", got)
+	}
+}
+
 func TestShellRunBatch_ReportsSourceLine(t *testing.T) {
 	// A failing batch statement must name where it started in the input so a long
 	// script is easy to locate, while keeping fail-fast and a non-zero exit.
