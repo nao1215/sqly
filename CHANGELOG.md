@@ -4,6 +4,7 @@
 
 ### Performance
 * Profile Memory Bound: `--profile` now streams each table's rows one at a time through the per-column accumulators instead of materializing the whole `SELECT *` result in Go first, so large CSV or Parquet inputs no longer hold a second full copy in memory. JSON and text output are unchanged; distinct counting still keeps a per-column distinct set, as the exact count requires.
+* Keyed Compare Memory: `--compare --compare-key` now computes the key sets and the changed rows in SQLite (a NULL-safe keyed join finds the modified rows) and materializes only the added, removed, and modified rows, instead of loading both full tables into Go keyed maps. Unchanged rows never enter Go, so large keyed diffs stay memory-bounded by the size of the diff. JSON and text report output is unchanged.
 
 ### New Features
 * Task-Oriented Help: interactive `.help` now groups commands by purpose (Session, Navigate, Inspect, Import / Export) and shows a minimal usage suffix for each (`.import PATH...`, `.dump TABLE FILE`, `.save DIR`). The destructive in-place overwrite `.save --force` is listed on its own labeled line, distinct from the non-destructive exports. No commands were added.

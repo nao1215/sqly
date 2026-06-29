@@ -54,6 +54,25 @@ Describe 'sqly --compare workflow'
     The stderr should include 'compare key'
   End
 
+  It 'rejects a duplicate key value as ambiguous'
+    printf 'id,name\n1,Alice\n1,Bob\n' > "$WORKDIR/dupe.csv"
+    printf 'id,name\n1,Alice\n' > "$WORKDIR/single.csv"
+    When run sqly --compare --compare-key id "$WORKDIR/dupe.csv" "$WORKDIR/single.csv"
+    The status should be failure
+    The stderr should include 'not unique'
+  End
+
+  It 'keeps the keyed diff correct on a larger input'
+    # A larger keyed compare must still classify rows correctly after the diff
+    # was pushed into SQL. Rows 0..49 match except id 0 (modified); id 49 is
+    # removed on the right and id 100 is added.
+    awk 'BEGIN{print "id,name,score"; for(i=0;i<50;i++) printf "%d,name%d,%d\n", i, i, i}' > "$WORKDIR/big1.csv"
+    awk 'BEGIN{print "id,name,score"; for(i=0;i<49;i++){s=i; if(i==0) s=i+1; printf "%d,name%d,%d\n", i, i, s} print "100,fresh,1"}' > "$WORKDIR/big2.csv"
+    When run sqly --compare --compare-key id --compare-format text "$WORKDIR/big1.csv" "$WORKDIR/big2.csv"
+    The status should be success
+    The output should include '1 added, 1 removed, 1 modified'
+  End
+
   It 'resolves uppercase --compare-tables against lowercase table names'
     # Tables import as "user" and "identifier"; the uppercase pair must resolve
     # the same tables because SQLite identifier matching is case-insensitive.

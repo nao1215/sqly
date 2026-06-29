@@ -2,10 +2,13 @@ package shell
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -390,6 +393,281 @@ func TestBuildCompareReport_KeyedDiff(t *testing.T) {
 	}
 }
 
+// TestBuildCompareReport_PreservesUserIndex guards the temporary join index from
+// clobbering a user index: a keyed compare creates and drops its own expression
+// index, and must not drop a pre-existing index that happens to share the base
+// name. The compare index names carry a per-call counter, so a user index named
+// with only the base name survives the compare.
+func TestBuildCompareReport_PreservesUserIndex(t *testing.T) {
+	left, right := writeKeyedCompareBenchCSVs(t, 20)
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// A user index whose name matches the compare index base (no counter suffix).
+	userIdx := "sqly_compare_idx_kleft"
+	if _, err := shell.usecases.query.Exec(context.Background(),
+		`CREATE INDEX "`+userIdx+`" ON "kleft" ("score")`); err != nil {
+		t.Fatalf("create user index: %v", err)
+	}
+
+	if _, err := shell.buildCompareReport(context.Background(), "kleft", "kright", "id"); err != nil {
+		t.Fatalf("buildCompareReport: %v", err)
+	}
+
+	res, err := shell.usecases.query.Query(context.Background(),
+		`SELECT name FROM sqlite_master WHERE type = 'index' AND name = '`+userIdx+`'`)
+	if err != nil {
+		t.Fatalf("query index: %v", err)
+	}
+	if len(res.Records()) != 1 {
+		t.Errorf("user index %q was dropped by compare; want it preserved", userIdx)
+	}
+}
+
+// TestBuildCompareReport_DetectsDelimiterCollision is an adversarial regression:
+// the two shared-key rows differ only in how their cells split, but a naive
+// delimiter-joined fingerprint encodes both to the same bytes ("a" + sep +
+// "b\x00\x01c" equals "a\x00\x01b" + sep + "c"). A fingerprint-only modified
+// decision would drop the change and report the rows as unchanged. The SQL path
+// compares values in the database, so the change must be reported as modified and
+// must match the in-memory oracle.
+func TestBuildCompareReport_DetectsDelimiterCollision(t *testing.T) {
+	dir := t.TempDir()
+	left := filepath.Join(dir, "dc_left.csv")
+	right := filepath.Join(dir, "dc_right.csv")
+
+	writeRaw := func(path string, rows [][]string) {
+		var b strings.Builder
+		w := csv.NewWriter(&b)
+		if err := w.Write([]string{"id", "a", "b"}); err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows {
+			if err := w.Write(row); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w.Flush()
+		if err := w.Error(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeRaw(left, [][]string{{"1", "a", "b\x00\x01c"}})
+	writeRaw(right, [][]string{{"1", "a\x00\x01b", "c"}})
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	report, err := shell.buildCompareReport(context.Background(), "dc_left", "dc_right", "id")
+	if err != nil {
+		t.Fatalf("buildCompareReport: %v", err)
+	}
+	if report.Rows == nil || len(report.Rows.Modified) != 1 {
+		t.Fatalf("expected the delimiter-colliding row to be reported modified, got %+v", report.Rows)
+	}
+
+	lt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "dc_left"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "dc_right"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := compareKeyedRows("dc_left", "dc_right", lt, rt, "id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotJSON, err := json.Marshal(report.Rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotJSON) != string(wantJSON) {
+		t.Errorf("SQL diff differs from oracle\n got: %s\nwant: %s", gotJSON, wantJSON)
+	}
+}
+
+// TestBuildCompareReport_SQLMatchesInMemoryOracle pins the SQL-pushdown keyed
+// diff to the original in-memory algorithm: the report rows produced by
+// buildCompareReport must be byte-for-byte identical to diffing the two full
+// tables in Go. The fixtures include added, removed, modified, a NULL value, and
+// a row whose only difference is NULL versus empty string, so the equality rules
+// are exercised. This is the regression guard that the performance refactor did
+// not change report semantics.
+func TestBuildCompareReport_SQLMatchesInMemoryOracle(t *testing.T) {
+	dir := t.TempDir()
+	left := filepath.Join(dir, "ora_left.csv")
+	right := filepath.Join(dir, "ora_right.csv")
+	// id 1: modified value; id 2: unchanged; id 3: removed; id 4: added on right;
+	// id 5: another modification. String-sorted keys (10 before 2) also exercise
+	// the ordering rule.
+	if err := os.WriteFile(left, []byte("id,name,note\n1,Alice,a\n2,Bob,b\n3,Carol,c\n5,Eve,x\n10,Tom,t\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(right, []byte("id,name,note\n1,Alice,A\n2,Bob,b\n4,Dave,d\n5,Eve,y\n10,Tom,t\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	report, err := shell.buildCompareReport(context.Background(), "ora_left", "ora_right", "id")
+	if err != nil {
+		t.Fatalf("buildCompareReport: %v", err)
+	}
+
+	// Oracle: read both full tables and diff them with the in-memory algorithm.
+	lt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "ora_left"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "ora_right"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := compareKeyedRows("ora_left", "ora_right", lt, rt, "id")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotJSON, err := json.Marshal(report.Rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotJSON) != string(wantJSON) {
+		t.Errorf("SQL keyed diff differs from in-memory oracle\n got: %s\nwant: %s", gotJSON, wantJSON)
+	}
+}
+
+// TestBuildCompareReport_SQLMatchesOracleRandom is a metamorphic property: for
+// many random keyed datasets, the SQL-pushdown diff must produce the same report
+// rows as diffing the full tables in memory. Cells vary across digits, letters,
+// empty strings, and Unicode so the value and key handling are exercised, and the
+// two sides overlap so added, removed, and modified rows all occur.
+func TestBuildCompareReport_SQLMatchesOracleRandom(t *testing.T) {
+	r := rand.New(rand.NewSource(20240704)) //nolint:gosec // deterministic test seed
+	cellSet := []string{"", "a", "B", "1", "10", "2", "x y", "é", "日"}
+	cell := func() string { return cellSet[r.Intn(len(cellSet))] }
+	rowsFor := func() [][]string {
+		n := r.Intn(8)
+		out := make([][]string, 0, n)
+		used := make(map[string]struct{})
+		for range n {
+			// Keys are small integers as strings; skip an already-used key so the
+			// side has no duplicate (a duplicate is a separate, tested error path).
+			k := strconv.Itoa(r.Intn(12))
+			if _, dup := used[k]; dup {
+				continue
+			}
+			used[k] = struct{}{}
+			out = append(out, []string{k, cell(), cell()})
+		}
+		return out
+	}
+	writeCSV := func(t *testing.T, path string, rows [][]string) {
+		t.Helper()
+		var b strings.Builder
+		w := csv.NewWriter(&b)
+		if err := w.Write([]string{"id", "a", "b"}); err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows {
+			if err := w.Write(row); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w.Flush()
+		if err := w.Error(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for iter := range 200 {
+		dir := t.TempDir()
+		left := filepath.Join(dir, "rleft.csv")
+		right := filepath.Join(dir, "rright.csv")
+		writeCSV(t, left, rowsFor())
+		writeCSV(t, right, rowsFor())
+
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+			cleanup()
+			t.Fatalf("iter %d import: %v", iter, err)
+		}
+
+		report, err := shell.buildCompareReport(context.Background(), "rleft", "rright", "id")
+		if err != nil {
+			cleanup()
+			t.Fatalf("iter %d buildCompareReport: %v", iter, err)
+		}
+		lt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "rleft"`)
+		if err != nil {
+			cleanup()
+			t.Fatalf("iter %d query left: %v", iter, err)
+		}
+		rt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "rright"`)
+		if err != nil {
+			cleanup()
+			t.Fatalf("iter %d query right: %v", iter, err)
+		}
+		want, err := compareKeyedRows("rleft", "rright", lt, rt, "id")
+		if err != nil {
+			cleanup()
+			t.Fatalf("iter %d oracle: %v", iter, err)
+		}
+		gotJSON, err := json.Marshal(report.Rows)
+		if err != nil {
+			cleanup()
+			t.Fatalf("iter %d marshal got: %v", iter, err)
+		}
+		wantJSON, err := json.Marshal(want)
+		if err != nil {
+			cleanup()
+			t.Fatalf("iter %d marshal want: %v", iter, err)
+		}
+		if string(gotJSON) != string(wantJSON) {
+			cleanup()
+			t.Fatalf("iter %d SQL diff != oracle\n got: %s\nwant: %s", iter, gotJSON, wantJSON)
+		}
+		cleanup()
+	}
+}
+
 func BenchmarkBuildCompareReportKeyed(b *testing.B) {
 	left, right := writeKeyedCompareBenchCSVs(b, 5000)
 	shell, cleanup, err := newShell(b, []string{"sqly"})
@@ -405,6 +683,76 @@ func BenchmarkBuildCompareReportKeyed(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		if _, err := shell.buildCompareReport(context.Background(), "kleft", "kright", "id"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// writeWideKeyedCompareCSVs writes two large, wide keyed CSVs that differ by only
+// a handful of added, removed, and modified rows. Wide unchanged rows are the
+// case the SQL pushdown helps most: those rows must never be copied into Go.
+func writeWideKeyedCompareCSVs(tb testing.TB, rows, cols int) (string, string) {
+	tb.Helper()
+	dir := tb.TempDir()
+	left := filepath.Join(dir, "wleft.csv")
+	right := filepath.Join(dir, "wright.csv")
+
+	header := strings.Builder{}
+	header.WriteString("id")
+	for c := range cols {
+		fmt.Fprintf(&header, ",c%d", c)
+	}
+	header.WriteString("\n")
+
+	var lb, rb strings.Builder
+	lb.WriteString(header.String())
+	rb.WriteString(header.String())
+	row := func(b *strings.Builder, id int, bump bool) {
+		fmt.Fprintf(b, "%d", id)
+		for c := range cols {
+			v := id*31 + c
+			if bump && c == 0 {
+				v++
+			}
+			fmt.Fprintf(b, ",v%d", v)
+		}
+		b.WriteString("\n")
+	}
+	for i := range rows {
+		row(&lb, i, false)
+		if i != rows-1 { // drop last row on the right (1 removed)
+			row(&rb, i, i%500 == 0) // bump c0 every 500th row (modified)
+		}
+	}
+	row(&rb, rows+1, false) // one fresh id (1 added)
+
+	if err := os.WriteFile(left, []byte(lb.String()), 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	if err := os.WriteFile(right, []byte(rb.String()), 0o600); err != nil {
+		tb.Fatal(err)
+	}
+	return left, right
+}
+
+// BenchmarkBuildCompareReportKeyedWide exercises a large, wide keyed compare
+// where almost every row is unchanged. The SQL pushdown should keep allocations
+// bounded by the small diff rather than by the full row data.
+func BenchmarkBuildCompareReportKeyedWide(b *testing.B) {
+	left, right := writeWideKeyedCompareCSVs(b, 5000, 20)
+	shell, cleanup, err := newShell(b, []string{"sqly"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		b.Fatalf("import: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := shell.buildCompareReport(context.Background(), "wleft", "wright", "id"); err != nil {
 			b.Fatal(err)
 		}
 	}
