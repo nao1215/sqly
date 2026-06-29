@@ -47,6 +47,32 @@ func cacheManifestPath(cachePath string) string {
 	return cachePath + ".manifest.json"
 }
 
+// isCacheArtifact reports whether path is one of sqly's own cache files (the
+// cache database or its manifest sidecar). When --cache points inside a directory
+// that is also imported, these files must never be treated as dataset inputs:
+// importing the manifest would create a stray table, and counting either file in
+// the cache signature would invalidate the cache on every run. Paths are compared
+// after resolving to absolute form so a relative input still matches.
+func (s *Shell) isCacheArtifact(path string) bool {
+	if s.argument.CachePath == "" {
+		return false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	for _, artifact := range []string{s.argument.CachePath, cacheManifestPath(s.argument.CachePath)} {
+		artifactAbs, err := filepath.Abs(artifact)
+		if err != nil {
+			artifactAbs = artifact
+		}
+		if abs == artifactAbs {
+			return true
+		}
+	}
+	return false
+}
+
 // cacheEnabled reports whether this run should use the import cache. Caching is
 // opt-in (--cache), needs file inputs, and is skipped for a --stdin dataset
 // (ephemeral, no stable signature) and for ACH/Fedwire inputs (their write-back
@@ -107,7 +133,7 @@ func (s *Shell) loadOrImport(ctx context.Context, paths []string) error {
 		s.clearCache(cachePath)
 	}
 
-	sigs, sigErr := collectCacheSignatures(paths)
+	sigs, sigErr := collectCacheSignatures(paths, s.isCacheArtifact)
 	if sigErr == nil {
 		if s.tryWarmCache(ctx, cachePath, sigs) {
 			return nil
@@ -210,11 +236,16 @@ func (s *Shell) clearCache(cachePath string) {
 }
 
 // collectCacheSignatures returns the invalidation signature for every input file,
-// expanding directories recursively. The result is sorted by path so the
-// signature is order-independent.
-func collectCacheSignatures(paths []string) ([]cacheSource, error) {
+// expanding directories recursively. Files for which skip returns true are
+// excluded, so sqly's own cache artifacts inside an imported directory do not
+// enter the signature. The result is sorted by path so the signature is
+// order-independent.
+func collectCacheSignatures(paths []string, skip func(string) bool) ([]cacheSource, error) {
 	var sigs []cacheSource
 	add := func(p string) error {
+		if skip != nil && skip(p) {
+			return nil
+		}
 		abs, err := filepath.Abs(p)
 		if err != nil {
 			abs = p

@@ -54,6 +54,36 @@ func TestCache_WarmHitReusesSnapshot(t *testing.T) {
 	}
 }
 
+// TestCache_InsideImportedDirectory verifies that when the cache path lives
+// inside the directory being imported, sqly's own cache artifacts (the database
+// and its manifest sidecar) are not treated as dataset inputs: the second run is
+// still a warm hit and no manifest-derived table appears.
+func TestCache_InsideImportedDirectory(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "data.csv")
+	cache := filepath.Join(dir, "snap.cache") // cache sidecar lands inside the imported dir
+	if err := os.WriteFile(src, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cold run imports the directory and writes the cache and manifest inside it.
+	runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT COUNT(*) AS n FROM data", dir})
+
+	// The second run over the same directory must reuse the cache, and the cache
+	// manifest must not have been imported as an extra table.
+	var tables string
+	warmErr := captureStderr(t, func() {
+		tables = runQuery(t, []string{"sqly", "--cache", cache, "--sql",
+			"SELECT group_concat(name, ',') AS t FROM sqlite_master WHERE type='table' ORDER BY name", dir})
+	})
+	if !strings.Contains(warmErr, "cache: reused") {
+		t.Errorf("second run should reuse the cache, stderr = %q", warmErr)
+	}
+	if strings.Contains(tables, "manifest") || strings.Contains(tables, "snap") {
+		t.Errorf("cache artifact was imported as a table: %q", tables)
+	}
+}
+
 // TestCache_InvalidatesWhenContentChangesSameSizeAndMTime reproduces issue #592:
 // a source rewritten with different but same-length content and its original
 // mtime restored must invalidate the cache, not reuse stale data.
@@ -208,7 +238,7 @@ func TestCollectCacheSignatures_DirectoryAndChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sigs, err := collectCacheSignatures([]string{dir})
+	sigs, err := collectCacheSignatures([]string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +250,7 @@ func TestCollectCacheSignatures_DirectoryAndChange(t *testing.T) {
 		t.Errorf("signatures not sorted by path: %+v", sigs)
 	}
 
-	again, err := collectCacheSignatures([]string{dir})
+	again, err := collectCacheSignatures([]string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

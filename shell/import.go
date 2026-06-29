@@ -394,7 +394,10 @@ func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
-		if s.usecases.importer.IsSupportedFile(path) {
+		// Skip sqly's own cache artifacts so a --cache file that lives inside the
+		// imported directory is never loaded as a dataset (for example its manifest
+		// JSON becoming a stray table).
+		if s.usecases.importer.IsSupportedFile(path) && !s.isCacheArtifact(path) {
 			files = append(files, path)
 		}
 		return nil
