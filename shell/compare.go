@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strings"
 
@@ -242,42 +243,246 @@ func (s *Shell) buildCompareReport(ctx context.Context, left, right, key string)
 	}
 
 	if key != "" {
-		// Convert each side to its keyed rows and release the raw table before
-		// loading the other, so the two full *model.Table results never live at the
-		// same time. Peak memory is one table plus the keyed map instead of both
-		// tables plus two index maps.
-		leftByKey, err := s.keyedRows(ctx, left, key)
+		rows, err := s.diffKeyedRowsSQL(ctx, left, right, key, leftCols, rightCols)
 		if err != nil {
 			return compareReport{}, err
 		}
-		rightByKey, err := s.keyedRows(ctx, right, key)
-		if err != nil {
-			return compareReport{}, err
-		}
-		report.Rows = diffKeyedRows(key, leftByKey, rightByKey)
+		report.Rows = rows
 	}
 	return report, nil
 }
 
-// keyedRows loads a table and indexes its rows by the key column, returning a
-// keyed map and releasing the raw table. Keeping only the keyed map lets the
-// caller load the two sides one at a time instead of holding both full tables.
-func (s *Shell) keyedRows(ctx context.Context, name, key string) (map[string]compareRow, error) {
-	table, err := s.selectAll(ctx, name)
+// diffKeyedRowsSQL builds the keyed-row diff by streaming both tables instead of
+// loading them into full keyed maps. The added, removed, and modified rows are
+// the only rows copied into Go, so peak memory scales with the size of the diff
+// and the key set rather than with both full tables.
+//
+// The first pass over the left side records, per key, only a row fingerprint, not
+// the row data. The pass over the right side compares each row against that
+// fingerprint on the fly: a key not on the left is added and a fingerprint
+// mismatch is a modification candidate, and only those right rows are retained. A
+// final left pass fetches the few rows behind the removed and candidate keys.
+// Candidates are then re-checked with the exact rowMapsEqual, so a fingerprint
+// collision can never report a false change. The output is identical to the
+// in-memory diffKeyedRows path.
+func (s *Shell) diffKeyedRowsSQL(ctx context.Context, left, right, key string, leftCols, rightCols []inspectColumn) (*compareRows, error) {
+	leftKeyCol, err := resolveKeyColumn(leftCols, key, left)
 	if err != nil {
 		return nil, err
 	}
-	return keyedRowsFromTable(table, key, name)
+	rightKeyCol, err := resolveKeyColumn(rightCols, key, right)
+	if err != nil {
+		return nil, err
+	}
+
+	// When the column name sets differ, the in-memory path treats every shared row
+	// as modified (rowMapsEqual returns false on mismatched maps) regardless of
+	// values, so a shared key is always a candidate. Otherwise only a fingerprint
+	// mismatch makes a shared key a candidate.
+	columnsMatch := sameColumnNames(leftCols, rightCols)
+
+	leftFP := make(map[string]uint64)
+	err = s.streamKeyedRows(ctx, left, leftKeyCol, leftCols, func(k string, record []string, nulls []bool) error {
+		if _, dup := leftFP[k]; dup {
+			return duplicateKeyError(leftKeyCol, left, k)
+		}
+		leftFP[k] = rowFingerprint(leftCols, record, nulls)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Pass over the right side: classify added and candidate rows and retain only
+	// those, and remember which left keys were seen so removed keys are the left
+	// keys the right side never produced.
+	addedRows := make(map[string]compareRow)
+	candidateRows := make(map[string]compareRow)
+	seen := make(map[string]struct{}, len(leftFP))
+	err = s.streamKeyedRows(ctx, right, rightKeyCol, rightCols, func(k string, record []string, nulls []bool) error {
+		if _, dup := seen[k]; dup {
+			return duplicateKeyError(rightKeyCol, right, k)
+		}
+		seen[k] = struct{}{}
+		lfp, shared := leftFP[k]
+		switch {
+		case !shared:
+			addedRows[k] = recordToCompareRow(rightCols, record, nulls)
+		case !columnsMatch || lfp != rowFingerprint(rightCols, record, nulls):
+			candidateRows[k] = recordToCompareRow(rightCols, record, nulls)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch only the left rows the report needs: removed keys and candidate keys.
+	leftWanted := make(map[string]struct{}, len(leftFP))
+	for k := range leftFP {
+		if _, ok := seen[k]; !ok {
+			leftWanted[k] = struct{}{} // removed
+			continue
+		}
+		if _, ok := candidateRows[k]; ok {
+			leftWanted[k] = struct{}{} // candidate
+		}
+	}
+	leftRows, err := s.rowsForKeys(ctx, left, leftKeyCol, leftCols, leftWanted)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := &compareRows{
+		Key:      key,
+		Added:    []compareRow{},
+		Removed:  []compareRow{},
+		Modified: []compareModifiedRow{},
+	}
+	for _, k := range sortedKeys(leftFP) {
+		if _, ok := seen[k]; !ok {
+			rows.Removed = append(rows.Removed, leftRows[k])
+			continue
+		}
+		rrow, ok := candidateRows[k]
+		if !ok {
+			continue
+		}
+		lrow := leftRows[k]
+		// Re-check exactly so a fingerprint collision is not reported as modified.
+		if rowMapsEqual(lrow, rrow) {
+			continue
+		}
+		rows.Modified = append(rows.Modified, compareModifiedRow{Key: k, Left: lrow, Right: rrow})
+	}
+	for _, k := range sortedKeys(addedRows) {
+		rows.Added = append(rows.Added, addedRows[k])
+	}
+	return rows, nil
 }
 
-// selectAll returns every row of a table for row-level comparison.
-func (s *Shell) selectAll(ctx context.Context, name string) (*model.Table, error) {
-	quoted := s.usecases.importer.QuoteIdentifier(name)
-	table, err := s.usecases.query.Query(ctx, "SELECT * FROM "+quoted)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read rows of %s: %w", name, err)
+// duplicateKeyError reports a duplicate key value with the same message the
+// in-memory path uses, so the comparison fails the same way.
+func duplicateKeyError(keyCol, name, value string) error {
+	return fmt.Errorf("compare key %q is not unique in table %s (value %q appears more than once)", keyCol, name, value)
+}
+
+// keyExpr renders the SQL text of a row's key: the key cell cast to TEXT with a
+// SQL NULL mapped to the empty string. This matches the in-memory key, where a
+// NULL key and an empty-string key share the same map key.
+func keyExpr(quotedCol string) string {
+	return "COALESCE(CAST(" + quotedCol + " AS TEXT), '')"
+}
+
+// streamKeyedRows streams a table once, invoking fn with each row's key string
+// (the COALESCE-to-empty text of the key cell), its cells, and its SQL NULL flags.
+// The key is appended as a trailing column so the callback can classify a row
+// without a second lookup. The leading columns line up with cols, which comes from
+// PRAGMA table_info in the same order as SELECT *.
+func (s *Shell) streamKeyedRows(ctx context.Context, name, keyCol string, cols []inspectColumn, fn func(key string, record []string, nulls []bool) error) error {
+	quote := s.usecases.importer.QuoteIdentifier
+	quotedTable := quote(name)
+	quotedKey := quote(keyCol)
+	keyIdx := len(cols) // the appended key expression is the last column
+	return s.usecases.query.QueryStream(ctx,
+		"SELECT *, "+keyExpr(quotedKey)+" FROM "+quotedTable,
+		func(record []string, nulls []bool) error {
+			if keyIdx >= len(record) {
+				return nil
+			}
+			return fn(record[keyIdx], record, nulls)
+		})
+}
+
+// recordToCompareRow pairs a streamed row's cells with their column names,
+// preserving the SQL NULL/empty-string distinction the same way rowMap does: a
+// NULL cell maps to nil, a value maps to a pointer to its string.
+func recordToCompareRow(cols []inspectColumn, record []string, nulls []bool) compareRow {
+	row := make(compareRow, len(cols))
+	for i, c := range cols {
+		if i >= len(record) {
+			break
+		}
+		if i < len(nulls) && nulls[i] {
+			row[c.Name] = nil
+			continue
+		}
+		v := record[i]
+		row[c.Name] = &v
 	}
-	return table, nil
+	return row
+}
+
+// rowFingerprint hashes a row's cells (by column-definition order) and per-cell
+// SQL NULL flags with FNV-1a. It is only a fast inequality filter: matching
+// fingerprints are re-checked exactly with rowMapsEqual, so a collision cannot
+// produce a wrong report.
+func rowFingerprint(cols []inspectColumn, record []string, nulls []bool) uint64 {
+	h := fnv.New64a()
+	for i := range cols {
+		if i < len(nulls) && nulls[i] {
+			_, _ = h.Write([]byte{0})
+			continue
+		}
+		_, _ = h.Write([]byte{1})
+		if i < len(record) {
+			_, _ = h.Write([]byte(record[i]))
+		}
+		_, _ = h.Write([]byte{0}) // separator so concatenations cannot collide
+	}
+	return h.Sum64()
+}
+
+// rowsForKeys streams a table once and returns the rows whose key is in wanted,
+// each as a compareRow. Rows not in the diff are skipped, so only the wanted rows
+// are copied into Go.
+func (s *Shell) rowsForKeys(ctx context.Context, name, keyCol string, cols []inspectColumn, wanted map[string]struct{}) (map[string]compareRow, error) {
+	if len(wanted) == 0 {
+		return map[string]compareRow{}, nil
+	}
+	out := make(map[string]compareRow, len(wanted))
+	err := s.streamKeyedRows(ctx, name, keyCol, cols, func(k string, record []string, nulls []bool) error {
+		if _, ok := wanted[k]; !ok {
+			return nil
+		}
+		out[k] = recordToCompareRow(cols, record, nulls)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// resolveKeyColumn finds the key column in a table's columns case-insensitively,
+// following SQLite identifier semantics where "ID" resolves the column "id". It
+// returns the canonical stored name so later quoting matches the real column.
+func resolveKeyColumn(cols []inspectColumn, key, name string) (string, error) {
+	for _, c := range cols {
+		if strings.EqualFold(c.Name, key) {
+			return c.Name, nil
+		}
+	}
+	return "", fmt.Errorf("compare key %q not found in table %s", key, name)
+}
+
+// sameColumnNames reports whether two column lists have the same set of names.
+// The in-memory diff treats rows with different column sets as always modified,
+// so the SQL path can only compare values column-by-column when the sets match.
+func sameColumnNames(left, right []inspectColumn) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	set := make(map[string]struct{}, len(left))
+	for _, c := range left {
+		set[c.Name] = struct{}{}
+	}
+	for _, c := range right {
+		if _, ok := set[c.Name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // compareSchemas reports the column-level differences between two schemas: which
