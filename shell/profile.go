@@ -207,7 +207,10 @@ func (c *columnProfiler) add(v string, isNull bool) {
 	} else {
 		c.nonNumeric++
 	}
-	if _, ok := nullLikeTokens[strings.ToLower(v)]; ok {
+	// Match null-like placeholders on the trimmed value so a padded token such as
+	// " NULL " is still flagged. The whitespace check below stays independent, so
+	// a padded placeholder raises both warnings.
+	if _, ok := nullLikeTokens[strings.ToLower(strings.TrimSpace(v))]; ok {
 		c.nullLike++
 	}
 	if v != strings.TrimSpace(v) {

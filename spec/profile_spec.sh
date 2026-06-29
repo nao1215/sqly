@@ -71,4 +71,20 @@ Describe 'sqly --profile workflow'
     The status should be success
     The output should include 'blanks=1 distinct=2'
   End
+
+  It 'flags a padded null-like placeholder and its whitespace together'
+    printf 'v\n" NULL "\n' > "$WORKDIR/nullspace.csv"
+    When run sqly --profile "$WORKDIR/nullspace.csv"
+    The status should be success
+    The output should include 'null placeholders'
+    The output should include 'leading or trailing whitespace'
+  End
+
+  It 'warns only about whitespace for a padded ordinary value'
+    printf 'v\n" hello "\n' > "$WORKDIR/padded.csv"
+    When run sqly --profile "$WORKDIR/padded.csv"
+    The status should be success
+    The output should not include 'null placeholders'
+    The output should include 'leading or trailing whitespace'
+  End
 End
