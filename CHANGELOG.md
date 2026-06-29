@@ -29,6 +29,7 @@
 * Cache Signature Scope: the directory cache signature now includes only files sqly would import, so changing an unsupported sibling file such as a `.txt` note no longer invalidates the cache. Changing a supported input still invalidates it.
 
 ### Documentation
+* Demo Asset Drift Check: a `TestDemoAssetsInSync` docs-sync test now guards the README demo GIFs without rendering them. It fails when a `doc/vhs/*.tape` declares an `Output` GIF that is missing (a tape changed or added without `make demo`) or when the README embeds a GIF no tape produces. Contributor docs explain when to rerun `make demo`, and the `--sql-file --output` workflow is documented as intentionally without a GIF.
 * Install Methods: the README and installation docs now cover aqua (`aqua g -i nao1215/sqly`) and mise (`mise use aqua:nao1215/sqly`), which install sqly through the aqua standard registry.
 * Helper Command Docs: the `.dump` and `.save` reference now matches current behavior. `.dump` in table mode infers the output format from the destination extension (TSV for `out.tsv`), falling back to CSV only for an unknown extension; `.save` documents native ACH/Fedwire whole-set write-back. A docs-sync test guards these descriptions.
 
