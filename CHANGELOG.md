@@ -6,6 +6,7 @@
 * SQL File Output: `--sql-file` can now export to `--output` when the script produces exactly one result set, so a saved SQL script works in the same automation pipelines as `--sql`. Setup statements may run first, the single result is written to the file with stdout left clean, and a script that yields no result set or more than one is rejected with a clear error.
 
 ### Bug Fixes
+* Parquet Export Null Fidelity: a SQL `NULL` exported to Parquet now reloads as `NULL` instead of an empty string, so `NULL` and `""` stay distinguishable in machine-readable output. The staging insert emits SQL `NULL` for null cells, and filesql v0.15.0 preserves the null through the Parquet write and reload.
 * Parquet Export Text Fidelity: parquet export now stages every column as TEXT, so numeric-looking text the session holds (leading-zero codes like `007`, decimal strings like `1.00`) survives the round-trip verbatim instead of being coerced to a number by the staging column's affinity.
 * Profile Blank Distinct Count: `--profile` now counts the blank string as a real distinct value, so `distinct_count` stays consistent with `blank_count` instead of dropping blanks and understating cardinality for categorical columns that mix blanks with real values.
 * Profile Padded Null Placeholders: `--profile` now matches null-like placeholders such as `NULL` and `N/A` on the trimmed value, so a padded token like `" NULL "` raises both the null-placeholder warning and the whitespace warning instead of only the whitespace one.
@@ -18,6 +19,9 @@
 
 ### Documentation
 * Helper Command Docs: the `.dump` and `.save` reference now matches current behavior. `.dump` in table mode infers the output format from the destination extension (TSV for `out.tsv`), falling back to CSV only for an unknown extension; `.save` documents native ACH/Fedwire whole-set write-back. A docs-sync test guards these descriptions.
+
+### Dependencies
+* `github.com/nao1215/filesql`: v0.14.0 to v0.15.0, which preserves SQL `NULL` through a Parquet round-trip.
 
 ## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 
