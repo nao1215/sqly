@@ -38,6 +38,16 @@ Describe 'sqly --compare workflow'
     The output should include '1 added, 1 removed, 1 modified'
   End
 
+  It 'resolves an uppercase --compare-key against a lowercase column'
+    # Header column is "id"; the uppercase spelling must resolve the same column
+    # because SQLite identifier matching is case-insensitive.
+    When run sqly --compare --compare-key ID "$WORKDIR/rev1.csv" "$WORKDIR/rev2.csv"
+    The status should be success
+    The output should include '"key": "ID"'
+    The output should include '"4"'
+    The output should include '"3"'
+  End
+
   It 'rejects a missing key column'
     When run sqly --compare --compare-key nope "$WORKDIR/rev1.csv" "$WORKDIR/rev2.csv"
     The status should be failure

@@ -121,6 +121,19 @@ func TestCompareKeyedRows(t *testing.T) {
 		}
 	})
 
+	t.Run("resolves the key column case-insensitively", func(t *testing.T) {
+		t.Parallel()
+		// Header is "id" but the user passed "ID". SQLite identifier matching is
+		// case-insensitive, so the key must resolve the same column as "id".
+		rows, err := compareKeyedRows("l", "r", left, right, "ID")
+		if err != nil {
+			t.Fatalf("uppercase key should resolve column id: %v", err)
+		}
+		if len(rows.Added) != 1 || len(rows.Removed) != 1 || len(rows.Modified) != 1 {
+			t.Errorf("case-insensitive key produced a different diff: %+v", rows)
+		}
+	})
+
 	t.Run("a duplicate key value is rejected as ambiguous", func(t *testing.T) {
 		t.Parallel()
 		dup := model.NewTable("d", header, []model.Record{
