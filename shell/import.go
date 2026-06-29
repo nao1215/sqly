@@ -55,6 +55,11 @@ func (e *partialImportError) Unwrap() error { return errPartialImport }
 // single non-matching workbook cannot suppress the workbooks that do match.
 var errSheetNotFound = errors.New("requested sheet not found in workbook")
 
+// errSheetNotExcel reports that --sheet was given but no input can be an Excel
+// file. It states what --sheet applies to and how to recover, so a non-Excel
+// input plus --sheet is distinguished from an Excel input whose sheet is missing.
+var errSheetNotExcel = errors.New("--sheet applies only to Excel (.xlsx) inputs, but none of the given inputs is an Excel file or a directory containing one; remove --sheet, or pass an .xlsx file")
+
 // validateSheetFlag rejects the CLI --sheet option when no input can be an
 // Excel file. --sheet selects a single Excel sheet and is silently ignored for
 // other formats, so a typo (or pairing it with --stdin) would otherwise pass
@@ -67,7 +72,7 @@ func (s *Shell) validateSheetFlag() error {
 	if s.sheetAppliesTo(s.argument.FilePaths) {
 		return nil
 	}
-	return errors.New("--sheet is only valid for Excel (.xlsx) inputs")
+	return errSheetNotExcel
 }
 
 // sheetAppliesTo reports whether --sheet can affect any of the given input
@@ -170,7 +175,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	// Reject --sheet when none of the inputs is an Excel file (or a directory
 	// containing one), so the flag is not silently ignored.
 	if sheetName != "" && !s.sheetAppliesTo(importPaths(argv)) {
-		return errors.New("--sheet is only valid for Excel (.xlsx) inputs")
+		return errSheetNotExcel
 	}
 
 	// A --sheet filter that misses one workbook must not fail a multi-workbook
@@ -245,7 +250,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 				// In a multi-workbook import, a workbook that lacks the requested
 				// sheet is skipped rather than failing the whole run.
 				if multiWorkbook && errors.Is(err, errSheetNotFound) {
-					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: %v\n", path, err)
+					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: requested sheet %q not found\n", path, sheetName)
 					skippedSheet++
 					continue
 				}
@@ -258,9 +263,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 	// Every workbook was skipped because none contained the requested sheet, and
 	// nothing else imported. Fail loudly instead of succeeding with no tables so
-	// a wrong --sheet value is visible.
+	// a wrong --sheet value is visible. Name the workbooks that were checked and
+	// suggest a recovery path, so the user can discover the valid sheet names.
 	if successCount == 0 && skippedSheet > 0 && len(errorMessages) == 0 {
-		return fmt.Errorf("sheet %q not found in any of the imported workbooks", sheetName)
+		books := s.excelWorkbooks(importPaths(argv))
+		return fmt.Errorf("sheet %q not found in any of the %d checked workbook(s): %s; re-import without --sheet to list the available sheet names",
+			sheetName, len(books), strings.Join(books, ", "))
 	}
 
 	// A successful import can change a table's columns without changing the
@@ -362,7 +370,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		if sheetName != "" && s.usecases.importer.IsExcelFile(file) {
 			if ferr := s.filterExcelSheets(ctx, file, sheetName, nil); ferr != nil {
 				if multiWorkbook && errors.Is(ferr, errSheetNotFound) {
-					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: %v\n", file, ferr)
+					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: requested sheet %q not found\n", file, sheetName)
 					skipped++
 					continue
 				}
@@ -477,7 +485,15 @@ func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []str
 // --sheet miss in one workbook should be a non-fatal skip (more than one
 // workbook) or a hard error (a single workbook).
 func (s *Shell) countExcelWorkbooks(paths []string) int {
-	count := 0
+	return len(s.excelWorkbooks(paths))
+}
+
+// excelWorkbooks returns every Excel workbook reachable from paths: each .xlsx
+// file argument plus every .xlsx file inside a directory argument. It backs the
+// --sheet diagnostics, so a miss error can name exactly which workbooks were
+// checked, and supplies the workbook count used to decide multi-workbook skipping.
+func (s *Shell) excelWorkbooks(paths []string) []string {
+	var books []string
 	for _, path := range paths {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -489,17 +505,17 @@ func (s *Shell) countExcelWorkbooks(paths []string) int {
 					return nil //nolint:nilerr // unreadable entries are surfaced by the import step
 				}
 				if s.usecases.importer.IsExcelFile(p) {
-					count++
+					books = append(books, p)
 				}
 				return nil
 			})
 			continue
 		}
 		if s.usecases.importer.IsExcelFile(path) {
-			count++
+			books = append(books, path)
 		}
 	}
-	return count
+	return books
 }
 
 // warnKeywordTableNames warns when an imported table's name is a SQLite keyword.
@@ -812,7 +828,7 @@ func (s *Shell) filterExcelSheets(ctx context.Context, excelPath, sheetName stri
 				return fmt.Errorf("failed to drop sheet table %s: %w", name, err)
 			}
 		}
-		return fmt.Errorf("sheet %q not found in Excel file %s: %w", sheetName, excelPath, errSheetNotFound)
+		return fmt.Errorf("sheet %q not found in Excel file %s (re-import without --sheet to list its sheet names): %w", sheetName, excelPath, errSheetNotFound)
 	}
 
 	for name := range candidates {

@@ -774,6 +774,75 @@ func TestImportFile_ExcelWithSheet(t *testing.T) {
 	}
 }
 
+func TestSheetMissErrors_AreDiagnostic(t *testing.T) {
+	ctx := context.Background()
+	sample := filepath.Join("..", "testdata", "sample.xlsx")
+	accents := filepath.Join("..", "testdata", "sheet_with_accents.xlsx")
+
+	t.Run("a non-Excel input with --sheet distinguishes validation failure and suggests recovery", func(t *testing.T) {
+		s, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		var importErr error
+		captureStderr(t, func() {
+			importErr = s.commands.importCommand(ctx, s, []string{filepath.Join("..", "testdata", "user.csv"), "--sheet", "Summary"})
+		})
+		if importErr == nil {
+			t.Fatal("expected --sheet on a non-Excel input to fail")
+		}
+		got := importErr.Error()
+		if !strings.Contains(got, "Excel") || !strings.Contains(got, "remove --sheet") {
+			t.Errorf("error %q should explain --sheet needs an Excel input and how to recover", got)
+		}
+	})
+
+	t.Run("a single-workbook miss names the workbook and suggests recovery", func(t *testing.T) {
+		s, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		err = s.importFile(ctx, sample, sample, "no_such_sheet")
+		if err == nil {
+			t.Fatal("expected a missing sheet to fail")
+		}
+		got := err.Error()
+		if !strings.Contains(got, "sample.xlsx") {
+			t.Errorf("error %q should name the checked workbook", got)
+		}
+		if !strings.Contains(got, "without --sheet") {
+			t.Errorf("error %q should suggest re-importing without --sheet", got)
+		}
+	})
+
+	t.Run("a multi-workbook miss names every checked workbook and suggests recovery", func(t *testing.T) {
+		s, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		var importErr error
+		captureStderr(t, func() {
+			importErr = s.commands.importCommand(ctx, s, []string{sample, accents, "--sheet", "no_such_sheet"})
+		})
+		if importErr == nil {
+			t.Fatal("expected a missing sheet across workbooks to fail")
+		}
+		got := importErr.Error()
+		if !strings.Contains(got, "sample.xlsx") || !strings.Contains(got, "sheet_with_accents.xlsx") {
+			t.Errorf("error %q should name every checked workbook", got)
+		}
+		if !strings.Contains(got, "without --sheet") {
+			t.Errorf("error %q should suggest re-importing without --sheet", got)
+		}
+	})
+}
+
 func TestImportDirectory_WithCSVFiles(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
