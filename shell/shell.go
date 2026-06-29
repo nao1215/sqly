@@ -264,8 +264,12 @@ func (s *Shell) Run(ctx context.Context) error {
 		// tables usable, so the interactive shell still starts after a warning.
 		// Non-interactive modes (--sql, --sql-file, --inspect, batch) treat it as
 		// a hard failure so automation sees a non-zero exit.
-		if errors.Is(err, errPartialImport) && s.startsInteractiveShell() {
-			fmt.Fprintf(config.Stderr, "%v\n", err)
+		var partial *partialImportError
+		if errors.As(err, &partial) && s.startsInteractiveShell() {
+			// Explain the shell state instead of the bare partial-import error, so a
+			// working session does not look broken. The failing inputs were already
+			// listed above by init.
+			fmt.Fprintln(config.Stderr, partialImportStartupMessage(partial.succeeded, partial.failed))
 		} else {
 			return err
 		}
@@ -472,6 +476,15 @@ func (s *Shell) disableHistory(err error) {
 // --sql, --sql-file). Batch mode (non-TTY) and those flags are non-interactive.
 func (s *Shell) startsInteractiveShell() bool {
 	return s.isTTY() && !s.argument.InspectFlag && !s.argument.CompareFlag && !s.argument.ProfileFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
+}
+
+// partialImportStartupMessage explains the shell state after a partial startup
+// import: the shell did start, some inputs loaded and are queryable now, and the
+// failing inputs were already listed above. It replaces the bare "one or more
+// inputs failed to import", which made a working session look broken.
+func partialImportStartupMessage(succeeded, failed int) string {
+	total := succeeded + failed
+	return fmt.Sprintf("sqly started with partial data: %d of %d inputs imported, %d failed (listed above). The imported tables are ready to query.", succeeded, total, failed)
 }
 
 // positionalSubcommandHint reports whether the first positional argument is the

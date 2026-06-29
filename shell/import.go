@@ -31,6 +31,25 @@ const (
 // to continue (interactive shell) or fail the run (non-interactive modes).
 var errPartialImport = errors.New("one or more inputs failed to import")
 
+// partialImportError carries the success and failure counts of a partial import
+// alongside the one-line summary. It wraps errPartialImport so errors.Is still
+// detects the condition, while errors.As lets the interactive shell report how
+// much data loaded; non-interactive callers see the same detailed final line.
+type partialImportError struct {
+	succeeded int
+	failed    int
+	summary   string
+}
+
+// Error renders the detailed final line for non-interactive callers: the
+// sentinel message followed by the per-input summary.
+func (e *partialImportError) Error() string {
+	return fmt.Sprintf("%s: %s", errPartialImport.Error(), e.summary)
+}
+
+// Unwrap exposes errPartialImport so errors.Is keeps matching the sentinel.
+func (e *partialImportError) Unwrap() error { return errPartialImport }
+
 // errSheetNotFound marks a --sheet filter that matched no sheet in a particular
 // workbook. In a multi-workbook import it is downgraded to a non-fatal skip so a
 // single non-matching workbook cannot suppress the workbooks that do match.
@@ -267,11 +286,11 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		if successCount == 0 {
 			return fmt.Errorf("all %d import(s) failed: %s", len(errorMessages), summary)
 		}
-		// A requested input failed while others succeeded. Wrap errPartialImport so
-		// non-interactive runs exit non-zero and callers can detect the sentinel
-		// with errors.Is, while the message names the failing inputs; the
-		// interactive shell tolerates it and starts with the tables that loaded.
-		return fmt.Errorf("%w: %s", errPartialImport, summary)
+		// A requested input failed while others succeeded. Return a
+		// partialImportError so non-interactive runs exit non-zero and callers can
+		// detect the sentinel with errors.Is, while the interactive shell reads the
+		// counts to explain the shell state and starts with the tables that loaded.
+		return &partialImportError{succeeded: successCount, failed: len(errorMessages), summary: summary}
 	}
 
 	return nil
