@@ -109,8 +109,12 @@ func (s *Shell) storedCreateSQL(ctx context.Context, schema, object string) (sql
 	// String literal: escape single quotes to query the master tables safely.
 	literal := "'" + strings.ReplaceAll(object, "'", "''") + "'"
 	for _, src := range sources {
+		// Match the name case-insensitively (COLLATE NOCASE) so the stored DDL
+		// still wins when the user spells the object in a different case, for
+		// example ".schema V" for a view created as "v". SQLite forbids two
+		// objects whose names differ only by case, so the match is unambiguous.
 		res, err := s.usecases.query.Query(ctx,
-			"SELECT sql FROM "+src.table+" WHERE name = "+literal+" AND type IN ('table', 'view') AND sql IS NOT NULL")
+			"SELECT sql FROM "+src.table+" WHERE name = "+literal+" COLLATE NOCASE AND type IN ('table', 'view') AND sql IS NOT NULL")
 		if err != nil {
 			return "", false, err
 		}

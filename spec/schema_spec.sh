@@ -41,6 +41,29 @@ Describe 'sqly schema inspection'
       The stderr should include 'Change output mode'
     End
 
+    It 'returns the stored CREATE VIEW for a differently cased view name'
+      # The view is created as "v"; ".schema V" must still return the stored
+      # CREATE VIEW instead of synthesizing a CREATE TABLE.
+      Data
+        #|CREATE VIEW v AS SELECT 1 AS x;
+        #|.schema V
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'CREATE VIEW'
+      The output should not include 'CREATE TABLE'
+    End
+
+    It 'resolves a table name case-insensitively'
+      Data
+        #|.schema USER
+      End
+      When run sqly testdata/user.csv
+      The status should be success
+      The output should include 'CREATE TABLE'
+      The output should include 'user_name'
+    End
+
     It 'errors on a missing table'
       Data
         #|.schema no_such_table
