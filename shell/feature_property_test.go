@@ -159,8 +159,10 @@ func TestCompareKeyedRows_SwapProperty(t *testing.T) {
 }
 
 // TestProfileColumnStats_PartitionProperty asserts the column counts partition
-// the values exactly: every value is counted as null, blank, or non-empty, and
-// the numeric and distinct counts never exceed the non-empty count.
+// the values exactly: every value is counted as null, blank, or non-empty. The
+// numeric count never exceeds the non-empty count, and the distinct count never
+// exceeds the non-empty count plus one for the blank string, which counts as a
+// single distinct value when present.
 func TestProfileColumnStats_PartitionProperty(t *testing.T) {
 	t.Parallel()
 	property := func(values []string, nulls []bool) bool {
@@ -179,7 +181,11 @@ func TestProfileColumnStats_PartitionProperty(t *testing.T) {
 		if pc.NullCount != nullN || pc.BlankCount != blankN {
 			return false
 		}
-		if pc.NumericCount > nonEmpty || pc.DistinctCount > nonEmpty {
+		distinctCap := nonEmpty
+		if blankN > 0 {
+			distinctCap++ // the blank string contributes one distinct value
+		}
+		if pc.NumericCount > nonEmpty || pc.DistinctCount > distinctCap {
 			return false
 		}
 		return pc.NullCount+pc.BlankCount+nonEmpty == int64(len(values))

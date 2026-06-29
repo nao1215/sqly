@@ -194,6 +194,11 @@ func (c *columnProfiler) add(v string, isNull bool) {
 	}
 	if v == "" {
 		c.blankCount++
+		// The blank string is a real distinct value. Counting it keeps
+		// distinct_count consistent with blank_count so the report does not
+		// understate cardinality for categorical columns that mix blanks with
+		// real values.
+		c.distinct[v] = struct{}{}
 		return
 	}
 	c.distinct[v] = struct{}{}
