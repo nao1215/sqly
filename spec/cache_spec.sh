@@ -27,6 +27,18 @@ Describe 'sqly --cache import cache'
     The stderr should include 'cache: reused'
   End
 
+  It 'reuses the cache when it lives inside the imported directory and ignores its manifest'
+    # The cache database and manifest sidecar land inside the directory that is
+    # imported. They must not be loaded as datasets, so the second run is a warm
+    # hit and no manifest-derived table appears.
+    When run sh -c "'$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' '$WORKDIR' >/dev/null && '$SQLY_BIN' --cache '$CACHE' --sql \"SELECT group_concat(name, ',') AS t FROM sqlite_master WHERE type='table'\" '$WORKDIR'"
+    The status should be success
+    The stderr should include 'cache: reused'
+    The output should include 'data'
+    The output should not include 'manifest'
+    The output should not include 'snap'
+  End
+
   It 'invalidates the cache when the source changes'
     When run sh -c "'$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' '$WORKDIR/data.csv' >/dev/null && printf 'id,name\n1,Alice\n2,Bob\n3,Carol\n4,Dave\n' > '$WORKDIR/data.csv' && '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' '$WORKDIR/data.csv'"
     The status should be success
