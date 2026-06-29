@@ -40,4 +40,26 @@ Describe 'sqly --sheet validation'
     The stderr should include '--sheet'
     rm -rf "$work"
   End
+
+  It 'tells the user how to recover when --sheet has no Excel input'
+    When run sqly --inspect --sheet "A test" testdata/user.csv
+    The status should be failure
+    The stderr should include 'Excel'
+    The stderr should include 'remove --sheet'
+  End
+
+  It 'names the workbook and suggests recovery on a single-workbook sheet miss'
+    When run sqly --inspect --sheet no_such_sheet testdata/sample.xlsx
+    The status should be failure
+    The stderr should include 'sample.xlsx'
+    The stderr should include 'without --sheet'
+  End
+
+  It 'names every checked workbook on a multi-workbook sheet miss'
+    When run sqly --inspect --sheet no_such_sheet testdata/sample.xlsx testdata/sheet_with_accents.xlsx
+    The status should be failure
+    The stderr should include 'sample.xlsx'
+    The stderr should include 'sheet_with_accents.xlsx'
+    The stderr should include 'without --sheet'
+  End
 End
