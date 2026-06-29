@@ -393,6 +393,75 @@ func TestBuildCompareReport_KeyedDiff(t *testing.T) {
 	}
 }
 
+// TestBuildCompareReport_DetectsDelimiterCollision is an adversarial regression:
+// the two shared-key rows differ only in how their cells split, but a naive
+// delimiter-joined fingerprint encodes both to the same bytes ("a" + sep +
+// "b\x00\x01c" equals "a\x00\x01b" + sep + "c"). A fingerprint-only modified
+// decision would drop the change and report the rows as unchanged. The SQL path
+// compares values in the database, so the change must be reported as modified and
+// must match the in-memory oracle.
+func TestBuildCompareReport_DetectsDelimiterCollision(t *testing.T) {
+	dir := t.TempDir()
+	left := filepath.Join(dir, "dc_left.csv")
+	right := filepath.Join(dir, "dc_right.csv")
+
+	writeRaw := func(path string, rows [][]string) {
+		var b strings.Builder
+		w := csv.NewWriter(&b)
+		_ = w.Write([]string{"id", "a", "b"})
+		for _, row := range rows {
+			_ = w.Write(row)
+		}
+		w.Flush()
+		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeRaw(left, [][]string{{"1", "a", "b\x00\x01c"}})
+	writeRaw(right, [][]string{{"1", "a\x00\x01b", "c"}})
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	report, err := shell.buildCompareReport(context.Background(), "dc_left", "dc_right", "id")
+	if err != nil {
+		t.Fatalf("buildCompareReport: %v", err)
+	}
+	if report.Rows == nil || len(report.Rows.Modified) != 1 {
+		t.Fatalf("expected the delimiter-colliding row to be reported modified, got %+v", report.Rows)
+	}
+
+	lt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "dc_left"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt, err := shell.usecases.query.Query(context.Background(), `SELECT * FROM "dc_right"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := compareKeyedRows("dc_left", "dc_right", lt, rt, "id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotJSON, err := json.Marshal(report.Rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotJSON) != string(wantJSON) {
+		t.Errorf("SQL diff differs from oracle\n got: %s\nwant: %s", gotJSON, wantJSON)
+	}
+}
+
 // TestBuildCompareReport_SQLMatchesInMemoryOracle pins the SQL-pushdown keyed
 // diff to the original in-memory algorithm: the report rows produced by
 // buildCompareReport must be byte-for-byte identical to diffing the two full
