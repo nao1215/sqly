@@ -50,10 +50,15 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .dump
 [Usage]
   .dump TABLE_NAME FILE_PATH
 [Note]
-  Output will be in the format specified in .mode.
-  table mode is not available in .dump. If mode is table, .dump output CSV file.
+  The format comes from .mode. When .mode is table, it is inferred from the
+  file extension (for example .tsv, .parquet), falling back to CSV (written to
+  the path as given) only when the extension is unknown.
+  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).
+  A .mode that disagrees with the extension is rejected instead of normalizing.
   ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format.
 ```
+
+For example, `.dump user out.tsv` in `table` mode writes a TSV file.
 
 ### exit command
 
@@ -135,6 +140,27 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .mode
 sqly:~/github/github.com/nao1215/sqly(table)$ .pwd
 /home/nao
 ```
+
+### save command
+
+Write the current tables back to files. `.save DIRECTORY` writes each table into
+that directory and leaves the original sources untouched; `.save --force`
+overwrites each table's source file in place.
+
+```shell
+sqly:~/data(table)$ .save
+[Usage]
+  .save DIRECTORY   write each table into DIRECTORY (originals untouched)
+  .save --force     overwrite each table's source file in place
+[Note]
+  csv/tsv/ltsv/parquet sources are written; compression is preserved.
+  A whole ACH or Fedwire set is reconstructed back into a single .ach/.fed
+  file when all of that source's tables are still present.
+```
+
+An ACH or Fedwire file imports as a multi-table set. `.save` rewrites the whole
+set back to its native `.ach`/`.fed` file only when all of that source's tables
+are present; a partial set is rejected before any file is written.
 
 ### tables command
 

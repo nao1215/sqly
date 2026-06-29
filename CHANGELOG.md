@@ -12,6 +12,9 @@
 * Cache Artifacts Not Imported: when `--cache` points inside a directory that is also imported, sqly's own cache database and manifest sidecar are no longer treated as dataset inputs. The manifest is not imported as a stray table, and the second run is a warm cache hit instead of a cold re-import.
 * Cache Signature Scope: the directory cache signature now includes only files sqly would import, so changing an unsupported sibling file such as a `.txt` note no longer invalidates the cache. Changing a supported input still invalidates it.
 
+### Documentation
+* Helper Command Docs: the `.dump` and `.save` reference now matches current behavior. `.dump` in table mode infers the output format from the destination extension (TSV for `out.tsv`), falling back to CSV only for an unknown extension; `.save` documents native ACH/Fedwire whole-set write-back. A docs-sync test guards these descriptions.
+
 ## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 
 ### New Features

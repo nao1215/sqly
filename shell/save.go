@@ -28,7 +28,9 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 			"  .save DIRECTORY   write each table into DIRECTORY (originals untouched)\n" +
 			"  .save --force     overwrite each table's source file in place\n" +
 			"[Note]\n" +
-			"  Only csv/tsv/ltsv/parquet sources are written; compression is preserved")
+			"  csv/tsv/ltsv/parquet sources are written; compression is preserved.\n" +
+			"  A whole ACH/Fedwire set is reconstructed back into a single .ach/.fed file\n" +
+			"  when all of that source's tables are still present")
 	}
 	// Reject an empty destination so `.save ""` is not treated as an in-place
 	// save, which would bypass the --force safeguard.
