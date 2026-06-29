@@ -63,6 +63,18 @@ make generate
 make tools
 ```
 
+### 7. Refresh demo GIFs when you change a tape
+The README demo GIFs under `doc/img/` are rendered from `doc/vhs/*.tape`. After
+changing a tape or adding a demo, rerun `make demo` (it needs vhs, ttyd, and
+ffmpeg) and commit the regenerated GIF with the tape change:
+
+```shell
+make demo
+```
+
+CI does not render GIFs; the `TestDemoAssetsInSync` test instead fails when a tape
+and its GIF, or the README and a GIF, fall out of sync.
+
 ## Documentation
 `README.md` (English) is the source of truth for user-facing documentation. When
 you add or change a feature, also update the GitHub Pages docs under
