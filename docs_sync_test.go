@@ -44,6 +44,69 @@ func TestDocsMakeCommandsExist(t *testing.T) {
 	}
 }
 
+// TestHelperCommandDocsMatchBehavior is a docs-sync guardrail for the
+// helper-command reference: the .save and .dump descriptions must match the
+// shell's current behavior. The .dump format in table mode is inferred from the
+// destination extension (not always CSV), and .save can reconstruct a whole
+// ACH/Fedwire set back to its native file. A stale description here misleads
+// users about what these commands write.
+func TestHelperCommandDocsMatchBehavior(t *testing.T) {
+	t.Parallel()
+
+	const path = "doc/pages/markdown/sqly_helper_command.md"
+	dump, err := docSection(path, "dump command")
+	if err != nil {
+		t.Fatalf("read .dump section: %v", err)
+	}
+	if strings.Contains(dump, "If mode is table, .dump output CSV file") {
+		t.Errorf(".dump docs still claim table mode always writes CSV; it infers the format from the destination extension")
+	}
+	if !strings.Contains(dump, "extension") {
+		t.Errorf(".dump docs should describe extension-driven format inference in table mode")
+	}
+
+	save, err := docSection(path, "save command")
+	if err != nil {
+		t.Fatalf("read .save section: %v", err)
+	}
+	if !strings.Contains(save, "ACH") || !strings.Contains(save, "Fedwire") {
+		t.Errorf(".save docs should mention ACH/Fedwire whole-set write-back")
+	}
+}
+
+// docSection returns the body of the Markdown section introduced by the heading
+// "### <title>", up to the next "### " heading or end of file. It lets a
+// docs-sync test assert on one command's description without matching text from
+// a neighboring section.
+func docSection(path, title string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	heading := "### " + title
+	var b strings.Builder
+	inSection := false
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "### ") {
+			if inSection {
+				break // reached the next section
+			}
+			inSection = strings.TrimSpace(line) == heading
+			continue
+		}
+		if inSection {
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
+	}
+	if !inSection && b.Len() == 0 {
+		return "", os.ErrNotExist
+	}
+	return b.String(), scanner.Err()
+}
+
 // makefileTargets returns the set of target names declared in the Makefile (a
 // line of the form "name:" at column 0). Pattern rules and variables are ignored.
 func makefileTargets(path string) (map[string]bool, error) {

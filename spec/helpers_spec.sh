@@ -113,4 +113,18 @@ Describe 'sqly shell helper commands'
       The stderr should include 'ndjson'
     End
   End
+
+  Describe '.dump'
+    It 'infers TSV from the .tsv extension in table mode, not CSV'
+      # In table mode .dump picks the format from the destination extension, so
+      # ".dump user out.tsv" writes a tab-separated file rather than falling back
+      # to CSV. The header line must be tab-separated, not comma-separated.
+      When run sh -c "out=\$(mktemp -d)/out.tsv; printf '.dump user %s\n' \"\$out\" | '$SQLY_BIN' '$PROJECT_ROOT/testdata/user.csv' >/dev/null; head -n1 \"\$out\""
+      The status should be success
+      The output should include "$(printf 'user_name\tidentifier')"
+      The output should not include 'user_name,identifier'
+      # The dump progress line confirms the inferred format on stderr.
+      The stderr should include 'mode=tsv'
+    End
+  End
 End
