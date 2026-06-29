@@ -27,7 +27,7 @@ Describe 'sqly batch mode (piped stdin)'
     The stderr should include 'Change output mode'
   End
 
-  It 'exits non-zero and names the failing statement on error'
+  It 'exits non-zero and names the failing statement and its line on error'
     Data
       #|SELECT user_name FROM user ORDER BY identifier LIMIT 1;
       #|SELECT * FROM no_such_table;
@@ -35,7 +35,21 @@ Describe 'sqly batch mode (piped stdin)'
     When run sqly testdata/user.csv
     The status should be failure
     The output should include 'booker12'
-    The stderr should include 'batch statement 2 failed'
+    The stderr should include 'batch statement 2 failed at line 2'
+    The stderr should include 'no_such_table'
+  End
+
+  It 'reports the line span of a failing multiline statement'
+    Data
+      #|SELECT user_name FROM user ORDER BY identifier LIMIT 1;
+      #|SELECT 1;
+      #|SELECT *
+      #|FROM no_such_table;
+    End
+    When run sqly testdata/user.csv
+    The status should be failure
+    The output should be present
+    The stderr should include 'batch statement 3 failed at lines 3-4'
     The stderr should include 'no_such_table'
   End
 

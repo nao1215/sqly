@@ -1951,6 +1951,49 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	}
 }
 
+func TestShellRunBatch_ReportsSourceLine(t *testing.T) {
+	// A failing batch statement must name where it started in the input so a long
+	// script is easy to locate, while keeping fail-fast and a non-zero exit.
+	run := func(t *testing.T, input string) string {
+		t.Helper()
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader(input)
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		var stderr bytes.Buffer
+		config.Stderr = &stderr
+
+		if err := shell.Run(context.Background()); err == nil {
+			t.Fatal("batch Run returned nil error for failing command, want non-nil")
+		}
+		return stderr.String()
+	}
+
+	t.Run("a single-line failing statement reports its line number", func(t *testing.T) {
+		got := run(t, "SELECT 1;\nSELECT * FROM no_such_table;\n")
+		if !strings.Contains(got, "batch statement 2 failed at line 2") {
+			t.Errorf("stderr = %q, want it to locate the failure at line 2", got)
+		}
+		if !strings.Contains(got, "no_such_table") {
+			t.Errorf("stderr = %q, want it to include the failing statement", got)
+		}
+	})
+
+	t.Run("a multiline failing statement reports its line span", func(t *testing.T) {
+		got := run(t, "SELECT 1;\nSELECT 2;\nSELECT *\nFROM no_such_table;\n")
+		if !strings.Contains(got, "batch statement 3 failed at lines 3-4") {
+			t.Errorf("stderr = %q, want it to locate the failure at lines 3-4", got)
+		}
+	})
+}
+
 func TestShellRunBatch_FailFast(t *testing.T) {
 	// Regression for: the first failed statement stops the batch, so later
 	// statements do not run and cannot leak output into a failed pipeline.

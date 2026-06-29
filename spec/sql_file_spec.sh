@@ -66,5 +66,14 @@ Describe 'sqly --sql-file'
       The status should be failure
       The stderr should include 'empty'
     End
+
+    It 'locates a failing statement by its line in the SQL file'
+      printf 'SELECT 1;\nSELECT 2;\nSELECT * FROM no_such_table;\n' > "$SQL_DIR/bad.sql"
+      When run sqly --sql-file "$SQL_DIR/bad.sql" testdata/actor.csv
+      The status should be failure
+      The output should be present
+      The stderr should include 'batch statement 3 failed at line 3'
+      The stderr should include 'no_such_table'
+    End
   End
 End
