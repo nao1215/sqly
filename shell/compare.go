@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -417,29 +418,55 @@ func (s *Shell) modifiedKeys(ctx context.Context, left, right, leftKeyCol, right
 	return out, nil
 }
 
+// compareIndexSeq makes each compare-key index name unique within the process.
+// It is a monotonic counter used only to mint a fresh identifier, not shared
+// application state, so the cleanup can never collide with (and then drop) an
+// index the user created.
+var compareIndexSeq atomic.Uint64
+
 // createCompareKeyIndexes adds an expression index on each side's key so the
-// modified-keys join can use it, and returns a cleanup that drops both. The index
-// names are derived from the table names so concurrent compares of other tables do
-// not collide. A drop failure is ignored: the index lives only in this process's
-// in-memory database, which is discarded at exit.
+// modified-keys join can use it, and returns a cleanup that drops both. Each name
+// carries a fresh per-call counter so it cannot clash with a user index; CREATE
+// is issued without IF NOT EXISTS so an unexpected clash fails loudly instead of
+// silently reusing (and later dropping) someone else's index. The cleanup drops
+// only the indexes this call created; a drop error is surfaced as a warning rather
+// than swallowed, though it is otherwise harmless since the index lives only in
+// this process's in-memory database.
 func (s *Shell) createCompareKeyIndexes(ctx context.Context, left, right, leftKeyCol, rightKeyCol string) (func(), error) {
 	quote := s.usecases.importer.QuoteIdentifier
-	leftIdx := "sqly_compare_idx_" + s.usecases.importer.SanitizeForSQL(left)
-	rightIdx := "sqly_compare_idx_" + s.usecases.importer.SanitizeForSQL(right)
+	leftIdx := s.compareIndexName(left)
+	rightIdx := s.compareIndexName(right)
 
 	if _, err := s.usecases.query.Exec(ctx,
-		"CREATE INDEX IF NOT EXISTS "+quote(leftIdx)+" ON "+quote(left)+" ("+keyExpr(quote(leftKeyCol))+")"); err != nil {
+		"CREATE INDEX "+quote(leftIdx)+" ON "+quote(left)+" ("+keyExpr(quote(leftKeyCol))+")"); err != nil {
 		return func() {}, fmt.Errorf("failed to index compare key of %s: %w", left, err)
 	}
 	if _, err := s.usecases.query.Exec(ctx,
-		"CREATE INDEX IF NOT EXISTS "+quote(rightIdx)+" ON "+quote(right)+" ("+keyExpr(quote(rightKeyCol))+")"); err != nil {
-		_, _ = s.usecases.query.Exec(ctx, "DROP INDEX IF EXISTS "+quote(leftIdx))
+		"CREATE INDEX "+quote(rightIdx)+" ON "+quote(right)+" ("+keyExpr(quote(rightKeyCol))+")"); err != nil {
+		s.dropCompareKeyIndex(ctx, leftIdx)
 		return func() {}, fmt.Errorf("failed to index compare key of %s: %w", right, err)
 	}
 	return func() {
-		_, _ = s.usecases.query.Exec(ctx, "DROP INDEX IF EXISTS "+quote(leftIdx))
-		_, _ = s.usecases.query.Exec(ctx, "DROP INDEX IF EXISTS "+quote(rightIdx))
+		s.dropCompareKeyIndex(ctx, leftIdx)
+		s.dropCompareKeyIndex(ctx, rightIdx)
 	}, nil
+}
+
+// compareIndexName mints a unique index name for a compare key, combining the
+// sanitized table name (for readability) with a fresh process-wide counter (for
+// uniqueness).
+func (s *Shell) compareIndexName(table string) string {
+	return fmt.Sprintf("sqly_compare_idx_%s_%d", s.usecases.importer.SanitizeForSQL(table), compareIndexSeq.Add(1))
+}
+
+// dropCompareKeyIndex drops an index this compare created, warning on failure
+// instead of swallowing the error. A leftover index is harmless because the
+// database is in memory and discarded at exit, but a silent failure would hide a
+// real problem.
+func (s *Shell) dropCompareKeyIndex(ctx context.Context, name string) {
+	if _, err := s.usecases.query.Exec(ctx, "DROP INDEX "+s.usecases.importer.QuoteIdentifier(name)); err != nil {
+		fmt.Fprintf(config.Stderr, "warning: failed to drop temporary compare index %s: %v\n", name, err)
+	}
 }
 
 // duplicateKeyError reports a duplicate key value with the same message the

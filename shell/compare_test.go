@@ -393,6 +393,43 @@ func TestBuildCompareReport_KeyedDiff(t *testing.T) {
 	}
 }
 
+// TestBuildCompareReport_PreservesUserIndex guards the temporary join index from
+// clobbering a user index: a keyed compare creates and drops its own expression
+// index, and must not drop a pre-existing index that happens to share the base
+// name. The compare index names carry a per-call counter, so a user index named
+// with only the base name survives the compare.
+func TestBuildCompareReport_PreservesUserIndex(t *testing.T) {
+	left, right := writeKeyedCompareBenchCSVs(t, 20)
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{left, right}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// A user index whose name matches the compare index base (no counter suffix).
+	userIdx := "sqly_compare_idx_kleft"
+	if _, err := shell.usecases.query.Exec(context.Background(),
+		`CREATE INDEX "`+userIdx+`" ON "kleft" ("score")`); err != nil {
+		t.Fatalf("create user index: %v", err)
+	}
+
+	if _, err := shell.buildCompareReport(context.Background(), "kleft", "kright", "id"); err != nil {
+		t.Fatalf("buildCompareReport: %v", err)
+	}
+
+	res, err := shell.usecases.query.Query(context.Background(),
+		`SELECT name FROM sqlite_master WHERE type = 'index' AND name = '`+userIdx+`'`)
+	if err != nil {
+		t.Fatalf("query index: %v", err)
+	}
+	if len(res.Records()) != 1 {
+		t.Errorf("user index %q was dropped by compare; want it preserved", userIdx)
+	}
+}
+
 // TestBuildCompareReport_DetectsDelimiterCollision is an adversarial regression:
 // the two shared-key rows differ only in how their cells split, but a naive
 // delimiter-joined fingerprint encodes both to the same bytes ("a" + sep +
@@ -408,11 +445,18 @@ func TestBuildCompareReport_DetectsDelimiterCollision(t *testing.T) {
 	writeRaw := func(path string, rows [][]string) {
 		var b strings.Builder
 		w := csv.NewWriter(&b)
-		_ = w.Write([]string{"id", "a", "b"})
+		if err := w.Write([]string{"id", "a", "b"}); err != nil {
+			t.Fatal(err)
+		}
 		for _, row := range rows {
-			_ = w.Write(row)
+			if err := w.Write(row); err != nil {
+				t.Fatal(err)
+			}
 		}
 		w.Flush()
+		if err := w.Error(); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -553,11 +597,18 @@ func TestBuildCompareReport_SQLMatchesOracleRandom(t *testing.T) {
 		t.Helper()
 		var b strings.Builder
 		w := csv.NewWriter(&b)
-		_ = w.Write([]string{"id", "a", "b"})
+		if err := w.Write([]string{"id", "a", "b"}); err != nil {
+			t.Fatal(err)
+		}
 		for _, row := range rows {
-			_ = w.Write(row)
+			if err := w.Write(row); err != nil {
+				t.Fatal(err)
+			}
 		}
 		w.Flush()
+		if err := w.Error(); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 			t.Fatal(err)
 		}
