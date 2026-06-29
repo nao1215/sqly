@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Bug Fixes
+* Profile Blank Distinct Count: `--profile` now counts the blank string as a real distinct value, so `distinct_count` stays consistent with `blank_count` instead of dropping blanks and understating cardinality for categorical columns that mix blanks with real values.
+
 ## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 
 ### New Features

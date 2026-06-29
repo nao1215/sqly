@@ -37,12 +37,27 @@ func TestProfileColumnStats(t *testing.T) {
 		if got.BlankCount != 1 {
 			t.Errorf("blank_count = %d, want 1", got.BlankCount)
 		}
-		// Non-null, non-blank values are "1","2","2" -> distinct {1,2} = 2.
-		if got.DistinctCount != 2 {
-			t.Errorf("distinct_count = %d, want 2", got.DistinctCount)
+		// Values are "1","2","","2" (index 4 is NULL). The blank string counts as a
+		// real distinct value, so distinct {1,2,""} = 3 and the metric no longer
+		// understates cardinality for columns that mix blanks with real values.
+		if got.DistinctCount != 3 {
+			t.Errorf("distinct_count = %d, want 3", got.DistinctCount)
 		}
 		if got.NumericCount != 3 {
 			t.Errorf("numeric_count = %d, want 3", got.NumericCount)
+		}
+	})
+
+	t.Run("counts a blank string as a distinct value alongside real values", func(t *testing.T) {
+		t.Parallel()
+		// Mixing blanks with real values: ["", "A", ""] has one real value plus the
+		// blank, so distinct {"", "A"} = 2 and blank_count = 2.
+		got := columnStats("v", "TEXT", []string{"", "A", ""}, []bool{false, false, false})
+		if got.BlankCount != 2 {
+			t.Errorf("blank_count = %d, want 2", got.BlankCount)
+		}
+		if got.DistinctCount != 2 {
+			t.Errorf("distinct_count = %d, want 2", got.DistinctCount)
 		}
 	})
 

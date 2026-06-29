@@ -53,4 +53,22 @@ Describe 'sqly --profile workflow'
     The status should be success
     The output should include 'table orders: 2 rows, 2 columns'
   End
+
+  It 'counts a blank string as a distinct value in JSON output'
+    # Column v mixes one blank with one real value, so distinct_count is 2 and
+    # stays consistent with blank_count instead of dropping the blank. Column id
+    # has distinct_count 1, so the asserted value is unambiguous.
+    printf 'id,v\nx,\nx,A\n' > "$WORKDIR/blank.csv"
+    When run sqly --profile "$WORKDIR/blank.csv"
+    The status should be success
+    The output should include '"blank_count": 1'
+    The output should include '"distinct_count": 2'
+  End
+
+  It 'counts a blank string as a distinct value in text output'
+    printf 'id,v\nx,\nx,A\n' > "$WORKDIR/blank.csv"
+    When run sqly --profile --profile-format text "$WORKDIR/blank.csv"
+    The status should be success
+    The output should include 'blanks=1 distinct=2'
+  End
 End
