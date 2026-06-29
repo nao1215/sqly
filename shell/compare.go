@@ -160,13 +160,15 @@ func (s *Shell) resolveCompareTables(ctx context.Context) (string, string, error
 		if left == "" || right == "" {
 			return "", "", fmt.Errorf("--compare-tables must name exactly two tables as \"left,right\", got %q", spec)
 		}
-		if !s.objectExists(ctx, left) {
+		leftName, ok := s.resolveTableNameCI(ctx, left)
+		if !ok {
 			return "", "", fmt.Errorf("compare table %q not found", left)
 		}
-		if !s.objectExists(ctx, right) {
+		rightName, ok := s.resolveTableNameCI(ctx, right)
+		if !ok {
 			return "", "", fmt.Errorf("compare table %q not found", right)
 		}
-		return left, right, nil
+		return leftName, rightName, nil
 	}
 
 	tables, err := s.usecases.metadata.TablesName(ctx)
@@ -189,6 +191,27 @@ func (s *Shell) resolveCompareTables(ctx context.Context) (string, string, error
 		return "", "", fmt.Errorf("--compare needs exactly two tables but found %d (%s); name the pair with --compare-tables \"left,right\"",
 			len(names), strings.Join(names, ", "))
 	}
+}
+
+// resolveTableNameCI resolves a user-supplied table name to the actual stored
+// name case-insensitively, so --compare-tables follows SQLite identifier
+// semantics where "USER" names the table imported as "user". It returns the
+// canonical name and true on a match, prefers the temp schema over main, and
+// returns false when no table or view matches. Returning the stored case keeps
+// the comparison report's left/right labels consistent with .tables output.
+func (s *Shell) resolveTableNameCI(ctx context.Context, name string) (string, bool) {
+	literal := "'" + strings.ReplaceAll(name, "'", "''") + "'"
+	res, err := s.usecases.query.Query(ctx,
+		"SELECT name FROM sqlite_temp_master WHERE name = "+literal+" COLLATE NOCASE AND type IN ('table', 'view') "+
+			"UNION ALL SELECT name FROM sqlite_master WHERE name = "+literal+" COLLATE NOCASE AND type IN ('table', 'view')")
+	if err != nil {
+		return "", false
+	}
+	records := res.Records()
+	if len(records) == 0 || len(records[0]) == 0 {
+		return "", false
+	}
+	return records[0][0], true
 }
 
 // buildCompareReport assembles the comparison of two existing tables.

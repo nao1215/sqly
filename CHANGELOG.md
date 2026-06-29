@@ -7,6 +7,7 @@
 * Profile Padded Null Placeholders: `--profile` now matches null-like placeholders such as `NULL` and `N/A` on the trimmed value, so a padded token like `" NULL "` raises both the null-placeholder warning and the whitespace warning instead of only the whitespace one.
 * Consistent Numeric Contract: `--profile` and table-mode right alignment now share one numeric predicate, so a comma-formatted value like `"1,000"` is classified as numeric by both. Profiling previously reported `numeric_count = 0` for a column that table output right-aligned as numbers.
 * Case-Insensitive Compare Key: `--compare-key` now resolves the key column case-insensitively, so `--compare-key ID` matches a column imported as `id`, following SQLite identifier semantics instead of requiring an exact case match.
+* Case-Insensitive Compare Tables: `--compare-tables` now resolves table names case-insensitively, so `--compare-tables "USER,IDENTIFIER"` matches the tables imported as `user` and `identifier`. The report shows the canonical stored names.
 
 ## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 

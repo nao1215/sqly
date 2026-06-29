@@ -169,6 +169,26 @@ func TestResolveCompareTables_PreservesImportOrder(t *testing.T) {
 	}
 }
 
+func TestRunCompare_CaseInsensitiveTableNames(t *testing.T) {
+	// --compare-tables "USER,IDENTIFIER" must resolve the same pair as the
+	// lowercase spelling, following SQLite identifier semantics, and the report
+	// should show the canonical stored table names.
+	dir := t.TempDir()
+	user := filepath.Join(dir, "user.csv")
+	identifier := filepath.Join(dir, "identifier.csv")
+	if err := os.WriteFile(user, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(identifier, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runCompareJSON(t, []string{"sqly", "--compare", "--compare-tables", "USER,IDENTIFIER", user, identifier})
+	if report.Left != "user" || report.Right != "identifier" {
+		t.Errorf("left,right = %q,%q, want user,identifier (uppercase names resolved to canonical case)", report.Left, report.Right)
+	}
+}
+
 func TestRunCompare_PreservesCLIInputOrder(t *testing.T) {
 	// End-to-end: passing zebra.csv before ant.csv must report zebra as the left
 	// side even though "ant" sorts first, so the left/right direction follows the
