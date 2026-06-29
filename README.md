@@ -33,6 +33,18 @@ go install github.com/nao1215/sqly@latest
 brew install nao1215/tap/sqly
 ```
 
+sqly is in the [aqua](https://aquaproj.github.io/) standard registry:
+
+```shell
+aqua g -i nao1215/sqly
+```
+
+[mise](https://mise.jdx.dev/) can install it through the same registry with the aqua backend:
+
+```shell
+mise use aqua:nao1215/sqly
+```
+
 Runs on Windows, macOS, and Linux. Requires Go 1.25 or later when building from source.
 
 ## Verifying release integrity

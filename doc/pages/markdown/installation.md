@@ -19,6 +19,22 @@ go install github.com/nao1215/sqly@latest
 brew install nao1215/tap/sqly
 ```
 
+### Use aqua
+
+sqly is in the [aqua](https://aquaproj.github.io/) standard registry:
+
+```shell
+aqua g -i nao1215/sqly
+```
+
+### Use mise
+
+[mise](https://mise.jdx.dev/) installs it through the aqua standard registry with the aqua backend:
+
+```shell
+mise use aqua:nao1215/sqly
+```
+
 ### Use pre-built binaries
 
 The following binaries are distributed on the release page.
