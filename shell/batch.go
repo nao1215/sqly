@@ -65,7 +65,10 @@ func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, e
 
 	// run executes one statement/command and returns whether to stop the batch
 	// (on failure or ".exit"). The first failure records failErr for the caller.
-	run := func(stmt string) (stop bool) {
+	// startLine and endLine locate the statement in the input so a failure in a
+	// long script is easy to find; a single-line statement passes startLine ==
+	// endLine.
+	run := func(stmt string, startLine, endLine int) (stop bool) {
 		stmtNo++
 		ranAny = true
 		if err := s.exec(ctx, stmt); err != nil {
@@ -73,7 +76,12 @@ func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, e
 				exited = true
 				return true
 			}
-			fmt.Fprintf(config.Stderr, "batch statement %d failed: %q: %v\n", stmtNo, stmt, err)
+			loc := fmt.Sprintf("line %d", startLine)
+			if endLine > startLine {
+				loc = fmt.Sprintf("lines %d-%d", startLine, endLine)
+			}
+			fmt.Fprintf(config.Stderr, "batch statement %d failed at %s: %q: %v\n",
+				stmtNo, loc, previewStatement(stmt), err)
 			failErr = errors.New("batch stopped: statement failed")
 			return true
 		}
@@ -81,8 +89,14 @@ func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, e
 	}
 
 	var pending strings.Builder
+	// lineNo is the 1-based number of the last line read; pendingStart is the line
+	// number of the first line currently buffered in pending, so failing statements
+	// can be reported with their source-line span.
+	lineNo := 0
+	pendingStart := 0
 scan:
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Text()
 		// A dot-command is a complete single-line statement when no SQL statement
 		// is open. "Open" means the pending buffer holds executable SQL, an
@@ -100,23 +114,40 @@ scan:
 				// Abandon any buffered leading comments/blank lines before running the
 				// command, so they do not merge into a later statement.
 				pending.Reset()
-				if run(trimmed) {
+				if run(trimmed, lineNo, lineNo) {
 					break scan
 				}
 				continue
 			}
 		}
 
+		if pending.Len() == 0 {
+			pendingStart = lineNo
+		}
 		pending.WriteString(line)
 		pending.WriteString("\n")
-		stmts, remainder := splitSQLStatements(pending.String())
-		pending.Reset()
-		pending.WriteString(remainder)
+		buf := pending.String()
+		stmts, remainder := splitSQLStatements(buf)
+		// remainder is a suffix of buf, so the consumed prefix is everything before
+		// it; its newline count advances pendingStart to the remainder's first line.
+		remainderStart := len(buf) - len(remainder)
+		// stmtBuf shrinks past each emitted statement so two identical statements in
+		// one flush map to their own lines; stmtStart tracks stmtBuf's first line.
+		stmtBuf, stmtStart := buf, pendingStart
 		for _, stmt := range stmts {
-			if run(stmt) {
+			sLine, eLine := statementLineSpan(stmtBuf, stmtStart, stmt)
+			if run(stmt, sLine, eLine) {
 				break scan
 			}
+			if idx := strings.Index(stmtBuf, stmt); idx >= 0 {
+				consumed := idx + len(stmt)
+				stmtStart += strings.Count(stmtBuf[:consumed], "\n")
+				stmtBuf = stmtBuf[consumed:]
+			}
 		}
+		pendingStart += strings.Count(buf[:remainderStart], "\n")
+		pending.Reset()
+		pending.WriteString(remainder)
 	}
 
 	// On ".exit" or a failure, stop reading. Otherwise run any trailing
@@ -126,11 +157,42 @@ scan:
 			return ranAny, fmt.Errorf("failed to read batch input: %w", err)
 		}
 		if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
-			run(leftover)
+			sLine, eLine := statementLineSpan(pending.String(), pendingStart, leftover)
+			run(leftover, sLine, eLine)
 		}
 	}
 
 	return ranAny, failErr
+}
+
+// maxStatementPreview caps the characters of a failing statement shown in the
+// batch error, so a long statement does not flood stderr.
+const maxStatementPreview = 200
+
+// previewStatement renders a failing statement for an error message: whitespace
+// runs are collapsed so a multiline statement stays on one line, and a statement
+// longer than maxStatementPreview is truncated with a marker and its full length.
+func previewStatement(stmt string) string {
+	oneLine := strings.Join(strings.Fields(stmt), " ")
+	runes := []rune(oneLine)
+	if len(runes) <= maxStatementPreview {
+		return oneLine
+	}
+	return fmt.Sprintf("%s… (%d chars total)", string(runes[:maxStatementPreview]), len(runes))
+}
+
+// statementLineSpan returns the 1-based start and end line of stmt within buf,
+// where buf's first line is bufStartLine. Lines are counted from the newlines
+// preceding the statement, so leading comment lines advance the start to the
+// first SQL line. A statement not found in buf falls back to the buffer start.
+func statementLineSpan(buf string, bufStartLine int, stmt string) (start, end int) {
+	idx := strings.Index(buf, stmt)
+	if idx < 0 {
+		return bufStartLine, bufStartLine
+	}
+	start = bufStartLine + strings.Count(buf[:idx], "\n")
+	end = start + strings.Count(stmt, "\n")
+	return start, end
 }
 
 // stripLeadingSQLComments removes leading line ("--") and block ("/* */")

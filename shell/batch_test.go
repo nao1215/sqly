@@ -239,6 +239,72 @@ func TestStatementResultMessage(t *testing.T) {
 	}
 }
 
+func TestPreviewStatement(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		stmt string
+		want string
+	}{
+		{"short statement is returned unchanged", "SELECT * FROM user", "SELECT * FROM user"},
+		{"multiline statement is collapsed onto one line", "SELECT *\nFROM user\nWHERE id = 1", "SELECT * FROM user WHERE id = 1"},
+		{"runs of whitespace collapse to single spaces", "SELECT\t\t1,    2", "SELECT 1, 2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := previewStatement(tt.stmt); got != tt.want {
+				t.Errorf("previewStatement(%q) = %q, want %q", tt.stmt, got, tt.want)
+			}
+		})
+	}
+
+	t.Run("a large statement is truncated to a bounded preview with a char count", func(t *testing.T) {
+		t.Parallel()
+		stmt := "SELECT " + strings.Repeat("x", 1000)
+		got := previewStatement(stmt)
+		if len([]rune(got)) > maxStatementPreview+40 {
+			t.Errorf("preview not bounded: %d runes", len([]rune(got)))
+		}
+		if !strings.Contains(got, "…") {
+			t.Errorf("truncated preview should mark the cut with an ellipsis: %q", got)
+		}
+		if !strings.Contains(got, "chars total") {
+			t.Errorf("truncated preview should report the full length: %q", got)
+		}
+	})
+}
+
+func TestStatementLineSpan(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		buf          string
+		bufStartLine int
+		stmt         string
+		wantStart    int
+		wantEnd      int
+	}{
+		{"single-line statement at buffer start", "SELECT 1;\n", 1, "SELECT 1", 1, 1},
+		{"statement offset by earlier lines", "SELECT 1;\nSELECT 2;\n", 1, "SELECT 2", 2, 2},
+		{"multiline statement reports a line span", "SELECT *\nFROM t;\n", 3, "SELECT *\nFROM t", 3, 4},
+		{"leading comment lines are skipped to the SQL line", "-- note\nSELECT 1;\n", 1, "SELECT 1", 2, 2},
+		{"missing statement falls back to the buffer start", "SELECT 1;\n", 5, "SELECT 999", 5, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			start, end := statementLineSpan(tt.buf, tt.bufStartLine, tt.stmt)
+			if start != tt.wantStart || end != tt.wantEnd {
+				t.Errorf("statementLineSpan(%q, %d, %q) = (%d, %d), want (%d, %d)",
+					tt.buf, tt.bufStartLine, tt.stmt, start, end, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}
+
 // TestFirstSaveIncompatibleStatement verifies that a non-interactive save run is
 // allowed only for read-only queries and row-modifying DML; any DDL, schema, or
 // maintenance statement is reported as save-incompatible so the run fails loudly
