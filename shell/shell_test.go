@@ -403,6 +403,47 @@ func TestShellExec(t *testing.T) {
 		g.Assert(t, "help_command", got)
 	})
 
+	t.Run(".help is grouped, shows usage, and flags destructive save", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		got, err := getExecStdOutput(t, shell.exec, ".help")
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := string(got)
+
+		// Task-oriented groups, not a single flat list.
+		for _, group := range []string{"Session", "Navigate", "Inspect", "Import / Export"} {
+			if !strings.Contains(out, group) {
+				t.Errorf(".help output is missing the %q group:\n%s", group, out)
+			}
+		}
+		// Usage suffixes for path/argument-taking commands.
+		for _, usage := range []string{".import PATH", ".dump TABLE", ".save DIR", ".mode MODE"} {
+			if !strings.Contains(out, usage) {
+				t.Errorf(".help output is missing usage %q:\n%s", usage, out)
+			}
+		}
+		// Destructive overwrite is visually distinct and labeled.
+		if !strings.Contains(out, ".save --force") || !strings.Contains(out, "destructive") {
+			t.Errorf(".help output should flag .save --force as destructive:\n%s", out)
+		}
+		// Every command still appears, so .help stays a complete reference.
+		for _, name := range shell.commands.sortCommandNameKey() {
+			if !strings.Contains(out, name) {
+				t.Errorf(".help output is missing command %q:\n%s", name, out)
+			}
+		}
+		// Stays compact: comfortably within one screen.
+		if lines := strings.Count(out, "\n"); lines > 28 {
+			t.Errorf(".help output is too long (%d lines); keep it within one screen", lines)
+		}
+	})
+
 	t.Run("execute .import csv", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
