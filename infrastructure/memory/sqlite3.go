@@ -277,6 +277,60 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	return table, nil
 }
 
+// QueryStream executes a read query and invokes fn once per result row, scanning
+// rows one at a time so a caller can aggregate without holding the whole result
+// set in memory. Each call gets the row's cell strings and a per-cell SQL NULL
+// flag (distinguished the same way Query does, via a *[]byte scan target).
+func (r *sqlite3Repository) QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	header, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	if len(header) == 0 {
+		return repository.ErrNoRows
+	}
+
+	scanDest := make([]any, len(header))
+	rawResult := make([][]byte, len(header))
+	for i := range header {
+		scanDest[i] = &rawResult[i]
+	}
+
+	for rows.Next() {
+		if err := rows.Scan(scanDest...); err != nil {
+			return err
+		}
+		record := make([]string, len(header))
+		nulls := make([]bool, len(header))
+		for i, raw := range rawResult {
+			if raw == nil {
+				nulls[i] = true
+				continue
+			}
+			record[i] = string(raw)
+		}
+		if err := fn(record, nulls); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // extractTableName extract table name from query.
 // The query must be "SELECT" or "EXPLAIN" statement.
 func extractTableName(query string) string {

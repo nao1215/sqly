@@ -96,6 +96,12 @@ func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Ta
 	return si.r.Query(ctx, query)
 }
 
+// QueryStream executes a "SELECT"/"EXPLAIN" query and streams each result row to
+// fn, so callers can aggregate without materializing the whole result set.
+func (si *SQLite3Interactor) QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error {
+	return si.r.QueryStream(ctx, query, fn)
+}
+
 // Exec execute "INSERT" or "UPDATE" or "DELETE" statement
 func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64, error) {
 	return si.r.Exec(ctx, statement)

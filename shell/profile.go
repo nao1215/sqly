@@ -110,54 +110,53 @@ func (s *Shell) runProfile(ctx context.Context) error {
 	return nil
 }
 
-// profileTable builds the data-quality summary for a single table by scanning its
-// rows once and computing per-column statistics.
+// profileTable builds the data-quality summary for a single table by streaming
+// its rows and folding each into per-column accumulators. Why stream instead of
+// SELECT * into a model.Table: the table is never held in memory all at once, so
+// profiling a large input no longer scales memory with rows. The accumulators
+// keep only running counts and each column's distinct set, which the distinct
+// count needs.
 func (s *Shell) profileTable(ctx context.Context, name string) (profileTable, error) {
 	columns, err := s.inspectColumns(ctx, name)
 	if err != nil {
 		return profileTable{}, err
 	}
-	table, err := s.selectAll(ctx, name)
-	if err != nil {
-		return profileTable{}, err
+
+	// Build profilers in column-definition order. inspectColumns reads PRAGMA
+	// table_info, whose cid order matches the SELECT * column order streamed below,
+	// so a record's cell index lines up with its profiler.
+	profilers := make([]*columnProfiler, len(columns))
+	for ci, c := range columns {
+		profilers[ci] = newColumnProfiler(c.Name, c.Type)
 	}
 
-	typeByName := make(map[string]string, len(columns))
-	for _, c := range columns {
-		typeByName[c.Name] = c.Type
-	}
-
-	header := table.Header()
-	records := table.Records()
-
-	// Aggregate per column in a single pass over the rows. Why not build a
-	// per-column values/nulls slice first: that duplicated the whole table once
-	// per column. The accumulators hold only running counts (and the distinct set
-	// the report needs anyway), so profiling no longer scales memory with
-	// columns * rows.
-	profilers := make([]*columnProfiler, len(header))
-	for ci, colName := range header {
-		profilers[ci] = newColumnProfiler(colName, typeByName[colName])
-	}
-	for ri, rec := range records {
-		for ci := range header {
+	var rowCount int64
+	quoted := s.usecases.importer.QuoteIdentifier(name)
+	err = s.usecases.query.QueryStream(ctx, "SELECT * FROM "+quoted, func(record []string, nulls []bool) error {
+		rowCount++
+		for ci := range profilers {
 			var v string
-			if ci < len(rec) {
-				v = rec[ci]
+			if ci < len(record) {
+				v = record[ci]
 			}
-			profilers[ci].add(v, table.IsNull(ri, ci))
+			profilers[ci].add(v, ci < len(nulls) && nulls[ci])
 		}
+		return nil
+	})
+	if err != nil {
+		return profileTable{}, fmt.Errorf("failed to read rows of %s: %w", name, err)
 	}
-	cols := make([]profileColumn, len(header))
-	for ci := range header {
+
+	cols := make([]profileColumn, len(profilers))
+	for ci := range profilers {
 		cols[ci] = profilers[ci].result()
 	}
 
 	return profileTable{
 		Name:        name,
 		Source:      s.tableSources[name],
-		RowCount:    int64(len(records)),
-		ColumnCount: len(header),
+		RowCount:    rowCount,
+		ColumnCount: len(columns),
 		Columns:     cols,
 	}, nil
 }

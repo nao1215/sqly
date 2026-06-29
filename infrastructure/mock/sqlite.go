@@ -273,6 +273,44 @@ func (c *MockSQLite3RepositoryQueryCall) DoAndReturn(f func(context.Context, str
 	return c
 }
 
+// QueryStream mocks base method.
+func (m *MockSQLite3Repository) QueryStream(ctx context.Context, query string, fn func([]string, []bool) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryStream", ctx, query, fn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QueryStream indicates an expected call of QueryStream.
+func (mr *MockSQLite3RepositoryMockRecorder) QueryStream(ctx, query, fn any) *MockSQLite3RepositoryQueryStreamCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStream", reflect.TypeOf((*MockSQLite3Repository)(nil).QueryStream), ctx, query, fn)
+	return &MockSQLite3RepositoryQueryStreamCall{Call: call}
+}
+
+// MockSQLite3RepositoryQueryStreamCall wrap *gomock.Call
+type MockSQLite3RepositoryQueryStreamCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSQLite3RepositoryQueryStreamCall) Return(arg0 error) *MockSQLite3RepositoryQueryStreamCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSQLite3RepositoryQueryStreamCall) Do(f func(context.Context, string, func([]string, []bool) error) error) *MockSQLite3RepositoryQueryStreamCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSQLite3RepositoryQueryStreamCall) DoAndReturn(f func(context.Context, string, func([]string, []bool) error) error) *MockSQLite3RepositoryQueryStreamCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // SchemaObjects mocks base method.
 func (m *MockSQLite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
 	m.ctrl.T.Helper()
