@@ -2,6 +2,32 @@ package config
 
 import "errors"
 
+// ArgError marks an error from parsing or validating command-line arguments and
+// flags, as opposed to a runtime startup failure (database, history file,
+// working directory). The top-level command checks for it to choose user-facing
+// wording: an ArgError is a bad invocation the user can fix on the command line,
+// so it must not be reported as the interactive shell failing to start.
+type ArgError struct {
+	err error
+}
+
+// Error returns the underlying message unchanged so the wrapper is invisible to
+// users; it only carries the classification.
+func (e *ArgError) Error() string { return e.err.Error() }
+
+// Unwrap exposes the wrapped error so errors.Is and errors.As keep matching the
+// sentinel argument errors (for example ErrEmptyArg).
+func (e *ArgError) Unwrap() error { return e.err }
+
+// newArgError tags err as an ArgError. A nil err returns nil so callers can wrap
+// a result unconditionally.
+func newArgError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &ArgError{err: err}
+}
+
 // ErrEmptyArg is argument for NewArg() is empty
 var ErrEmptyArg = errors.New("argument is empty")
 

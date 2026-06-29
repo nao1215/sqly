@@ -472,6 +472,32 @@ func TestNewArg(t *testing.T) {
 			t.Errorf("mismatch got=%v, want=%v", got, ErrEmptyArg)
 		}
 	})
+
+	t.Run("parse and validation errors are tagged as *ArgError so the caller can tell a bad invocation from a shell-start failure", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name string
+			args []string
+		}{
+			{"empty argument", []string{}},
+			{"unknown flag", []string{"sqly", "--no-such-flag"}},
+			{"conflicting output modes", []string{"sqly", "--csv", "--json"}},
+			{"explicit empty --sheet value", []string{"sqly", "--sheet", ""}},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				_, err := NewArg(tc.args)
+				if err == nil {
+					t.Fatalf("NewArg(%v) returned nil error, want an error", tc.args)
+				}
+				var argErr *ArgError
+				if !errors.As(err, &argErr) {
+					t.Errorf("NewArg(%v) error is not *ArgError: %v", tc.args, err)
+				}
+			})
+		}
+	})
 }
 
 func TestUsage(t *testing.T) {

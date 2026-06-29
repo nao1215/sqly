@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -124,6 +125,43 @@ func Test_runErrPatern(t *testing.T) {
 			t.Errorf("mismatch got=%d, want=%d", got, 1)
 		}
 	})
+
+	t.Run("invalid flag is reported as a CLI error, not a shell initialization failure", func(t *testing.T) {
+		stderr := getStderrForRunFunc(t, run, []string{"sqly", "--no-such-flag"})
+
+		if bytes.Contains(stderr, []byte("failed to initialize sqly shell")) {
+			t.Errorf("an invalid flag must not be labeled a shell init failure: %s", stderr)
+		}
+		if !bytes.Contains(stderr, []byte("unknown flag")) {
+			t.Errorf("stderr should explain the invalid flag: %s", stderr)
+		}
+	})
+}
+
+func Test_startupErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a CLI argument error is printed verbatim, without the shell-start prefix", func(t *testing.T) {
+		t.Parallel()
+		_, argErr := config.NewArg([]string{"sqly", "--no-such-flag"})
+		if argErr == nil {
+			t.Fatal("expected NewArg to reject --no-such-flag")
+		}
+
+		got := startupErrorMessage(argErr)
+		if got != argErr.Error() {
+			t.Errorf("CLI error should be printed verbatim: got=%q, want=%q", got, argErr.Error())
+		}
+	})
+
+	t.Run("a genuine shell-start failure keeps the shell initialization prefix", func(t *testing.T) {
+		t.Parallel()
+		got := startupErrorMessage(errors.New("history db open failed"))
+		want := "failed to initialize sqly shell: history db open failed"
+		if got != want {
+			t.Errorf("mismatch got=%q, want=%q", got, want)
+		}
+	})
 }
 
 func BenchmarkImport100000Records(b *testing.B) {
@@ -148,6 +186,20 @@ func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 
 	var buffer bytes.Buffer
 	config.Stdout = &buffer
+
+	f(list)
+	return buffer.Bytes()
+}
+
+func getStderrForRunFunc(t *testing.T, f func([]string) int, list []string) []byte {
+	t.Helper()
+	backupColorStderr := config.Stderr
+	defer func() {
+		config.Stderr = backupColorStderr
+	}()
+
+	var buffer bytes.Buffer
+	config.Stderr = &buffer
 
 	f(list)
 	return buffer.Bytes()

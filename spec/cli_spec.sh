@@ -34,6 +34,20 @@ Describe 'sqly CLI surface'
       The status should be failure
       The stderr should be present
     End
+
+    It 'reports an unknown flag as a CLI error, not a shell initialization failure'
+      When run sqly --no-such-flag
+      The status should be failure
+      The stderr should include 'unknown flag'
+      The stderr should not include 'failed to initialize sqly shell'
+    End
+
+    It 'reports conflicting output mode flags as a CLI error, not a shell initialization failure'
+      When run sqly --csv --json --sql "SELECT 1" testdata/user.csv
+      The status should be failure
+      The stderr should include 'conflicting output mode flags'
+      The stderr should not include 'failed to initialize sqly shell'
+    End
   End
 
   Describe 'multi-file JOIN'
