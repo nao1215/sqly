@@ -84,6 +84,49 @@ func TestCache_InsideImportedDirectory(t *testing.T) {
 	}
 }
 
+// TestCache_IgnoresUnsupportedSiblingChange verifies that only files sqly would
+// import participate in the directory cache key: mutating an unsupported sibling
+// (here a .txt note) keeps the cache warm, while mutating the imported file
+// invalidates it.
+func TestCache_IgnoresUnsupportedSiblingChange(t *testing.T) {
+	dir := t.TempDir()
+	data := filepath.Join(dir, "data.csv")
+	ignore := filepath.Join(dir, "ignore.txt")
+	cache := filepath.Join(t.TempDir(), "snap.cache") // cache lives outside the imported dir
+	if err := os.WriteFile(data, []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ignore, []byte("note\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cold run warms the cache.
+	runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT COUNT(*) AS n FROM data", dir})
+
+	// Changing only the unsupported sibling leaves the imported dataset unchanged,
+	// so the second run must still be a warm hit.
+	if err := os.WriteFile(ignore, []byte("changed note\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	warmErr := captureStderr(t, func() {
+		runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT COUNT(*) AS n FROM data", dir})
+	})
+	if !strings.Contains(warmErr, "cache: reused") {
+		t.Errorf("changing an unsupported sibling must not invalidate the cache, stderr = %q", warmErr)
+	}
+
+	// Control: changing the supported file must invalidate the cache.
+	if err := os.WriteFile(data, []byte("id,name\n1,Alice\n2,Bob\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	coldErr := captureStderr(t, func() {
+		runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT COUNT(*) AS n FROM data", dir})
+	})
+	if strings.Contains(coldErr, "cache: reused") {
+		t.Errorf("changing the supported file must invalidate the cache, stderr = %q", coldErr)
+	}
+}
+
 // TestCache_InvalidatesWhenContentChangesSameSizeAndMTime reproduces issue #592:
 // a source rewritten with different but same-length content and its original
 // mtime restored must invalidate the cache, not reuse stale data.
@@ -238,7 +281,7 @@ func TestCollectCacheSignatures_DirectoryAndChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sigs, err := collectCacheSignatures([]string{dir}, nil)
+	sigs, err := collectCacheSignatures([]string{dir}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +293,7 @@ func TestCollectCacheSignatures_DirectoryAndChange(t *testing.T) {
 		t.Errorf("signatures not sorted by path: %+v", sigs)
 	}
 
-	again, err := collectCacheSignatures([]string{dir}, nil)
+	again, err := collectCacheSignatures([]string{dir}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

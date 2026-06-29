@@ -10,6 +10,7 @@
 * Case-Insensitive Compare Tables: `--compare-tables` now resolves table names case-insensitively, so `--compare-tables "USER,IDENTIFIER"` matches the tables imported as `user` and `identifier`. The report shows the canonical stored names.
 * Case-Insensitive Schema Lookup: `.schema` now matches the stored object name case-insensitively, so `.schema V` returns the stored `CREATE VIEW v ...` (and a constrained table's real DDL) instead of falling back to a synthesized `CREATE TABLE`, following SQLite identifier semantics.
 * Cache Artifacts Not Imported: when `--cache` points inside a directory that is also imported, sqly's own cache database and manifest sidecar are no longer treated as dataset inputs. The manifest is not imported as a stray table, and the second run is a warm cache hit instead of a cold re-import.
+* Cache Signature Scope: the directory cache signature now includes only files sqly would import, so changing an unsupported sibling file such as a `.txt` note no longer invalidates the cache. Changing a supported input still invalidates it.
 
 ## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 

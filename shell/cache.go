@@ -133,7 +133,7 @@ func (s *Shell) loadOrImport(ctx context.Context, paths []string) error {
 		s.clearCache(cachePath)
 	}
 
-	sigs, sigErr := collectCacheSignatures(paths, s.isCacheArtifact)
+	sigs, sigErr := collectCacheSignatures(paths, s.isCacheArtifact, s.usecases.importer.IsSupportedFile)
 	if sigErr == nil {
 		if s.tryWarmCache(ctx, cachePath, sigs) {
 			return nil
@@ -238,9 +238,12 @@ func (s *Shell) clearCache(cachePath string) {
 // collectCacheSignatures returns the invalidation signature for every input file,
 // expanding directories recursively. Files for which skip returns true are
 // excluded, so sqly's own cache artifacts inside an imported directory do not
-// enter the signature. The result is sorted by path so the signature is
-// order-independent.
-func collectCacheSignatures(paths []string, skip func(string) bool) ([]cacheSource, error) {
+// enter the signature. Inside a directory, only files for which dirSupported
+// returns true are included, so a change to an unsupported sibling (a README, a
+// .txt note) does not invalidate the cache when the imported dataset is
+// unchanged; a directly named file is always included. The result is sorted by
+// path so the signature is order-independent.
+func collectCacheSignatures(paths []string, skip func(string) bool, dirSupported func(string) bool) ([]cacheSource, error) {
 	var sigs []cacheSource
 	add := func(p string) error {
 		if skip != nil && skip(p) {
@@ -278,6 +281,9 @@ func collectCacheSignatures(paths []string, skip func(string) bool) ([]cacheSour
 			}
 			if d.IsDir() {
 				return nil
+			}
+			if dirSupported != nil && !dirSupported(path) {
+				return nil // an unsupported sibling is not part of the cache key
 			}
 			return add(path)
 		})

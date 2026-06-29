@@ -39,6 +39,22 @@ Describe 'sqly --cache import cache'
     The output should not include 'snap'
   End
 
+  It 'keeps the cache warm when only an unsupported sibling file changes'
+    # data.csv is imported; ignore.txt is not. Mutating only ignore.txt leaves
+    # the imported dataset unchanged, so the second run must still be a warm hit.
+    When run sh -c "indir=\$(mktemp -d); printf 'id,name\n1,Alice\n' > \"\$indir/data.csv\"; printf 'note\n' > \"\$indir/ignore.txt\"; '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' \"\$indir\" >/dev/null; printf 'changed\n' > \"\$indir/ignore.txt\"; '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' \"\$indir\"; rm -rf \"\$indir\""
+    The status should be success
+    The output should include '1'
+    The stderr should include 'cache: reused'
+  End
+
+  It 'still invalidates the cache when the supported file changes'
+    When run sh -c "indir=\$(mktemp -d); printf 'id,name\n1,Alice\n' > \"\$indir/data.csv\"; printf 'note\n' > \"\$indir/ignore.txt\"; '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' \"\$indir\" >/dev/null; printf 'id,name\n1,Alice\n2,Bob\n' > \"\$indir/data.csv\"; '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' \"\$indir\"; rm -rf \"\$indir\""
+    The status should be success
+    The output should include '2'
+    The stderr should not include 'cache: reused'
+  End
+
   It 'invalidates the cache when the source changes'
     When run sh -c "'$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' '$WORKDIR/data.csv' >/dev/null && printf 'id,name\n1,Alice\n2,Bob\n3,Carol\n4,Dave\n' > '$WORKDIR/data.csv' && '$SQLY_BIN' --cache '$CACHE' --sql 'SELECT COUNT(*) AS n FROM data' '$WORKDIR/data.csv'"
     The status should be success
