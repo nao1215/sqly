@@ -33,6 +33,20 @@ go install github.com/nao1215/sqly@latest
 brew install nao1215/tap/sqly
 ```
 
+Arch Linux users can install the [AUR package](https://aur.archlinux.org/packages/sqly-bin):
+
+```shell
+yay -S sqly-bin
+```
+
+Without an AUR helper:
+
+```shell
+git clone https://aur.archlinux.org/sqly-bin.git
+cd sqly-bin
+makepkg -si
+```
+
 sqly is in the [aqua](https://aquaproj.github.io/) standard registry:
 
 ```shell
