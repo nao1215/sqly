@@ -1,14 +1,24 @@
-                 .cd: change directory
-              .clear: clear terminal screen
-           .describe: print column information of a table
-               .dump: dump db table to file in a format according to output mode (default: csv)
-               .exit: exit sqly
-             .header: print table header
-               .help: print help message
-             .import: import file(s) and/or directory(ies)
-                 .ls: print directory contents
-               .mode: change output mode
-                .pwd: print current working directory
-               .save: write tables back to files: .save DIR (to a directory) or .save --force (overwrite sources)
-             .schema: print CREATE TABLE statement of a table
-             .tables: print tables
+sqly helper commands (run inside the shell; SQL needs no leading dot):
+
+Session
+  .help              show this help
+  .mode MODE         change output mode (table, csv, tsv, ltsv, json, ndjson, markdown, ...)
+  .clear             clear the terminal screen
+  .exit              exit sqly
+
+Navigate
+  .cd [DIR]          change the working directory (no arg: home)
+  .pwd               print the working directory
+  .ls [DIR]          list directory contents
+
+Inspect
+  .tables            list imported tables
+  .schema TABLE      print a table's CREATE statement
+  .describe TABLE    print a table's columns
+  .header TABLE      print a table's header row
+
+Import / Export
+  .import PATH...    load files or directories into the session
+  .dump TABLE FILE   export a table to a file (format follows .mode; default csv)
+  .save DIR          write changed tables into DIR (sources untouched)
+  .save --force      overwrite each table's source file in place (destructive)

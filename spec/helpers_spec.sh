@@ -8,6 +8,22 @@
 Describe 'sqly shell helper commands'
   Include "$SHELLSPEC_SPECDIR/spec_helper.sh"
 
+  Describe '.help'
+    It 'groups commands, shows usage, and flags destructive save'
+      Data
+        #|.help
+      End
+      When run sqly
+      The status should be success
+      The output should include 'Import / Export'
+      The output should include '.import PATH'
+      The output should include '.dump TABLE FILE'
+      The output should include '.save DIR'
+      The output should include '.save --force'
+      The output should include 'destructive'
+    End
+  End
+
   Describe '.cd and .pwd'
     It 'changes directory with a relative path and reports it'
       Data

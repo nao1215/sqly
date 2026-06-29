@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### New Features
+* Task-Oriented Help: interactive `.help` now groups commands by purpose (Session, Navigate, Inspect, Import / Export) and shows a minimal usage suffix for each (`.import PATH...`, `.dump TABLE FILE`, `.save DIR`). The destructive in-place overwrite `.save --force` is listed on its own labeled line, distinct from the non-destructive exports. No commands were added.
 * SQL File Output: `--sql-file` can now export to `--output` when the script produces exactly one result set, so a saved SQL script works in the same automation pipelines as `--sql`. Setup statements may run first, the single result is written to the file with stdout left clean, and a script that yields no result set or more than one is rejected with a clear error.
 
 ### Bug Fixes
