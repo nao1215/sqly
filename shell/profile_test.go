@@ -80,6 +80,32 @@ func TestProfileColumnStats(t *testing.T) {
 		}
 	})
 
+	t.Run("flags a padded null-like placeholder and its whitespace together", func(t *testing.T) {
+		t.Parallel()
+		// " NULL " and " N/A " are null-like once trimmed, and they also carry
+		// surrounding whitespace, so both warnings must fire.
+		got := columnStats("c", "TEXT", []string{" NULL ", " N/A "}, []bool{false, false})
+		if !hasWarningContaining(got.Warnings, "null placeholders") {
+			t.Errorf("expected a null-placeholder warning, got %v", got.Warnings)
+		}
+		if !hasWarningContaining(got.Warnings, "whitespace") {
+			t.Errorf("expected a whitespace warning, got %v", got.Warnings)
+		}
+	})
+
+	t.Run("padded ordinary value warns only about whitespace", func(t *testing.T) {
+		t.Parallel()
+		// " hello " is padded but not null-like, so only the whitespace warning
+		// fires; trimming must not turn ordinary values into null placeholders.
+		got := columnStats("c", "TEXT", []string{" hello "}, []bool{false})
+		if hasWarningContaining(got.Warnings, "null placeholders") {
+			t.Errorf("did not expect a null-placeholder warning, got %v", got.Warnings)
+		}
+		if !hasWarningContaining(got.Warnings, "whitespace") {
+			t.Errorf("expected a whitespace warning, got %v", got.Warnings)
+		}
+	})
+
 	t.Run("clean numeric column has no warnings", func(t *testing.T) {
 		t.Parallel()
 		got := columnStats("c", "INTEGER", []string{"1", "2", "3"}, []bool{false, false, false})
