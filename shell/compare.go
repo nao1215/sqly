@@ -368,10 +368,13 @@ func diffKeyedRows(key string, leftByKey, rightByKey map[string]compareRow) *com
 	return rows
 }
 
-// indexOfColumn returns the position of name in header, or -1.
+// indexOfColumn returns the position of name in header, or -1. The match is
+// case-insensitive so --compare-key follows SQLite identifier semantics, where
+// "ID" resolves the same column as "id". SQLite forbids two columns that differ
+// only by case, so the case-insensitive match stays unambiguous.
 func indexOfColumn(header model.Header, name string) int {
 	for i, h := range header {
-		if h == name {
+		if strings.EqualFold(h, name) {
 			return i
 		}
 	}
