@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/caarlos0/env/v11 v11.4.1
+	github.com/creack/pty v1.1.24
 	github.com/fatih/color v1.19.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
