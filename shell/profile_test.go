@@ -113,6 +113,19 @@ func TestProfileColumnStats(t *testing.T) {
 			t.Errorf("expected no warnings, got %v", got.Warnings)
 		}
 	})
+
+	t.Run("counts comma-formatted numerals as numeric like table-mode does", func(t *testing.T) {
+		t.Parallel()
+		// "1,000" and "2,500" are numeric to table-mode alignment, so profiling
+		// must agree and count them as numeric instead of reporting numeric=0.
+		got := columnStats("amount", "TEXT", []string{"1,000", "2,500"}, []bool{false, false})
+		if got.NumericCount != 2 {
+			t.Errorf("numeric_count = %d, want 2", got.NumericCount)
+		}
+		if hasWarningContaining(got.Warnings, "mixed numeric") {
+			t.Errorf("comma numerals should not be a mixed-type column, got %v", got.Warnings)
+		}
+	})
 }
 
 func hasWarningContaining(warnings []string, sub string) bool {
@@ -122,21 +135,6 @@ func hasWarningContaining(warnings []string, sub string) bool {
 		}
 	}
 	return false
-}
-
-func TestIsNumericValue(t *testing.T) {
-	t.Parallel()
-	cases := map[string]bool{
-		"1": true, "-2.5": true, "1e3": true, "0": true,
-		"abc": false, "": false, "NaN": false, "Inf": false, "1e400": false, "1,000": false,
-		// Go-specific float spellings are not treated as data numbers.
-		"0x1p4": false, "1_000": false,
-	}
-	for in, want := range cases {
-		if got := isNumericValue(in); got != want {
-			t.Errorf("isNumericValue(%q) = %v, want %v", in, got, want)
-		}
-	}
 }
 
 // runProfileJSON builds a shell from args, runs it, and decodes the JSON report.

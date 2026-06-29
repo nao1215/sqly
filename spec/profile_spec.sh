@@ -87,4 +87,20 @@ Describe 'sqly --profile workflow'
     The output should not include 'null placeholders'
     The output should include 'leading or trailing whitespace'
   End
+
+  It 'counts comma-formatted numerals as numeric, matching table-mode'
+    printf 'amount\n"1,000"\n"2,500"\n' > "$WORKDIR/commas.csv"
+    When run sqly --profile "$WORKDIR/commas.csv"
+    The status should be success
+    The output should include '"numeric_count": 2'
+    The output should not include 'mixed numeric'
+  End
+
+  It 'right-aligns the same comma-formatted column in table-mode'
+    printf 'amount\n"1,000"\n"2,500"\n' > "$WORKDIR/commas.csv"
+    When run sqly --sql 'SELECT * FROM commas' "$WORKDIR/commas.csv"
+    The status should be success
+    # Right alignment pads the value with leading spaces inside the cell.
+    The output should include '|  1,000 |'
+  End
 End

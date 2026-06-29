@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 
@@ -25,21 +26,43 @@ func getColumnData(records []Record, columnIndex int) []string {
 	return columnData
 }
 
-// isAllNumeric checks if all values in a column look like numbers
+// IsNumericValue reports whether s is what a human would call a number. It
+// strips comma thousands separators ("1,000") and surrounding whitespace, then
+// requires a finite decimal. It rejects the Go-specific float spellings
+// ParseFloat also accepts but data rarely means as numbers: hexadecimal floats
+// ("0x1p4"), underscore digit separators ("1_000"), and the Infinity/NaN words.
+//
+// This is the single numeric contract shared by data profiling and table-mode
+// right alignment, so the same cell is classified the same way in both. Why
+// expose it from the model layer: presentation and profiling both depend on the
+// model, so a model-level predicate keeps the two surfaces in agreement without
+// duplicating the rules.
+func IsNumericValue(s string) bool {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, ",", "")
+	if strings.ContainsAny(s, "xXpP_") {
+		return false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return false
+	}
+	return !math.IsInf(f, 0) && !math.IsNaN(f)
+}
+
+// isAllNumeric checks if all values in a column look like numbers, skipping
+// blank cells. It uses IsNumericValue so column alignment follows the same
+// numeric contract as data profiling.
 func isAllNumeric(values []string) bool {
 	if len(values) == 0 {
 		return false
 	}
 
 	for _, v := range values {
-		v = strings.TrimSpace(v)
-		if v == "" {
+		if strings.TrimSpace(v) == "" {
 			continue
 		}
-		// Remove commas for number parsing (e.g., "1,000" -> "1000")
-		v = strings.ReplaceAll(v, ",", "")
-		// Try to parse as float
-		if _, err := strconv.ParseFloat(v, 64); err != nil {
+		if !IsNumericValue(v) {
 			return false
 		}
 	}
