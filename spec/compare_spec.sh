@@ -54,6 +54,22 @@ Describe 'sqly --compare workflow'
     The stderr should include 'compare key'
   End
 
+  It 'resolves uppercase --compare-tables against lowercase table names'
+    # Tables import as "user" and "identifier"; the uppercase pair must resolve
+    # the same tables because SQLite identifier matching is case-insensitive.
+    cp "$PROJECT_ROOT/testdata/user.csv" "$WORKDIR/user.csv"
+    cp "$PROJECT_ROOT/testdata/identifier.csv" "$WORKDIR/identifier.csv"
+    When run sqly --compare --compare-format text --compare-tables "USER,IDENTIFIER" "$WORKDIR/user.csv" "$WORKDIR/identifier.csv"
+    The status should be success
+    The line 1 should equal 'compare user -> identifier'
+  End
+
+  It 'rejects a genuinely missing --compare-tables name'
+    When run sqly --compare --compare-tables "nope,rev2" "$WORKDIR/rev1.csv" "$WORKDIR/rev2.csv"
+    The status should be failure
+    The stderr should include 'compare table'
+  End
+
   It 'rejects an ambiguous single-table compare'
     When run sqly --compare "$WORKDIR/rev1.csv"
     The status should be failure
