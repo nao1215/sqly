@@ -75,6 +75,69 @@ func TestDumpTableToParquet_RoundTrip(t *testing.T) {
 	if len(cols) != 2 || cols[0] != "id" || cols[1] != "name" {
 		t.Errorf("reimported columns = %v, want [id name]", cols)
 	}
+
+	// Cell fidelity: the reimported name column carries the same string values, not
+	// just the same row and column counts.
+	names := reimportStringColumn(t, out, "people", "name")
+	if len(names) != 3 || names[0] != "alice" || names[1] != "bob" || names[2] != "carol" {
+		t.Errorf("reimported names = %v, want [alice bob carol]", names)
+	}
+}
+
+// reimportStringColumn writes the parquet file back via filesql and returns the
+// named column's values as plain strings, so a test can assert exact cell
+// fidelity after a round-trip.
+func reimportStringColumn(t *testing.T, parquetPath, tableName, column string) []string {
+	t.Helper()
+	db, err := libfilesql.OpenContext(context.Background(), parquetPath)
+	if err != nil {
+		t.Fatalf("reimport parquet: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.QueryContext(context.Background(), "SELECT "+column+" FROM "+tableName)
+	if err != nil {
+		t.Fatalf("select %s: %v", column, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			t.Fatalf("scan %s: %v", column, err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestDumpTableToParquet_PreservesNumericLookingText locks issue #687: numeric
+// looking text such as leading-zero codes ("007") and decimal strings ("1.00")
+// must survive a parquet round-trip verbatim instead of being coerced to a
+// number by the staging column's affinity.
+func TestDumpTableToParquet_PreservesNumericLookingText(t *testing.T) {
+	t.Parallel()
+
+	table := model.NewTable("codes", model.Header{"code", "amount"}, []model.Record{
+		{"007", "1.00"},
+		{"010", "2.50"},
+	})
+	out := filepath.Join(t.TempDir(), "codes.parquet")
+
+	if err := DumpTableToParquet(out, table); err != nil {
+		t.Fatalf("DumpTableToParquet: %v", err)
+	}
+
+	codes := reimportStringColumn(t, out, "codes", "code")
+	if len(codes) != 2 || codes[0] != "007" || codes[1] != "010" {
+		t.Errorf("code column = %v, want [007 010] (leading zeros preserved)", codes)
+	}
+	amounts := reimportStringColumn(t, out, "codes", "amount")
+	if len(amounts) != 2 || amounts[0] != "1.00" || amounts[1] != "2.50" {
+		t.Errorf("amount column = %v, want [1.00 2.50] (decimal text preserved)", amounts)
+	}
 }
 
 // TestDumpTableToParquet_EmptyResult covers the empty-result behavior: Parquet

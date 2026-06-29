@@ -55,6 +55,22 @@ Describe 'sqly parquet export'
     End
   End
 
+  Describe 'numeric-looking text fidelity'
+    # The export staging no longer types a column as INTEGER from its payload, so
+    # numeric-looking text the session holds (here SQL string literals) survives
+    # the parquet round-trip verbatim instead of being coerced to a number.
+    It 'preserves leading-zero codes through a parquet round-trip'
+      out_dir=$(mktemp -d)
+      export out_dir
+      # Export the string literals to parquet, then re-import and read them back.
+      When run sh -c "'$SQLY_BIN' --parquet --output '$out_dir/codes.parquet' --sql \"SELECT '007' AS code, '00042' AS acct\" >/dev/null 2>&1; '$SQLY_BIN' --csv --sql 'SELECT code, acct FROM codes' '$out_dir/codes.parquet'"
+      The status should be success
+      The output should include '007'
+      The output should include '00042'
+      rm -rf "$out_dir"
+    End
+  End
+
   Describe 'empty result'
     It 'reports a clear error when exporting an empty result'
       out_dir=$(mktemp -d)

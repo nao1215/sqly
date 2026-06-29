@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	libfilesql "github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
@@ -47,7 +48,7 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	}()
 
 	ctx := context.Background()
-	if _, err = db.ExecContext(ctx, infra.GenerateCreateTableStatement(table)); err != nil {
+	if _, err = db.ExecContext(ctx, parquetStagingCreateTable(table)); err != nil {
 		return fmt.Errorf("create staging table: %w", err)
 	}
 	// Insert in a single transaction; one implicit transaction per row is slow
@@ -83,6 +84,27 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 		return fmt.Errorf("write parquet to %q: %w", filePath, err)
 	}
 	return nil
+}
+
+// parquetStagingCreateTable builds the staging CREATE TABLE for a parquet export
+// with every column typed TEXT. The shared GenerateCreateTableStatement infers an
+// INTEGER column when all values parse as numbers, which makes SQLite's column
+// affinity rewrite numeric-looking text such as a leading-zero code ("007") or a
+// decimal string ("1.00") into a number before the parquet writer sees it.
+// Staging every column as TEXT keeps the original text verbatim through the
+// round-trip; re-import still types a canonical number when the reader asks for
+// typed output.
+func parquetStagingCreateTable(t *model.Table) string {
+	var b strings.Builder
+	b.WriteString("CREATE TABLE " + infra.Quote(t.Name()) + " (")
+	for i, col := range t.Header() {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(infra.Quote(col) + " TEXT")
+	}
+	b.WriteString(");")
+	return b.String()
 }
 
 // copyFile copies src to dst. A copy (not rename) is used because the temporary
