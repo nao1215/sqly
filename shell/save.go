@@ -37,6 +37,17 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	if argv[0] != forceArg && strings.TrimSpace(argv[0]) == "" {
 		return errors.New(".save requires a non-empty directory; use .save --force to overwrite sources in place")
 	}
+	// An empty session has no tables at all (forgot to .import, or a prior import
+	// failed), which is a different mistake from a read-only session below. Save is
+	// safety-sensitive, so guide the user to load a table instead of emitting a
+	// bare no-op.
+	tables, err := s.usecases.metadata.TablesName(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list tables: %w", err)
+	}
+	if len(tables) == 0 {
+		return noTablesToSaveError(s.isTTY())
+	}
 	// A read-only session changed no table data, so there is nothing to persist.
 	// Writing here would rewrite source files (or emit fresh directory exports)
 	// with no logical change, normalizing bytes (e.g. the trailing newline) and
@@ -57,6 +68,17 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 		return err
 	}
 	return s.writeBack(ctx, destDir)
+}
+
+// noTablesToSaveError builds the empty-session save error with recovery guidance
+// tailored to the run mode. Save is safety-sensitive, so the message names the
+// next step (.import a file, or pass input files) instead of a bare "no tables to
+// save".
+func noTablesToSaveError(interactive bool) error {
+	if interactive {
+		return errors.New("no tables to save: run .import FILE to load a table first")
+	}
+	return errors.New("no tables to save: pass input files (e.g. sqly data.csv ...) before saving")
 }
 
 // validateSaveFlags checks the --save/--save-dir/--force combination before any
@@ -221,7 +243,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
 	if len(tables) == 0 {
-		return nil, errors.New("no tables to save")
+		return nil, noTablesToSaveError(s.isTTY())
 	}
 
 	// Count how many tables map to each source so multi-table sources (Excel,

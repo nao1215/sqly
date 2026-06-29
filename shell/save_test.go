@@ -626,3 +626,59 @@ func runWithArgs(t *testing.T, args []string) {
 		}
 	})
 }
+
+func TestNoTablesToSaveError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("interactive empty session is told to .import a file", func(t *testing.T) {
+		t.Parallel()
+		got := noTablesToSaveError(true).Error()
+		if !strings.Contains(got, ".import") {
+			t.Errorf("interactive empty-save error %q should suggest .import", got)
+		}
+	})
+
+	t.Run("non-interactive empty session is told to pass input files", func(t *testing.T) {
+		t.Parallel()
+		got := noTablesToSaveError(false).Error()
+		if !strings.Contains(got, "input files") {
+			t.Errorf("non-interactive empty-save error %q should suggest passing input files", got)
+		}
+	})
+}
+
+func TestSaveCommand_EmptyInteractiveSessionGuidesToImport(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	s.isTTY = func() bool { return true }
+
+	err = s.commands.saveCommand(context.Background(), s, []string{"--force"})
+	if err == nil {
+		t.Fatal("expected an error when saving an empty interactive session")
+	}
+	if !strings.Contains(err.Error(), "no tables to save") || !strings.Contains(err.Error(), ".import") {
+		t.Errorf("error %q should explain the empty session and suggest .import", err.Error())
+	}
+}
+
+func TestSave_EmptyNonInteractiveRunGuidesToInputFiles(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly", "--save", "--force", "--sql", "UPDATE foo SET x=1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	s.isTTY = func() bool { return false }
+
+	// Preflight rejects the save before any query output, so Run can be called
+	// directly without capturing stdout.
+	runErr := s.Run(context.Background())
+	if runErr == nil {
+		t.Fatal("expected an error for --save with no input files")
+	}
+	if !strings.Contains(runErr.Error(), "no tables to save") || !strings.Contains(runErr.Error(), "input files") {
+		t.Errorf("error %q should explain the empty run and suggest input files", runErr.Error())
+	}
+}

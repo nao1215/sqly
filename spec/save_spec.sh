@@ -70,4 +70,21 @@ Describe 'sqly write-back'
     The stderr should include 'Saved u to'
     The contents of file "$WORK/u.csv" should include 'BATCH'
   End
+
+  It 'guides a non-interactive --save with no input files toward passing input'
+    When run sqly --save --force --sql "UPDATE foo SET x = 1"
+    The status should be failure
+    The stderr should include 'no tables to save'
+    The stderr should include 'input files'
+  End
+
+  It 'guides a batch .save with no imported tables toward passing input'
+    Data
+      #|.save --force
+    End
+    When run sqly
+    The status should be failure
+    The stderr should include 'no tables to save'
+    The stderr should include 'input files'
+  End
 End
