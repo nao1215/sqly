@@ -274,7 +274,9 @@ func TestProfileTable_StreamingMatchesFullScan(t *testing.T) {
 		t.Fatalf("row/col = %d/%d, want 200/4", entry.RowCount, entry.ColumnCount)
 	}
 	// Each column draws from 97 distinct generated values, so a 200-row column
-	// sees all 97. This confirms the single-pass aggregation matches a full scan.
+	// sees all 97. This confirms the streaming aggregation (rows folded one at a
+	// time via QueryStream, never materialized as a whole table) matches a full
+	// scan.
 	for _, c := range entry.Columns {
 		if c.DistinctCount != 97 {
 			t.Errorf("column %s distinct = %d, want 97", c.Name, c.DistinctCount)
@@ -285,6 +287,10 @@ func TestProfileTable_StreamingMatchesFullScan(t *testing.T) {
 	}
 }
 
+// BenchmarkProfileTable measures the streaming profile path with -benchmem. Rows
+// are folded one at a time via QueryStream, so allocations track the per-column
+// distinct sets rather than a full in-memory copy; raising the row count should
+// not grow the per-op footprint.
 func BenchmarkProfileTable(b *testing.B) {
 	csv := writeProfileBenchCSV(b, 5000, 8)
 	shell, cleanup, err := newShell(b, []string{"sqly"})

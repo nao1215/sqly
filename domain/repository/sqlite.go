@@ -33,6 +33,12 @@ type SQLite3Repository interface {
 	Header(ctx context.Context, tableName string) (*model.Table, error)
 	// Query execute "SELECT" or "EXPLAIN" query
 	Query(ctx context.Context, query string) (*model.Table, error)
+	// QueryStream executes a "SELECT"/"EXPLAIN" query and streams each result row
+	// to fn, so callers can aggregate without materializing the whole result set.
+	// fn receives one row's cell strings and a per-cell SQL NULL flag; returning an
+	// error stops the scan and is returned. A statement with no result columns
+	// returns ErrNoRows.
+	QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error
 	// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
 	Exec(ctx context.Context, statement string) (int64, error)
 }
