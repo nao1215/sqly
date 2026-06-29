@@ -297,7 +297,7 @@ type docImageRef struct {
 // Markdown file via the image syntax ![alt](path). A leading "./" is trimmed so
 // the path matches a tape's Output directive.
 func markdownGIFRefs(path string) ([]docImageRef, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is a repo-relative doc file, not user input
 	if err != nil {
 		return nil, err
 	}
