@@ -107,6 +107,15 @@ type Shell struct {
 	// to stdout only after write-back succeeds, so a run that fails during
 	// write-back leaves stdout free of success counts.
 	pendingAffected []string
+	// collectingOutput routes rowset results into capturedRowsets instead of
+	// printing them, so --sql-file combined with --output can export the single
+	// result set the script produces. No-rowset statements stay silent in this
+	// mode, keeping stdout clean for the exported-data run.
+	collectingOutput bool
+	// capturedRowsets holds the rowset results produced while collectingOutput is
+	// set. The one-result-set contract is enforced after the script finishes: zero
+	// or more than one captured rowset is an error.
+	capturedRowsets []*model.Table
 	// completionTableKey fingerprints the table-name set the cached table/column
 	// completion suggestions were built from. completionTableCols holds those
 	// suggestions. Together they let interactive completion reuse table and column
@@ -206,11 +215,11 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
-	// --output is only honored by the --sql path (a single result written to one
-	// file). Without --sql (no query, batch stdin, --sql-file, or interactive)
-	// the flag was silently ignored, so reject it instead of looking successful.
-	if s.argument.Output.FilePath != "" && s.argument.Query == "" {
-		return errors.New("--output requires --sql")
+	// --output is honored by --sql (a single result) and --sql-file (the script's
+	// one result set). Without either (batch stdin or interactive) the flag was
+	// silently ignored, so reject it instead of looking successful.
+	if s.argument.Output.FilePath != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" {
+		return errors.New("--output requires --sql or --sql-file")
 	}
 
 	// Reject an --output destination that is an existing directory before import,
@@ -310,6 +319,11 @@ func (s *Shell) Run(ctx context.Context) error {
 	if s.argument.SQLFilePath != "" {
 		if err := s.preflightSave(ctx, sqlScript); err != nil {
 			return err
+		}
+		// With --output, export the script's single result set to the file instead
+		// of printing each statement's result, mirroring how --sql exports.
+		if s.argument.Output.FilePath != "" {
+			return s.runSQLFileToOutput(ctx, sqlScript)
 		}
 		ranAny, err := s.runBatchReader(ctx, strings.NewReader(sqlScript))
 		if err != nil {
@@ -975,6 +989,39 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 	return nil
 }
 
+// runSQLFileToOutput runs a --sql-file script and exports its single result set
+// to --output. The script may run any number of setup statements (DDL/DML), but
+// exactly one must produce a result set: zero or more than one is rejected with a
+// clear error, matching the one-file/one-result contract of --sql --output.
+// Rowset results are captured rather than printed, so a successful run leaves
+// stdout clean and writes only to the output file.
+func (s *Shell) runSQLFileToOutput(ctx context.Context, script string) error {
+	// Start from a clean slate and clear on the way out, so a reused Shell never
+	// counts rowsets captured by an earlier run.
+	s.capturedRowsets = nil
+	s.collectingOutput = true
+	defer func() {
+		s.collectingOutput = false
+		s.capturedRowsets = nil
+	}()
+
+	if _, err := s.runBatchReader(ctx, strings.NewReader(script)); err != nil {
+		return err
+	}
+
+	switch len(s.capturedRowsets) {
+	case 0:
+		return errors.New("--output requires the --sql-file script to produce one result set, but it produced none; add a statement that returns rows (for example a SELECT)")
+	case 1:
+		if err := s.outputToFile(s.capturedRowsets[0]); err != nil {
+			return err
+		}
+		return s.finishNonInteractive(ctx)
+	default:
+		return fmt.Errorf("--output supports a single result set, but the --sql-file script produced %d; reduce it to one SELECT or run without --output", len(s.capturedRowsets))
+	}
+}
+
 // execSQL execute SQL query.
 func (s *Shell) execSQL(ctx context.Context, req string) error {
 	req = strings.TrimRight(req, ";")
@@ -995,6 +1042,13 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		}
 	}
 	if table == nil {
+		// While collecting a --sql-file script's output, a no-rowset statement
+		// (DDL, DML, PRAGMA) is a legitimate setup step. Stay silent so stdout
+		// holds nothing but the exported data; the one-result-set contract is
+		// checked after the whole script runs.
+		if s.collectingOutput {
+			return nil
+		}
 		// --output is only meaningful for a statement that produces a rowset. An
 		// INSERT/UPDATE/DELETE without RETURNING produces only an affected-row
 		// count, so reject --output instead of silently ignoring it.
@@ -1017,6 +1071,13 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	// typed mode (--json-typed/--ndjson-typed or .mode json-typed/ndjson-typed).
 	// The flag is ignored by every non-JSON format.
 	table.SetJSONTyped(s.state.mode.jsonTyped)
+
+	// While collecting a --sql-file script's output, capture each rowset instead
+	// of printing it. The script's single result set is exported after the run.
+	if s.collectingOutput {
+		s.capturedRowsets = append(s.capturedRowsets, table)
+		return nil
+	}
 
 	// use --sql option and user want to output table data to file.
 	if s.argument.NeedsOutputToFile() {

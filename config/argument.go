@@ -211,7 +211,7 @@ func NewArg(args []string) (*Arg, error) {
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	sqlFile := flag.StringP("sql-file", "f", "", "path to a file with SQL to execute (multiline; cannot be used with --sql)")
-	output := flag.StringP("output", "o", "", "destination path for SQL results specified in --sql option")
+	output := flag.StringP("output", "o", "", "destination path for the result of --sql or a single-result --sql-file script")
 	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
 	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "rows to include per table in --inspect (0 for schema only)")
 	flag.BoolVar(&arg.CompareFlag, "compare", false, "compare two imported tables (schema, row count, and keyed rows) and print a report, then exit")

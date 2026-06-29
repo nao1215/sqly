@@ -3105,6 +3105,85 @@ func TestShellRun_SQLFileWithEmptyStdinIsAllowed(t *testing.T) {
 	}
 }
 
+func TestShellRun_SQLFileWithOutput(t *testing.T) {
+	writeScript := func(t *testing.T, dir, body string) string {
+		t.Helper()
+		p := filepath.Join(dir, "q.sql")
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	t.Run("exports a single result set to the output file with clean stdout", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := writeScript(t, dir, "SELECT user_name FROM user ORDER BY identifier LIMIT 1;\n")
+		out := filepath.Join(dir, "out.csv")
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, "--output", out, filepath.Join("testdata", "user.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("")
+
+		stdout := captureStdout(t, func() {
+			if err := shell.Run(context.Background()); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+		})
+		if strings.TrimSpace(stdout) != "" {
+			t.Errorf("stdout should be empty for an exported run, got %q", stdout)
+		}
+		data, err := os.ReadFile(out) //nolint:gosec // test-controlled temp path
+		if err != nil {
+			t.Fatalf("read output file: %v", err)
+		}
+		if !strings.Contains(string(data), "user_name") {
+			t.Errorf("output file missing the result header: %q", data)
+		}
+	})
+
+	t.Run("rejects a script that produces no result set", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := writeScript(t, dir, "CREATE TEMP TABLE t AS SELECT 1 AS x;\n")
+		out := filepath.Join(dir, "out.csv")
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, "--output", out, filepath.Join("testdata", "user.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("")
+
+		err = shell.Run(context.Background())
+		if err == nil || !strings.Contains(err.Error(), "result set") {
+			t.Fatalf("Run error = %v, want a no-result-set error", err)
+		}
+		if _, statErr := os.Stat(out); statErr == nil {
+			t.Errorf("output file should not be created when the script yields no result set")
+		}
+	})
+
+	t.Run("rejects a script that produces multiple result sets", func(t *testing.T) {
+		dir := t.TempDir()
+		sqlPath := writeScript(t, dir, "SELECT user_name FROM user LIMIT 1;\nSELECT identifier FROM user LIMIT 1;\n")
+		out := filepath.Join(dir, "out.csv")
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sql-file", sqlPath, "--output", out, filepath.Join("testdata", "user.csv")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.isTTY = func() bool { return false }
+		shell.stdin = strings.NewReader("")
+
+		err = shell.Run(context.Background())
+		if err == nil || !strings.Contains(err.Error(), "single result set") {
+			t.Fatalf("Run error = %v, want a single-result-set error", err)
+		}
+	})
+}
+
 func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
 	// Regression for: a --stdin dataset run with no query must fail loudly
 	// instead of importing the data and discarding it.

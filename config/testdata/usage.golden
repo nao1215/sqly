@@ -37,7 +37,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --stdin-name string       table name for the --stdin dataset (default "stdin")
   -s, --sql string              sql query you want to execute
   -f, --sql-file string         path to a file with SQL to execute (multiline; cannot be used with --sql)
-  -o, --output string           destination path for SQL results specified in --sql option
+  -o, --output string           destination path for the result of --sql or a single-result --sql-file script
   -i, --inspect                 print a JSON report of imported tables (schema, row counts, sample rows) and exit
       --inspect-sample int      rows to include per table in --inspect (0 for schema only) (default 5)
       --compare                 compare two imported tables (schema, row count, and keyed rows) and print a report, then exit

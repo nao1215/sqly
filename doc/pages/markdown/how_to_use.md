@@ -46,7 +46,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --stdin-name string   table name for the --stdin dataset (default "stdin")
   -s, --sql string      sql query you want to execute
   -f, --sql-file string   path to a file with SQL to execute (multiline; cannot be used with --sql)
-  -o, --output string   destination path for SQL results specified in --sql option
+  -o, --output string   destination path for the result of --sql or a single-result --sql-file script
   -i, --inspect         print a JSON report of imported tables (schema, row counts, sample rows) and exit
       --inspect-sample int  rows to include per table in --inspect (0 for schema only) (default 5)
       --cache string        opt-in import cache: reuse a SQLite snapshot of the imported tables for unchanged inputs (path to the cache file)
@@ -272,7 +272,7 @@ $ sqly --sql "SELECT * FROM user" --csv testdata/user.csv > test.csv
 
 #### For windows user
 
-The sqly can save SQL execution results to the file using the --output option. The --output option specifies the destination path for SQL results specified in the --sql option.
+The sqly can save SQL execution results to the file using the --output option. The --output option specifies the destination path for the result of --sql (or a single-result --sql-file script).
 
 ```shell
 $ sqly --sql "SELECT * FROM user" --output=test.csv testdata/user.csv 
@@ -288,3 +288,11 @@ $ sqly --sql "SELECT * FROM user" --output result.ndjson.gz testdata/user.csv
 ```
 
 Text and JSON formats (csv, tsv, ltsv, json, ndjson, markdown) support the compression wrappers `.gz`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4`. An explicit mode flag that disagrees with the path extension is rejected instead of writing a surprising format. Bzip2 output and compression on Parquet or Excel are rejected with a clear error.
+
+### Export a --sql-file script result with --output
+
+`--output` also works with `--sql-file` when the script produces exactly one result set. Setup statements (DDL/DML) may run first; the single result set is written to the output file and stdout stays clean. A script that produces no result set, or more than one, is rejected with a clear error.
+
+```shell
+$ sqly --sql-file report.sql --output out.csv data.csv
+```

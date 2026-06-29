@@ -284,6 +284,12 @@ JOIN identifier i ON s.identifier = i.id
 ORDER BY s.identifier;
 ```
 
+`--sql-file` can also export with `--output` when the script produces exactly one result set, so a saved script works in the same pipelines as `--sql`. Setup statements may run first; the single result is written to the file. A script that yields no result set or more than one is rejected.
+
+```shell
+$ sqly --sql-file report.sql --output out.csv data.csv
+```
+
 ## Inspect tables: --inspect
 
 `--inspect` imports the inputs, prints a JSON report of every table (name, source, columns, row count, sample rows), and exits without the shell. It is the non-interactive equivalent of `.tables` + `.schema` + `.describe`, useful for scripts and LLMs. Import progress goes to stderr, so stdout is JSON only. `--inspect-sample N` sets the sample size (default 5; `0` for schema only).

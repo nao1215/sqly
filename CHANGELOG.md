@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### New Features
+* SQL File Output: `--sql-file` can now export to `--output` when the script produces exactly one result set, so a saved SQL script works in the same automation pipelines as `--sql`. Setup statements may run first, the single result is written to the file with stdout left clean, and a script that yields no result set or more than one is rejected with a clear error.
+
 ### Bug Fixes
 * Profile Blank Distinct Count: `--profile` now counts the blank string as a real distinct value, so `distinct_count` stays consistent with `blank_count` instead of dropping blanks and understating cardinality for categorical columns that mix blanks with real values.
 * Profile Padded Null Placeholders: `--profile` now matches null-like placeholders such as `NULL` and `N/A` on the trimmed value, so a padded token like `" NULL "` raises both the null-placeholder warning and the whitespace warning instead of only the whitespace one.
