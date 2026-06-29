@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/nao1215/sqly/config"
@@ -202,7 +200,7 @@ func (c *columnProfiler) add(v string, isNull bool) {
 		return
 	}
 	c.distinct[v] = struct{}{}
-	if isNumericValue(v) {
+	if model.IsNumericValue(v) {
 		c.numeric++
 	} else {
 		c.nonNumeric++
@@ -240,22 +238,6 @@ func (c *columnProfiler) result() profileColumn {
 		pc.Warnings = append(pc.Warnings, fmt.Sprintf("%d value(s) have leading or trailing whitespace", c.spacecnt))
 	}
 	return pc
-}
-
-// isNumericValue reports whether s is a finite decimal number. It rejects the
-// Go-specific float spellings ParseFloat also accepts but data rarely means as
-// numbers: hexadecimal floats ("0x1p4"), underscore digit separators
-// ("1_000"), and the Infinity/NaN words. This keeps the profile's numeric count
-// aligned with what a human would call a number.
-func isNumericValue(s string) bool {
-	if strings.ContainsAny(s, "xXpP_") {
-		return false
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return false
-	}
-	return !math.IsInf(f, 0) && !math.IsNaN(f)
 }
 
 // renderProfileText renders a human-readable summary of a profile report.

@@ -864,6 +864,24 @@ func TestIsAllNumeric(t *testing.T) {
 	}
 }
 
+func TestIsNumericValue(t *testing.T) {
+	t.Parallel()
+	cases := map[string]bool{
+		"1": true, "-2.5": true, "1e3": true, "0": true,
+		// Comma thousands separators and surrounding whitespace are stripped, so
+		// the contract matches table-mode alignment.
+		"1,000": true, "2,500.50": true, " 123 ": true,
+		"abc": false, "": false, "NaN": false, "Inf": false, "1e400": false,
+		// Go-specific float spellings are not treated as data numbers.
+		"0x1p4": false, "1_000": false,
+	}
+	for in, want := range cases {
+		if got := IsNumericValue(in); got != want {
+			t.Errorf("IsNumericValue(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 // TestTablePrintEscaping covers the output-format bugs: CSV/TSV stdout must
 // stay valid when values contain the delimiter, quotes, or newlines; LTSV must
 // reject values it cannot represent losslessly; JSON/NDJSON must reject
