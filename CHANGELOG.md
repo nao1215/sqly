@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.26.0](https://github.com/nao1215/sqly/compare/v0.25.0...v0.26.0) (2026-06-29)
 
 ### Performance
 * Profile Memory Bound: `--profile` now streams each table's rows one at a time through the per-column accumulators instead of materializing the whole `SELECT *` result in Go first, so large CSV or Parquet inputs no longer hold a second full copy in memory. JSON and text output are unchanged; distinct counting still keeps a per-column distinct set, as the exact count requires.
@@ -35,7 +35,7 @@
 
 ### Dependencies
 * `github.com/creack/pty`: added as a test dependency for PTY-backed end-to-end tests that drive the real interactive shell.
-* `github.com/nao1215/filesql`: v0.14.0 to v0.15.0, which preserves SQL `NULL` through a Parquet round-trip.
+* `github.com/nao1215/filesql`: v0.14.0 to v0.16.0. v0.15.0 preserves SQL `NULL` through a Parquet round-trip. v0.16.0 makes the `*sql.DB` returned by `Open` safe to share across goroutines (a uniquely named shared-cache in-memory database instead of one reused connection) and makes `ReadOnlyDB` actually enforce read-only access on the `Query`/`QueryRow` and `Exec` paths.
 
 ## [v0.25.0](https://github.com/nao1215/sqly/compare/v0.24.0...v0.25.0) (2026-06-28)
 
