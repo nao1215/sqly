@@ -788,7 +788,7 @@ func TestSheetMissErrors_AreDiagnostic(t *testing.T) {
 
 		var importErr error
 		captureStderr(t, func() {
-			importErr = s.commands.importCommand(ctx, s, []string{filepath.Join("testdata", "user.csv"), "--sheet", "Summary"})
+			importErr = s.commands.importCommand(ctx, s, []string{filepath.Join("..", "testdata", "user.csv"), "--sheet", "Summary"})
 		})
 		if importErr == nil {
 			t.Fatal("expected --sheet on a non-Excel input to fail")
