@@ -996,8 +996,14 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 // Rowset results are captured rather than printed, so a successful run leaves
 // stdout clean and writes only to the output file.
 func (s *Shell) runSQLFileToOutput(ctx context.Context, script string) error {
+	// Start from a clean slate and clear on the way out, so a reused Shell never
+	// counts rowsets captured by an earlier run.
+	s.capturedRowsets = nil
 	s.collectingOutput = true
-	defer func() { s.collectingOutput = false }()
+	defer func() {
+		s.collectingOutput = false
+		s.capturedRowsets = nil
+	}()
 
 	if _, err := s.runBatchReader(ctx, strings.NewReader(script)); err != nil {
 		return err
