@@ -591,7 +591,7 @@ Thanks for taking the time to contribute! See [CONTRIBUTING.md](./CONTRIBUTING.m
 
 ## How to develop
 
-See the [developer documentation](https://nao1215.github.io/sqly/). When adding features or fixing bugs, please write unit tests; sqly aims for unit-test coverage across all packages, as the tree map shows. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (regenerate with `make demo`), and their commands are exercised end-to-end by the shellspec suite in `spec/` (`make test-e2e`).
+See the [developer documentation](https://nao1215.github.io/sqly/). When adding features or fixing bugs, please write unit tests; sqly aims for unit-test coverage across all packages, as the tree map shows. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (regenerate with `make demo`), and their commands are exercised end-to-end by the atago suite in `e2e/atago/` (`make test-e2e`).
 
 ![treemap](./doc/img/cover-tree.svg)
 

@@ -1,0 +1,196 @@
+# Migrated from sqly's ShellSpec spec/cache_spec.sh (issue #284).
+# --cache snapshots imported tables to a SQLite file; a warm run reuses it,
+# changing the source invalidates it, --cache-clear rebuilds, and an unwritable
+# cache path falls back to a cold import. Cold/warm runs are two run steps
+# sharing the scenario workdir (the cache file persists between them).
+# Run with: make test-e2e
+#
+# The size+mtime-vs-content-hash case uses fixture.mtime to pin both writes to
+# the same timestamp (the atago equivalent of `touch -r`).
+version: "1"
+
+suite:
+  name: sqly --cache import cache
+
+scenarios:
+  - name: writes a cache on the cold run and reuses it on the warm run
+    steps:
+      - fixture: &data
+          file: data.csv
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+            3,Carol
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "3"
+          stderr:
+            contains: "cache: reused"
+
+  - name: invalidates the cache when the source changes
+    steps:
+      - fixture: *data
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      # Overwrite the source between runs (a 4th row).
+      - fixture:
+          file: data.csv
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+            3,Carol
+            4,Dave
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "4"
+          stderr:
+            not_contains: "cache: reused"
+
+  - name: rebuilds after --cache-clear
+    steps:
+      - fixture: *data
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      - run:
+          command: sqly --cache snap.cache --cache-clear --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "3"
+          stderr:
+            not_contains: "cache: reused"
+
+  - name: falls back to a cold import when the cache path is unwritable
+    steps:
+      - fixture: *data
+      # A non-empty directory at the cache path cannot be written as a SQLite file.
+      - fixture:
+          file: snap.cache/keep
+          content: "x"
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "3"
+          stderr:
+            contains: cache
+
+  - name: invalidates the cache when content changes but size and mtime do not (#592)
+    steps:
+      # Same byte length and same pinned mtime as the first write; only a content
+      # hash (not size+mtime) can detect the edit.
+      - fixture:
+          file: d.csv
+          mtime: "2020-01-01T00:00:00Z"
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT group_concat(name, ',') AS names FROM d" d.csv
+      - fixture:
+          file: d.csv
+          mtime: "2020-01-01T00:00:00Z"
+          content: |
+            id,name
+            1,Carol
+            2,Eve
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT group_concat(name, ',') AS names FROM d" d.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Carol,Eve"
+      - assert:
+          stdout:
+            not_contains: "Alice,Bob"
+          stderr:
+            not_contains: "cache: reused"
+
+  - name: reuses the cache that lives inside the imported directory and ignores its manifest
+    steps:
+      - fixture:
+          file: indir/data.csv
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+            3,Carol
+      - run:
+          command: sqly --cache indir/snap.cache --sql "SELECT COUNT(*) AS n FROM data" indir
+      - run:
+          command: sqly --cache indir/snap.cache --sql "SELECT group_concat(name, ',') AS t FROM sqlite_master WHERE type='table'" indir
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "cache: reused"
+          stdout:
+            contains: data
+      - assert:
+          stdout:
+            not_contains:
+              - manifest
+              - snap
+
+  - name: keeps the cache warm when only an unsupported sibling file changes
+    steps:
+      - fixture:
+          file: indir/data.csv
+          content: |
+            id,name
+            1,Alice
+      - fixture:
+          file: indir/ignore.txt
+          content: "note\n"
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" indir
+      # Only the non-imported sibling changes; the dataset is unchanged.
+      - fixture:
+          file: indir/ignore.txt
+          content: "changed\n"
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" indir
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+          stderr:
+            contains: "cache: reused"
+
+  - name: still invalidates the cache when the supported file changes
+    steps:
+      - fixture:
+          file: indir/data.csv
+          content: |
+            id,name
+            1,Alice
+      - fixture:
+          file: indir/ignore.txt
+          content: "note\n"
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" indir
+      - fixture:
+          file: indir/data.csv
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+      - run:
+          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" indir
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+          stderr:
+            not_contains: "cache: reused"

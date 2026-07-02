@@ -1,0 +1,174 @@
+# Migrated from sqly's ShellSpec spec/export_inference_spec.sh.
+# Export format/compression inferred from --output and .dump destination paths,
+# with conflict/unsupported-combination errors. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly export format inference
+
+scenarios:
+  - name: infers parquet from the destination extension without a flag
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.parquet
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=parquet"
+          file:
+            path: result.parquet
+            exists: true
+
+  - name: infers ndjson with gzip and writes a compressed file
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.ndjson.gz
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=ndjson"
+          file:
+            path: result.ndjson.gz
+            exists: true
+      # The payload is gzip-compressed, so the plaintext value is not present.
+      - assert:
+          file:
+            path: result.ndjson.gz
+            not_contains: booker12
+
+  - name: re-imports a gzip-compressed csv it wrote
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      - run:
+          command: sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.csv.gz
+      - run:
+          command: sqly --csv --sql "SELECT user_name FROM result LIMIT 1" result.csv.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: user_name
+      - assert:
+          stdout:
+            line: 2
+            equals: booker12
+
+  - name: writes the CSV fallback to an unknown extension path without rewriting it
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT user_name FROM user LIMIT 1" user.csv --output out.unknown
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: out.unknown
+          file:
+            path: out.unknown
+            exists: true
+      - assert:
+          file:
+            path: out.csv
+            exists: false
+
+  - name: rejects --output to an existing directory
+    steps:
+      - fixture: *user
+      - fixture:
+          file: outdir/.keep
+          content: ""
+      - run:
+          command: sqly --sql "SELECT identifier FROM user LIMIT 1" user.csv --output outdir
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: directory
+          file:
+            path: outdir.csv
+            exists: false
+
+  - name: rejects .dump to an existing directory
+    steps:
+      - fixture: *user
+      - fixture:
+          file: outdir/.keep
+          content: ""
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user outdir\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: directory
+
+  - name: errors when an explicit mode flag disagrees with the path extension
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --json --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "conflicts with destination path"
+
+  - name: rejects bzip2 output
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.csv.bz2
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: bzip2
+
+  - name: rejects compression on parquet
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.parquet.gz
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "cannot be compressed"
+
+  - name: infers tsv from the .dump destination path
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user dump.tsv\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "mode=tsv"
+          file:
+            path: dump.tsv
+            exists: true
+
+  - name: keeps --json --output result.json writing json
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      - run:
+          command: sqly --json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.json
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=json"
+          file:
+            path: result.json
+            contains: '"user_name":"booker12"'

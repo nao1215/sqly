@@ -1,0 +1,45 @@
+# Migrated from sqly's ShellSpec spec/hermetic_spec.sh.
+# The two `Skip if [ -z "$SQLY_E2E_SANDBOX" ]` cases assert sqly's OWN wrapper
+# prepared a sandbox; they map to `only: { env: SQLY_E2E_SANDBOX }` and run only
+# when that variable is set (so they skip when the runner has not exported it, exactly
+# like the ShellSpec Skip-if). atago already runs every scenario in its own
+# isolated workdir, so they are present for fidelity rather than coverage.
+version: "1"
+
+suite:
+  name: sqly hermetic environment
+
+scenarios:
+  - name: runs with HOME inside the sandbox
+    only:
+      env: SQLY_E2E_SANDBOX
+    steps:
+      - run:
+          shell: true
+          command: 'case "$HOME" in "$SQLY_E2E_SANDBOX"*) exit 0 ;; *) exit 1 ;; esac'
+      - assert:
+          exit_code: 0
+
+  - name: routes the history DB into the sandbox
+    only:
+      env: SQLY_E2E_SANDBOX
+    steps:
+      - run:
+          shell: true
+          command: 'case "$SQLY_HISTORY_DB_PATH" in "$SQLY_E2E_SANDBOX"*) exit 0 ;; *) exit 1 ;; esac'
+      - assert:
+          exit_code: 0
+
+  - name: still runs sqly normally inside the sandbox
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELECT 1 AS one" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: one

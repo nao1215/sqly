@@ -1,0 +1,132 @@
+# Migrated from sqly's ShellSpec spec/sql_file_spec.sh.
+# --sql-file loads SQL from a file (freeing stdin for a piped --stdin dataset),
+# supports multiline statements, and reports failing-statement line numbers.
+# The SQL files are atago fixtures. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --sql-file
+
+scenarios:
+  - name: runs a multiline query loaded from a file against a file input
+    steps:
+      - fixture: &actor
+          file: actor.csv
+          content: |
+            actor
+            Adam Sandler
+            Harrison Ford
+      - fixture:
+          file: q.sql
+          content: |
+            -- top actor by name
+            SELECT actor
+            FROM actor
+            ORDER BY actor
+            LIMIT 1;
+      - run:
+          command: sqly --csv --sql-file q.sql actor.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Adam Sandler"
+
+  - name: joins a piped --stdin dataset with a query loaded from a file
+    steps:
+      - fixture:
+          file: identifier.csv
+          content: |
+            id,position
+            1,developrt
+            2,manager
+      - fixture:
+          file: join.sql
+          content: |
+            SELECT s.name, i.position
+            FROM stdin s
+            JOIN identifier i ON s.id = i.id
+            ORDER BY s.id;
+      - run:
+          command: sqly --stdin csv --csv --sql-file join.sql identifier.csv
+          stdin: |
+            id,name
+            1,alice
+            2,bob
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - developrt
+
+  - name: runs multiple statements from a file in order
+    steps:
+      - fixture: *actor
+      - fixture:
+          file: multi.sql
+          content: |
+            SELECT 'first' AS x;
+            SELECT 'second' AS x;
+      - run:
+          command: sqly --csv --sql-file multi.sql actor.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - first
+              - second
+
+  - name: rejects --sql and --sql-file together
+    steps:
+      - fixture: *actor
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT 1;
+      - run:
+          command: sqly --sql "SELECT 1" --sql-file q.sql actor.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--sql-file"
+
+  - name: fails for a missing SQL file
+    steps:
+      - fixture: *actor
+      - run:
+          command: sqly --sql-file no_such.sql actor.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "sql-file"
+
+  - name: fails for an empty SQL file
+    steps:
+      - fixture: *actor
+      - fixture:
+          file: empty.sql
+          content: ""
+      - run:
+          command: sqly --sql-file empty.sql actor.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: empty
+
+  - name: locates a failing statement by its line in the SQL file
+    steps:
+      - fixture: *actor
+      - fixture:
+          file: bad.sql
+          content: |
+            SELECT 1;
+            SELECT 2;
+            SELECT * FROM no_such_table;
+      - run:
+          command: sqly --sql-file bad.sql actor.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "batch statement 3 failed at line 3"
+              - no_such_table

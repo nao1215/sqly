@@ -1,0 +1,147 @@
+# Migrated from sqly's ShellSpec spec/schema_spec.sh.
+# Schema inspection: .schema and .describe driven through piped stdin against
+# the built binary, plus JSON-mode structured output and missing-table errors.
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+#
+# Only the CSV-table cases are ported (hermetic via an inline fixture). The
+# ACH/Excel/JSON-source cases need binary testdata that cannot be inlined, and
+# the case-insensitive `CREATE VIEW` case relies on a negative matcher
+# (`should not include 'CREATE TABLE'`) atago lacks. See the migration report.
+version: "1"
+
+suite:
+  name: sqly schema inspection
+
+scenarios:
+  - name: ".schema prints a CREATE TABLE statement for a CSV table"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".schema user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "CREATE TABLE"
+              - user_name
+
+  - name: ".schema emits a structured object in json mode"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".mode json\n.schema user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$[0].table"
+              equals: user
+      - assert:
+          stdout:
+            json:
+              path: "$[0].schema"
+              matches: "^CREATE TABLE"
+          stderr:
+            contains: "Change output mode"
+
+  - name: ".schema returns the stored CREATE VIEW for a differently cased view name"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          # The view is created as "v"; ".schema V" must return the stored
+          # CREATE VIEW, not synthesize a CREATE TABLE.
+          stdin: "CREATE VIEW v AS SELECT 1 AS x;\n.schema V\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "CREATE VIEW"
+      - assert:
+          stdout:
+            not_contains: "CREATE TABLE"
+
+  - name: ".schema errors on a missing table"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".schema no_such_table\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such table"
+
+  - name: ".describe lists columns and types for a CSV table"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".describe user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - user_name
+              - identifier
+
+  - name: ".describe emits structured column metadata in json mode"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".mode json\n.describe user\n"
+      - assert:
+          exit_code: 0
+      # ShellSpec pairs name+type so the assertion verifies user_name's own type.
+      - assert:
+          stdout:
+            json:
+              path: "$[0].name"
+              equals: user_name
+      - assert:
+          stdout:
+            json:
+              path: "$[0].type"
+              equals: TEXT
+
+  - name: ".describe errors on a missing table"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".describe no_such_table\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such table"

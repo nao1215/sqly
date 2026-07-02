@@ -1,0 +1,58 @@
+# Migrated from sqly's ShellSpec spec/empty_args_spec.sh.
+# An empty quoted command argument must be rejected, not reinterpreted as an
+# in-place save, a ".csv" file, or the current directory.
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+#
+version: "1"
+
+suite:
+  name: sqly empty command arguments
+
+scenarios:
+  - name: rejects .save "" and leaves the source unchanged
+    steps:
+      - fixture:
+          file: u.csv
+          content: |
+            user_name,identifier,first_name
+            booker12,1,Rachel
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET first_name = 'EMPTY' WHERE identifier = 1;\n.save \"\"\n"
+      - assert:
+          exit_code: 1
+          stdout:
+            contains: affected
+          stderr:
+            contains: ".save requires"
+      # The in-place save was rejected, so the source file is untouched.
+      - assert:
+          file:
+            path: u.csv
+            not_contains: EMPTY
+
+  - name: rejects .dump with an empty destination
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user \"\"\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".dump requires"
+
+  - name: rejects .import with an empty path
+    steps:
+      - run:
+          command: sqly
+          stdin: ".import \"\"\n.tables\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "empty import path"

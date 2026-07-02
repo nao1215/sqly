@@ -1,0 +1,112 @@
+# Migrated from sqly's ShellSpec spec/history_tolerance_spec.sh.
+# Non-interactive runs must succeed even when the history DB cannot be created.
+# The history DB path is pointed (via scenario env + ${workdir}) at a directory
+# that does not exist, so creating it fails the way a read-only/sandboxed config
+# location would. Run with: make test-e2e
+#
+# The "read-only after startup" group seeds a history DB (a first run creates
+# it) and then makes it 0444 with a mode-only fixture (fixture.mode applied to an
+# existing file), simulating a history DB that turned read-only mid-session.
+version: "1"
+
+suite:
+  name: sqly history tolerance
+
+scenarios:
+  - name: runs --sql and warns instead of failing
+    env: &histenv
+      SQLY_HISTORY_DB_PATH: "${workdir}/missing/history.db"
+    steps:
+      - fixture: &actor
+          file: actor.csv
+          content: |
+            actor
+            Adam Sandler
+            Harrison Ford
+      - run:
+          command: sqly --csv --sql "SELECT actor FROM actor ORDER BY actor LIMIT 1" actor.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Adam Sandler"
+          stderr:
+            contains: "history disabled"
+
+  - name: runs batch mode without a writable history DB
+    env: *histenv
+    steps:
+      - fixture: *actor
+      - run:
+          command: sqly actor.csv
+          stdin: ".tables\nSELECT actor FROM actor ORDER BY actor LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "TABLE NAME"
+              - "Adam Sandler"
+          stderr:
+            contains: "history disabled"
+
+  - name: runs --sql when the history DB is read-only after startup
+    env: &roenv
+      SQLY_HISTORY_DB_PATH: "${workdir}/h.db"
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      # First run seeds a valid, writable history DB at ${workdir}/h.db.
+      - run:
+          command: sqly --sql "SELECT 1" user.csv
+      # Make the seeded DB read-only (mode-only fixture modifies the existing file).
+      - fixture:
+          file: h.db
+          mode: "0444"
+      - run:
+          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: runs --inspect when the history DB is read-only after startup
+    env: *roenv
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT 1" user.csv
+      - fixture:
+          file: h.db
+          mode: "0444"
+      - run:
+          command: sqly --inspect user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "{"
+      - assert:
+          stdout:
+            contains: '"name": "user"'
+
+  - name: runs batch mode and warns when a history write fails after startup
+    env: *roenv
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT 1" user.csv
+      - fixture:
+          file: h.db
+          mode: "0444"
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT user_name FROM user ORDER BY identifier LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+          stderr:
+            contains: "history disabled"

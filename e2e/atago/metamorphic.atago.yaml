@@ -1,0 +1,104 @@
+# Migrated from sqly's ShellSpec spec/metamorphic_spec.sh.
+# The ShellSpec versions compute and compare values across two runs (a property-
+# /metamorphic-testing paradigm). atago is declarative fixed-output assertion by
+# design (no expression language, spec §4), so each relation is expressed as
+# concrete assertions over a known 3-row fixture — same behavioral coverage
+# without cross-run arithmetic. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly metamorphic relations
+
+scenarios:
+  - name: COUNT(*) equals the number of selected rows
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user" user.csv
+      - assert:
+          stdout:
+            line: 2
+            equals: "3"
+      - run:
+          command: sqly --csv --sql "SELECT user_name FROM user" user.csv
+      - assert:
+          stdout:
+            contains:
+              - booker12
+              - jenkins46
+              - grey07
+
+  - name: WHERE 1=1 returns all rows and WHERE 1=0 returns none
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user WHERE 1=1" user.csv
+      - assert:
+          stdout:
+            line: 2
+            equals: "3"
+      - run:
+          command: sqly --json --sql "SELECT user_name FROM user WHERE 1=0" user.csv
+      - assert:
+          stdout:
+            equals: "[]"
+
+  - name: ORDER BY preserves the row multiset
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --sql "SELECT user_name FROM user ORDER BY user_name DESC" user.csv
+      - assert:
+          exit_code: 0
+      # Reordered, but every original member is still present.
+      - assert:
+          stdout:
+            line: 2
+            equals: jenkins46
+      - assert:
+          stdout:
+            contains:
+              - grey07
+              - booker12
+
+  - name: csv and ndjson yield the same rows
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --ndjson --sql "SELECT user_name FROM user ORDER BY identifier" user.csv
+      - assert:
+          stdout:
+            line: 1
+            equals: '{"user_name":"booker12"}'
+      - assert:
+          stdout:
+            line: 3
+            equals: '{"user_name":"grey07"}'
+
+  - name: CSV dump reimported yields identical data
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user rt.csv\n"
+      - run:
+          command: sqly --csv --sql "SELECT * FROM rt ORDER BY identifier" rt.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: user_name,identifier
+      - assert:
+          stdout:
+            line: 2
+            equals: booker12,1
+      - assert:
+          stdout:
+            line: 4
+            equals: grey07,3

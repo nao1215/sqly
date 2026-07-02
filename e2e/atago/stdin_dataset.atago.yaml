@@ -1,0 +1,171 @@
+# Migrated from sqly's ShellSpec spec/stdin_dataset_spec.sh.
+# With --stdin <format>, piped stdin is imported as a dataset (default table
+# "stdin") and can be joined with file arguments. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --stdin dataset
+
+scenarios:
+  - name: queries piped CSV through the default stdin table
+    steps:
+      - run:
+          command: sqly --stdin csv --csv --sql "SELECT name FROM stdin ORDER BY id"
+          stdin: |
+            id,name
+            1,alice
+            2,bob
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: name
+      - assert:
+          stdout:
+            line: 2
+            equals: alice
+      - assert:
+          stdout:
+            line: 3
+            equals: bob
+
+  - name: queries piped TSV data
+    steps:
+      - run:
+          command: sqly --stdin tsv --csv --sql "SELECT COUNT(*) AS c FROM stdin"
+          stdin: "id\tname\n1\talice\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: queries piped JSONL data stored in a data column
+    steps:
+      - run:
+          command: sqly --stdin jsonl --csv --sql "SELECT COUNT(*) AS c FROM stdin"
+          stdin: |
+            {"id":1,"name":"alice"}
+            {"id":2,"name":"bob"}
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+
+  - name: overrides the stdin table name with --stdin-name
+    steps:
+      - run:
+          command: sqly --stdin csv --stdin-name people --csv --sql "SELECT COUNT(*) FROM people"
+          stdin: |
+            id,name
+            1,alice
+            2,bob
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+
+  - name: joins piped stdin with an imported file argument
+    steps:
+      - fixture:
+          file: identifier.csv
+          content: |
+            id,position
+            1,developrt
+            2,manager
+      - run:
+          command: sqly --stdin csv --csv --sql "SELECT s.name, i.position FROM stdin s JOIN identifier i ON s.id = i.id ORDER BY s.id" identifier.csv
+          stdin: |
+            id,name
+            1,alice
+            2,bob
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - developrt
+
+  - name: reports a stable stdin source in --inspect, not a temp path
+    steps:
+      - run:
+          command: sqly --stdin csv --inspect
+          stdin: |
+            id,name
+            1,alice
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"source": "stdin"'
+      - assert:
+          stdout:
+            not_contains: "sqly-stdin-"
+
+  - name: rejects --save --force for a stdin-backed table
+    steps:
+      - run:
+          command: sqly --stdin csv --sql "UPDATE stdin SET name = 'x'" --save --force
+          stdin: |
+            id,name
+            1,alice
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: affected
+          stderr:
+            contains: stdin
+
+  - name: rejects a non-identifier --stdin-name so the name stays queryable
+    steps:
+      - run:
+          command: sqly --stdin csv --stdin-name "my data" --sql 'SELECT * FROM "my data"'
+          stdin: |
+            id,name
+            1,alice
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "stdin-name"
+
+  - name: rejects a path-like --stdin-name
+    steps:
+      - run:
+          command: sqly --stdin csv --stdin-name "../escaped" --sql "SELECT 1"
+          stdin: |
+            a
+            1
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "stdin-name"
+          file:
+            path: escaped.csv
+            exists: false
+
+  - name: reports a clear error for an unsupported stdin format
+    steps:
+      - run:
+          command: sqly --stdin xml --sql "SELECT 1"
+          stdin: |
+            a,b
+            1,2
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unsupported --stdin format"
+
+  - name: still reads stdin as SQL and helper commands without --stdin
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".tables\nSELECT user_name FROM user ORDER BY identifier LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "TABLE NAME"
+              - booker12

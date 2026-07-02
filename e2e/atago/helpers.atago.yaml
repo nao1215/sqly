@@ -1,0 +1,145 @@
+# Migrated from sqly's ShellSpec spec/helpers_spec.sh.
+# Shell helper commands: .help/.cd/.pwd/.clear/.import/.mode/.dump, driven
+# through piped stdin. ~ expansion uses an isolated HOME via scenario env +
+# ${workdir}. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly shell helper commands
+
+scenarios:
+  - name: .help groups commands, shows usage, and flags destructive save
+    steps:
+      - run:
+          command: sqly
+          stdin: ".help\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Import / Export"
+              - ".import PATH"
+              - ".dump TABLE FILE"
+              - ".save DIR"
+              - ".save --force"
+              - destructive
+
+  - name: .cd changes directory with a relative path and reports it
+    steps:
+      - fixture:
+          file: testdata/x.csv
+          content: |
+            id,name
+            1,a
+      - run:
+          command: sqly
+          stdin: ".cd testdata\n.pwd\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: testdata
+
+  - name: expands a bare ~ in .cd to the home directory
+    env: &home
+      HOME: "${workdir}/home"
+    steps:
+      - fixture:
+          file: home/sqly_tilde.csv
+          content: |
+            id,name
+            1,foo
+      - run:
+          command: sqly
+          stdin: ".cd ~\n.pwd\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: home
+
+  - name: expands ~/file in .import
+    env: *home
+    steps:
+      - fixture:
+          file: home/sqly_tilde.csv
+          content: |
+            id,name
+            1,foo
+      - run:
+          command: sqly
+          stdin: ".import ~/sqly_tilde.csv\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: sqly_tilde
+
+  - name: .clear emits no ANSI escapes to stdout in batch mode
+    steps:
+      - run:
+          command: sqly
+          stdin: ".clear\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+
+  - name: keeps --json stdout parseable when .clear precedes a query
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --json user.csv
+          stdin: ".clear\nSELECT 1 AS x;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "["
+
+  - name: .import imports a quoted path containing a space as one argument
+    steps:
+      - fixture:
+          file: "sqly_e2e space.csv"
+          content: |
+            id,name
+            1,foo
+      - run:
+          command: sqly
+          stdin: ".import \"sqly_e2e space.csv\"\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: sqly_e2e_space
+
+  - name: .mode fails on a missing mode name but still lists the modes
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - json
+              - ndjson
+
+  - name: .dump infers TSV from the .tsv extension in table mode, not CSV
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user out.tsv\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "mode=tsv"
+          file:
+            path: out.tsv
+            contains: "user_name\tidentifier"
+      - assert:
+          file:
+            path: out.tsv
+            not_contains: "user_name,identifier"

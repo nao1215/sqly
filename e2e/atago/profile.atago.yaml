@@ -1,0 +1,160 @@
+# Migrated from sqly's ShellSpec spec/profile_spec.sh (issue #275).
+# --profile prints a per-column data-quality report (row/column counts, null/
+# blank/distinct/numeric counts, mixed-type/null-like/whitespace warnings). JSON
+# is the default, --profile-format text is human-readable. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --profile workflow
+
+scenarios:
+  - name: reports per-column data quality as JSON
+    steps:
+      - fixture: &messy
+          file: messy.csv
+          content: |
+            id,score,note
+            1,10, hi
+            2,abc,
+            3,30,N/A
+      - run:
+          command: sqly --profile messy.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"row_count": 3'
+              - '"column_count": 3'
+              - "mixed numeric and non-numeric"
+              - "null placeholders"
+
+  - name: profiles a stdin dataset
+    steps:
+      - run:
+          command: sqly --stdin csv --profile
+          stdin: |
+            id,name
+            1,Alice
+            2,Bob
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"name": "stdin"'
+              - '"row_count": 2'
+
+  - name: profiles multiple tables in one run
+    steps:
+      - fixture: *messy
+      - fixture:
+          file: orders.csv
+          content: |
+            oid,amount
+            1,9.99
+            2,5.00
+      - run:
+          command: sqly --profile messy.csv orders.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"name": "messy"'
+              - '"name": "orders"'
+
+  - name: emits a human-readable summary with --profile-format text
+    steps:
+      - fixture:
+          file: orders.csv
+          content: |
+            oid,amount
+            1,9.99
+            2,5.00
+      - run:
+          command: sqly --profile --profile-format text orders.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "table orders: 2 rows, 2 columns"
+
+  - name: counts a blank string as a distinct value in JSON output
+    steps:
+      - fixture: &blank
+          file: blank.csv
+          content: |
+            id,v
+            x,
+            x,A
+      - run:
+          command: sqly --profile blank.csv
+      - assert:
+          stdout:
+            contains:
+              - '"blank_count": 1'
+              - '"distinct_count": 2'
+
+  - name: counts a blank string as a distinct value in text output
+    steps:
+      - fixture: *blank
+      - run:
+          command: sqly --profile --profile-format text blank.csv
+      - assert:
+          stdout:
+            contains: "blanks=1 distinct=2"
+
+  - name: flags a padded null-like placeholder and its whitespace together
+    steps:
+      - fixture:
+          file: nullspace.csv
+          content: |
+            v
+            " NULL "
+      - run:
+          command: sqly --profile nullspace.csv
+      - assert:
+          stdout:
+            contains:
+              - "null placeholders"
+              - "leading or trailing whitespace"
+
+  - name: warns only about whitespace for a padded ordinary value
+    steps:
+      - fixture:
+          file: padded.csv
+          content: |
+            v
+            " hello "
+      - run:
+          command: sqly --profile padded.csv
+      - assert:
+          stdout:
+            not_contains: "null placeholders"
+      - assert:
+          stdout:
+            contains: "leading or trailing whitespace"
+
+  - name: counts comma-formatted numerals as numeric, matching table-mode
+    steps:
+      - fixture: &commas
+          file: commas.csv
+          content: |
+            amount
+            "1,000"
+            "2,500"
+      - run:
+          command: sqly --profile commas.csv
+      - assert:
+          stdout:
+            contains: '"numeric_count": 2'
+      - assert:
+          stdout:
+            not_contains: "mixed numeric"
+
+  - name: right-aligns the same comma-formatted column in table-mode
+    steps:
+      - fixture: *commas
+      - run:
+          command: sqly --sql "SELECT * FROM commas" commas.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "|  1,000 |"

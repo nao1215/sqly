@@ -1,0 +1,69 @@
+# Migrated from sqly's ShellSpec spec/ach_fedwire_writeback_spec.sh (issue #242).
+# sqly reconstructs a complete .ach/.fed file from its imported table set after
+# an in-session UPDATE, via the whole-set --save/--save-dir path. The
+# single-table --output/.dump path still rejects .ach/.fed. ACH/Fed testdata is
+# copied in via fixture.from. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly ACH/Fedwire native write-back
+
+scenarios:
+  - name: round-trips an ACH file through --save --force after an UPDATE
+    steps:
+      - fixture: &ach
+          file: payment.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly --sql "UPDATE payment_entries SET individual_name='E2E Receiver' WHERE entry_index=0" --save --force payment.ach
+      - assert:
+          stderr:
+            contains: Saved
+      - run:
+          command: sqly --json --sql "SELECT individual_name FROM payment_entries WHERE entry_index=0" payment.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "E2E Receiver"
+
+  - name: writes a reconstructed ACH file into a directory with --save-dir
+    steps:
+      - fixture: *ach
+      - run:
+          command: sqly --sql "UPDATE payment_entries SET individual_name='Dir Receiver' WHERE entry_index=0" --save-dir out payment.ach
+      - assert:
+          stderr:
+            contains: Saved
+      - run:
+          command: sqly --json --sql "SELECT individual_name FROM payment_entries WHERE entry_index=0" out/payment.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Dir Receiver"
+
+  - name: round-trips a Fedwire file through --save --force after an UPDATE
+    steps:
+      - fixture:
+          file: transfer.fed
+          from: testdata/customer-transfer.fed
+      - run:
+          command: sqly --sql "UPDATE transfer_message SET sender_reference='E2EREF'" --save --force transfer.fed
+      - assert:
+          stderr:
+            contains: Saved
+      - run:
+          command: sqly --json --sql "SELECT sender_reference FROM transfer_message" transfer.fed
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: E2EREF
+
+  - name: still rejects a single-table --output to .ach
+    steps:
+      - fixture: *ach
+      - run:
+          command: sqly --sql "SELECT * FROM payment_entries" --output out.ach payment.ach
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "input-only"

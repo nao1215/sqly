@@ -31,13 +31,13 @@ make build
 and go-arch-lint. Aim for 80% or higher coverage with unit tests.
 
 ### 4. Run the end-to-end tests (recommended for CLI/shell changes)
-sqly has a [ShellSpec](https://github.com/shellspec/shellspec) suite that
-exercises the real `sqly` binary. It runs in CI
+sqly has an end-to-end suite of plain-YAML [atago](https://github.com/nao1215/atago)
+specs (`e2e/atago/`) that exercises the real `sqly` binary. It runs in CI
 (`.github/workflows/e2e_test.yml`).
 
 ```shell
-# Install ShellSpec once (see https://github.com/shellspec/shellspec#installation)
-curl -fsSL https://git.io/shellspec | sh -s 0.28.1 --yes
+# Install atago once
+go install github.com/nao1215/atago@latest
 
 # Build the binary and run the suite
 make test-e2e

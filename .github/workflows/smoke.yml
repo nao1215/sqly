@@ -9,8 +9,8 @@ on:
 
 # Binary-level smoke coverage that builds the real sqly binary and drives it
 # through stdin and flags. The harness is pure Go, so the same checks run on
-# Windows, macOS, and Linux, giving Windows the binary-level coverage the
-# shell-based ShellSpec suite cannot provide.
+# Windows, macOS, and Linux, complementing the atago end-to-end suite with
+# Windows binary-level coverage.
 #
 # This job also carries the PTY-backed interactive-shell tests (e2e/pty_e2e_test.go,
 # tagged `smoke && !windows`): they run here on the Unix runners and are excluded

@@ -1,0 +1,126 @@
+# Migrated from sqly's ShellSpec spec/filesql_integration_spec.sh.
+# Every supported file format imports and can be queried/inspected; the
+# ACH/Fedwire cleanup path stays deterministic across repeated imports. Binary
+# testdata is copied in via fixture.from. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly filesql integration
+
+scenarios:
+  - name: imports and queries a CSV file
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT COUNT(*) FROM user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "3"
+
+  - name: imports and queries a JSONL file
+    steps:
+      - fixture:
+          file: sample.jsonl
+          from: testdata/sample.jsonl
+      - run:
+          command: sqly sample.jsonl
+          stdin: "SELECT COUNT(*) FROM sample\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "COUNT(*)"
+
+  - name: imports and queries a Parquet file
+    steps:
+      - fixture:
+          file: products.parquet
+          from: testdata/products.parquet
+      - run:
+          command: sqly products.parquet
+          stdin: "SELECT COUNT(*) FROM products\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "3"
+
+  - name: imports and queries an Excel file
+    steps:
+      - fixture:
+          file: sample.xlsx
+          from: testdata/sample.xlsx
+      - run:
+          command: sqly sample.xlsx
+          stdin: "SELECT COUNT(*) FROM sample_test_sheet\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "COUNT(*)"
+
+  - name: imports and queries an ACH file
+    steps:
+      - fixture:
+          file: ppd-debit.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly ppd-debit.ach
+          stdin: "SELECT COUNT(*) FROM ppd_debit_entries\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "COUNT(*)"
+
+  - name: imports and queries a Fedwire file
+    steps:
+      - fixture:
+          file: customer-transfer.fed
+          from: testdata/customer-transfer.fed
+      - run:
+          command: sqly customer-transfer.fed
+          stdin: "SELECT COUNT(*) FROM customer_transfer_message\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "COUNT(*)"
+
+  - name: preserves filesql-detected column types for schema inspection
+    steps:
+      - fixture:
+          file: products.parquet
+          from: testdata/products.parquet
+      - run:
+          command: sqly products.parquet
+          stdin: ".describe products\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - name
+              - price
+
+  - name: produces identical tables on repeated ACH imports
+    steps:
+      - fixture:
+          file: ppd-debit.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly ppd-debit.ach
+          stdin: ".tables\n"
+      - assert:
+          stdout:
+            contains: ppd_debit_entries
+      # A second identical import yields the same table set (cleanup is
+      # deterministic, independent of prior imports).
+      - run:
+          command: sqly ppd-debit.ach
+          stdin: ".tables\n"
+      - assert:
+          stdout:
+            contains: ppd_debit_entries

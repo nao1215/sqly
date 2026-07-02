@@ -1,0 +1,108 @@
+# Migrated from sqly's ShellSpec spec/sheet_flag_spec.sh.
+# --sheet only affects Excel imports, so it must be rejected for non-Excel
+# inputs. Excel testdata is copied in via fixture.from. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --sheet validation
+
+scenarios:
+  - name: rejects --sheet with a non-Excel file and --sql
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELECT * FROM user" --sheet "A test" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--sheet"
+
+  - name: rejects --sheet with a non-Excel file and --inspect
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --sheet "A test" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--sheet"
+
+  - name: still imports an Excel file with --sheet
+    steps:
+      - fixture: &sample
+          file: sample.xlsx
+          from: testdata/sample.xlsx
+      - run:
+          command: sqly --csv --sql "SELECT * FROM sample_test_sheet" --sheet test_sheet sample.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: name
+
+  - name: rejects an explicit empty --sheet
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --sheet "" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: sheet
+
+  - name: rejects --sheet for a directory with no Excel files
+    steps:
+      - fixture:
+          file: dir/u.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --inspect --sheet anything dir
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--sheet"
+
+  - name: tells the user how to recover when --sheet has no Excel input
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --sheet "A test" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - Excel
+              - "remove --sheet"
+
+  - name: names the workbook and suggests recovery on a single-workbook sheet miss
+    steps:
+      - fixture: *sample
+      - run:
+          command: sqly --inspect --sheet no_such_sheet sample.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - sample.xlsx
+              - "without --sheet"
+
+  - name: names every checked workbook on a multi-workbook sheet miss
+    steps:
+      - fixture: *sample
+      - fixture:
+          file: sheet_with_accents.xlsx
+          from: testdata/sheet_with_accents.xlsx
+      - run:
+          command: sqly --inspect --sheet no_such_sheet sample.xlsx sheet_with_accents.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - sample.xlsx
+              - sheet_with_accents.xlsx
+              - "without --sheet"

@@ -1,0 +1,77 @@
+# Migrated from sqly's ShellSpec spec/import_quoting_spec.sh.
+# A space-containing path must reach .import as one argument when escaped or
+# quoted, and the unescaped form must split and fail. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly .import with space-containing paths
+
+scenarios:
+  - name: imports a backslash-escaped space path as a single argument
+    steps:
+      - fixture: &spacefile
+          file: "space name.csv"
+          content: |
+            label,score
+            alpha,1
+            beta,2
+      - run:
+          command: sqly
+          stdin: ".import space\\ name.csv\nSELECT label FROM space_name ORDER BY score;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alpha
+              - beta
+
+  - name: imports a double-quoted space path as a single argument
+    steps:
+      - fixture: *spacefile
+      - run:
+          command: sqly
+          stdin: ".import \"space name.csv\"\nSELECT label FROM space_name ORDER BY score;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alpha
+
+  - name: imports a single-quoted space path as a single argument
+    steps:
+      - fixture: *spacefile
+      - run:
+          command: sqly
+          stdin: ".import 'space name.csv'\nSELECT label FROM space_name ORDER BY score;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alpha
+
+  - name: imports a file inside a space-containing directory when escaped
+    steps:
+      - fixture:
+          file: "space dir/nested.csv"
+          content: |
+            label,score
+            gamma,3
+            delta,4
+      - run:
+          command: sqly
+          stdin: ".import space\\ dir/nested.csv\nSELECT label FROM nested ORDER BY score;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - gamma
+              - delta
+
+  - name: splits an unquoted space path into two failing arguments
+    steps:
+      - fixture: *spacefile
+      - run:
+          command: sqly
+          stdin: ".import space name.csv\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: space

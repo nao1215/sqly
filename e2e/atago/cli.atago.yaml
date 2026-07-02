@@ -1,0 +1,157 @@
+# Migrated from sqly's ShellSpec spec/cli_spec.sh.
+# Broad CLI surface: version/help, error handling and exit codes, multi-file
+# JOINs, and writing results to a file with --output.
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+#
+# Two ShellSpec assertions did NOT port (see doc/research/shellspec-migration.md):
+#   * `The stderr should not include 'failed to initialize sqly shell'` needs a
+#     negative stream matcher atago lacks, AND the installed sqly v0.25.0 still
+#     wraps flag errors in that prefix, so the assertion is not currently true.
+#   * `The stderr should be present` (non-empty) is covered here by asserting the
+#     concrete error substring instead.
+version: "1"
+
+suite:
+  name: sqly CLI surface
+
+scenarios:
+  - name: prints the version
+    steps:
+      - run:
+          command: sqly --version
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: sqly
+
+  - name: prints usage with --help
+    steps:
+      - run:
+          command: sqly --help
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "[Usage]"
+              - "--json"
+
+  - name: fails on a non-existent file
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" does_not_exist.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: does not exist
+
+  - name: fails on invalid SQL with --sql
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELEKT * FROM user" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "syntax error"
+
+  - name: reports an unknown flag as a CLI error
+    steps:
+      - run:
+          command: sqly --no-such-flag
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unknown flag"
+
+  - name: reports conflicting output mode flags as a CLI error
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --csv --json --sql "SELECT 1" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "conflicting output mode flags"
+
+  - name: joins two imported files
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      - fixture:
+          file: identifier.csv
+          content: |
+            id,position
+            1,developrt
+            2,manager
+      - run:
+          command: sqly --csv --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" user.csv identifier.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: user_name,position
+      - assert:
+          stdout:
+            contains: booker12
+
+  - name: writes JSON results to the given path with --output
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --json --output result.json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: result.json
+          file:
+            path: result.json
+            contains: '"user_name":"booker12"'
+
+  - name: applies an output-mode flag placed after the file path
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: user_name
+      - assert:
+          stdout:
+            contains: booker12
+
+  - name: fails fast on an unknown flag after the file path
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv --nope
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unknown flag"

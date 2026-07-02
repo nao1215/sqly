@@ -1,0 +1,125 @@
+# Migrated from sqly's ShellSpec spec/save_spec.sh.
+# DML changes persist to files only through --save / --save-dir / .save. --save
+# overwrites sources and requires --force; --save-dir never touches the source.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly write-back
+
+scenarios:
+  - name: writes to --save-dir without modifying the source
+    steps:
+      - fixture: &u
+          file: u.csv
+          content: |
+            user_name,identifier,first_name
+            booker12,1,Rachel
+            jenkins46,2,Mary
+      - run:
+          command: sqly --sql "UPDATE u SET first_name = 'CHANGED' WHERE identifier = 1" u.csv --save-dir out
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: "Saved u to"
+          file:
+            path: u.csv
+            not_contains: CHANGED
+      - assert:
+          file:
+            path: out/u.csv
+            contains: CHANGED
+
+  - name: refuses --save without --force
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "UPDATE u SET first_name = 'X'" u.csv --save
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--force"
+          file:
+            path: u.csv
+            not_contains: "X,"
+
+  - name: overwrites the source in place with --save --force
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "DELETE FROM u WHERE identifier > 1" u.csv --save --force
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: "Saved u to"
+
+  - name: re-imports a file rewritten in place (round-trip)
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "DELETE FROM u WHERE identifier > 1" u.csv --save --force
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM u" u.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: preserves gzip compression on in-place save
+    steps:
+      - fixture:
+          file: c.csv.gz
+          from: testdata/user.csv.gz
+      - run:
+          command: sqly --sql "UPDATE c SET first_name = 'GZ' WHERE identifier = 1" c.csv.gz --save --force
+      - run:
+          command: sqly --csv --sql "SELECT first_name FROM c WHERE identifier = 1" c.csv.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: GZ
+
+  - name: saves via the .save command in batch mode
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET first_name = 'BATCH' WHERE identifier = 1;\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: "Saved u to"
+          file:
+            path: u.csv
+            contains: BATCH
+
+  - name: guides a non-interactive --save with no input files toward passing input
+    steps:
+      - run:
+          command: sqly --save --force --sql "UPDATE foo SET x = 1"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "no tables to save"
+              - "input files"
+
+  - name: guides a batch .save with no imported tables toward passing input
+    steps:
+      - run:
+          command: sqly
+          stdin: ".save --force\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "no tables to save"
+              - "input files"

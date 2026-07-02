@@ -1,0 +1,393 @@
+# Migrated from sqly's ShellSpec spec/v0_21_bugs_spec.sh.
+# v0.21.0 binary regressions. ShellSpec `Parameters` tables are expanded into
+# explicit scenarios (atago keeps YAML declarative). Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly v0.21.0 binary regressions
+
+scenarios:
+  - name: prefers a TEMP table over a same-named main table in .schema
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly user.csv
+          stdin: "CREATE TEMP TABLE user(id TEXT);\n.schema user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: TEMP
+      - assert:
+          stdout:
+            not_contains: first_name
+
+  - name: prefers a TEMP view over a same-named main table in .schema
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "CREATE TEMP VIEW user AS SELECT 1 AS id;\n.schema user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "TEMP VIEW"
+
+  - name: keeps both a main and a same-named TEMP object in .tables
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "CREATE TEMP TABLE user(id TEXT);\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "temp.user"
+
+  - name: targets a literal dotted table name in .schema
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"a.b\"(id INTEGER);\n.schema \"a.b\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: id
+
+  - name: targets a literal dotted table name in .describe
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"a.b\"(id INTEGER);\n.describe \"a.b\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: id
+
+  - name: targets a literal dotted table name in .header
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"a.b\"(id INTEGER);\n.header \"a.b\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: id
+
+  - name: targets a literal dotted table name in .dump
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"a.b\"(id INTEGER);\n.dump \"a.b\" ab.csv\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: ab.csv
+            contains: id
+
+  - name: prints a paste-safe quoted identifier in .tables
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"two words\"(id INTEGER);\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"two words"'
+
+  - name: keeps the full spaced table name in .header
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"two words\"(id INTEGER);\n.header \"two words\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "two words"
+
+  - name: keeps the TEMP keyword for a temp-qualified table in .schema
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TEMP TABLE t(id INTEGER PRIMARY KEY);\n.schema temp.t\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: TEMP
+
+  - name: keeps the TEMP keyword for a temp-qualified view in .schema
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TEMP VIEW v AS SELECT 1 AS id;\n.schema temp.v\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "TEMP VIEW"
+
+  - name: "direct --sql rejects multi-statement input: two SELECTs"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT 1 AS x; SELECT 2 AS y" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "single SQL statement"
+
+  - name: "direct --sql rejects multi-statement input: SELECT then UPDATE"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT 1 AS x; UPDATE user SET first_name='z'" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "single SQL statement"
+
+  - name: rejects multi-statement --sql --output before writing the file
+    env: *hist
+    steps:
+      - run:
+          command: sqly --csv --sql "SELECT 1 AS x; SELECT 2 AS y" --output out.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "single SQL statement"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: "rejects under --save --force: PRAGMA user_version=1"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "PRAGMA user_version=1" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          stdout:
+            not_contains: journal_mode
+
+  - name: "rejects under --save --force: PRAGMA incremental_vacuum"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "PRAGMA incremental_vacuum" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          stdout:
+            not_contains: journal_mode
+
+  - name: "rejects under --save --force: PRAGMA journal_mode=OFF"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "PRAGMA journal_mode=OFF" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          stdout:
+            not_contains: journal_mode
+
+  - name: rejects a setter PRAGMA under --save-dir and writes nothing
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "PRAGMA user_version=1" --save-dir out user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          file:
+            path: out
+            exists: false
+
+  - name: rejects a command PRAGMA under --save-dir and writes nothing
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "PRAGMA incremental_vacuum" --save-dir out user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          file:
+            path: out
+            exists: false
+
+  - name: rejects END in direct --sql
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "END"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: transaction
+
+  - name: rejects END in batch stdin
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "END;\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: transaction
+
+  - name: rejects END in a --sql-file script
+    env: *hist
+    steps:
+      - fixture:
+          file: end.sql
+          content: |
+            END;
+      - run:
+          command: sqly --sql-file end.sql
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: transaction
+
+  - name: "--output rejects nested compression suffixes: out.csv.gz.zst"
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output out.csv.gz.zst
+      - assert:
+          exit_code: 1
+          file:
+            path: out.csv.gz.zst
+            exists: false
+
+  - name: "--output rejects nested compression suffixes: out.parquet.gz.zst"
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output out.parquet.gz.zst
+      - assert:
+          exit_code: 1
+          file:
+            path: out.parquet.gz.zst
+            exists: false
+
+  - name: "--output rejects nested compression suffixes: out.xlsx.gz.zst"
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output out.xlsx.gz.zst
+      - assert:
+          exit_code: 1
+          file:
+            path: out.xlsx.gz.zst
+            exists: false
+
+  - name: rejects a nested .dump destination and writes nothing
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user d.csv.gz.zst\n"
+      - assert:
+          exit_code: 1
+          file:
+            path: d.csv.gz.zst
+            exists: false
+
+  - name: emits structured .tables output under .mode json
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode json\n.tables\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Change output mode"
+          stdout:
+            contains:
+              - '"name"'
+              - '"schema"'
+
+  - name: emits structured .header output under .mode ndjson
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode ndjson\n.header user\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Change output mode"
+          stdout:
+            contains:
+              - '"column"'
+              - first_name
+
+  - name: does not rewrite an unchanged source on .save --force
+    env: *hist
+    steps:
+      - fixture:
+          file: ro.csv
+          content: |
+            user_name,identifier
+            alice,1
+      - run:
+          command: sqly ro.csv
+          stdin: ".save --force\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+
+  - name: writes no directory export for an unchanged session on .save DIR
+    env: *hist
+    steps:
+      - fixture:
+          file: ro2.csv
+          content: |
+            user_name,identifier
+            alice,1
+      - run:
+          command: sqly ro2.csv
+          stdin: "SELECT 1;\n.save out\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: out
+            exists: false

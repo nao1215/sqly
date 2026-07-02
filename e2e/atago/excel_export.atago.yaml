@@ -1,0 +1,47 @@
+# Migrated from sqly's ShellSpec spec/excel_export_spec.sh.
+# Exported .xlsx files are ordinary data files. Run with: make test-e2e
+#
+version: "1"
+
+suite:
+  name: sqly excel export
+
+scenarios:
+  - name: writes a non-executable .xlsx with --output
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --excel --output out.xlsx --sql "SELECT * FROM user LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=excel"
+          file:
+            path: out.xlsx
+            exists: true
+      - assert:
+          file:
+            path: out.xlsx
+            executable: false
+
+  - name: writes a non-executable .xlsx with the .dump command
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode excel\n.dump user dump.xlsx\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "mode=excel"
+          file:
+            path: dump.xlsx
+            exists: true
+      - assert:
+          file:
+            path: dump.xlsx
+            executable: false

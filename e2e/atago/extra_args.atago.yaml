@@ -1,0 +1,88 @@
+# Migrated from sqly's ShellSpec spec/extra_args_spec.sh.
+# Helper dot-commands reject unexpected trailing arguments. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly helper commands reject extra args
+
+scenarios:
+  - name: rejects .schema with an extra argument
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".schema user extra\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".schema"
+
+  - name: rejects .describe with an extra argument
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".describe user extra\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".describe"
+
+  - name: rejects .tables with an extra argument
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".tables extra\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".tables"
+
+  - name: rejects .mode with an extra argument
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode csv extra\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".mode"
+
+  - name: rejects .pwd with an extra argument
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".pwd extra\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".pwd"
+
+  - name: rejects .clear with an extra argument
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".clear extra\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".clear"
+
+  - name: does not let .exit with an extra argument silently terminate the batch
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".exit extra\nSELECT 1;\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".exit"

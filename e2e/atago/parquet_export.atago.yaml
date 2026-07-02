@@ -1,0 +1,97 @@
+# Migrated from sqly's ShellSpec spec/parquet_export_spec.sh.
+# Parquet is export-only: written by .dump and --output, re-imports cleanly,
+# normalizes the extension, and errors on an empty result. Round-trips use two
+# run steps (write, then re-import); each assert targets the most recent run.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly parquet export
+
+scenarios:
+  - name: writes a parquet file that re-imports with the same rows
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly user.csv
+          stdin: ".mode parquet\n.dump user user.parquet\n"
+      - assert:
+          stderr:
+            contains: "Change output mode"
+          file:
+            path: user.parquet
+            exists: true
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user" user.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: appends the .parquet extension
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode parquet\n.dump user result\n"
+      - assert:
+          file:
+            path: result.parquet
+            exists: true
+
+  - name: writes query results to the given parquet path with --output
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --parquet --output q.parquet --sql "SELECT user_name FROM user LIMIT 2" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: q.parquet
+          file:
+            path: q.parquet
+            exists: true
+
+  - name: preserves leading-zero codes through a parquet round-trip
+    steps:
+      - run:
+          command: sqly --parquet --output codes.parquet --sql "SELECT '007' AS code, '00042' AS acct"
+      - run:
+          command: sqly --csv --sql "SELECT code, acct FROM codes" codes.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "007"
+              - "00042"
+
+  - name: preserves SQL NULL through a parquet round-trip
+    steps:
+      - run:
+          command: sqly --parquet --output n.parquet --sql "SELECT CAST(NULL AS TEXT) AS id, 'A' AS name UNION ALL SELECT '1' AS id, 'B' AS name"
+      - run:
+          command: sqly --json-typed --sql "SELECT * FROM n" n.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"id":null'
+      - assert:
+          stdout:
+            not_contains: '"id":""'
+
+  - name: reports a clear error when exporting an empty result
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --parquet --output empty.parquet --sql "SELECT user_name FROM user WHERE 1=0" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "empty result"

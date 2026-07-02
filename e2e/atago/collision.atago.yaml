@@ -1,0 +1,27 @@
+# Migrated from sqly's ShellSpec spec/collision_spec.sh.
+# Two inputs that sanitize to the same table name must fail instead of one
+# silently overwriting the other. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly table-name collision
+
+scenarios:
+  - name: fails when two inputs sanitize to the same table name
+    steps:
+      - fixture:
+          file: a-b.csv
+          content: |
+            id,name
+            1,A
+      - fixture:
+          file: a_b.csv
+          content: |
+            id,name
+            2,B
+      - run:
+          command: sqly --inspect a-b.csv a_b.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: collision

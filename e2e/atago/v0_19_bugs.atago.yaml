@@ -1,0 +1,280 @@
+# Migrated from sqly's ShellSpec spec/v0_19_bugs_spec.sh.
+# v0.19.0 binary bug fixes. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly v0.19.0 binary bug fixes
+
+scenarios:
+  - name: quotes a CSV value containing a comma
+    steps:
+      - run:
+          command: sqly --csv --sql "SELECT 'a,b' AS c"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: '"a,b"'
+
+  - name: quotes a CSV value containing a double quote
+    steps:
+      - run:
+          command: sqly --csv --sql "SELECT 'a' || char(34) || 'b' AS c"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: '"a""b"'
+
+  - name: rejects an LTSV value containing a tab
+    steps:
+      - run:
+          command: sqly --ltsv --sql "SELECT 'a' || char(9) || 'b' AS c"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: LTSV
+
+  - name: rejects duplicate JSON keys
+    steps:
+      - run:
+          command: sqly --json --sql "SELECT 1 AS x, 2 AS x"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unique column names"
+
+  - name: rejects duplicate NDJSON keys
+    steps:
+      - run:
+          command: sqly --ndjson --sql "SELECT 1 AS x, 2 AS x"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unique column names"
+
+  - name: keeps a Markdown row on one line when a value has a newline
+    steps:
+      - run:
+          command: sqly --markdown --sql "SELECT 'a' || char(10) || 'b' AS x"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "a<br>b"
+
+  - name: accepts a leading block comment in direct --sql
+    steps:
+      - run:
+          command: sqly --csv --sql "/* note */ SELECT 1 AS x"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: accepts PRAGMA in direct --sql
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly --csv --sql "PRAGMA table_info(user)" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user_name
+
+  - name: accepts VALUES in direct --sql
+    steps:
+      - run:
+          command: sqly --csv --sql "VALUES (1), (2)"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: accepts the TABLE shorthand in direct --sql
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --sql "TABLE user" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: accepts CREATE TABLE in direct --sql
+    steps:
+      - run:
+          command: sqly --sql "CREATE TABLE t(x)"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+
+  - name: accepts ANALYZE in direct --sql
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "ANALYZE" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+
+  - name: runs WITH ... UPDATE without RETURNING as DML
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "WITH s AS (SELECT 1 AS identifier) UPDATE user SET first_name='Z' WHERE identifier IN (SELECT identifier FROM s)" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "affected is 1 row"
+
+  - name: rejects --stdin-name without --stdin
+    steps:
+      - run:
+          command: sqly --stdin-name weird --csv --sql "SELECT 1 AS x"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "stdin-name"
+
+  - name: rejects --inspect-sample without --inspect
+    steps:
+      - run:
+          command: sqly --inspect-sample 0 --csv --sql "SELECT 1 AS x"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "inspect-sample"
+
+  - name: rejects --force without --save
+    steps:
+      - run:
+          command: sqly --force --sql "SELECT 1 AS x"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: force
+
+  - name: rejects --inspect combined with --csv
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --csv user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: inspect
+
+  - name: imports an empty JSON array as a zero-row table
+    steps:
+      - fixture:
+          file: empty.json
+          content: "[]"
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM empty" empty.json
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0"
+
+  - name: imports an empty JSONL file as a zero-row table
+    steps:
+      - fixture:
+          file: empty.jsonl
+          content: ""
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM empty" empty.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0"
+
+  - name: rejects an --output path ending with a slash
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output "outdir/" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: separator
+
+  - name: rejects an --output ACH destination
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT identifier FROM user LIMIT 1" --output out.ach user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "input-only"
+
+  - name: parses a helper command after a terminated statement
+    steps:
+      - run:
+          command: sqly
+          stdin: "SELECT 1 AS x;\n.mode csv\nSELECT 2 AS y;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+          stderr:
+            not_contains: arguments
+
+  - name: parses a helper command after a leading comment
+    steps:
+      - run:
+          command: sqly
+          stdin: "-- header\n.mode csv\nSELECT 1 AS x;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+          stderr:
+            not_contains: arguments
+
+  - name: does not write back for an EXPLAIN under --save-dir
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "EXPLAIN UPDATE user SET first_name='X' WHERE identifier=1" --save-dir out user.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out/user.csv
+            exists: false
+
+  - name: does not write back for a zero-row DML under --save-dir
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=999999" --save-dir out user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "affected is 0"
+          file:
+            path: out/user.csv
+            exists: false
+
+  - name: keeps stdout clean when parquet write-back fails
+    steps:
+      - fixture:
+          file: products.parquet
+          from: testdata/products.parquet
+      - run:
+          command: sqly --sql "DELETE FROM products" --save --force products.parquet
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            empty: false
