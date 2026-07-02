@@ -1,0 +1,48 @@
+# Migrated from sqly's ShellSpec spec/inspect_conflicts_spec.sh.
+# --inspect is self-contained, so combining it with action/side-effecting flags
+# must fail and write nothing. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --inspect conflicts
+
+scenarios:
+  - name: rejects --inspect with --sql
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --inspect --sql "SELECT * FROM user LIMIT 1" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--inspect"
+
+  - name: rejects --inspect with --output and writes no file
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --output out.csv user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--inspect"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: rejects --inspect with --save-dir and creates no save dir
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --save-dir save user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--inspect"
+          file:
+            path: save
+            exists: false

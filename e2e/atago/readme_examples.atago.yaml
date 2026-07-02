@@ -1,0 +1,429 @@
+# Migrated from sqly's ShellSpec spec/readme_examples_spec.sh.
+# Every example shown in sqly's README, run against the real binary so the docs
+# cannot silently drift. Full testdata + the doc/vhs/*.sql scripts are copied in
+# via fixture.from; user.csv/identifier.csv are inlined. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: README examples
+
+scenarios:
+  - name: prints the full user table as an ASCII table
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - run:
+          command: sqly --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - user_name
+              - booker12
+              - smith79
+
+  - name: joins two files on a shared key
+    steps:
+      - fixture: *user
+      - fixture: &identifier
+          file: identifier.csv
+          content: |
+            id,position
+            1,developrt
+            2,manager
+            3,neet
+      - run:
+          command: sqly --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id" user.csv identifier.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - position
+              - developrt
+
+  - name: runs the analytics script (CTE + window + GROUP BY)
+    steps:
+      - fixture:
+          file: actor.csv
+          from: testdata/actor.csv
+      - fixture:
+          file: analytics.sql
+          from: testdata/analytics.sql
+      - run:
+          command: sqly --sql-file analytics.sql actor.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Harrison Ford"
+              - "50+ movies"
+
+  - name: extracts JSON fields from a JSONL file
+    steps:
+      - fixture:
+          file: sample.jsonl
+          from: testdata/sample.jsonl
+      - fixture:
+          file: json.sql
+          from: testdata/json.sql
+      - run:
+          command: sqly --sql-file json.sql sample.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - Charlie
+              - Nagoya
+
+  - name: reads a gzipped CSV transparently
+    steps:
+      - fixture: &usergz
+          file: user.csv.gz
+          from: testdata/user.csv.gz
+      - run:
+          command: sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: booker12
+
+  - name: queries a Parquet file
+    steps:
+      - fixture:
+          file: products.parquet
+          from: testdata/products.parquet
+      - run:
+          command: sqly --csv --sql "SELECT name FROM products ORDER BY CAST(price AS REAL) DESC LIMIT 1" products.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: Laptop
+
+  - name: joins a compressed CSV with a plain CSV
+    steps:
+      - fixture: *usergz
+      - fixture: *identifier
+      - run:
+          command: sqly --csv --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" user.csv.gz identifier.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: developrt
+
+  - name: renders CSV with --csv
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+      - assert:
+          stdout:
+            line: 1
+            equals: user_name,identifier
+      - assert:
+          stdout:
+            line: 2
+            equals: booker12,1
+      - assert:
+          stdout:
+            line: 3
+            equals: jenkins46,2
+
+  - name: renders JSON with --json
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --json --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+      - assert:
+          stdout:
+            contains: '{"user_name":"booker12","identifier":"1"}'
+
+  - name: renders NDJSON with --ndjson
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --ndjson --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+      - assert:
+          stdout:
+            line: 1
+            equals: '{"user_name":"booker12","identifier":"1"}'
+      - assert:
+          stdout:
+            line: 2
+            equals: '{"user_name":"jenkins46","identifier":"2"}'
+
+  - name: renders a markdown table with --markdown
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --markdown --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+      - assert:
+          stdout:
+            line: 1
+            equals: "| user_name | identifier |"
+      - assert:
+          stdout:
+            contains: "| booker12 | 1 |"
+
+  - name: renders LTSV with --ltsv
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --ltsv --sql "SELECT user_name, identifier FROM user LIMIT 1" user.csv
+      - assert:
+          stdout:
+            line: 1
+            equals: "user_name:booker12\tidentifier:1"
+
+  - name: writes CSV to the path given by --output
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT * FROM user" --output out.csv user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: out.csv
+          file:
+            path: out.csv
+            contains: booker12
+
+  - name: queries piped CSV through the default stdin table
+    steps:
+      - run:
+          command: sqly --stdin csv --sql "SELECT user_name FROM stdin LIMIT 1"
+          stdin: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: joins piped stdin with a file argument
+    steps:
+      - fixture: *identifier
+      - run:
+          command: sqly --stdin csv --csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" identifier.csv
+          stdin: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: developrt
+
+  - name: runs a helper command and a query from piped stdin
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".tables\nSELECT COUNT(*) FROM user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "TABLE NAME"
+              - user
+              - "3"
+
+  - name: runs SQL from join.sql while stdin carries a dataset
+    steps:
+      - fixture: *identifier
+      - fixture:
+          file: join.sql
+          from: testdata/join.sql
+      - run:
+          command: sqly --stdin csv --sql-file join.sql identifier.csv
+          stdin: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: developrt
+
+  - name: prints a JSON inspect report with a stable source and column types
+    steps:
+      - fixture: *identifier
+      - run:
+          command: sqly --inspect --inspect-sample 1 identifier.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"name": "identifier"'
+              - identifier.csv
+              - '"type": "INTEGER"'
+              - '"position": "developrt"'
+
+  - name: omits sample rows with --inspect-sample 0
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --inspect-sample 0 user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"sample_rows": []'
+
+  - name: prints the CREATE TABLE statement with .schema
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".schema user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - 'CREATE TABLE "user"'
+              - '"identifier" INTEGER'
+
+  - name: prints column information with .describe
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".describe user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - notnull
+              - user_name
+              - INTEGER
+
+  - name: writes the updated table to --save-dir, leaving the source untouched
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir out user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: "Saved user to"
+          file:
+            path: user.csv
+            not_contains: Rachelle
+      - assert:
+          file:
+            path: out/user.csv
+            contains: Rachelle
+
+  - name: rejects --save without --force
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: force
+          file:
+            path: user.csv
+            not_contains: "101"
+
+  - name: rejects a schema-changing statement under --save-dir before writing anything
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir out user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "cannot persist"
+          file:
+            path: out
+            exists: false
+
+  - name: overwrites the source in place with --save --force
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save --force user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: "Saved user to"
+          file:
+            path: user.csv
+            contains: "101"
+
+  - name: imports every supported file under a directory
+    steps:
+      - fixture:
+          file: imp/user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - fixture:
+          file: imp/identifier.csv
+          content: |
+            id,position
+            1,developrt
+      - run:
+          command: sqly imp
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - user
+              - identifier
+          stderr:
+            contains: "Successfully imported"
+
+  - name: loads ACH records into multiple tables
+    steps:
+      - fixture: &ach
+          file: ppd-debit.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly ppd-debit.ach
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - ppd_debit_file_header
+              - ppd_debit_entries
+
+  - name: queries the ACH entries table
+    steps:
+      - fixture: *ach
+      - run:
+          command: sqly --csv --sql "SELECT amount FROM ppd_debit_entries" ppd-debit.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: amount
+
+  - name: loads a Fedwire file into a single message table
+    steps:
+      - fixture:
+          file: customer-transfer.fed
+          from: testdata/customer-transfer.fed
+      - run:
+          command: sqly customer-transfer.fed
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: customer_transfer_message

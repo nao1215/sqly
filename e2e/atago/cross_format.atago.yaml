@@ -1,0 +1,41 @@
+# Migrated from sqly's ShellSpec spec/cross_format_spec.sh (the cross-format
+# JOIN case). Requires `sqly` on PATH. Run with: make test-e2e
+#
+# The Parquet table cannot be expressed as an inline text fixture, so it is a
+# committed binary testdata file copied into the workdir via `fixture: { from }`
+# (relative to this spec's directory). sales.csv is small enough to inline.
+#
+# The --output format-converter and directory-import cases of the original spec
+# wrap the work in shell helper functions (mktemp, multiple writes, re-query and
+# grep); those are shell scripting, not single-command behavior, so they are not
+# ported (recorded in the migration report).
+version: "1"
+
+suite:
+  name: sqly cross-format workflows
+
+scenarios:
+  - name: joins a Parquet table to a CSV table and computes a column
+    steps:
+      - fixture:
+          file: products.parquet
+          from: testdata/products.parquet
+      - fixture:
+          file: sales.csv
+          content: |
+            product_id,quantity
+            1,3
+            2,10
+            3,5
+      - run:
+          command: sqly --csv --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2) AS revenue FROM products p JOIN sales s ON p.id = s.product_id ORDER BY revenue DESC" products.parquet sales.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: name,price,quantity,revenue
+      - assert:
+          stdout:
+            contains:
+              - Laptop
+              - "2999.97"

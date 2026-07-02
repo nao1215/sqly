@@ -1,0 +1,78 @@
+# Migrated from sqly's ShellSpec spec/output_status_spec.sh.
+# When data is written to a file (--output, .dump), the success/status line is
+# control-plane output and must go to stderr so stdout stays empty for scripts.
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+#
+# ShellSpec mapping:
+#   * `Data:expand` writing to ${OUT_DIR}/... -> literal run.stdin writing to a
+#     workdir-relative path (atago gives each scenario its own temp workdir).
+#   * `The output should equal ''` -> stdout: { empty: true }.
+# The .save case is not ported: it relies on `The output should not include`
+# (a negative stream matcher atago lacks — see migration report).
+version: "1"
+
+suite:
+  name: sqly file-output status routing
+
+scenarios:
+  - name: keeps stdout empty for --output and reports on stderr
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output out.csv user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+          stderr:
+            contains: "Output sql result to"
+          file:
+            path: out.csv
+            exists: true
+
+  - name: keeps stdout free of the .dump status line
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user dump.csv\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+          stderr:
+            contains: "dump `user` table to"
+          file:
+            path: dump.csv
+            exists: true
+
+  - name: keeps the .save confirmation off stdout
+    steps:
+      - fixture:
+          file: u.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET user_name = 'X' WHERE identifier = 1;\n.save saved\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+      # The "Saved ..." confirmation is control-plane output: it belongs on
+      # stderr, never stdout.
+      - assert:
+          stdout:
+            not_contains: Saved
+          stderr:
+            contains: "Saved u to"

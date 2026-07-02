@@ -1,0 +1,83 @@
+# Migrated from sqly's ShellSpec spec/typed_json_spec.sh (issue #282).
+# --json-typed/--ndjson-typed emit native JSON scalars; plain --json/--ndjson
+# keep the legacy string contract. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly typed JSON output
+
+scenarios:
+  - name: emits native numbers, booleans, and null with --json-typed
+    steps:
+      - run:
+          command: sqly --json-typed --sql "SELECT 42 AS i, -1.5 AS f, NULL AS n, 'x' AS s"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"i":42'
+              - '"f":-1.5'
+              - '"n":null'
+              - '"s":"x"'
+
+  - name: keeps the legacy string contract with plain --json
+    steps:
+      - run:
+          command: sqly --json --sql "SELECT 42 AS i"
+      - assert:
+          stdout:
+            contains: '"i":"42"'
+
+  - name: emits native scalars per line with --ndjson-typed
+    steps:
+      - run:
+          command: sqly --ndjson-typed --sql "SELECT 7 AS n, 't' AS s"
+      - assert:
+          stdout:
+            contains:
+              - '"n":7'
+              - '"s":"t"'
+
+  - name: keeps a large integer column lossless (no scientific notation)
+    steps:
+      - fixture: &bigint
+          file: typed_bigint.csv
+          content: |
+            id,amount,flag
+            1,9007199254740993,true
+            2,42,false
+      - run:
+          command: sqly --json-typed --sql "SELECT amount FROM typed_bigint WHERE id = 1" typed_bigint.csv
+      - assert:
+          stdout:
+            contains: '"amount":9007199254740993'
+      - assert:
+          stdout:
+            not_contains: "e+"
+
+  - name: leaves a leading-zero value as a string
+    steps:
+      - run:
+          command: sqly --json-typed --sql "SELECT '007' AS code"
+      - assert:
+          stdout:
+            contains: '"code":"007"'
+
+  - name: uses the typed contract for --inspect sample rows
+    steps:
+      - fixture: *bigint
+      - run:
+          command: sqly --inspect --json-typed typed_bigint.csv
+      - assert:
+          stdout:
+            contains: '"amount": 9007199254740993'
+
+  - name: rejects plain --json combined with --inspect
+    steps:
+      - fixture: *bigint
+      - run:
+          command: sqly --inspect --json typed_bigint.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: inspect

@@ -1,0 +1,117 @@
+# Migrated from sqly's ShellSpec spec/inspect_spec.sh.
+# Non-interactive --inspect: machine-readable JSON report + stdout purity.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --inspect
+
+scenarios:
+  - name: prints a JSON report for a single file
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly --inspect user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "{"
+      - assert:
+          stdout:
+            contains:
+              - '"name": "user"'
+              - '"row_count": 3'
+              - '"user_name"'
+
+  - name: maps every table from a multi-table ACH file to its source
+    steps:
+      - fixture:
+          file: ppd-debit.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly --inspect ppd-debit.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"name": "ppd_debit_entries"'
+              - ppd-debit.ach
+
+  - name: keeps stdout as pure JSON for a directory and stays quiet on stderr
+    steps:
+      - fixture:
+          file: ins/a.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - fixture:
+          file: ins/b.csv
+          content: |
+            id,position
+            1,developrt
+      - run:
+          command: sqly --inspect ins
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "{"
+      - assert:
+          stdout:
+            contains:
+              - '"name": "a"'
+              - '"name": "b"'
+          stderr:
+            not_contains: "Successfully imported"
+
+  - name: fails with a clear error when no input is given
+    steps:
+      - run:
+          command: sqly --inspect
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no tables to inspect"
+
+  - name: emits a schema-only report with --inspect-sample 0
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --inspect-sample 0 user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"sample_rows": []'
+      - assert:
+          stdout:
+            not_contains: booker12
+
+  - name: limits sample rows with --inspect-sample
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --inspect-sample 1 user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+      - assert:
+          stdout:
+            not_contains: jenkins46
+
+  - name: rejects a negative --inspect-sample
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect --inspect-sample -1 user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "inspect-sample"

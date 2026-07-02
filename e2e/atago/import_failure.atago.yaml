@@ -1,0 +1,76 @@
+# Migrated from sqly's ShellSpec spec/import_failure_spec.sh.
+# When an explicitly requested input fails to import, non-interactive runs exit
+# non-zero and keep diagnostics on stderr so stdout stays clean. make test-e2e
+version: "1"
+
+suite:
+  name: sqly import failure handling
+
+scenarios:
+  - name: fails query mode on a partial import and keeps stdout clean
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --json --sql "SELECT user_name FROM user LIMIT 1" user.csv /no/such/file.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains:
+              - "failed to import"
+              - "inputs failed to import: path does not exist"
+
+  - name: names the failed count and first path when every input fails
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" /no/such/a.csv /no/such/b.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains:
+              - "all 2 import(s) failed"
+              - "/no/such/a.csv"
+              - "+1 more"
+
+  - name: fails --inspect on a partial import
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect user.csv /no/such/file.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: "failed to import"
+
+  - name: fails batch .import on a partial import and stops later commands
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly
+          stdin: ".import user.csv /no/such/file.csv\n.tables\n"
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: "TABLE NAME"
+          stderr:
+            contains: "failed to import"
+
+  - name: keeps stdout clean when a stdin dataset fails to import
+    steps:
+      - run:
+          command: sqly --stdin csv --json --sql "SELECT COUNT(*) FROM stdin"
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: "Import failed"

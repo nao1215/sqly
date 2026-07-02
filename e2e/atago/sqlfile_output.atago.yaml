@@ -1,0 +1,88 @@
+# Migrated from sqly's ShellSpec spec/sqlfile_output_spec.sh (issue #685).
+# --sql-file with --output exports a single result set to a file; zero or
+# multiple result sets are rejected, and a successful export keeps stdout clean.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --sql-file --output
+
+scenarios:
+  - name: exports a single-SELECT script to the output file with clean stdout
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT user_name FROM user ORDER BY identifier LIMIT 1;
+      - run:
+          command: sqly --sql-file q.sql --output out.csv user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+          stderr:
+            contains: "Output sql result"
+          file:
+            path: out.csv
+            contains: user_name
+
+  - name: exports a single result set even when the script first runs DDL/DML
+    steps:
+      - fixture: *user
+      - fixture:
+          file: q.sql
+          content: |
+            CREATE TEMP TABLE picked AS SELECT user_name FROM user;
+            SELECT * FROM picked ORDER BY user_name LIMIT 1;
+      - run:
+          command: sqly --sql-file q.sql --output out.csv user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+          stderr:
+            contains: "Output sql result"
+          file:
+            path: out.csv
+            exists: true
+
+  - name: rejects a script that produces no result set
+    steps:
+      - fixture: *user
+      - fixture:
+          file: q.sql
+          content: |
+            CREATE TEMP TABLE t AS SELECT 1 AS x;
+      - run:
+          command: sqly --sql-file q.sql --output out.csv user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "result set"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: rejects a script that produces multiple result sets
+    steps:
+      - fixture: *user
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT user_name FROM user LIMIT 1;
+            SELECT identifier FROM user LIMIT 1;
+      - run:
+          command: sqly --sql-file q.sql --output out.csv user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "single result set"
+          file:
+            path: out.csv
+            exists: false

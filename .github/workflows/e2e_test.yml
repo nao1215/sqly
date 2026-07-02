@@ -8,8 +8,8 @@ on:
     branches: [main]
 
 jobs:
-  shellspec:
-    name: shellspec (binary e2e)
+  atago:
+    name: atago (binary e2e)
 
     strategy:
       matrix:
@@ -28,12 +28,12 @@ jobs:
         with:
           go-version-file: "go.mod"
 
-      - name: Install shellspec
-        run: |
-          curl -fsSL https://git.io/shellspec | sh -s 0.28.1 --yes
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install atago
+        uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
+        with:
+          version: v0.1.0
 
-      - name: Run shellspec end-to-end tests
+      - name: Run atago end-to-end tests
         # The hermetic runner builds sqly and runs the suite in a temp-backed
         # HOME/config sandbox, so local and CI execution are identical.
         run: make test-e2e

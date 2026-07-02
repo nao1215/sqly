@@ -1,0 +1,210 @@
+# Migrated from sqly's ShellSpec spec/v0_25_bugs_spec.sh.
+# Binary-level regressions for the v0.25.0 onboarding/UX hardening work.
+# Run with: make test-e2e
+#
+# `printf '' | sqly` (truly empty stdin) maps to a newline-only run.stdin: both
+# are non-TTY pipes with no SQL, so sqly emits the same "no TTY detected" hint.
+version: "1"
+
+suite:
+  name: sqly v0.25.0 binary regressions
+
+scenarios:
+  - name: rejects an explicit empty --sql value
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--sql requires a non-empty SQL statement"
+
+  - name: reports a hint when non-interactive run gets empty stdin and no file
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no TTY detected"
+
+  - name: reports a hint when non-interactive run gets empty stdin with a file
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no TTY detected"
+
+  - name: reports a stable stdin reference instead of the staging temp path
+    env: *hist
+    steps:
+      - run:
+          command: sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
+          stdin: "\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: stdin
+      - assert:
+          stderr:
+            not_contains: "sqly-stdin-"
+
+  - name: fails batch mode when .schema is missing its table name
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".schema\nSELECT 1;\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".schema requires"
+
+  - name: fails batch mode when .header is missing its table name
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".header\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".header requires"
+
+  - name: fails batch mode when .describe is missing its table name
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".describe\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".describe requires"
+
+  - name: fails batch mode when .mode is missing its mode name
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".mode requires"
+
+  - name: fails batch mode when .dump is missing its destination
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".dump\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".dump requires"
+
+  - name: fails batch mode when .import is missing its path
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".import\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".import requires"
+
+  - name: fails batch mode when .save is missing its argument
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".save\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ".save requires"
+
+  - name: keeps --inspect quiet on stderr after a successful directory import
+    env: *hist
+    steps:
+      - fixture:
+          file: "space dir/d.csv"
+          content: |
+            a
+            1
+      - run:
+          command: sqly --inspect "space dir"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"tables"'
+          stderr:
+            not_contains: "Successfully imported"
+
+  - name: keeps --profile quiet on stderr after a successful directory import
+    env: *hist
+    steps:
+      - fixture:
+          file: "space dir/d.csv"
+          content: |
+            a
+            1
+      - run:
+          command: sqly --profile "space dir"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"tables"'
+          stderr:
+            not_contains: "Successfully imported"
+
+  - name: guides "sqly help" to --help instead of an import error
+    env: *hist
+    steps:
+      - run:
+          command: sqly help
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "--help"
+              - "no subcommands"
+      - assert:
+          stderr:
+            not_contains: "path does not exist"
+
+  - name: guides "sqly version" to --version instead of an import error
+    env: *hist
+    steps:
+      - run:
+          command: sqly version
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--version"
+      - assert:
+          stderr:
+            not_contains: "path does not exist"

@@ -1,0 +1,123 @@
+# Migrated from sqly's ShellSpec spec/output_format_spec.sh.
+# Exercises atago against the real `sqly` CLI (github.com/nao1215/sqly).
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+#
+# sqly derives the table name from the file name, so user.csv -> table "user".
+# The fixture inlines a trimmed copy of sqly's testdata/user.csv (only the two
+# columns these queries touch) so the suite stays hermetic.
+#
+# This is the spec family the `line:` selector (ADR-0012) was added to migrate:
+# ShellSpec's `The line N should equal '...'` becomes `line: N` + `equals:`.
+version: "1"
+
+suite:
+  name: sqly output formats
+
+scenarios:
+  - name: "--json renders results as a JSON array"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly --json --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
+      # The status should be success
+      - assert:
+          exit_code: 0
+      # The line 1 should equal '['
+      - assert:
+          stdout:
+            line: 1
+            equals: "["
+      # The output should include '{"user_name":"booker12","identifier":"1"}'
+      - assert:
+          stdout:
+            contains: '{"user_name":"booker12","identifier":"1"}'
+      # The output should include '{"user_name":"jenkins46","identifier":"2"}'
+      - assert:
+          stdout:
+            contains: '{"user_name":"jenkins46","identifier":"2"}'
+
+  - name: "--json prints [] for an empty result"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --json --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
+      - assert:
+          exit_code: 0
+      # The output should equal '[]'
+      - assert:
+          stdout:
+            equals: "[]"
+
+  - name: "--ndjson renders one JSON object per line"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly --ndjson --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
+      - assert:
+          exit_code: 0
+      # The line 1 should equal '{"user_name":"booker12","identifier":"1"}'
+      - assert:
+          stdout:
+            line: 1
+            equals: '{"user_name":"booker12","identifier":"1"}'
+      # The line 2 should equal '{"user_name":"jenkins46","identifier":"2"}'
+      - assert:
+          stdout:
+            line: 2
+            equals: '{"user_name":"jenkins46","identifier":"2"}'
+
+  - name: "--ndjson prints nothing for an empty result"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --ndjson --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
+      - assert:
+          exit_code: 0
+      # The output should equal ''
+      - assert:
+          stdout:
+            empty: true
+
+  - name: "--csv renders header and rows as CSV"
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      - run:
+          command: sqly --csv --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+      # The line 1 should equal 'user_name,identifier'
+      - assert:
+          stdout:
+            line: 1
+            equals: user_name,identifier
+      # The line 2 should equal 'booker12,1'
+      - assert:
+          stdout:
+            line: 2
+            equals: booker12,1

@@ -28,7 +28,7 @@ test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverpkg=./... -coverprofile=cover.out
 	$(GO_TOOL) cover -html=cover.out -o cover.html
 
-test-e2e: ## Run shellspec end-to-end tests in a hermetic temp-backed sandbox
+test-e2e: ## Run atago end-to-end tests in a hermetic temp-backed sandbox (requires atago)
 	sh scripts/run_e2e.sh
 
 demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, ffmpeg)

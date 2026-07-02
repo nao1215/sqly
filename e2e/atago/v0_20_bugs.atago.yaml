@@ -1,0 +1,446 @@
+# Migrated from sqly's ShellSpec spec/v0_20_bugs_spec.sh.
+# v0.20.0 binary regressions. Parameters tables expanded into explicit scenarios.
+# `.import testdata/user.csv` uses a workdir fixture of the same path. Empty
+# gzip imports use base64 fixtures. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly v0.20.0 binary regressions
+
+scenarios:
+  - name: "write-back rejects: ALTER TABLE RENAME COLUMN"
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly --sql "ALTER TABLE user RENAME COLUMN first_name TO fname" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          stdout:
+            not_contains: "affected is"
+
+  - name: "write-back rejects: DROP TABLE"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "DROP TABLE user" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: "write-back rejects: CREATE VIEW"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "CREATE VIEW v AS SELECT user_name FROM user" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: "write-back rejects: CREATE INDEX"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "CREATE INDEX idx ON user(identifier)" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: "write-back rejects: CREATE TABLE"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "CREATE TABLE backup (id INTEGER)" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: "write-back rejects: REINDEX"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "REINDEX" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: "write-back rejects: ANALYZE"
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "ANALYZE" --save --force user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: rejects CREATE TABLE AS SELECT under --save-dir and writes nothing
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir out user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          file:
+            path: out
+            exists: false
+
+  - name: preflight rejects a CTAS+DML script before it executes
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: s.sql
+          content: |
+            CREATE TABLE backup AS SELECT * FROM user;
+            UPDATE user SET first_name='Z' WHERE identifier=1;
+      - run:
+          command: sqly --sql-file s.sql --save-dir out user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: allows a .import + UPDATE batch under --save-dir and writes the change
+    env: *hist
+    steps:
+      - fixture:
+          file: testdata/user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - fixture:
+          file: imp.sql
+          content: |
+            .import testdata/user.csv
+            UPDATE user SET first_name='Batch' WHERE identifier=1;
+      - run:
+          command: sqly --sql-file imp.sql --save-dir out
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "affected is 1 row(s)"
+          file:
+            path: out/user.csv
+            contains: Batch
+
+  - name: "neutral success: CREATE VIEW"
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "CREATE VIEW v AS SELECT 1 AS x"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+      - assert:
+          stdout:
+            not_contains: "affected is"
+
+  - name: "neutral success: CREATE TABLE"
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "CREATE TABLE t (id INTEGER)"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+      - assert:
+          stdout:
+            not_contains: "affected is"
+
+  - name: "neutral success: ANALYZE"
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "ANALYZE"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+
+  - name: runs a setter PRAGMA
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "PRAGMA user_version = 1" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+
+  - name: runs a command PRAGMA that returns no rows
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "PRAGMA incremental_vacuum"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+
+  - name: rejects BEGIN in a --sql-file script
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: tx.sql
+          content: |
+            BEGIN IMMEDIATE;
+            UPDATE user SET first_name='TX' WHERE identifier=1;
+            COMMIT;
+      - run:
+          command: sqly --sql-file tx.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: transaction
+
+  - name: rejects VACUUM
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "VACUUM"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: VACUUM
+
+  - name: rejects VACUUM INTO and writes no file
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "VACUUM INTO 'dump.db'"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: VACUUM
+          file:
+            path: dump.db
+            exists: false
+
+  - name: rejects ATTACH DATABASE and persists no external file
+    env: *hist
+    steps:
+      - fixture:
+          file: a.sql
+          content: |
+            ATTACH DATABASE 'aux.db' AS aux;
+            CREATE TABLE aux.t (id INTEGER);
+      - run:
+          command: sqly --sql-file a.sql
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+          file:
+            path: aux.db
+            exists: false
+
+  - name: runs a multiline CREATE TRIGGER from a --sql-file
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: t.sql
+          content: |
+            CREATE TRIGGER trig_user AFTER UPDATE ON user BEGIN
+              UPDATE user SET last_name='Triggered' WHERE identifier=2;
+            END;
+      - run:
+          command: sqly --sql-file t.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "statement executed successfully"
+
+  - name: accepts a schema-qualified .schema name
+    env: *hist
+    steps:
+      - fixture:
+          file: testdata/user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly
+          stdin: ".import testdata/user.csv\n.schema main.user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user_name
+
+  - name: lists session-created views and temp tables in .tables
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "CREATE TEMP TABLE temp_t (id INTEGER);\nCREATE VIEW v_user AS SELECT user_name FROM user;\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - temp_t
+              - v_user
+
+  - name: prints CREATE VIEW for a view in .schema
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "CREATE VIEW v_user AS SELECT user_name FROM user;\n.schema v_user\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "CREATE VIEW"
+
+  - name: imports an empty compressed JSON array as a zero-row table
+    env: *hist
+    steps:
+      - fixture:
+          file: empty.json.gz
+          base64: "H4sIAAAAAAAAA4uOBQApu0wNAgAAAA=="
+      - run:
+          command: sqly --sql "SELECT COUNT(*) AS c FROM empty" empty.json.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: imports an empty compressed JSONL file as a zero-row table
+    env: *hist
+    steps:
+      - fixture:
+          file: empty.jsonl.gz
+          base64: "H4sIAAAAAAAAAwMAAAAAAAAAAAA="
+      - run:
+          command: sqly --sql "SELECT COUNT(*) AS c FROM empty" empty.jsonl.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: imports /dev/stdin as CSV
+    skip:
+      os: windows
+    steps:
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM stdin" /dev/stdin
+          stdin: |
+            name,score
+            a,1
+            b,2
+            c,3
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: imports /proc/self/fd/0 as CSV
+    only:
+      os: linux
+    steps:
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM sheet_0" /proc/self/fd/0
+          stdin: |
+            name,score
+            a,1
+            b,2
+            c,3
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: rejects --output to a multi-compressed ACH destination
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT * FROM user LIMIT 1" --output out.ach.gz.zst user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "ACH/Fedwire"
+          file:
+            path: out.ach.gz.zst
+            exists: false
+
+  - name: rejects .dump to a multi-compressed Fedwire destination
+    env: *hist
+    steps:
+      - fixture:
+          file: testdata/user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly
+          stdin: ".import testdata/user.csv\n.dump user out.fed.gz.zst\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "ACH/Fedwire"
+          file:
+            path: out.fed.gz.zst
+            exists: false
+
+  - name: rejects an invalid LTSV output label
+    env: *hist
+    steps:
+      - run:
+          command: sqly --ltsv --sql 'SELECT 1 AS "foo:bar"' --output out.ltsv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: rejects duplicate LTSV output labels
+    env: *hist
+    steps:
+      - run:
+          command: sqly --ltsv --sql "SELECT 1 AS x, 2 AS x" --output out.ltsv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: rejects an LTSV import with duplicate labels
+    env: *hist
+    steps:
+      - fixture:
+          file: dup.ltsv
+          content: "x:1\tx:2\n"
+      - run:
+          command: sqly --sql "SELECT * FROM dup" dup.ltsv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false

@@ -1,0 +1,277 @@
+# Migrated from sqly's ShellSpec spec/compare_spec.sh (issue #276).
+# --compare diffs two imported tables (schema, row count, keyed rows); JSON is
+# the default, --compare-format text is human-readable. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --compare workflow
+
+scenarios:
+  - name: reports schema, row count, and keyed rows as JSON
+    steps:
+      - fixture: &rev1
+          file: rev1.csv
+          content: |
+            id,name,age
+            1,Alice,30
+            2,Bob,25
+            3,Carol,40
+      - fixture: &rev2
+          file: rev2.csv
+          content: |
+            id,name,age
+            1,Alice,31
+            2,Bob,25
+            4,Dave,50
+      - run:
+          command: sqly --compare --compare-key id rev1.csv rev2.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.schema.equal"
+              equals: true
+      - assert:
+          stdout:
+            json:
+              path: "$.row_count.delta"
+              equals: 0
+      - assert:
+          stdout:
+            json:
+              path: "$.rows.key"
+              equals: id
+      - assert:
+          stdout:
+            contains:
+              - '"4"'
+              - '"3"'
+
+  - name: emits a human-readable summary with --compare-format text
+    steps:
+      - fixture: *rev1
+      - fixture: *rev2
+      - run:
+          command: sqly --compare --compare-key id --compare-format text rev1.csv rev2.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "schema: identical"
+              - "1 added, 1 removed, 1 modified"
+
+  - name: resolves an uppercase --compare-key against a lowercase column
+    steps:
+      - fixture: *rev1
+      - fixture: *rev2
+      - run:
+          command: sqly --compare --compare-key ID rev1.csv rev2.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.rows.key"
+              equals: ID
+
+  - name: rejects a missing key column
+    steps:
+      - fixture: *rev1
+      - fixture: *rev2
+      - run:
+          command: sqly --compare --compare-key nope rev1.csv rev2.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "compare key"
+
+  - name: rejects a duplicate key value as ambiguous
+    steps:
+      - fixture:
+          file: dupe.csv
+          content: |
+            id,name
+            1,Alice
+            1,Bob
+      - fixture:
+          file: single.csv
+          content: |
+            id,name
+            1,Alice
+      - run:
+          command: sqly --compare --compare-key id dupe.csv single.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "not unique"
+
+  - name: rejects a genuinely missing --compare-tables name
+    steps:
+      - fixture: *rev1
+      - fixture: *rev2
+      - run:
+          command: sqly --compare --compare-tables "nope,rev2" rev1.csv rev2.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "compare table"
+
+  - name: rejects an ambiguous single-table compare
+    steps:
+      - fixture: *rev1
+      - run:
+          command: sqly --compare rev1.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "exactly two tables"
+
+  - name: follows CLI input order for left and right, not table-name sorting
+    steps:
+      - fixture: &zebra
+          file: zebra.csv
+          content: |
+            id,name
+            1,Alice
+      - fixture: &ant
+          file: ant.csv
+          content: |
+            id,name
+            1,Alice
+      - run:
+          command: sqly --compare --compare-format text zebra.csv ant.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "compare zebra -> ant"
+
+  - name: reverses left and right when the inputs are swapped
+    steps:
+      - fixture: *zebra
+      - fixture: *ant
+      - run:
+          command: sqly --compare --compare-format text ant.csv zebra.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "compare ant -> zebra"
+
+  - name: keeps the keyed diff correct on a larger input
+    steps:
+      - fixture:
+          file: big1.csv
+          content: |
+            id,name,score
+            0,name0,0
+            1,name1,1
+            2,name2,2
+            3,name3,3
+            4,name4,4
+            5,name5,5
+            6,name6,6
+            7,name7,7
+            8,name8,8
+            9,name9,9
+            10,name10,10
+            11,name11,11
+            12,name12,12
+            13,name13,13
+            14,name14,14
+            15,name15,15
+            16,name16,16
+            17,name17,17
+            18,name18,18
+            19,name19,19
+            20,name20,20
+            21,name21,21
+            22,name22,22
+            23,name23,23
+            24,name24,24
+            25,name25,25
+            26,name26,26
+            27,name27,27
+            28,name28,28
+            29,name29,29
+            30,name30,30
+            31,name31,31
+            32,name32,32
+            33,name33,33
+            34,name34,34
+            35,name35,35
+            36,name36,36
+            37,name37,37
+            38,name38,38
+            39,name39,39
+            40,name40,40
+            41,name41,41
+            42,name42,42
+            43,name43,43
+            44,name44,44
+            45,name45,45
+            46,name46,46
+            47,name47,47
+            48,name48,48
+            49,name49,49
+      - fixture:
+          file: big2.csv
+          content: |
+            id,name,score
+            0,name0,1
+            1,name1,1
+            2,name2,2
+            3,name3,3
+            4,name4,4
+            5,name5,5
+            6,name6,6
+            7,name7,7
+            8,name8,8
+            9,name9,9
+            10,name10,10
+            11,name11,11
+            12,name12,12
+            13,name13,13
+            14,name14,14
+            15,name15,15
+            16,name16,16
+            17,name17,17
+            18,name18,18
+            19,name19,19
+            20,name20,20
+            21,name21,21
+            22,name22,22
+            23,name23,23
+            24,name24,24
+            25,name25,25
+            26,name26,26
+            27,name27,27
+            28,name28,28
+            29,name29,29
+            30,name30,30
+            31,name31,31
+            32,name32,32
+            33,name33,33
+            34,name34,34
+            35,name35,35
+            36,name36,36
+            37,name37,37
+            38,name38,38
+            39,name39,39
+            40,name40,40
+            41,name41,41
+            42,name42,42
+            43,name43,43
+            44,name44,44
+            45,name45,45
+            46,name46,46
+            47,name47,47
+            48,name48,48
+            100,fresh,1
+      - run:
+          command: sqly --compare --compare-key id --compare-format text big1.csv big2.csv
+      - assert:
+          exit_code: 0
+      # id 0 modified, id 49 removed, id 100 added.
+      - assert:
+          stdout:
+            contains: "1 added, 1 removed, 1 modified"

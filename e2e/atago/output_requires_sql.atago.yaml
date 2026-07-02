@@ -1,0 +1,51 @@
+# Migrated from sqly's ShellSpec spec/output_requires_sql_spec.sh.
+# --output is only honored by the --sql path, so without --sql (no query and no
+# batch stdin query) it must be rejected instead of silently ignored.
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+#
+# ShellSpec mapping:
+#   * `Data` (stdin) -> run.stdin (literal). The empty-Data case omits stdin.
+#   * `The path X should not be exist` -> file: { exists: false }.
+#   * BeforeEach/AfterEach tmpdir -> atago's per-scenario temp workdir (the
+#     --output path is relative, so it lands in and is cleaned with the workdir).
+version: "1"
+
+suite:
+  name: sqly --output requires --sql
+
+scenarios:
+  - name: rejects --output with no query
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv --output out.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output requires --sql"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: rejects --output for batch SQL from stdin
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv --output out.csv
+          stdin: "SELECT user_name FROM user ORDER BY identifier LIMIT 1\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output requires --sql"
+          file:
+            path: out.csv
+            exists: false

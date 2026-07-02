@@ -1,0 +1,215 @@
+# Migrated from sqly's ShellSpec spec/batch_spec.sh.
+# Non-TTY batch mode: piped stdin runs SQL/helper commands; failures surface a
+# non-zero exit and name the failing statement and line(s). Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly batch mode (piped stdin)
+
+scenarios:
+  - name: runs SQL read from stdin
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT user_name FROM user ORDER BY identifier LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: switches output mode and runs the following query
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode ndjson\nSELECT user_name FROM user ORDER BY identifier LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '{"user_name":"booker12"}'
+          stderr:
+            contains: "Change output mode"
+
+  - name: exits non-zero and names the failing statement and its line on error
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT user_name FROM user ORDER BY identifier LIMIT 1;\nSELECT * FROM no_such_table;\n"
+      - assert:
+          exit_code: 1
+          stdout:
+            contains: booker12
+          stderr:
+            contains:
+              - "batch statement 2 failed at line 2"
+              - no_such_table
+
+  - name: reports the line span of a failing multiline statement
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT user_name FROM user ORDER BY identifier LIMIT 1;\nSELECT 1;\nSELECT *\nFROM no_such_table;\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "batch statement 3 failed at lines 3-4"
+              - no_such_table
+
+  - name: stops at .exit with a success status
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".exit\nSELECT * FROM no_such_table\n"
+      - assert:
+          exit_code: 0
+
+  - name: still exits non-zero when a failure precedes .exit
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT * FROM no_such_table;\n.exit\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: no_such_table
+
+  - name: runs a multiline SELECT terminated by a semicolon
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT user_name\nFROM user\nORDER BY identifier\nLIMIT 1;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: runs a multiline UNION ALL across bare newlines as one statement
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode csv\nSELECT 1 AS n\nUNION ALL\nSELECT 2;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: n
+      - assert:
+          stdout:
+            line: 2
+            equals: "1"
+      - assert:
+          stdout:
+            line: 3
+            equals: "2"
+          stderr:
+            contains: "Change output mode"
+
+  - name: runs a multiline WITH (CTE) query
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "WITH x AS (\n  SELECT user_name FROM user ORDER BY identifier LIMIT 1\n)\nSELECT * FROM x;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: runs multiple statements and helper commands in one payload
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".tables\nSELECT COUNT(*) AS c FROM user;\nSELECT user_name FROM user ORDER BY identifier LIMIT 1;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "TABLE NAME"
+              - booker12
+
+  - name: ignores a semicolon inside a leading line comment
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "-- comment ;\nSELECT 'v' AS x;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: v
+
+  - name: ignores a semicolon inside a block comment
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "/* comment ; */\nSELECT 'v' AS x;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: v
+
+  - name: ignores a semicolon inside a trailing line comment
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 'first' AS x; -- trailing ; comment\nSELECT 'second' AS y;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - first
+              - second
+
+  - name: does not split on a semicolon inside a bracket-quoted identifier
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 'v' AS [a;b];\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "a;b"
+              - v
+
+  - name: does not split on a semicolon inside a backtick-quoted identifier
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 'v' AS `a;b`;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "a;b"
+              - v
+
+  - name: reports an error for incomplete SQL
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT * FROM (\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "batch statement"

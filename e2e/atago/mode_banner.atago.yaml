@@ -1,0 +1,65 @@
+# Migrated from sqly's ShellSpec spec/mode_banner_spec.sh.
+# In batch mode the .mode-change banner must not pollute stdout (it is a status
+# message and goes to stderr), so JSON/NDJSON output stays machine-readable.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly .mode banner routing
+
+scenarios:
+  - name: keeps stdout pure JSON after .mode json
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".mode json\nSELECT user_name FROM user LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "["
+      - assert:
+          stdout:
+            not_contains: "Change output mode"
+          stderr:
+            contains: "Change output mode from table to json"
+
+  - name: keeps stdout pure NDJSON after .mode ndjson
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode ndjson\nSELECT user_name FROM user LIMIT 1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: '{"user_name":"booker12"}'
+      - assert:
+          stdout:
+            not_contains: "Change output mode"
+          stderr:
+            contains: "Change output mode from table to ndjson"
+
+  - name: reports the typed mode by name and emits typed output after .mode json-typed
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode json-typed\nSELECT 7 AS n, 'x' AS s\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: "Change output mode"
+          stderr:
+            contains: "Change output mode from table to json-typed"
+      - assert:
+          stdout:
+            contains:
+              - '"n":7'
+              - '"s":"x"'

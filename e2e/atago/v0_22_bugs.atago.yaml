@@ -1,0 +1,272 @@
+# Migrated from sqly's ShellSpec spec/v0_22_bugs_spec.sh.
+# v0.22.0 binary regressions. Run with: make test-e2e
+#
+# ShellSpec `cksum`-equality "source unchanged" checks become assertions that the
+# file still holds its original values and not the (reverted) edit — the
+# accompanying "nothing to save" stderr proves no rewrite happened.
+version: "1"
+
+suite:
+  name: sqly v0.22.0 binary regressions
+
+scenarios:
+  - name: inspects a literal "main.x" table with .schema
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"main.x\"(litcol INTEGER);\n.schema \"main.x\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: litcol
+
+  - name: inspects a literal "temp.x" table with .describe
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"temp.x\"(litcol INTEGER);\n.describe \"temp.x\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: litcol
+
+  - name: inspects a literal "main.v" view with .header
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE VIEW \"main.v\" AS SELECT 1 AS litcol;\n.header \"main.v\"\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: litcol
+
+  - name: exports a literal "temp.v" view with .dump
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE VIEW \"temp.v\" AS SELECT 1 AS litcol;\n.dump \"temp.v\" tv.csv\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: tv.csv
+            contains: litcol
+
+  - name: prints a paste-safe literal "main.x" name in .tables
+    env: *hist
+    steps:
+      - run:
+          command: sqly
+          stdin: "CREATE TABLE \"main.x\"(litcol INTEGER);\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"main.x"'
+
+  - name: rejects a --output destination that stacks .gzip and .zst on a format suffix
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output fake.parquet.gzip.zst
+      - assert:
+          exit_code: 1
+          file:
+            path: fake.parquet.gzip.zst
+            exists: false
+
+  - name: rejects a --output .json.gzip.zst destination
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output fake.json.gzip.zst
+      - assert:
+          exit_code: 1
+          file:
+            path: fake.json.gzip.zst
+            exists: false
+
+  - name: rejects a --output .ach.gzip.zst destination as input-only
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output fake.ach.gzip.zst
+      - assert:
+          exit_code: 1
+          file:
+            path: fake.ach.gzip.zst
+            exists: false
+
+  - name: rejects a .dump destination that stacks .gzip and .zst
+    env: *hist
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user fake.parquet.gzip.zst\n"
+      - assert:
+          exit_code: 1
+          file:
+            path: fake.parquet.gzip.zst
+            exists: false
+
+  - name: runs the SELECT after a leading empty statement in direct --sql
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql ";SELECT 1 AS x"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - x
+              - "1"
+
+  - name: runs the SELECT after multiple leading empty statements in direct --sql
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql ";;SELECT 2 AS y"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+
+  - name: exports the SELECT after a leading empty statement with --output
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql ";SELECT 1 AS x" --output lead.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: lead.csv
+            contains: x
+
+  - name: still rejects ATTACH after a leading empty statement in direct --sql
+    env: *hist
+    steps:
+      - run:
+          command: sqly --sql ";ATTACH DATABASE 'x.db' AS aux"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: ATTACH
+
+  - name: does not rewrite an unchanged CSV when only a TEMP table changed
+    env: *hist
+    steps:
+      - fixture:
+          file: temp_only.csv
+          content: |
+            name,age
+            alice,30
+            bob,25
+      - run:
+          command: sqly temp_only.csv
+          stdin: "CREATE TEMP TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          stdout:
+            not_contains: Saved
+          file:
+            path: temp_only.csv
+            contains: "alice,30"
+
+  - name: does not fail on an unchanged JSONL import when only a scratch table changed
+    env: *hist
+    steps:
+      - fixture:
+          file: data.jsonl
+          content: |
+            {"id":1}
+            {"id":2}
+      - run:
+          command: sqly data.jsonl
+          stdin: "CREATE TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: "nothing to save"
+      - assert:
+          stderr:
+            not_contains: "not loaded from a file"
+
+  - name: does not rewrite the source after net-zero CSV edits
+    env: *hist
+    steps:
+      - fixture:
+          file: netzero.csv
+          content: |
+            name,age
+            alice,30
+            bob,25
+      - run:
+          command: sqly netzero.csv
+          stdin: "UPDATE netzero SET age=99 WHERE name='alice';\nUPDATE netzero SET age=30 WHERE name='alice';\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          stdout:
+            not_contains: Saved
+          file:
+            path: netzero.csv
+            contains: "alice,30"
+
+  - name: does not rewrite the source after net-zero edits via --sql-file --save --force
+    env: *hist
+    steps:
+      - fixture:
+          file: netzero_file.csv
+          content: |
+            name,age
+            alice,30
+            bob,25
+      - fixture:
+          file: netzero.sql
+          content: |
+            UPDATE netzero_file SET age=99 WHERE name='alice';
+            UPDATE netzero_file SET age=30 WHERE name='alice';
+      - run:
+          command: sqly --sql-file netzero.sql --save --force netzero_file.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: netzero_file.csv
+            contains: "alice,30"
+
+  - name: still persists a genuine CSV change with .save --force
+    env: *hist
+    steps:
+      - fixture:
+          file: genuine.csv
+          content: |
+            name,age
+            alice,30
+            bob,25
+      - run:
+          command: sqly genuine.csv
+          stdin: "UPDATE genuine SET age=999 WHERE name='alice';\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: affected
+          stderr:
+            contains: Saved
+          file:
+            path: genuine.csv
+            contains: "999"

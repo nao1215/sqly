@@ -1,0 +1,82 @@
+# Migrated from sqly's ShellSpec spec/path_validation_spec.sh.
+# sqly runs with the user's own permissions, so legitimate readable paths must
+# import regardless of nesting depth or filenames that merely contain
+# traversal-looking byte sequences. Run with: make test-e2e
+#
+# The symlink cases use fixture.symlink (Unix only; skipped on Windows).
+version: "1"
+
+suite:
+  name: sqly input path validation
+
+scenarios:
+  - name: imports a deeply nested path
+    steps:
+      - fixture:
+          file: a/b/c/d/e/f/g/h/i/j/k/user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            grey07,3
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user" a/b/c/d/e/f/g/h/i/j/k/user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: imports a file whose name literally contains ..%2f
+    steps:
+      # %2f is two literal characters, not a path separator, so this is a normal
+      # filename — the guard must not treat it as traversal.
+      - fixture:
+          file: "..%2fuser.csv"
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --inspect "..%2fuser.csv"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user_name
+          stderr:
+            not_contains: "dangerous path pattern"
+
+  - name: rejects a symlink alias that resolves to a blocked system path
+    skip:
+      os: windows
+    steps:
+      # Create the malicious alias at runtime: atago's own fixture step confines
+      # symlink targets to the workdir (issue #16), so the symlink-to-/etc/hosts
+      # must be planted by the command under test's environment, not by `fixture`.
+      - run:
+          shell: true
+          command: ln -s /etc/hosts hosts_alias.csv
+      - run:
+          command: sqly --inspect hosts_alias.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "system directory not allowed"
+
+  - name: imports a symlink alias that resolves to an ordinary user file
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: real.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - fixture:
+          file: user_alias.csv
+          symlink: "${workdir}/real.csv"
+      - run:
+          command: sqly --inspect user_alias.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user_name

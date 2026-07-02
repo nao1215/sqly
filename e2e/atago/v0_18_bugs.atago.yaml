@@ -1,0 +1,312 @@
+# Migrated from sqly's ShellSpec spec/v0_18_bugs_spec.sh.
+# v0.18.0 binary bug fixes. UTF-8 BOM cases use a literal BOM in stdin and a
+# base64 fixture for the BOM .sql file. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly v0.18.0 binary bug fixes
+
+scenarios:
+  - name: rejects an empty --output
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1 AS x" --output ""
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output"
+
+  - name: rejects an empty --sql-file
+    steps:
+      - run:
+          command: sqly --sql-file ""
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--sql-file"
+
+  - name: rejects an empty --save-dir
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly --sql "SELECT 1" --save-dir "" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--save-dir"
+
+  - name: rejects an empty --stdin
+    steps:
+      - run:
+          command: sqly --stdin "" --sql "SELECT 1 AS x"
+          stdin: |
+            id,name
+            1,a
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--stdin"
+
+  - name: rejects conflicting output mode flags
+    steps:
+      - run:
+          command: sqly --csv --json --sql "SELECT 1 AS x"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: conflicting
+
+  - name: prints rows for a DML RETURNING statement
+    steps:
+      - fixture: &u
+          file: u.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly --csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name" u.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: X
+      - assert:
+          stdout:
+            not_contains: affected
+
+  - name: rejects --output for a non-rowset DML statement
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "UPDATE u SET first_name='X' WHERE identifier=1" --output out.csv u.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: exports RETURNING rows with --output
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier" --output out.csv u.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.csv
+            exists: true
+          stderr:
+            contains: "Output sql result"
+
+  - name: rejects a comment-only --sql-file
+    steps:
+      - fixture:
+          file: q.sql
+          content: |
+            -- header only
+            /* block */
+      - run:
+          command: sqly --sql-file q.sql
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no executable"
+
+  - name: strips a UTF-8 BOM from a --sql-file script
+    steps:
+      - fixture: *user
+      - fixture:
+          file: q.sql
+          base64: "77u/U0VMRUNUIDIgQVMgeTsK"
+      - run:
+          command: sqly --csv --sql-file q.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+
+  - name: strips a UTF-8 BOM from batch stdin
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv user.csv
+          stdin: "﻿SELECT 7 AS z;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "7"
+
+  - name: rejects non-empty piped stdin with --sql-file
+    steps:
+      - fixture: *user
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT 1 AS x;
+      - run:
+          command: sqly --sql-file q.sql user.csv
+          stdin: "SELECT 999 AS y;\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: stdin
+
+  - name: fails a --stdin dataset run with no query
+    steps:
+      - run:
+          command: sqly --stdin csv
+          stdin: |
+            id,name
+            1,a
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--stdin"
+
+  - name: reports per-file provenance for a sanitized basename
+    steps:
+      - fixture:
+          file: dir/2023-data.csv
+          content: |
+            id,name
+            1,a
+      - run:
+          command: sqly --inspect dir
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2023-data.csv"
+          stderr:
+            not_contains: "Successfully imported"
+
+  - name: rejects duplicate basenames from different subdirectories
+    steps:
+      - fixture:
+          file: dir/a/user.csv
+          content: |
+            id,name
+            1,alpha
+      - fixture:
+          file: dir/b/user.csv
+          content: |
+            id,name
+            2,beta
+      - run:
+          command: sqly --inspect dir
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: collision
+
+  - name: reports an overwrite when re-importing a directory
+    steps:
+      - fixture: *user
+      - fixture:
+          file: dir/user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            alt1,1,ALT,One
+      - fixture:
+          file: cmds.sql
+          content: |
+            .import dir
+            SELECT user_name FROM user ORDER BY identifier;
+      - run:
+          command: sqly --sql-file cmds.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alt1
+          stderr:
+            not_contains: "No supported files"
+
+  - name: rejects --output that aliases an imported source
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --sql "SELECT * FROM user WHERE identifier=1" --output user.csv user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output"
+
+  - name: rejects --save-dir that resolves to the source directory
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "UPDATE user SET first_name='P' WHERE identifier=1" --save-dir . user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: source
+
+  - name: rejects a --save-dir destination that already exists
+    steps:
+      - fixture:
+          file: src/user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - fixture:
+          file: out/user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+      - run:
+          command: sqly --sql "UPDATE user SET first_name='Q' WHERE identifier=1" --save-dir out src/user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "already exists"
+
+  - name: keeps stdout clean when write-back fails
+    steps:
+      - fixture: *user
+      - fixture:
+          file: sample.xlsx
+          from: testdata/sample.xlsx
+      - run:
+          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=1" --save-dir out user.csv sample.xlsx
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: affected
+          stderr:
+            contains: "cannot save"
+
+  - name: skips write-back for a read-only query under --save --force
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --sql "SELECT * FROM user WHERE identifier=1" --save --force user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+          stderr:
+            not_contains: Saved
+
+  - name: skips workbooks lacking the requested sheet (multi-workbook --sheet)
+    steps:
+      - fixture:
+          file: sheet_with_spaces.xlsx
+          from: testdata/sheet_with_spaces.xlsx
+      - fixture:
+          file: sample.xlsx
+          from: testdata/sample.xlsx
+      - fixture:
+          file: sheet_with_accents.xlsx
+          from: testdata/sheet_with_accents.xlsx
+      - run:
+          command: sqly --inspect --sheet "A test" sheet_with_spaces.xlsx sample.xlsx sheet_with_accents.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: sheet_with_spaces
+          stderr:
+            contains: Skipped

@@ -1,0 +1,74 @@
+# Migrated from sqly's ShellSpec spec/batch_failfast_spec.sh.
+# The first failed statement stops the batch, so later statements and
+# side-effecting helpers (.save/.dump) do not run. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly batch fail-fast
+
+scenarios:
+  - name: stops later statements after a SQL failure
+    steps:
+      - fixture: &u
+          file: u.csv
+          content: |
+            user_name,identifier,first_name
+            booker12,1,Rachel
+            jenkins46,2,Mary
+      - run:
+          command: sqly u.csv
+          stdin: "SELECT * FROM no_such_table;\nSELECT 1 AS later;\n"
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: later
+          stderr:
+            contains: no_such_table
+
+  - name: does not run .save --force after an earlier failure
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET first_name = 'BROKEN' WHERE identifier = 1;\nSELECT * FROM no_such_table;\n.save --force\n"
+      - assert:
+          exit_code: 1
+          stdout:
+            contains: affected
+          stderr:
+            not_contains: Saved
+          file:
+            path: u.csv
+            not_contains: BROKEN
+
+  - name: does not run .dump after an earlier failure
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "SELECT * FROM no_such_table;\n.dump u out.csv\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: no_such_table
+          file:
+            path: out.csv
+            exists: false
+
+  - name: does not write back for empty stdin with --save --force
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv --save --force
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no TTY detected"
+      - assert:
+          stderr:
+            not_contains: Saved
+      # The source is left untouched (its original first_name survives).
+      - assert:
+          file:
+            path: u.csv
+            contains: Rachel

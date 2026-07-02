@@ -1,0 +1,30 @@
+# Migrated from sqly's ShellSpec spec/json_null_spec.sh.
+# A SQL NULL must render as JSON null (distinct from an empty string) in
+# machine-readable output. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly JSON/NDJSON NULL handling
+
+scenarios:
+  - name: emits NULL as JSON null in --json
+    steps:
+      - run:
+          command: sqly --json --sql "SELECT NULL AS n, '' AS e, 1 AS x"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"n":null'
+              - '"e":""'
+
+  - name: emits NULL as JSON null in --ndjson
+    steps:
+      - run:
+          command: sqly --ndjson --sql "SELECT NULL AS n, '' AS e, 1 AS x"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"n":null'
+              - '"e":""'

@@ -1,0 +1,76 @@
+# Strict output contracts the ShellSpec suite asserted only loosely: the
+# version banner's exact shape, and the bad-SQL failure mode keeping stdout
+# clean (diagnostics belong on stderr, exit code 1).
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly strict contracts
+
+scenarios:
+  - name: version banner is exactly one clean line
+    steps:
+      - run:
+          command: sqly --version
+      - assert:
+          exit_code: 0
+          # A tagged build reports the semver tag; a build without tag metadata
+          # (CI shallow checkouts, `go install` without VCS info) reports
+          # "(devel)". Both are one clean "sqly <version>" line on stdout.
+          stdout:
+            matches: "^sqly (v[0-9]+\\.[0-9]+\\.[0-9]+|\\(devel\\))"
+          stderr:
+            empty: true
+
+  - name: SQL syntax error exits 1 and keeps stdout clean
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --sql "SELEC broken" t.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: syntax error
+
+  - name: querying a missing table names it in the diagnostics
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --sql "SELECT * FROM no_such_table" t.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: no_such_table
+
+  - name: a successful query emits no error-looking text anywhere
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            id,name
+            1,Alice
+      - run:
+          command: sqly --sql "SELECT name FROM t" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: Alice
+      - assert:
+          stdout:
+            not_matches: "(?i)error|warn"
+      - assert:
+          stderr:
+            not_matches: "(?i)error|warn"
