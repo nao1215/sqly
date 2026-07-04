@@ -19,6 +19,7 @@ Inspect
 
 Import / Export
   .import PATH...    load files or directories into the session
+  .import-mode POLICY set ragged CSV/TSV row handling (stop, skip, fill)
   .dump TABLE FILE   export a table to a file (format follows .mode; default csv)
   .save DIR          write changed tables into DIR (sources untouched)
   .save --force      overwrite each table's source file in place (destructive)

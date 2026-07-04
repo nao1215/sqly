@@ -521,6 +521,20 @@ Spaces, hyphens, and dots become `_`; other special characters are removed; a na
 
 CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel also read these compression extensions: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4` (e.g. `.csv.gz`, `.tsv.bz2`).
 
+## Handle malformed rows: --import-mode
+
+When a CSV/TSV row has a different number of fields than the header, `--import-mode` (or the `.import-mode` shell command) chooses what happens:
+
+| Policy | Behavior |
+|:--|:--|
+| `stop` (default) | Fail the import and report the mismatch |
+| `skip` | Drop the malformed rows, import the rest |
+| `fill` | Pad short rows with blanks, truncate long rows |
+
+```shell
+$ sqly --import-mode skip --sql "SELECT * FROM data" data.csv
+```
+
 ## Key bindings for the shell
 
 |Key|Action|

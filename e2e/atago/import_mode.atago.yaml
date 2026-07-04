@@ -1,0 +1,177 @@
+# End-to-end coverage for --import-mode / .import-mode, which chooses how a
+# ragged CSV/TSV row (one whose field count differs from the header) is imported:
+# stop (default), skip, or fill. Regression for nao1215/sqly#731, where a ragged
+# row silently produced an empty table. make test-e2e
+version: "1"
+
+suite:
+  name: sqly malformed-row import mode
+
+scenarios:
+  - name: default policy stops the import and reports the column mismatch
+    steps:
+      - fixture: &ragged
+          file: ragged.csv
+          content: |
+            id,name,zip
+            1,alice,01234
+            2,bob,00123
+            3,caro
+      - run:
+          command: sqly --json --sql "SELECT name FROM ragged" ragged.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains:
+              - "failed to import"
+              - "column count mismatch"
+
+  - name: --import-mode skip drops the ragged row and imports the rest
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly --import-mode skip --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - bob
+      - assert:
+          stdout:
+            not_contains: caro
+
+  - name: --import-mode fill keeps every row and blanks the missing field
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly --import-mode fill --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - bob
+              - caro
+
+  - name: an invalid --import-mode value is rejected
+    steps:
+      - run:
+          command: sqly --import-mode keep --sql "SELECT 1"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "invalid import mode"
+
+  - name: .import-mode changes the policy for a later batch .import
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly
+          stdin: ".import-mode fill\n.import ragged.csv\nSELECT name FROM ragged ORDER BY id;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - caro
+          stderr:
+            contains: "Change import mode from stop to fill"
+
+  - name: .import-mode with no argument reports usage and fails the batch
+    steps:
+      - run:
+          command: sqly
+          stdin: ".import-mode\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - ".import-mode requires a policy name"
+              - "current mode=stop"
+
+  # The policy only applies to delimited text (CSV/TSV). The scenarios below pin
+  # down that it is a no-op for every other format: LTSV, JSON, JSONL, Parquet,
+  # and Excel import their data unchanged under stop, skip, and fill, so a user
+  # who sets the flag on a non-delimited input sees no surprising behavior.
+
+  - name: LTSV imports a sparse record unchanged under every policy
+    steps:
+      # Row 2 omits the zip label. LTSV records are self-describing, so a missing
+      # label is valid and filled blank; stop does not abort and skip does not drop.
+      - fixture: &sparse_ltsv
+          file: sparse.ltsv
+          content: |
+            id:1	name:alice	zip:01234
+            id:2	name:bob
+      - run:
+          command: sqly --import-mode stop --csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+      - run:
+          command: sqly --import-mode skip --csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+
+  - name: JSON imports unchanged under a non-default policy
+    steps:
+      - fixture:
+          file: people.json
+          content: |
+            [
+              {"name": "Alice", "age": 30},
+              {"name": "Bob", "age": 25}
+            ]
+      - run:
+          command: sqly --import-mode fill --csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - Alice
+              - Bob
+
+  - name: JSONL imports a record with a missing key unchanged under stop
+    steps:
+      - fixture:
+          file: varying.jsonl
+          content: |
+            {"id":1,"name":"alice"}
+            {"id":2}
+      - run:
+          command: sqly --import-mode stop --csv --sql "SELECT COUNT(*) FROM varying" varying.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+
+  - name: Parquet imports unchanged under a non-default policy
+    steps:
+      - fixture:
+          file: products.parquet
+          from: testdata/products.parquet
+      - run:
+          command: sqly --import-mode fill --csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: Laptop
+
+  - name: Excel imports unchanged under a non-default policy
+    steps:
+      - fixture:
+          file: sample.xlsx
+          from: testdata/sample.xlsx
+      - run:
+          command: sqly --import-mode skip sample.xlsx
+          stdin: "SELECT COUNT(*) FROM sample_test_sheet\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "COUNT(*)"

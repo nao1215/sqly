@@ -47,6 +47,7 @@ func helpGroups() []helpGroup {
 		}},
 		{"Import / Export", []helpLine{
 			{importCommand + " PATH...", "load files or directories into the session"},
+			{importModeCommand + " POLICY", "set ragged CSV/TSV row handling (stop, skip, fill)"},
 			{dumpCommand + " TABLE FILE", "export a table to a file (format follows .mode; default csv)"},
 			{saveCommand + " DIR", "write changed tables into DIR (sources untouched)"},
 			{saveCommand + " --force", "overwrite each table's source file in place (destructive)"},

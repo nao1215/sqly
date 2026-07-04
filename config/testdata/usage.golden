@@ -35,6 +35,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -S, --sheet string            excel sheet name you want to import
       --stdin string            treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
       --stdin-name string       table name for the --stdin dataset (default "stdin")
+      --import-mode string      how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill (default "stop")
   -s, --sql string              sql query you want to execute
   -f, --sql-file string         path to a file with SQL to execute (multiline; cannot be used with --sql)
   -o, --output string           destination path for the result of --sql or a single-result --sql-file script

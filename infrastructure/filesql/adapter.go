@@ -38,12 +38,41 @@ const (
 //nolint:revive // Name maintained for compatibility with existing wire dependencies and external usage
 type FileSQLAdapter struct {
 	sharedDB *sql.DB // The main sqly application database
+	// malformedRowPolicy controls how a ragged CSV/TSV row is handled on import.
+	// It defaults to MalformedRowStop and is updated by the --import-mode flag and
+	// the .import-mode shell command.
+	malformedRowPolicy model.MalformedRowPolicy
 }
 
 // NewFileSQLAdapter creates a new adapter for filesql integration
 func NewFileSQLAdapter(sharedDB *sql.DB) *FileSQLAdapter {
 	return &FileSQLAdapter{
 		sharedDB: sharedDB,
+	}
+}
+
+// SetMalformedRowPolicy sets how a ragged CSV/TSV row (one whose field count
+// differs from the header) is handled by subsequent imports.
+func (f *FileSQLAdapter) SetMalformedRowPolicy(policy model.MalformedRowPolicy) {
+	f.malformedRowPolicy = policy
+}
+
+// MalformedRowPolicy returns the policy applied to ragged CSV/TSV rows on import.
+func (f *FileSQLAdapter) MalformedRowPolicy() model.MalformedRowPolicy {
+	return f.malformedRowPolicy
+}
+
+// filesqlMalformedRowPolicy maps sqly's policy to the filesql policy that drives
+// the actual import. Both enums share the same three cases; keeping them
+// separate lets sqly's layers stay independent of the filesql type.
+func filesqlMalformedRowPolicy(policy model.MalformedRowPolicy) filesql.MalformedRowPolicy {
+	switch policy {
+	case model.MalformedRowSkip:
+		return filesql.MalformedRowSkip
+	case model.MalformedRowFill:
+		return filesql.MalformedRowFill
+	default:
+		return filesql.MalformedRowStop
 	}
 }
 
@@ -83,8 +112,17 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	// Stream the files directly into the shared session database. filesql's
 	// LoadInto replaces a same-named table (last-wins), matching sqly's import
 	// semantics, and avoids the previous temporary-database-plus-row-copy path.
+	// The builder form is used (instead of the package-level filesql.LoadInto) so
+	// the malformed-row policy can be applied to ragged CSV/TSV rows.
 	if len(toLoad) > 0 {
-		if err := filesql.LoadInto(ctx, f.sharedDB, toLoad...); err != nil {
+		builder := filesql.NewBuilder().
+			AddPaths(toLoad...).
+			WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
+		validated, err := builder.Build(ctx)
+		if err != nil {
+			return err
+		}
+		if err := validated.LoadInto(ctx, f.sharedDB); err != nil {
 			return err
 		}
 	}

@@ -13,6 +13,7 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .help
     .header: print table header
       .help: print help message
     .import: import file(s) and/or directory(ies)
+ .import-mode: show or set how a ragged CSV/TSV row is imported (stop|skip|fill)
         .ls: print directory contents
       .mode: change output mode
        .pwd: print current working directory
@@ -94,6 +95,22 @@ sqly:~/github/github.com/nao1215/sqly(table)$ .import
 ```
 
 After `--sheet`, press TAB to complete the sheet names of the first Excel workbook on the line. Quoted and backslash-escaped names with spaces are completed in a form that stays a single argument.
+
+### import-mode command
+
+Show or set how a ragged CSV/TSV row (one whose field count differs from the header) is imported by later `.import` commands. It mirrors the `--import-mode` flag.
+
+```shell
+sqly:~/github/github.com/nao1215/sqly(table)$ .import-mode
+[Usage]
+  .import-mode POLICY   ※ current mode=stop
+[Policy list]
+  stop ※ abort the import when a row's field count differs from the header (default)
+  skip ※ drop such rows and import the rest
+  fill ※ pad short rows with empty values and truncate long rows to the header width
+sqly:~/github/github.com/nao1215/sqly(table)$ .import-mode fill
+Change import mode from stop to fill
+```
 
 ### ls command
 
