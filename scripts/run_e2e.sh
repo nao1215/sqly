@@ -27,7 +27,10 @@ fi
 # path stays byte-for-byte identical, keeping `make test-e2e` fast.
 if [ -n "${COVER:-}" ]; then
 	: "${GOCOVERDIR:?COVER set but GOCOVERDIR is empty; export GOCOVERDIR to collect e2e coverage}"
-	VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo dev)"
+	# Mirror the Makefile's VERSION exactly (empty when no tags are reachable, e.g.
+	# on a shallow CI checkout) so `sqly --version` resolves the same way the plain
+	# `make build` binary does: an empty ldflag falls back to "(devel)".
+	VERSION="$(git describe --tags --abbrev=0 2>/dev/null || true)"
 	env GO111MODULE=on CGO_ENABLED=0 \
 		go build -cover -covermode=atomic -coverpkg=./... \
 		-ldflags "-X github.com/nao1215/sqly/config.Version=${VERSION}" \
