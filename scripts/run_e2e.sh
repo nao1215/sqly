@@ -19,7 +19,25 @@ if ! command -v atago >/dev/null 2>&1; then
 fi
 
 # Build the binary the specs exercise; it is exposed on PATH below.
-make build
+#
+# When COVER is set (by scripts/coverage.sh) the binary is built with Go's
+# coverage instrumentation instead of the plain `make build`. atago passes the
+# environment through to the spec commands, so the sqly child processes inherit
+# GOCOVERDIR and write their runtime covdata there. The default (unset COVER)
+# path stays byte-for-byte identical, keeping `make test-e2e` fast.
+if [ -n "${COVER:-}" ]; then
+	: "${GOCOVERDIR:?COVER set but GOCOVERDIR is empty; export GOCOVERDIR to collect e2e coverage}"
+	# Mirror the Makefile's VERSION exactly (empty when no tags are reachable, e.g.
+	# on a shallow CI checkout) so `sqly --version` resolves the same way the plain
+	# `make build` binary does: an empty ldflag falls back to "(devel)".
+	VERSION="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+	env GO111MODULE=on CGO_ENABLED=0 \
+		go build -cover -covermode=atomic -coverpkg=./... \
+		-ldflags "-X github.com/nao1215/sqly/config.Version=${VERSION}" \
+		-o sqly main.go
+else
+	make build
+fi
 
 # Create an isolated sandbox and remove it on exit, so no run leaves state behind.
 SANDBOX="$(mktemp -d)"
