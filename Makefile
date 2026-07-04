@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e smoke demo clean vet fmt chkfmt
+.PHONY: build test test-e2e coverage smoke demo clean vet fmt chkfmt
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
@@ -22,7 +22,7 @@ build:  ## Build binary
 	env GO111MODULE=on CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO_BUILD) $(GO_LDFLAGS) -o $(APP) main.go
 
 clean: ## Clean project
-	-rm -rf $(APP) cover.*
+	-rm -rf $(APP) cover.* coverage.out .coverage
 
 test: ## Start test
 	env GOOS=$(GOOS) $(GO_TEST) -cover $(GO_PKGROOT) -coverpkg=./... -coverprofile=cover.out
@@ -30,6 +30,9 @@ test: ## Start test
 
 test-e2e: ## Run atago end-to-end tests in a hermetic temp-backed sandbox (requires atago)
 	sh scripts/run_e2e.sh
+
+coverage: ## Combine unit + self-hosted E2E coverage into coverage.out / cover.html (uses a `go build -cover` sqly; scratch under .coverage/)
+	sh scripts/coverage.sh
 
 demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, ffmpeg)
 	for tape in doc/vhs/*.tape; do vhs "$$tape"; done
