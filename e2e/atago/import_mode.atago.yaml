@@ -1,0 +1,93 @@
+# End-to-end coverage for --import-mode / .import-mode, which chooses how a
+# ragged CSV/TSV row (one whose field count differs from the header) is imported:
+# stop (default), skip, or fill. Regression for nao1215/sqly#731, where a ragged
+# row silently produced an empty table. make test-e2e
+version: "1"
+
+suite:
+  name: sqly malformed-row import mode
+
+scenarios:
+  - name: default policy stops the import and reports the column mismatch
+    steps:
+      - fixture: &ragged
+          file: ragged.csv
+          content: |
+            id,name,zip
+            1,alice,01234
+            2,bob,00123
+            3,caro
+      - run:
+          command: sqly --json --sql "SELECT name FROM ragged" ragged.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains:
+              - "failed to import"
+              - "column count mismatch"
+
+  - name: --import-mode skip drops the ragged row and imports the rest
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly --import-mode skip --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - bob
+      - assert:
+          stdout:
+            not_contains: caro
+
+  - name: --import-mode fill keeps every row and blanks the missing field
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly --import-mode fill --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - bob
+              - caro
+
+  - name: an invalid --import-mode value is rejected
+    steps:
+      - run:
+          command: sqly --import-mode keep --sql "SELECT 1"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "invalid import mode"
+
+  - name: .import-mode changes the policy for a later batch .import
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly
+          stdin: ".import-mode fill\n.import ragged.csv\nSELECT name FROM ragged ORDER BY id;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - caro
+          stderr:
+            contains: "Change import mode from stop to fill"
+
+  - name: .import-mode with no argument reports usage and fails the batch
+    steps:
+      - run:
+          command: sqly
+          stdin: ".import-mode\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - ".import-mode requires a policy name"
+              - "current mode=stop"

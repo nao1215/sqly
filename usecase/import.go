@@ -15,6 +15,11 @@ import (
 type ImportUsecase interface {
 	// LoadFiles loads multiple files or directories into the database
 	LoadFiles(ctx context.Context, filePaths ...string) error
+	// SetMalformedRowPolicy sets how a ragged CSV/TSV row (one whose field count
+	// differs from the header) is handled by subsequent imports.
+	SetMalformedRowPolicy(policy model.MalformedRowPolicy)
+	// MalformedRowPolicy returns the policy applied to ragged CSV/TSV rows.
+	MalformedRowPolicy() model.MalformedRowPolicy
 	// GetTableNames returns the list of tables in the database
 	GetTableNames(ctx context.Context) ([]*model.Table, error)
 	// IsSupportedFile checks if the file has a format supported by filesql

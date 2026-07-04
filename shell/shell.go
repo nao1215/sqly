@@ -29,20 +29,21 @@ var (
 )
 
 const (
-	importCommand   = ".import"
-	cdCommand       = ".cd"
-	clearCommand    = ".clear"
-	dumpCommand     = ".dump"
-	exitCommand     = ".exit"
-	headerCommand   = ".header"
-	helpCommand     = ".help"
-	lsCommand       = ".ls"
-	modeCommand     = ".mode"
-	tablesCommand   = ".tables"
-	pwdCommand      = ".pwd"
-	schemaCommand   = ".schema"
-	describeCommand = ".describe"
-	saveCommand     = ".save"
+	importCommand     = ".import"
+	importModeCommand = ".import-mode"
+	cdCommand         = ".cd"
+	clearCommand      = ".clear"
+	dumpCommand       = ".dump"
+	exitCommand       = ".exit"
+	headerCommand     = ".header"
+	helpCommand       = ".help"
+	lsCommand         = ".ls"
+	modeCommand       = ".mode"
+	tablesCommand     = ".tables"
+	pwdCommand        = ".pwd"
+	schemaCommand     = ".schema"
+	describeCommand   = ".describe"
+	saveCommand       = ".save"
 
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
@@ -523,6 +524,10 @@ func (s *Shell) reportOnly() bool {
 
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init(ctx context.Context) error {
+	// Apply the malformed-row import policy from the --import-mode flag before any
+	// file is loaded, so the initial import honors the requested handling.
+	s.usecases.importer.SetMalformedRowPolicy(s.state.importMode)
+
 	// History is best-effort: a read-only or unwritable history DB (CI,
 	// sandboxes, containers) must not block the requested query or command.
 	// Disable history for the session and warn instead of failing.

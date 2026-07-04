@@ -498,6 +498,35 @@ func TestNewArg(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("--import-mode defaults to stop and parses stop/skip/fill", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			args []string
+			want model.MalformedRowPolicy
+		}{
+			{[]string{"sqly"}, model.MalformedRowStop},
+			{[]string{"sqly", "--import-mode", "stop"}, model.MalformedRowStop},
+			{[]string{"sqly", "--import-mode", "skip"}, model.MalformedRowSkip},
+			{[]string{"sqly", "--import-mode", "fill"}, model.MalformedRowFill},
+		}
+		for _, tc := range cases {
+			arg, err := NewArg(tc.args)
+			if err != nil {
+				t.Fatalf("NewArg(%v) unexpected error: %v", tc.args, err)
+			}
+			if arg.ImportMode != tc.want {
+				t.Errorf("NewArg(%v).ImportMode = %v, want %v", tc.args, arg.ImportMode, tc.want)
+			}
+		}
+	})
+
+	t.Run("an invalid --import-mode is rejected", func(t *testing.T) {
+		t.Parallel()
+		if _, err := NewArg([]string{"sqly", "--import-mode", "keep"}); err == nil {
+			t.Fatal("NewArg with --import-mode keep returned nil error, want an error")
+		}
+	})
 }
 
 func TestUsage(t *testing.T) {

@@ -31,6 +31,7 @@ func NewCommands() CommandList {
 	c[headerCommand] = command{execute: c.headerCommand, name: headerCommand, description: "print table header"}
 	c[helpCommand] = command{execute: c.helpCommand, name: helpCommand, description: "print help message"}
 	c[importCommand] = command{execute: c.importCommand, name: importCommand, description: "import file(s) and/or directory(ies)"}
+	c[importModeCommand] = command{execute: c.importModeCommand, name: importModeCommand, description: "show or set how a ragged CSV/TSV row is imported (stop|skip|fill)"}
 	c[lsCommand] = command{execute: c.lsCommand, name: lsCommand, description: "print directory contents"}
 	c[modeCommand] = command{execute: c.modeCommand, name: modeCommand, description: "change output mode"}
 	c[tablesCommand] = command{execute: c.tablesCommand, name: tablesCommand, description: "print tables"}

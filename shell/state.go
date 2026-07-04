@@ -14,6 +14,9 @@ import (
 type state struct {
 	cwd  string // cwd is current working directory.
 	mode *mode  // mode is output mode.
+	// importMode is the current malformed-row policy for CSV/TSV imports. It is
+	// seeded from the --import-mode flag and changed by the .import-mode command.
+	importMode model.MalformedRowPolicy
 }
 
 // newState return *state.
@@ -23,8 +26,9 @@ func newState(arg *config.Arg) (*state, error) {
 		return nil, err
 	}
 	return &state{
-		cwd:  dir,
-		mode: newMode(config.Stdout, arg.Output.Mode, arg.Output.JSONTyped),
+		cwd:        dir,
+		mode:       newMode(config.Stdout, arg.Output.Mode, arg.Output.JSONTyped),
+		importMode: arg.ImportMode,
 	}, nil
 }
 

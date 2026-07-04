@@ -113,6 +113,11 @@ type Arg struct {
 	StdinFormat string
 	// StdinTableName is the table name for the --stdin dataset (default: stdin).
 	StdinTableName string
+	// ImportMode selects how a ragged CSV/TSV row (one whose field count differs
+	// from the header) is imported: stop (default), skip, or fill. It sets the
+	// initial policy for the session; the .import-mode shell command can change it
+	// at runtime.
+	ImportMode model.MalformedRowPolicy
 	// Version print version message
 	Version func()
 }
@@ -223,6 +228,7 @@ func newArg(args []string) (*Arg, error) {
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
+	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	sqlFile := flag.StringP("sql-file", "f", "", "path to a file with SQL to execute (multiline; cannot be used with --sql)")
 	output := flag.StringP("output", "o", "", "destination path for the result of --sql or a single-result --sql-file script")
@@ -349,6 +355,13 @@ func newArg(args []string) (*Arg, error) {
 		return nil, fmt.Errorf("conflicting output mode flags: %s; choose one", strings.Join(names, ", "))
 	}
 
+	// Parse --import-mode into a policy, rejecting any value other than
+	// stop|skip|fill so a typo fails fast instead of silently defaulting.
+	importPolicy, err := model.ParseMalformedRowPolicy(*importMode)
+	if err != nil {
+		return nil, err
+	}
+
 	arg.Usage = usage(flag)
 	arg.Version = version
 	arg.Output = newOutput(*output, oFlag)
@@ -356,6 +369,7 @@ func newArg(args []string) (*Arg, error) {
 	arg.SheetName = *sheetName
 	arg.StdinFormat = *stdinFormat
 	arg.StdinTableName = *stdinName
+	arg.ImportMode = importPolicy
 	arg.Query = *query
 	arg.SQLFilePath = *sqlFile
 	arg.SaveDir = *saveDir

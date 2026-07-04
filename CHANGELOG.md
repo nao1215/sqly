@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### New Features
+* Import Mode for Ragged Rows: the new `--import-mode` flag and `.import-mode` shell command choose how a CSV/TSV row whose field count differs from the header is imported. `stop` (default) aborts the import and reports the mismatch, `skip` drops the ragged rows and imports the rest, and `fill` keeps every row by padding short rows with empty values and truncating long rows to the header width. The shell command changes the policy for later `.import` runs in the same session.
+
+### Bug Fixes
+* Malformed Row Data Loss: a CSV/TSV row whose field count differs from the header no longer imports as a silently empty table. filesql reported the mismatch as a field-count error that the loader masked with an empty single-column table, dropping both the malformed row and the well-formed rows before it. The default `stop` policy now fails the import with the column-count mismatch, and `--import-mode skip`/`fill` offer the non-fatal alternatives. Requires filesql v0.17.0.
+
 ## [v0.26.0](https://github.com/nao1215/sqly/compare/v0.25.0...v0.26.0) (2026-06-29)
 
 ### Performance

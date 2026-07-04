@@ -162,6 +162,17 @@ func (si *SQLite3Interactor) LoadFiles(ctx context.Context, filePaths ...string)
 	return si.adapter.LoadFiles(ctx, filePaths...)
 }
 
+// SetMalformedRowPolicy sets how a ragged CSV/TSV row is handled by subsequent
+// imports.
+func (si *SQLite3Interactor) SetMalformedRowPolicy(policy model.MalformedRowPolicy) {
+	si.adapter.SetMalformedRowPolicy(policy)
+}
+
+// MalformedRowPolicy returns the policy applied to ragged CSV/TSV rows on import.
+func (si *SQLite3Interactor) MalformedRowPolicy() model.MalformedRowPolicy {
+	return si.adapter.MalformedRowPolicy()
+}
+
 // GetTableNames returns the list of tables currently available in the database.
 func (si *SQLite3Interactor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
 	return si.adapter.GetTableNames(ctx)

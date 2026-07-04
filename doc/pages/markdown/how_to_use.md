@@ -10,6 +10,8 @@ sqly allows you to change the display mode of SQL results with options. By defau
 
 For automation-friendly output, `--json-typed` and `--ndjson-typed` (or `.mode json-typed` / `.mode ndjson-typed` in the shell) emit native JSON scalars instead of strings: a canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`. A large integer stays lossless and never regresses into scientific notation, while a value with a leading zero such as `007` remains a string. The default `--json`/`--ndjson` keep the legacy string contract. Pair `--inspect` with `--json-typed` to apply the same contract to the report's sample rows.
 
+When a CSV/TSV row has a different field count than the header, `--import-mode` (or the `.import-mode` shell command) decides what happens: `stop` (default) fails the import and reports the mismatch, `skip` drops the malformed rows and imports the rest, and `fill` keeps every row by padding short rows with blanks and truncating long rows to the header width. The policy applies to delimited text only; Excel and LTSV already fill missing cells, and Parquet and JSON/JSONL have no per-row field-count mismatch.
+
 
 ### sqly options
 
@@ -44,6 +46,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
   -S, --sheet string    excel sheet name you want to import
       --stdin string    treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
       --stdin-name string   table name for the --stdin dataset (default "stdin")
+      --import-mode string  how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill (default "stop")
   -s, --sql string      sql query you want to execute
   -f, --sql-file string   path to a file with SQL to execute (multiline; cannot be used with --sql)
   -o, --output string   destination path for the result of --sql or a single-result --sql-file script
