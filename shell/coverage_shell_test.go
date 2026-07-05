@@ -430,11 +430,10 @@ func TestOutputAliasesImportedSource_SkipsStdinAndMatchesFile(t *testing.T) {
 
 // TestRunSQLFileToOutput_ResultSetCount covers the zero-result and multiple-result
 // error branches of the --sql-file --output contract.
+// Serial: the "one result set" subtest swaps the package-level config.Stderr that
+// runSQLFileToOutput writes to, so the subtests must not run concurrently.
 func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
-	t.Parallel()
-
 	t.Run("no result set -> error asks for a SELECT", func(t *testing.T) {
-		t.Parallel()
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -449,7 +448,6 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 	})
 
 	t.Run("one result set -> exports to the output file", func(t *testing.T) {
-		t.Parallel()
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -476,7 +474,6 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 	})
 
 	t.Run("two result sets -> error asks to reduce to one", func(t *testing.T) {
-		t.Parallel()
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -530,10 +527,9 @@ func TestGetCompletions_SheetContextJoinedForm(t *testing.T) {
 	got := shell.getCompletions(context.Background(), ".import testdata/sample.xlsx --sheet=")
 	for _, s := range got {
 		if s.Description != "" && s.Description != msgExcelSheet {
-			continue
+			t.Errorf("unexpected non-sheet suggestion %q with description %q", s.Text, s.Description)
 		}
 	}
-	_ = got
 }
 
 // TestGetQuotedFilePathCompletions_DirAndBadDir covers a directory suggestion
