@@ -1,0 +1,64 @@
+# Snapshot tests for sqly's stable formatted output. Unlike the contains/line
+# assertions in the other specs, these pin the exact rendered output to a
+# committed golden file, so an unintended formatting change (table borders,
+# column order, CREATE statement text) fails loudly with a diff. atago
+# normalizes volatile details (ANSI colors, temp paths, timestamps) before
+# comparing, so the goldens stay stable across machines and CI.
+#
+# Record or refresh the goldens with:
+#   atago snapshot update e2e/atago/snapshot.atago.yaml
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly output snapshots
+
+scenarios:
+  - name: table mode renders the ASCII result table exactly
+    steps:
+      - fixture: &people
+          file: people.csv
+          content: |
+            name,age,city
+            Alice,30,Tokyo
+            Bob,25,Osaka
+            Carol,41,Kyoto
+      - run:
+          command: sqly --sql "SELECT name, age FROM people ORDER BY age" people.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/select_table.txt
+
+  - name: markdown mode renders a GitHub-style table
+    steps:
+      - fixture: *people
+      - run:
+          command: sqly people.csv
+          stdin: ".mode markdown\nSELECT name, age FROM people ORDER BY age;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/select_markdown.txt
+
+  - name: .schema prints the stored CREATE TABLE statement
+    steps:
+      - fixture: *people
+      - run:
+          command: sqly people.csv
+          stdin: ".schema people\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/schema_people.txt
+
+  - name: .tables lists the imported table
+    steps:
+      - fixture: *people
+      - run:
+          command: sqly people.csv
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/tables_list.txt

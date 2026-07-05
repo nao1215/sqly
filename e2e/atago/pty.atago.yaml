@@ -1,0 +1,61 @@
+# PTY tests for sqly's interactive shell. A `run:` step feeds stdin as a
+# non-TTY batch script, which never exercises the REPL prompt, completion, or
+# the TTY-detection branch. A `pty:` step runs sqly inside a real pseudo-
+# terminal and drives it with an expect/send session, so the interactive path
+# (prompt rendering, per-command execution, live .mode switching, clean exit)
+# is verified end to end against the real binary.
+#
+# POSIX-only: the pty step reports a clear error on Windows, so these scenarios
+# skip there. Windows keeps its coverage through the Go tests and the batch
+# specs. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly interactive shell (pty)
+
+scenarios:
+  - name: an interactive query prints its result table
+    skip:
+      os: windows
+    steps:
+      - fixture: &people
+          file: people.csv
+          content: |
+            name,age,city
+            Alice,30,Tokyo
+            Bob,25,Osaka
+            Carol,41,Kyoto
+      - pty:
+          command: sqly people.csv
+          timeout: 20s
+          session:
+            # The prompt ends with "(<mode>)$ "; table is the default mode.
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 25;\n"
+            # Bob is the only 25-year-old, so it appears in the result table but
+            # not in the echoed query text.
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: ".exit\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+
+  - name: the prompt reflects a live .mode switch
+    skip:
+      os: windows
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 20s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".mode csv\n"
+            # The mode-change status goes to stderr, which the pty transcript
+            # merges in, and the next prompt now reports the csv mode.
+            - expect: '\(csv\)\$'
+            - send: ".exit\n"
+      - assert:
+          exit_code: 0
