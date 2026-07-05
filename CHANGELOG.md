@@ -4,6 +4,7 @@
 
 ### Testing
 * Coverage Expansion: combined unit and self-hosted E2E statement coverage rose from about 83 percent to 94 percent. New tests exercise error-propagation paths across the shell, filesql, memory, and persistence layers (closed-database returns, usecase failures surfaced through the command handlers, malformed and missing inputs) plus edge cases in compare, inspect, profile, dump, schema, and the cd/ls commands. The octocov acceptable threshold moved from 80 percent to 90 percent, and cd.go and ls.go are no longer excluded from the coverage report now that they are directly tested.
+* Snapshot and PTY E2E: the atago suite now pins sqly's formatted output (the table and markdown result tables, `.schema`, and `.tables`) to committed golden files, so an unintended formatting change fails with a diff. New pty scenarios drive the interactive shell in a real pseudo-terminal to verify the REPL path that batch input never reaches: a query prints its result table, and a `.mode` switch is reflected in the live prompt. The pty scenarios are POSIX-only and skip on Windows.
 
 ## [v0.27.0](https://github.com/nao1215/sqly/compare/v0.26.0...v0.27.0) (2026-07-04)
 
