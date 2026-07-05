@@ -153,10 +153,13 @@ func TestOpenQuotePrefix_Branches(t *testing.T) {
 func TestSplitCompletionPrefix_LeadingSeparator(t *testing.T) {
 	t.Parallel()
 
+	// lastUnescapedSeparator treats "/" as a path separator on every platform, so
+	// the split is "/" + "foo" and readDir mirrors the non-empty base "/". This is
+	// independent of os.PathSeparator, which is "\\" on Windows.
 	readDir, base, partial := splitCompletionPrefix("/foo")
-	if readDir != string(os.PathSeparator) || base != "/" || partial != "foo" {
+	if readDir != "/" || base != "/" || partial != "foo" {
 		t.Errorf("splitCompletionPrefix(%q) = (%q, %q, %q), want (%q, %q, %q)",
-			"/foo", readDir, base, partial, string(os.PathSeparator), "/", "foo")
+			"/foo", readDir, base, partial, "/", "/", "foo")
 	}
 }
 
