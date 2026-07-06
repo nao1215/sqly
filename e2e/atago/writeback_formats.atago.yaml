@@ -1,0 +1,80 @@
+# In-place write-back (.save --force) for source formats the save suite does not
+# cover. save.atago.yaml exercises CSV and the ACH/Fedwire native formats; this
+# pins TSV, LTSV, and Parquet. Each scenario updates a row, writes back over the
+# source, then re-imports to confirm the change persisted in that format and the
+# untouched row survived. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly write-back across source formats
+
+scenarios:
+  - name: writes an UPDATE back to a TSV source in place
+    steps:
+      - fixture:
+          file: d.tsv
+          content: "id\tv\n1\ta\n2\tb\n"
+      - run:
+          command: sqly d.tsv
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Saved d"
+      - run:
+          command: sqly --csv --sql "SELECT id, v FROM d ORDER BY id" d.tsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1,Z"
+              - "2,b"
+
+  - name: writes an UPDATE back to an LTSV source in place
+    steps:
+      - fixture:
+          file: d.ltsv
+          content: "id:1\tv:a\nid:2\tv:b\n"
+      - run:
+          command: sqly d.ltsv
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Saved d"
+      - run:
+          command: sqly --csv --sql "SELECT id, v FROM d ORDER BY id" d.ltsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1,Z"
+              - "2,b"
+
+  - name: writes an UPDATE back to a Parquet source in place
+    steps:
+      - fixture:
+          file: seed.csv
+          content: |
+            id,v
+            1,a
+            2,b
+      - run:
+          command: sqly --sql "SELECT * FROM seed ORDER BY id" seed.csv --output d.parquet
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly d.parquet
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Saved d"
+      - run:
+          command: sqly --csv --sql "SELECT id, v FROM d ORDER BY id" d.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1,Z"
+              - "2,b"
