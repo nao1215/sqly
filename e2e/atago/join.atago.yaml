@@ -1,0 +1,89 @@
+# JOIN semantics across imported files. The existing suites only exercise a
+# happy-path INNER JOIN, so this pins the join shapes a user relies on: LEFT
+# JOIN keeping unmatched rows as NULL, CROSS JOIN's cartesian product, a
+# self-join, and a three-way join with aggregation. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly join semantics
+
+scenarios:
+  - name: left join keeps an unmatched left row with NULL right columns
+    steps:
+      - fixture: &emp
+          file: emp.csv
+          content: |
+            id,name
+            1,alice
+            2,bob
+            3,carol
+      - fixture: &loc
+          file: loc.csv
+          content: |
+            id,city
+            1,NYC
+            2,LA
+      - run:
+          command: sqly --ndjson --sql "SELECT e.name, l.city FROM emp e LEFT JOIN loc l ON e.id = l.id ORDER BY e.id" emp.csv loc.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '{"name":"alice","city":"NYC"}'
+              - '{"name":"carol","city":null}'
+
+  - name: cross join produces the cartesian product
+    steps:
+      - fixture: *emp
+      - fixture: *loc
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM emp CROSS JOIN loc" emp.csv loc.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "6"
+
+  - name: self join pairs distinct rows of one table
+    steps:
+      - fixture: *emp
+      - run:
+          command: sqly --csv --sql "SELECT a.name AS x, b.name AS y FROM emp a JOIN emp b ON a.id < b.id ORDER BY x, y" emp.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "alice,bob"
+              - "alice,carol"
+              - "bob,carol"
+            not_contains: "bob,alice"
+
+  - name: three-way join aggregates across three files
+    steps:
+      - fixture:
+          file: orders.csv
+          content: |
+            oid,cid,amt
+            1,10,100
+            2,10,50
+            3,20,80
+      - fixture:
+          file: cust.csv
+          content: |
+            cid,cname
+            10,Acme
+            20,Beta
+      - fixture:
+          file: reg.csv
+          content: |
+            cid,region
+            10,West
+            20,East
+      - run:
+          command: sqly --csv --sql "SELECT c.cname, r.region, SUM(o.amt) AS total FROM orders o JOIN cust c ON o.cid = c.cid JOIN reg r ON o.cid = r.cid GROUP BY c.cname, r.region ORDER BY total DESC" orders.csv cust.csv reg.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Acme,West,150"
+              - "Beta,East,80"

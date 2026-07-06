@@ -143,3 +143,26 @@ scenarios:
           file:
             path: out.tsv
             not_contains: "user_name,identifier"
+
+  - name: .ls lists the working directory and a named subdirectory
+    steps:
+      - fixture:
+          file: alpha.csv
+          content: |
+            id
+            1
+      - fixture:
+          file: sub/beta.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly alpha.csv
+          stdin: ".ls\n.ls sub\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alpha.csv
+              - sub
+              - beta.csv
