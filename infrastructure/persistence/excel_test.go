@@ -87,8 +87,10 @@ func TestExcelRepositoryDump(t *testing.T) {
 		t.Parallel()
 
 		names := map[string]string{
-			"long":      "this_is_a_very_long_table_name_exceeding_31_chars",
-			"forbidden": "sales/2023:q1[west]",
+			"long":              "this_is_a_very_long_table_name_exceeding_31_chars",
+			"forbidden":         "sales/2023:q1[west]",
+			"default_lowercase": "sheet1",
+			"default_uppercase": "SHEET1",
 		}
 		for label, name := range names {
 			t.Run(label, func(t *testing.T) {

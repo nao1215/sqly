@@ -66,14 +66,17 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	// : \ / ? * [ ], so the table name is adapted before it becomes a sheet.
 	sheetName := excelSheetName(table.Name())
 
-	if sheetName != "Sheet1" {
-		if _, err = f.NewSheet(sheetName); err != nil {
-			return err
-		}
-		// Delete the default sheet only when a distinct sheet replaced it.
-		if err := f.DeleteSheet("Sheet1"); err != nil {
-			return err
-		}
+	// A new excelize file already has one sheet named "Sheet1"; rename it to the
+	// target rather than adding a second sheet and deleting the default. Excelize
+	// matches sheet names case-insensitively, so adding "sheet1" would collide
+	// with the default and renaming sidesteps that entirely. When the target only
+	// differs from "Sheet1" by case, keep the default name so row writes still
+	// address the sheet that exists.
+	const defaultSheet = "Sheet1"
+	if strings.EqualFold(sheetName, defaultSheet) {
+		sheetName = defaultSheet
+	} else if err = f.SetSheetName(defaultSheet, sheetName); err != nil {
+		return err
 	}
 
 	f.SetActiveSheet(0)
