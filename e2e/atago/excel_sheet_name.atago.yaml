@@ -1,0 +1,51 @@
+# Excel limits a worksheet name to 31 characters. A table name comes from the
+# source filename, so a long filename produced a >31-character sheet name and
+# the .xlsx export failed on excelize's NewSheet with a raw library error and no
+# output file. sqly now adapts the table name to Excel's rules before writing,
+# so the export succeeds and the file re-imports. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly excel export sheet-name handling
+
+scenarios:
+  - name: exports a long-named table to xlsx instead of failing on the 31-char limit
+    steps:
+      - fixture:
+          file: orders_by_region_and_fiscal_quarter_2023.csv
+          content: |
+            region,amount
+            west,100
+      - run:
+          command: sqly --excel --output out.xlsx --sql "SELECT * FROM orders_by_region_and_fiscal_quarter_2023" orders_by_region_and_fiscal_quarter_2023.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=excel"
+          file:
+            path: out.xlsx
+            exists: true
+      - assert:
+          file:
+            path: out.xlsx
+            executable: false
+
+  - name: the exported xlsx is a valid workbook that re-imports
+    steps:
+      - fixture:
+          file: orders_by_region_and_fiscal_quarter_2023.csv
+          content: |
+            region,amount
+            west,100
+      - run:
+          command: sqly --excel --output out.xlsx --sql "SELECT * FROM orders_by_region_and_fiscal_quarter_2023" orders_by_region_and_fiscal_quarter_2023.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --inspect out.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - region
+              - west

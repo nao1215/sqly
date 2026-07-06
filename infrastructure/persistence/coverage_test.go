@@ -9,6 +9,7 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/xuri/excelize/v2"
 )
 
 // covPerNewHistoryRepo returns a history repository backed by its own in-memory
@@ -38,15 +39,29 @@ func TestExcelRepository_Dump_SaveToMissingDirectoryReturnsError(t *testing.T) {
 	}
 }
 
-func TestExcelRepository_Dump_InvalidSheetNameReturnsError(t *testing.T) {
+func TestExcelRepository_Dump_SanitizesInvalidSheetName(t *testing.T) {
 	t.Parallel()
 
 	r := NewExcelRepository()
-	// Excel sheet names cannot contain ':'; NewSheet rejects it.
+	// Excel sheet names cannot contain ':'; the name is sanitized so the dump
+	// succeeds instead of failing on NewSheet.
 	table := model.NewTable("bad:name", model.Header{"id"}, []model.Record{{"1"}})
 	path := filepath.Join(t.TempDir(), "out.xlsx")
-	if err := r.Dump(path, table); err == nil {
-		t.Error("expected error for an invalid excel sheet name, got nil")
+	if err := r.Dump(path, table); err != nil {
+		t.Fatalf("Dump failed for a punctuated sheet name: %v", err)
+	}
+
+	f, err := excelize.OpenFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	sheets := f.GetSheetList()
+	if len(sheets) != 1 {
+		t.Fatalf("sheet count = %d, want 1", len(sheets))
+	}
+	if strings.ContainsAny(sheets[0], `:\/?*[]`) {
+		t.Errorf("sheet name %q still contains a forbidden character", sheets[0])
 	}
 }
 
