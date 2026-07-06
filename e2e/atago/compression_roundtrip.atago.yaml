@@ -1,0 +1,102 @@
+# Compression round-trips for the writable codecs the existing suites do not
+# cover. gzip round-trip, bzip2 write rejection, and the unknown-extension CSV
+# fallback are already tested in export_inference.atago.yaml; this pins the rest.
+# Each scenario writes a CSV through a codec, then re-imports the file and reads
+# a row back. The re-import only succeeds if the file was genuinely compressed in
+# that codec, so a successful round-trip is the integrity check. make test-e2e
+version: "1"
+
+suite:
+  name: sqly compression round-trips
+
+scenarios:
+  - name: csv round-trips through xz compression
+    steps:
+      - fixture: &src
+          file: src.csv
+          content: |
+            id,name
+            1,alicexyz
+            2,bobqworst
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output out.csv.xz
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=csv"
+      - run:
+          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.xz
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: bobqworst
+
+  - name: csv round-trips through zstd compression
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output out.csv.zst
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.zst
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: bobqworst
+
+  - name: csv round-trips through zlib compression
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output out.csv.z
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.z
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: bobqworst
+
+  - name: csv round-trips through snappy compression
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output out.csv.snappy
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.snappy
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: bobqworst
+
+  - name: csv round-trips through s2 compression
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output out.csv.s2
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.s2
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: bobqworst
+
+  - name: csv round-trips through lz4 compression
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output out.csv.lz4
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.lz4
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: bobqworst
