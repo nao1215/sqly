@@ -1,0 +1,93 @@
+# A leading Unicode byte-order mark must not corrupt an import. Editors and
+# shells (Excel, Notepad, PowerShell) prepend a UTF-8 BOM, and a UTF-8 or
+# UTF-16 BOM used to leak into the first column name or break parsing, so a
+# query on the plain column name failed with "no such column". filesql now
+# strips a UTF-8 BOM and transcodes UTF-16 before parsing. Run with:
+# make test-e2e
+#
+# Fixtures are base64 so the raw BOM/UTF-16 bytes survive intact.
+version: "1"
+
+suite:
+  name: sqly Unicode BOM handling on import
+
+scenarios:
+  - name: utf-8 BOM on a CSV keeps the first column queryable by its plain name
+    steps:
+      - fixture:
+          file: bom.csv
+          base64: "77u/bmFtZSxhZ2UKYWxpY2UsMzAK"
+      - run:
+          command: sqly --csv --sql "SELECT name FROM bom WHERE age = 30" bom.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alice
+          stderr:
+            not_contains: "no such column"
+
+  - name: utf-8 BOM on a TSV keeps the first column queryable by its plain name
+    steps:
+      - fixture:
+          file: bom.tsv
+          base64: "77u/bmFtZQlhZ2UKYWxpY2UJMzAK"
+      - run:
+          command: sqly --csv --sql "SELECT name FROM bom WHERE age = 30" bom.tsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alice
+          stderr:
+            not_contains: "no such column"
+
+  - name: utf-8 BOM on an LTSV keeps the first label queryable by its plain name
+    steps:
+      - fixture:
+          file: bom.ltsv
+          base64: "77u/bmFtZTphbGljZQlhZ2U6MzAK"
+      - run:
+          command: sqly --csv --sql "SELECT name FROM bom WHERE age = 30" bom.ltsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alice
+          stderr:
+            not_contains: "no such column"
+
+  - name: utf-8 BOM on a JSON array parses instead of failing
+    steps:
+      - fixture:
+          file: bom.json
+          base64: "77u/W3sibmFtZSI6ImFsaWNlIiwiYWdlIjozMH1d"
+      - run:
+          command: sqly --csv --sql "SELECT json_extract(data, '$.name') AS n FROM bom" bom.json
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alice
+
+  - name: utf-8 BOM on a JSONL parses instead of failing
+    steps:
+      - fixture:
+          file: bom.jsonl
+          base64: "77u/eyJuYW1lIjoiYWxpY2UiLCJhZ2UiOjMwfQo="
+      - run:
+          command: sqly --csv --sql "SELECT json_extract(data, '$.name') AS n FROM bom" bom.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alice
+
+  - name: utf-16 LE CSV is transcoded to UTF-8 instead of misreading columns
+    steps:
+      - fixture:
+          file: utf16.csv
+          base64: "//5uAGEAbQBlACwAYQBnAGUACgBhAGwAaQBjAGUALAAzADAACgA="
+      - run:
+          command: sqly --csv --sql "SELECT name FROM utf16 WHERE age = 30" utf16.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: alice
+          stderr:
+            not_contains: "column count mismatch"
