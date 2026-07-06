@@ -1,0 +1,74 @@
+# A zero-padded numeric code (ZIP code, product ID, bank code) must keep its
+# leading zeros on import. Type inference used to classify a column as INTEGER
+# when every value looked numeric, so "02134" was stored as 2134. filesql now
+# classifies a zero-padded integer literal as TEXT. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly zero-padded code preservation
+
+scenarios:
+  - name: preserves leading zeros on a zip-code column
+    steps:
+      - fixture:
+          file: zip.csv
+          content: |
+            zip
+            02134
+            00501
+      - run:
+          command: sqly --csv --sql "SELECT zip FROM zip ORDER BY zip" zip.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "00501"
+              - "02134"
+
+  - name: types a zero-padded column as text
+    steps:
+      - fixture:
+          file: zip.csv
+          content: |
+            zip
+            02134
+            00501
+      - run:
+          command: sqly --csv --sql "SELECT typeof(zip) AS t FROM zip LIMIT 1" zip.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: text
+
+  - name: keeps a lone zero as an integer
+    steps:
+      - fixture:
+          file: flag.csv
+          content: |
+            flag
+            0
+            1
+            0
+      - run:
+          command: sqly --csv --sql "SELECT typeof(flag) AS t FROM flag LIMIT 1" flag.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: integer
+
+  - name: keeps exact values when a code column also holds non-numeric text
+    steps:
+      - fixture:
+          file: mix.csv
+          content: |
+            code
+            02134
+            ABCDE
+      - run:
+          command: sqly --csv --sql "SELECT code FROM mix ORDER BY code" mix.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "02134"
+              - ABCDE
