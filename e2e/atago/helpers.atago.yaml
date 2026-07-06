@@ -143,3 +143,97 @@ scenarios:
           file:
             path: out.tsv
             not_contains: "user_name,identifier"
+
+  - name: .ls lists the working directory and a named subdirectory
+    steps:
+      - fixture:
+          file: alpha.csv
+          content: |
+            id
+            1
+      - fixture:
+          file: sub/beta.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly alpha.csv
+          stdin: ".ls\n.ls sub\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alpha.csv
+              - sub
+              - beta.csv
+
+  - name: .ls fails on a missing directory
+    steps:
+      - fixture:
+          file: alpha.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly alpha.csv
+          stdin: ".ls no_such_dir\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such file or directory"
+
+  - name: .cd with no argument moves to the home directory
+    env: *home
+    steps:
+      - fixture:
+          file: home/x.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly
+          stdin: ".cd\n.pwd\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: home
+
+  - name: .cd fails on a missing directory
+    steps:
+      - fixture:
+          file: alpha.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly alpha.csv
+          stdin: ".cd no_such_dir\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such file or directory"
+
+  - name: .header fails on a missing table
+    steps:
+      - fixture:
+          file: alpha.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly alpha.csv
+          stdin: ".header nope\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such table"
+
+  - name: .tables guides an empty session toward .import
+    steps:
+      - run:
+          command: sqly
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ".import"
