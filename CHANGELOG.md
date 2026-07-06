@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.27.1](https://github.com/nao1215/sqly/compare/v0.27.0...v0.27.1) (2026-07-06)
 
 ### Bug Fixes
 * Unicode BOM on Import: a CSV, TSV, LTSV, JSON, or JSONL file that begins with a Unicode byte-order mark now imports correctly. A UTF-8 BOM (written by Excel, Notepad, and PowerShell) used to stay attached to the first column name, so `SELECT name` failed with `no such column`, and it broke JSON/JSONL parsing outright; a UTF-16 file surfaced as a column-count mismatch. The reader now strips a UTF-8 BOM and transcodes UTF-16 (LE or BE) to UTF-8 before parsing. A non-Unicode legacy encoding without a BOM (for example Shift-JIS) still passes through as raw bytes. Requires filesql v0.17.1.
