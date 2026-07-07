@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v0.27.3](https://github.com/nao1215/sqly/compare/v0.27.2...v0.27.3) (2026-07-08)
 
 ### Bug Fixes
 * Interactive Input Lost on Windows: keystrokes typed right after a re-rendered prompt in the interactive shell are no longer dropped on a Windows ConPTY. The prompt library entered raw mode on os.Stdin while reading input through a different handle (CONIN$ on Windows), so on a ConPTY input delivered in the render-to-read window went to an ungoverned handle and could be lost, leaving a command typed but never executed and the session hung. prompt v0.0.11 routes raw mode through the read handle on Windows (while keeping the proven os.Stdin path on Unix), closing the gap.
