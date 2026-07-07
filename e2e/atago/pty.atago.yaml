@@ -5,17 +5,15 @@
 # dot-commands, live .mode switching, error recovery, and clean exit — is
 # verified end to end against the real binary.
 #
-# These run on Unix (POSIX pty). They are skipped on Windows (ConPTY): the prompt
-# is re-rendered a beat before its read loop is ready, and on a ConPTY the input
-# delivered in that window is dropped rather than buffered, so a command is typed
-# but never executed and the session hangs. That is a terminal-backend race in the
-# prompt library, tracked upstream at github.com/nao1215/prompt/issues/13; it
-# cannot be fixed reliably from the test side (combining the command and its CR
-# into one send, serializing, and retrying all reduce but do not remove it). The
-# skip is removed once prompt#13 is fixed. Windows binary behavior stays covered by
-# the batch smoke tests. Two authoring rules keep the Unix sessions robust,
-# including when the whole suite runs in parallel and the sessions starve each
-# other of CPU:
+# These run on Unix (POSIX pty) and Windows (ConPTY). They were once skipped on
+# Windows: the prompt entered raw mode on os.Stdin while go-tty read from a
+# different handle (CONIN$), so on a ConPTY input delivered right after a
+# re-rendered prompt went to an ungoverned handle and could be dropped, leaving a
+# command typed but never executed and the session hung. prompt v0.0.11 routes raw
+# mode through go-tty's own handle on Windows (github.com/nao1215/prompt/issues/13),
+# so the read path and raw mode share one handle and the skip is gone. Three
+# authoring rules keep the sessions robust, including when the whole suite runs in
+# parallel and the sessions starve each other of CPU:
 #
 #   * Submit a command with a trailing CR in the same send (`"...\r"`), not a
 #     separate `{key: enter}` step. The prompt is re-rendered a beat before its
@@ -30,6 +28,13 @@
 #     Enter can. After a query, wait for a token that appears only in the
 #     executed result before expecting the prompt again, or the prompt echoed
 #     mid-typing would match too early.
+#   * Give the pty a wide terminal (cols: 220). The prompt embeds the working
+#     directory, and under CI the temp sandbox path is long, so prefix plus command
+#     can land a character exactly on the last column. ConPTY defers the wrap at the
+#     final column (pending-wrap), which the line editor's redraw math mishandles,
+#     so a command whose length hits the width boundary can fail to execute. A wide
+#     terminal keeps every prompt-plus-command on one row regardless of the sandbox
+#     path length.
 version: "1"
 
 suite:
@@ -37,7 +42,6 @@ suite:
 
 scenarios:
   - name: an interactive query prints its result table
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: &people
           file: people.csv
@@ -48,8 +52,8 @@ scenarios:
             Carol,41,Kyoto
       - pty:
           command: sqly people.csv
-          rows: 24
-          cols: 80
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$' # the prompt ends with "(<mode>)$ "; table is default
@@ -65,11 +69,12 @@ scenarios:
               - "+--" # the box-drawn result table sqly renders to the terminal
 
   - name: the prompt reflects a live .mode switch
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -80,11 +85,12 @@ scenarios:
           exit_code: 0
 
   - name: .tables lists the imported table
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -98,11 +104,12 @@ scenarios:
             contains: "people"
 
   - name: .schema shows the imported columns
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -118,11 +125,12 @@ scenarios:
               - "city"
 
   - name: a computed aggregate round-trips through the shell
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -138,11 +146,12 @@ scenarios:
             contains: "ROWS=3"
 
   - name: two queries run in one interactive session
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -161,11 +170,12 @@ scenarios:
               - "Carol"
 
   - name: an invalid query reports an error and the shell recovers to the prompt
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -181,11 +191,12 @@ scenarios:
             contains: "no such table"
 
   - name: EOF at the prompt exits the shell cleanly
-    skip: { os: windows } # ConPTY read-readiness race (prompt#13); see file header
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
