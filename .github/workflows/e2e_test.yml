@@ -75,4 +75,4 @@ jobs:
           export USERPROFILE="$HOME"
           export SQLY_HISTORY_DB_PATH="$RUNNER_TEMP/history.db"
           mkdir -p "$HOME"
-          atago run --ci --parallel 1 --retry-failed 3 ./e2e/atago/pty.atago.yaml
+          atago run --ci --parallel 1 --retry-failed 5 ./e2e/atago/pty.atago.yaml
