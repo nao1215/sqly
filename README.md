@@ -166,7 +166,7 @@ A SQL statement is buffered until it ends with `;`, so a multi-line or pasted qu
 
 ```shell
 $ sqly testdata/user.csv
-sqly v0.27.2
+sqly v0.27.3
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
@@ -562,7 +562,7 @@ SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `In
 |--------:|--------:|------------:|--------------:|-------------------:|
 | 100,000 | 12 | 515 ms | 161 MB | 2.82M |
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.27.2. Run `make bench` to reproduce on your machine.
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.27.3. Run `make bench` to reproduce on your machine.
 
 ## Comparison with similar tools
 
