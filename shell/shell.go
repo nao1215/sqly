@@ -164,6 +164,7 @@ func NewShell(
 				prompt.WithIsComplete(sqlInputComplete),
 				prompt.WithWordEscape(),
 				prompt.WithKeyMap(sqlyKeyMap()),
+				prompt.WithPersistentRawMode(),
 			)
 		},
 		stdin:          os.Stdin,
@@ -396,6 +397,11 @@ func (s *Shell) communicate(ctx context.Context) error {
 
 	// The prompt session is ready, so it is now safe to announce the shell.
 	s.printWelcomeMessage()
+
+	// Persistent raw mode disables the terminal's LF-to-CRLF mapping, so route
+	// command output through CRLF translation for the session. Restored on exit.
+	restoreOutput := installCRLFTranslation()
+	defer restoreOutput()
 
 	for {
 		input, err := s.prompt(p)
