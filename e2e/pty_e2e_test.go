@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -275,5 +276,71 @@ func TestInteractivePTY_ExitOnCtrlD(t *testing.T) {
 	s.write("\x04") // Ctrl-D / EOF
 	if code := s.waitExit(exitTimeout); code != 0 {
 		t.Fatalf("interactive shell: Ctrl-D produced exit code %d, want 0", code)
+	}
+}
+
+// rawCount returns how many times want appears in the unstripped captured output.
+// It is used to assert on the raw terminal control bytes (the bracketed-paste
+// enable the prompt emits once when it enters raw mode) that stripANSI removes.
+func (s *ptySession) rawCount(want string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return strings.Count(s.buf.String(), want)
+}
+
+// bracketedPasteEnable is the control sequence the prompt writes each time it
+// enters raw mode. sqly holds the terminal in raw mode for the whole session
+// (prompt.WithPersistentRawMode), so it appears exactly once; if the shell
+// regressed to re-acquiring raw mode on every line it would appear once per
+// prompt, which is the toggling that lets input be dropped between lines.
+const bracketedPasteEnable = "\x1b[?2004h"
+
+// TestInteractivePTY_RapidConsecutiveLinesNotLost reproduces the interactive
+// input-loss bug (prompt issue #10): a driver that dumps several lines back to
+// back — as a pipe or pty driver does — with no delay between them must have
+// every line consumed. Before the fix the shell restored and re-acquired raw mode
+// around every command, so a line already buffered when the next prompt was
+// rendered could be dropped in the mode-switch window and the session would hang.
+//
+// All queries plus a trailing ".exit" are written as a single burst so the whole
+// script is buffered before the shell reads it, exercising the many-lines-at-once
+// path deterministically. Each query selects a distinct marker, so a lost line
+// surfaces as a missing marker or as the process failing to exit. The test also
+// asserts raw mode was entered exactly once, pinning the persistent-raw-mode
+// contract that closes the loss window.
+func TestInteractivePTY_RapidConsecutiveLinesNotLost(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+
+	s.waitReady(startupTimeout)
+
+	const lines = 10
+	var burst strings.Builder
+	for i := range lines {
+		// A distinct string literal per line; "sqlymark<i>" is unlikely to collide
+		// with any other terminal text, so its presence proves the line reached the
+		// prompt's read loop rather than being dropped in a mode-switch window.
+		fmt.Fprintf(&burst, "SELECT 'sqlymark%d';\r", i)
+	}
+	burst.WriteString(".exit\r")
+
+	// One write, no inter-line pauses: the whole script arrives at once.
+	s.write(burst.String())
+
+	// Every marker must appear; a dropped line would never echo or execute.
+	for i := range lines {
+		s.waitFor(fmt.Sprintf("sqlymark%d", i), ioTimeout)
+	}
+
+	// The trailing ".exit" must still be reached, proving the session processed the
+	// entire burst without hanging on a lost line.
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: rapid burst produced exit code %d, want 0 (a lost line would hang the session)", code)
+	}
+
+	// Raw mode must have been entered once for the whole session, not per line.
+	// Per-line re-acquisition is the toggling that opens the input-loss window.
+	if got := s.rawCount(bracketedPasteEnable); got != 1 {
+		t.Fatalf("interactive shell: raw mode entered %d times across the session, want 1 (persistent raw mode)", got)
 	}
 }

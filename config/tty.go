@@ -12,3 +12,13 @@ import (
 func IsInputFromTTY() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
+
+// IsOutputToTTY reports whether standard output is connected to an interactive
+// terminal. The interactive shell holds the terminal in raw mode across prompts,
+// which disables the terminal's own LF-to-CRLF mapping; the shell uses this to
+// decide whether command output needs explicit CRLF translation so results stay
+// aligned. When stdout is piped or redirected it returns false and output is left
+// untouched.
+func IsOutputToTTY() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}

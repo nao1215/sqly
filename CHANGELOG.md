@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Bug Fixes
+* Interactive Input Lost Between Lines: keystrokes typed right after a result, or a script piped into the interactive shell all at once, are no longer dropped. The shell re-acquired raw mode on every prompt, so input buffered while the terminal briefly returned to cooked mode between lines could be lost and the session would hang; automated interactive runs needed retries to absorb it. The shell now keeps the terminal in raw mode for the whole session (prompt v0.0.9 WithPersistentRawMode), which also disables the terminal's own newline translation, so command output is routed through a CRLF writer while the shell is interactive to keep result tables aligned.
+
+### Testing
+* Rapid Interactive Input E2E: the Go pty smoke suite adds a scenario that writes several queries plus the exit command to the interactive shell as a single burst and asserts every result appears and the session exits cleanly, so a regression that drops buffered input surfaces as a missing marker or a hang. It also asserts raw mode is entered exactly once per session.
+
+### Dependencies
+* prompt v0.0.9: upgraded from v0.0.8 for WithPersistentRawMode.
+
 ## [v0.27.1](https://github.com/nao1215/sqly/compare/v0.27.0...v0.27.1) (2026-07-06)
 
 ### Bug Fixes
