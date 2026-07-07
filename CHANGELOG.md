@@ -2,8 +2,14 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+* Interactive Input Lost on Windows: keystrokes typed right after a re-rendered prompt in the interactive shell are no longer dropped on a Windows ConPTY. The prompt library entered raw mode on os.Stdin while reading input through a different handle (CONIN$ on Windows), so on a ConPTY input delivered in the render-to-read window went to an ungoverned handle and could be lost, leaving a command typed but never executed and the session hung. prompt v0.0.10 routes raw mode through the same handle it reads from, closing the gap.
+
 ### Testing
-* Stabilize the interactive-shell pty E2E: the atago pty specs drive sqly's readline REPL over a pseudo-terminal, where the prompt is re-rendered a beat before its read loop is ready. On Unix each command now submits with a trailing CR in the same send (`"...\r"`) instead of a separate `{key: enter}` step, so the Enter is read together with the command and can no longer be dropped, and `make test-e2e` runs the pty specs in their own `--parallel 1` pass so they get uncontended CPU. On a Windows ConPTY the input delivered in the render-to-read window is dropped rather than buffered, which no test-side change fixes reliably, so the pty specs are skipped there and the behavior is tracked upstream at github.com/nao1215/prompt/issues/13; Windows binary behavior stays covered by the batch smoke tests.
+* Interactive-shell pty E2E on Windows: the atago pty specs that drive sqly's readline REPL now run on Windows ConPTY too. They were skipped there while the raw-mode handle mismatch made the ConPTY sessions drop input; prompt v0.0.10 fixes that, so the `skip: { os: windows }` guards are removed and the interactive path is verified end to end on every platform. Each command still submits with a trailing CR in the same send (`"...\r"`), and `make test-e2e` runs the pty specs in their own `--parallel 1` pass so they get uncontended CPU.
+
+### Dependencies
+* prompt v0.0.10: upgraded from v0.0.9 for the raw-mode single-handle fix (github.com/nao1215/prompt/issues/13).
 
 ## [v0.27.2](https://github.com/nao1215/sqly/compare/v0.27.1...v0.27.2) (2026-07-07)
 

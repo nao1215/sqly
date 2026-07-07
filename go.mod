@@ -11,7 +11,7 @@ require (
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.15
 	github.com/nao1215/filesql v0.17.2
-	github.com/nao1215/prompt v0.0.9
+	github.com/nao1215/prompt v0.0.10
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/sergi/go-diff v1.4.0
