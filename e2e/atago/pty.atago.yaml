@@ -9,11 +9,11 @@
 # Windows: the prompt entered raw mode on os.Stdin while go-tty read from a
 # different handle (CONIN$), so on a ConPTY input delivered right after a
 # re-rendered prompt went to an ungoverned handle and could be dropped, leaving a
-# command typed but never executed and the session hung. prompt v0.0.10 routes raw
-# mode through go-tty's own handle (github.com/nao1215/prompt/issues/13), so the
-# read path and raw mode share one handle and the skip is gone. Two authoring
-# rules keep the sessions robust, including when the whole suite runs in parallel
-# and the sessions starve each other of CPU:
+# command typed but never executed and the session hung. prompt v0.0.11 routes raw
+# mode through go-tty's own handle on Windows (github.com/nao1215/prompt/issues/13),
+# so the read path and raw mode share one handle and the skip is gone. Three
+# authoring rules keep the sessions robust, including when the whole suite runs in
+# parallel and the sessions starve each other of CPU:
 #
 #   * Submit a command with a trailing CR in the same send (`"...\r"`), not a
 #     separate `{key: enter}` step. The prompt is re-rendered a beat before its
@@ -28,6 +28,13 @@
 #     Enter can. After a query, wait for a token that appears only in the
 #     executed result before expecting the prompt again, or the prompt echoed
 #     mid-typing would match too early.
+#   * Give the pty a wide terminal (cols: 220). The prompt embeds the working
+#     directory, and under CI the temp sandbox path is long, so prefix plus command
+#     can land a character exactly on the last column. ConPTY defers the wrap at the
+#     final column (pending-wrap), which the line editor's redraw math mishandles,
+#     so a command whose length hits the width boundary can fail to execute. A wide
+#     terminal keeps every prompt-plus-command on one row regardless of the sandbox
+#     path length.
 version: "1"
 
 suite:
@@ -45,8 +52,8 @@ scenarios:
             Carol,41,Kyoto
       - pty:
           command: sqly people.csv
-          rows: 24
-          cols: 80
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$' # the prompt ends with "(<mode>)$ "; table is default
@@ -66,6 +73,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -80,6 +89,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -97,6 +108,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -116,6 +129,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -135,6 +150,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -157,6 +174,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'
@@ -176,6 +195,8 @@ scenarios:
       - fixture: *people
       - pty:
           command: sqly people.csv
+          rows: 30
+          cols: 220
           timeout: 30s
           session:
             - expect: '\(table\)\$'

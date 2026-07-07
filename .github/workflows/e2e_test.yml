@@ -31,7 +31,7 @@ jobs:
       - name: Install atago
         uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
         with:
-          version: v0.7.0
+          version: v0.8.0
 
       - name: Run atago end-to-end tests
         # The hermetic runner builds sqly and runs the suite in a temp-backed
@@ -45,7 +45,7 @@ jobs:
   # gives Windows real interactive-shell coverage — prompt rendering, dot-commands,
   # a live .mode switch, error recovery, and a clean EOF exit — not just the batch
   # smoke tests. Serialized so the concurrent ConPTY sessions do not starve each
-  # other, with --retry-failed for the residual readline read-readiness race.
+  # other, with --retry-failed as a safety net against CPU-starvation flakes.
   atago-windows:
     name: atago interactive shell (Windows ConPTY)
     runs-on: windows-latest
@@ -62,7 +62,7 @@ jobs:
       - name: Install atago
         uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
         with:
-          version: v0.7.0
+          version: v0.8.0
 
       - name: Build sqly
         run: go build -o sqly.exe main.go
