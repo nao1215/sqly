@@ -31,9 +31,48 @@ jobs:
       - name: Install atago
         uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
         with:
-          version: v0.5.1
+          version: v0.7.0
 
       - name: Run atago end-to-end tests
         # The hermetic runner builds sqly and runs the suite in a temp-backed
-        # HOME/config sandbox, so local and CI execution are identical.
+        # HOME/config sandbox, so local and CI execution are identical. The suite
+        # includes the interactive-shell pty specs, which run over a real pty here.
         run: make test-e2e
+
+  # The interactive shell (its readline REPL) is the one path the POSIX pty
+  # harness (e2e/pty_e2e_test.go) cannot cover on Windows, because it needs a
+  # POSIX pty. atago >= v0.7.0 drives a ConPTY on Windows, so e2e/atago/pty.atago.yaml
+  # gives Windows real interactive-shell coverage — prompt rendering, dot-commands,
+  # a live .mode switch, error recovery, and a clean EOF exit — not just the batch
+  # smoke tests. Serialized so the concurrent ConPTY sessions do not starve each
+  # other, with --retry-failed for the residual readline read-readiness race.
+  atago-windows:
+    name: atago interactive shell (Windows ConPTY)
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install atago
+        uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
+        with:
+          version: v0.7.0
+
+      - name: Build sqly
+        run: go build -o sqly.exe main.go
+
+      - name: Run the interactive-shell pty specs
+        shell: bash
+        run: |
+          export PATH="$PWD:$PATH"
+          export HOME="$RUNNER_TEMP/sqlyhome"
+          export USERPROFILE="$HOME"
+          export SQLY_HISTORY_DB_PATH="$RUNNER_TEMP/history.db"
+          mkdir -p "$HOME"
+          atago run --ci --parallel 1 --retry-failed 3 ./e2e/atago/pty.atago.yaml

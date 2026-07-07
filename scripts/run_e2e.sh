@@ -72,4 +72,10 @@ export PATH
 # No `exec`: it would replace the shell and skip the EXIT trap, leaking the
 # sandbox. As the last command under `set -e`, atago's exit status is the
 # script's exit status either way.
-atago run --ci "$@" "$ROOT/e2e/atago"
+#
+# --retry-failed absorbs the inherently racy interactive-shell specs
+# (e2e/atago/pty.atago.yaml drives sqly's readline REPL over a pty; the prompt is
+# re-rendered a beat before its read loop is ready, so a fast keystroke can be
+# lost under parallel load). A recovered scenario is reported as flaky, never
+# hidden, and a real regression still fails after the retries.
+atago run --ci --retry-failed 3 "$@" "$ROOT/e2e/atago"

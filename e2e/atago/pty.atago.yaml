@@ -1,13 +1,24 @@
-# PTY tests for sqly's interactive shell. A `run:` step feeds stdin as a
-# non-TTY batch script, which never exercises the REPL prompt, completion, or
-# the TTY-detection branch. A `pty:` step runs sqly inside a real pseudo-
-# terminal and drives it with an expect/send session, so the interactive path
-# (prompt rendering, per-command execution, live .mode switching, clean exit)
-# is verified end to end against the real binary.
+# PTY tests for sqly's interactive shell (its readline REPL). A `run:` step feeds
+# stdin as a non-TTY batch script and never exercises the prompt; a `pty:` step
+# runs sqly inside a real pseudo-terminal and drives it with an expect/send
+# session, so the interactive path — prompt rendering, per-command execution,
+# dot-commands, live .mode switching, error recovery, and clean exit — is
+# verified end to end against the real binary.
 #
-# POSIX-only: the pty step reports a clear error on Windows, so these scenarios
-# skip there. Windows keeps its coverage through the Go tests and the batch
-# specs. Run with: make test-e2e
+# These run on every OS: atago's pty runner speaks a POSIX pty on Unix and a
+# ConPTY on Windows (atago >= v0.7.0), so the interactive shell is covered on
+# Windows too, not just through the batch smoke tests. Two authoring rules keep
+# the sessions robust, including when the whole suite runs in parallel and the
+# sessions starve each other of CPU:
+#
+#   * Enter is `{key: enter}` (a raw CR, 0x0d); a bare "\n" is not the Return key
+#     a raw-mode line editor waits for, and a Windows ConPTY needs the CR.
+#   * Quit with EOF (`send: ""`, a single ^D) after the prompt returns, not by
+#     typing ".exit" — a one-byte terminal EOF cannot race the completer or the
+#     prompt's read-readiness the way a multi-character command submitted with
+#     Enter can. After a query, wait for a token that appears only in the
+#     executed result before expecting the prompt again, or the prompt echoed
+#     mid-typing would match too early.
 version: "1"
 
 suite:
@@ -15,8 +26,6 @@ suite:
 
 scenarios:
   - name: an interactive query prints its result table
-    skip:
-      os: windows
     steps:
       - fixture: &people
           file: people.csv
@@ -27,35 +36,148 @@ scenarios:
             Carol,41,Kyoto
       - pty:
           command: sqly people.csv
-          timeout: 20s
+          rows: 24
+          cols: 80
+          timeout: 30s
           session:
-            # The prompt ends with "(<mode>)$ "; table is the default mode.
-            - expect: '\(table\)\$'
-            - send: "SELECT name FROM people WHERE age = 25;\n"
-            # Bob is the only 25-year-old, so it appears in the result table but
-            # not in the echoed query text.
-            - expect: "Bob"
-            - expect: '\(table\)\$'
-            - send: ".exit\n"
+            - expect: '\(table\)\$' # the prompt ends with "(<mode>)$ "; table is default
+            - send: "SELECT name FROM people WHERE age = 25;"
+            - send: { key: enter }
+            - expect: "Bob" # Bob is the only 25-year-old; a result token, not echoed text
+            - expect: '\(table\)\$' # the prompt returned, editor idle again
+            - send: "" # EOF (^D) quits cleanly
       - assert:
           exit_code: 0
           stdout:
-            contains: "Bob"
+            contains:
+              - "Bob"
+              - "+--" # the box-drawn result table sqly renders to the terminal
 
   - name: the prompt reflects a live .mode switch
-    skip:
-      os: windows
     steps:
       - fixture: *people
       - pty:
           command: sqly people.csv
-          timeout: 20s
+          timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: ".mode csv\n"
-            # The mode-change status goes to stderr, which the pty transcript
-            # merges in, and the next prompt now reports the csv mode.
-            - expect: '\(csv\)\$'
-            - send: ".exit\n"
+            - send: ".mode csv"
+            - send: { key: enter }
+            - expect: '\(csv\)\$' # the mode change is live: the next prompt says csv
+            - send: ""
+      - assert:
+          exit_code: 0
+
+  - name: .tables lists the imported table
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".tables"
+            - send: { key: enter }
+            - expect: "people" # the imported CSV became the "people" table
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "people"
+
+  - name: .schema shows the imported columns
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".schema people" # .schema requires a table name
+            - send: { key: enter }
+            - expect: "city" # a column from the CREATE TABLE DDL, post-execution
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "CREATE TABLE"
+              - "city"
+
+  - name: a computed aggregate round-trips through the shell
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            # A distinctive, self-labeling result so the wait cannot match stray
+            # output — the count of the three imported rows.
+            - send: "SELECT 'ROWS=' || COUNT(*) AS r FROM people;"
+            - send: { key: enter }
+            - expect: "ROWS=3"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "ROWS=3"
+
+  - name: two queries run in one interactive session
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE city = 'Tokyo';"
+            - send: { key: enter }
+            - expect: "Alice"
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE city = 'Kyoto';"
+            - send: { key: enter }
+            - expect: "Carol"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice"
+              - "Carol"
+
+  - name: an invalid query reports an error and the shell recovers to the prompt
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT * FROM no_such_table;"
+            - send: { key: enter }
+            - expect: "no such table" # the query error is reported, not swallowed
+            - expect: '\(table\)\$' # the shell recovered to a working prompt (it did
+              # not exit on the error) — the clean EOF exit below confirms it is
+              # still reading input.
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "no such table"
+
+  - name: EOF at the prompt exits the shell cleanly
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "" # EOF (^D) at an empty prompt exits with status 0
       - assert:
           exit_code: 0
