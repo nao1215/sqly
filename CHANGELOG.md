@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Testing
+* Serialize the interactive-shell pty E2E: the atago pty specs drive sqly's readline REPL over a pseudo-terminal, where the prompt is re-rendered a beat before its read loop is ready, so a keystroke sent right after can be lost when the pty sessions are starved of CPU by the rest of the suite running in parallel. `make test-e2e` now runs the pty specs in their own `--parallel 1` pass with extra retries, and the Windows ConPTY job's retry budget was raised, so the inherently racy interactive specs no longer make CI flaky.
+
 ## [v0.27.2](https://github.com/nao1215/sqly/compare/v0.27.1...v0.27.2) (2026-07-07)
 
 ### Bug Fixes

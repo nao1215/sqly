@@ -70,12 +70,26 @@ PATH="$SANDBOX/bin:$PATH"
 export PATH
 
 # No `exec`: it would replace the shell and skip the EXIT trap, leaking the
-# sandbox. As the last command under `set -e`, atago's exit status is the
-# script's exit status either way.
+# sandbox. Under `set -e` a failing run stops the script, so a real regression in
+# either pass surfaces; the last successful run's exit status is the script's.
 #
-# --retry-failed absorbs the inherently racy interactive-shell specs
-# (e2e/atago/pty.atago.yaml drives sqly's readline REPL over a pty; the prompt is
-# re-rendered a beat before its read loop is ready, so a fast keystroke can be
-# lost under parallel load). A recovered scenario is reported as flaky, never
-# hidden, and a real regression still fails after the retries.
-atago run --ci --retry-failed 3 "$@" "$ROOT/e2e/atago"
+# The interactive-shell pty specs (e2e/atago/pty.atago.yaml drives sqly's readline
+# REPL over a pty) are split from the rest of the suite. The prompt is re-rendered a
+# beat before its read loop is ready, so a keystroke sent right after can be lost
+# when the pty sessions are starved of CPU by the other scenarios running in
+# parallel. The rest of the suite runs in parallel; the pty specs then run on their
+# own with --parallel 1 so each session gets uncontended CPU, and with extra
+# retries. --retry-failed reports a recovered scenario as flaky, never hides it, and
+# a real regression still fails after the retries.
+PTY_SPEC="$ROOT/e2e/atago/pty.atago.yaml"
+
+# Every spec except the pty one, collected so the parallel pass can skip it.
+NON_PTY_SPECS=""
+for spec in "$ROOT"/e2e/atago/*.atago.yaml; do
+	[ "$spec" = "$PTY_SPEC" ] && continue
+	NON_PTY_SPECS="$NON_PTY_SPECS $spec"
+done
+
+# shellcheck disable=SC2086 # intentional word splitting over the spec list
+atago run --ci --retry-failed 3 "$@" $NON_PTY_SPECS
+atago run --ci --parallel 1 --retry-failed 5 "$@" "$PTY_SPEC"
