@@ -7,12 +7,17 @@
 #
 # These run on every OS: atago's pty runner speaks a POSIX pty on Unix and a
 # ConPTY on Windows (atago >= v0.7.0), so the interactive shell is covered on
-# Windows too, not just through the batch smoke tests. Two authoring rules keep
+# Windows too, not just through the batch smoke tests. Three authoring rules keep
 # the sessions robust, including when the whole suite runs in parallel and the
 # sessions starve each other of CPU:
 #
-#   * Enter is `{key: enter}` (a raw CR, 0x0d); a bare "\n" is not the Return key
-#     a raw-mode line editor waits for, and a Windows ConPTY needs the CR.
+#   * Submit a command with a trailing CR in the same send (`"...\r"`), not a
+#     separate `{key: enter}` step. The prompt is re-rendered a beat before its
+#     read loop is ready, so an Enter delivered as its own write right after the
+#     command can be dropped — most visibly on a Windows ConPTY — leaving the
+#     command typed but never executed. Sending the command and its CR as one
+#     write keeps them in the same read, so the CR is not lost. A bare "\n" is not
+#     the Return key a raw-mode line editor waits for; the CR (0x0d) is.
 #   * Quit with EOF (`send: ""`, a single ^D) after the prompt returns, not by
 #     typing ".exit" — a one-byte terminal EOF cannot race the completer or the
 #     prompt's read-readiness the way a multi-character command submitted with
@@ -41,8 +46,7 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$' # the prompt ends with "(<mode>)$ "; table is default
-            - send: "SELECT name FROM people WHERE age = 25;"
-            - send: { key: enter }
+            - send: "SELECT name FROM people WHERE age = 25;\r"
             - expect: "Bob" # Bob is the only 25-year-old; a result token, not echoed text
             - expect: '\(table\)\$' # the prompt returned, editor idle again
             - send: "" # EOF (^D) quits cleanly
@@ -61,8 +65,7 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: ".mode csv"
-            - send: { key: enter }
+            - send: ".mode csv\r"
             - expect: '\(csv\)\$' # the mode change is live: the next prompt says csv
             - send: ""
       - assert:
@@ -76,8 +79,7 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: ".tables"
-            - send: { key: enter }
+            - send: ".tables\r"
             - expect: "people" # the imported CSV became the "people" table
             - expect: '\(table\)\$'
             - send: ""
@@ -94,8 +96,7 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: ".schema people" # .schema requires a table name
-            - send: { key: enter }
+            - send: ".schema people\r" # .schema requires a table name
             - expect: "city" # a column from the CREATE TABLE DDL, post-execution
             - expect: '\(table\)\$'
             - send: ""
@@ -116,8 +117,7 @@ scenarios:
             - expect: '\(table\)\$'
             # A distinctive, self-labeling result so the wait cannot match stray
             # output — the count of the three imported rows.
-            - send: "SELECT 'ROWS=' || COUNT(*) AS r FROM people;"
-            - send: { key: enter }
+            - send: "SELECT 'ROWS=' || COUNT(*) AS r FROM people;\r"
             - expect: "ROWS=3"
             - expect: '\(table\)\$'
             - send: ""
@@ -134,12 +134,10 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: "SELECT name FROM people WHERE city = 'Tokyo';"
-            - send: { key: enter }
+            - send: "SELECT name FROM people WHERE city = 'Tokyo';\r"
             - expect: "Alice"
             - expect: '\(table\)\$'
-            - send: "SELECT name FROM people WHERE city = 'Kyoto';"
-            - send: { key: enter }
+            - send: "SELECT name FROM people WHERE city = 'Kyoto';\r"
             - expect: "Carol"
             - expect: '\(table\)\$'
             - send: ""
@@ -158,8 +156,7 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: "SELECT * FROM no_such_table;"
-            - send: { key: enter }
+            - send: "SELECT * FROM no_such_table;\r"
             - expect: "no such table" # the query error is reported, not swallowed
             - expect: '\(table\)\$' # the shell recovered to a working prompt (it did
               # not exit on the error) — the clean EOF exit below confirms it is
