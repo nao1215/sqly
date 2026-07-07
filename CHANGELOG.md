@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Testing
-* Stabilize the interactive-shell pty E2E: the atago pty specs drive sqly's readline REPL over a pseudo-terminal, where the prompt is re-rendered a beat before its read loop is ready. Each command now submits with a trailing CR in the same send (`"...\r"`) instead of a separate `{key: enter}` step, so the Enter is read together with the command and can no longer be dropped — the failure, most visible on a Windows ConPTY, that left a command typed but never executed. As added protection under load, `make test-e2e` runs the pty specs in their own `--parallel 1` pass with extra retries so they get uncontended CPU, and the Windows ConPTY job's retry budget was raised.
+* Stabilize the interactive-shell pty E2E: the atago pty specs drive sqly's readline REPL over a pseudo-terminal, where the prompt is re-rendered a beat before its read loop is ready. On Unix each command now submits with a trailing CR in the same send (`"...\r"`) instead of a separate `{key: enter}` step, so the Enter is read together with the command and can no longer be dropped, and `make test-e2e` runs the pty specs in their own `--parallel 1` pass so they get uncontended CPU. On a Windows ConPTY the input delivered in the render-to-read window is dropped rather than buffered, which no test-side change fixes reliably, so the pty specs are skipped there and the behavior is tracked upstream at github.com/nao1215/prompt/issues/13; Windows binary behavior stays covered by the batch smoke tests.
 
 ## [v0.27.2](https://github.com/nao1215/sqly/compare/v0.27.1...v0.27.2) (2026-07-07)
 
