@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1058,4 +1059,38 @@ func TestTablePrintLTSV_RejectsInvalidLabels(t *testing.T) {
 			t.Errorf("Print(LTSV) = %q, want %q", got, "a:1\tb:2\n")
 		}
 	})
+}
+
+var errForcedWrite = errors.New("forced write error")
+
+type errorWriter struct{}
+
+func (e errorWriter) Write(_ []byte) (n int, err error) {
+	return 0, errForcedWrite
+}
+
+// TestTablePrint_WriteError verifies that Print propagates errors when writing fails
+func TestTablePrint_WriteError(t *testing.T) {
+	t.Parallel()
+
+	tbl := NewTable("test", Header{"col1", "col2"}, []Record{{"val1", "val2"}})
+
+	modes := []PrintMode{
+		PrintModeMarkdownTable,
+		PrintModeCSV,
+		PrintModeTSV,
+		PrintModeLTSV,
+		PrintModeJSON,
+		PrintModeNDJSON,
+	}
+
+	for _, mode := range modes {
+		t.Run(mode.String()+" propagates write error", func(t *testing.T) {
+			t.Parallel()
+			err := tbl.Print(errorWriter{}, mode)
+			if !errors.Is(err, errForcedWrite) {
+				t.Errorf("expected error %v, got %v", errForcedWrite, err)
+			}
+		})
+	}
 }
