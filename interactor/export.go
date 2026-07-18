@@ -90,15 +90,14 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, com
 // the file is closed (deferred close runs in reverse order), so all buffered
 // compressed bytes reach disk.
 func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
-	// Create a temporary file in the same directory to ensure atomic rename on the same filesystem.
-	dir := filepath.Dir(filePath)
-	tmpFile, err := e.fileRepo.CreateTemp(dir, "sqly-export-tmp-*")
+	// Create a temporary file in the OS temp directory (does not require write access to target parent directory during staging).
+	tmpFile, err := e.fileRepo.CreateTemp("", "sqly-export-tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temporary output file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 
-	// Ensure cleanup of the temporary file in case of failure.
+	// Ensure cleanup of the temporary file.
 	defer func() {
 		_ = tmpFile.Close()
 		_ = e.fileRepo.Remove(tmpPath)
@@ -133,14 +132,25 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 		return fmt.Errorf("finalize compression for %q: %w", filePath, err)
 	}
 
-	// Close the file handle to release the lock (important for Windows support).
-	if err = tmpFile.Close(); err != nil {
-		return fmt.Errorf("close temporary file: %w", err)
+	// Rewind the temporary file to the beginning for reading.
+	if _, err = tmpFile.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seek temporary file: %w", err)
 	}
 
-	// Atomically rename the temp file to the final destination.
-	if err = e.fileRepo.Rename(tmpPath, filePath); err != nil {
-		return fmt.Errorf("rename temporary file to %q: %w", filePath, err)
+	// Open the target file in-place (this preserves original permissions, ownership, and metadata).
+	targetFile, err := e.fileRepo.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("create output file %q: %w", filePath, err)
+	}
+	defer func() {
+		if cerr := targetFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
+		}
+	}()
+
+	// Copy the validated content from the temp file to the target file.
+	if _, err = io.Copy(targetFile, tmpFile); err != nil {
+		return fmt.Errorf("write output file %q: %w", filePath, err)
 	}
 
 	return nil
