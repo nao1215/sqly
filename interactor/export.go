@@ -99,8 +99,12 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 
 	// Ensure cleanup of the temporary file.
 	defer func() {
-		_ = tmpFile.Close()
-		_ = e.fileRepo.Remove(tmpPath)
+		if cerr := tmpFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close temporary file: %w", cerr)
+		}
+		if rerr := e.fileRepo.Remove(tmpPath); rerr != nil && err == nil {
+			err = fmt.Errorf("remove temporary file: %w", rerr)
+		}
 	}()
 
 	w, closeComp, err := filesql.NewCompressingWriter(tmpFile, compression)

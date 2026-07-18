@@ -35,11 +35,6 @@ func (fr *fileRepository) CreateTemp(dir, pattern string) (*os.File, error) {
 	return os.CreateTemp(dir, pattern)
 }
 
-// Rename renames a file from oldPath to newPath.
-func (fr *fileRepository) Rename(oldPath, newPath string) error {
-	return os.Rename(oldPath, newPath)
-}
-
 // Remove deletes a file.
 func (fr *fileRepository) Remove(path string) error {
 	return os.Remove(path)
