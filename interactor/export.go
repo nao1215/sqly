@@ -3,7 +3,6 @@ package interactor
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
@@ -93,7 +92,7 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, com
 func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
 	// Create a temporary file in the same directory to ensure atomic rename on the same filesystem.
 	dir := filepath.Dir(filePath)
-	tmpFile, err := os.CreateTemp(dir, "sqly-export-tmp-*")
+	tmpFile, err := e.fileRepo.CreateTemp(dir, "sqly-export-tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temporary output file: %w", err)
 	}
@@ -102,7 +101,7 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 	// Ensure cleanup of the temporary file in case of failure.
 	defer func() {
 		_ = tmpFile.Close()
-		_ = os.Remove(tmpPath)
+		_ = e.fileRepo.Remove(tmpPath)
 	}()
 
 	w, closeComp, err := filesql.NewCompressingWriter(tmpFile, compression)
@@ -131,7 +130,7 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 
 	// Flush and close the compression codec.
 	if err = finalizeComp(); err != nil {
-		return err
+		return fmt.Errorf("finalize compression for %q: %w", filePath, err)
 	}
 
 	// Close the file handle to release the lock (important for Windows support).
@@ -140,7 +139,7 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 	}
 
 	// Atomically rename the temp file to the final destination.
-	if err = os.Rename(tmpPath, filePath); err != nil {
+	if err = e.fileRepo.Rename(tmpPath, filePath); err != nil {
 		return fmt.Errorf("rename temporary file to %q: %w", filePath, err)
 	}
 

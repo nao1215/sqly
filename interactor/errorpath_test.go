@@ -204,39 +204,47 @@ func TestDumpTable_ParquetEmpty(t *testing.T) {
 	}
 }
 
-// TestDumpTable_PreservesExistingFileOnFailure covers Issue #753: if writing the
-// output file fails (e.g. LTSV header/value validation fails due to a tab character),
-// the existing output file must remain untouched and not be truncated or deleted.
 func TestDumpTable_PreservesExistingFileOnFailure(t *testing.T) {
 	t.Parallel()
 
-	exp := newTestExportInteractor()
-	// Table with a tab character in a value, which is invalid in LTSV format
-	table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
-		model.NewRecord([]string{"1", "alice\tbob"}),
+	t.Run("preserves existing file and cleans up temp files when LTSV dump fails due to tab", func(t *testing.T) {
+		exp := newTestExportInteractor()
+		// Table with a tab character in a value, which is invalid in LTSV format
+		table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
+			model.NewRecord([]string{"1", "alice\tbob"}),
+		})
+
+		tempDir := t.TempDir()
+		outPath := filepath.Join(tempDir, "original.ltsv")
+
+		// Create an existing file with content
+		originalContent := []byte("original data")
+		if err := os.WriteFile(outPath, originalContent, 0o600); err != nil { //nolint:gosec // test file with controlled path
+			t.Fatalf("failed to write original file: %v", err)
+		}
+
+		// Try to dump invalid table to the file path, which should fail
+		err := exp.DumpTable(outPath, table, model.ExportLTSV, model.CompressionNone)
+		if err == nil {
+			t.Fatal("expected DumpTable to fail due to tab in LTSV value, but it succeeded")
+		}
+
+		// Verify that the file still contains its original data and has not been truncated
+		currentContent, err := os.ReadFile(outPath) //nolint:gosec // test file with controlled path
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		if string(currentContent) != string(originalContent) {
+			t.Errorf("file was altered! got %q, want %q", string(currentContent), string(originalContent))
+		}
+
+		// Verify no temporary files were leaked (only original.ltsv remains)
+		entries, err := os.ReadDir(tempDir)
+		if err != nil {
+			t.Fatalf("failed to read temporary directory: %v", err)
+		}
+		if len(entries) != 1 || entries[0].Name() != filepath.Base(outPath) {
+			t.Errorf("temporary files were not cleaned up: %v", entries)
+		}
 	})
-
-	tempDir := t.TempDir()
-	outPath := filepath.Join(tempDir, "original.ltsv")
-
-	// Create an existing file with content
-	originalContent := []byte("original data")
-	if err := os.WriteFile(outPath, originalContent, 0o600); err != nil { //nolint:gosec // test file with controlled path
-		t.Fatalf("failed to write original file: %v", err)
-	}
-
-	// Try to dump invalid table to the file path, which should fail
-	err := exp.DumpTable(outPath, table, model.ExportLTSV, model.CompressionNone)
-	if err == nil {
-		t.Fatal("expected DumpTable to fail due to tab in LTSV value, but it succeeded")
-	}
-
-	// Verify that the file still contains its original data and has not been truncated
-	currentContent, err := os.ReadFile(outPath) //nolint:gosec // test file with controlled path
-	if err != nil {
-		t.Fatalf("failed to read file: %v", err)
-	}
-	if string(currentContent) != string(originalContent) {
-		t.Errorf("file was altered! got %q, want %q", string(currentContent), string(originalContent))
-	}
 }
