@@ -3,6 +3,7 @@ package interactor
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/nao1215/sqly/domain/model"
@@ -90,22 +91,36 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, com
 // the file is closed (deferred close runs in reverse order), so all buffered
 // compressed bytes reach disk.
 func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
-	f, err := e.fileRepo.Create(filepath.Clean(filePath))
+	// Create a temporary file in the same directory to ensure atomic rename on the same filesystem.
+	dir := filepath.Dir(filePath)
+	tmpFile, err := os.CreateTemp(dir, "sqly-export-tmp-*")
 	if err != nil {
-		return fmt.Errorf("create output file %q: %w", filePath, err)
+		return fmt.Errorf("create temporary output file: %w", err)
 	}
+	tmpPath := tmpFile.Name()
+
+	// Ensure cleanup of the temporary file in case of failure.
 	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
-		}
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 	}()
 
-	w, closeComp, err := filesql.NewCompressingWriter(f, compression)
+	w, closeComp, err := filesql.NewCompressingWriter(tmpFile, compression)
 	if err != nil {
 		return fmt.Errorf("init compression for %q: %w", filePath, err)
 	}
+
+	compClosed := false
+	finalizeComp := func() error {
+		if compClosed {
+			return nil
+		}
+		compClosed = true
+		return closeComp()
+	}
+
 	defer func() {
-		if cerr := closeComp(); cerr != nil && err == nil {
+		if cerr := finalizeComp(); cerr != nil && err == nil {
 			err = fmt.Errorf("finalize compression for %q: %w", filePath, cerr)
 		}
 	}()
@@ -113,5 +128,21 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 	if err = write(w); err != nil {
 		return fmt.Errorf("dump to %q: %w", filePath, err)
 	}
+
+	// Flush and close the compression codec.
+	if err = finalizeComp(); err != nil {
+		return err
+	}
+
+	// Close the file handle to release the lock (important for Windows support).
+	if err = tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temporary file: %w", err)
+	}
+
+	// Atomically rename the temp file to the final destination.
+	if err = os.Rename(tmpPath, filePath); err != nil {
+		return fmt.Errorf("rename temporary file to %q: %w", filePath, err)
+	}
+
 	return nil
 }
