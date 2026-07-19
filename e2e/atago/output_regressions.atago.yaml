@@ -1,0 +1,104 @@
+version: "1"
+
+suite:
+  name: sqly output regressions
+
+scenarios:
+  - name: csv join output stays exact
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - fixture:
+          file: identifier.csv
+          content: |
+            id,position
+            1,developer
+            2,manager
+            3,neet
+      - run:
+          command: sqly --csv --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" user.csv identifier.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/select_inner_join_csv.txt
+
+  - name: tsv output stays exact
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - run:
+          command: sqly --tsv --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/select_tsv.txt
+
+  - name: ltsv output stays exact
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --ltsv --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/select_ltsv.txt
+
+  - name: multiline sql-file output stays exact
+    steps:
+      - fixture:
+          file: actor.csv
+          from: testdata/actor.csv
+      - fixture:
+          file: query.sql
+          content: |
+            -- top actor by name
+            SELECT actor
+            FROM actor
+            ORDER BY actor ASC
+            LIMIT 1;
+      - run:
+          command: sqly --csv --sql-file query.sql actor.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/sql_file_multiline.txt
+
+  - name: numeric sort output stays exact
+    steps:
+      - fixture:
+          file: numeric.csv
+          content: |
+            id,name
+            1,John
+            2,Paul
+            3,George
+            11,Ringo
+            12,Billy
+      - run:
+          command: sqly --csv --sql "SELECT * FROM numeric ORDER BY id" numeric.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/numeric.txt
+
+  - name: excel import to csv output stays exact
+    steps:
+      - fixture:
+          file: sample.xlsx
+          from: testdata/sample.xlsx
+      - run:
+          command: sqly --csv --sql "SELECT * FROM sample_test_sheet" -S test_sheet sample.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/excel_to_csv.txt

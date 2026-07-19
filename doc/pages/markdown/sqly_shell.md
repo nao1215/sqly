@@ -5,7 +5,7 @@ The sqly-shell also supports command history, and input completion.
 
 ```shell
 $ sqly 
-sqly v0.11.0
+sqly v0.27.4
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.

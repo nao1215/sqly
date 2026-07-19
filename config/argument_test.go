@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/golden"
+	"github.com/nao1215/sqly/testutil"
 )
 
 func TestNewArg(t *testing.T) {
@@ -536,8 +536,7 @@ func TestUsage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := golden.New(t)
-		g.Assert(t, "usage", []byte(arg.Usage))
+		testutil.AssertFileEquals(t, filepath.Join("testdata", "usage.golden"), []byte(arg.Usage))
 	})
 }
 

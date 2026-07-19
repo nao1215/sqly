@@ -12,8 +12,8 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/golden"
 	"github.com/nao1215/sqly/infrastructure"
+	"github.com/nao1215/sqly/testutil"
 )
 
 func TestLtsvRepositoryLabelAndData(t *testing.T) {
@@ -120,9 +120,7 @@ func TestLtsvRepositoryDump(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "sample_ltsv", got)
+		testutil.AssertFileEquals(t, filepath.Join("testdata", "golden", "sample_ltsv.golden"), got)
 	})
 }
 

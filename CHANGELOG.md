@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.27.4](https://github.com/nao1215/sqly/compare/v0.27.3...v0.27.4) (2026-07-19)
+
+### Testing
+* atago Snapshot Coverage: the binary E2E suite adds exact-output snapshot specs for the main non-interactive workflows that were previously pinned only by the in-process `main_test` goldens: CSV/TSV/LTSV output, Excel-to-CSV import, multiline `--sql-file`, and numeric sort order. This keeps the CLI contract covered through the real built binary while expanding atago's share of the output-regression surface.
+* Golden Framework Removal: the large forked `golden` test package is removed. The remaining package-level fixture comparisons now use a tiny shared helper, and the real CLI/shell formatting snapshots stay in atago where diffs are exercised against the built binary instead of an in-process harness.
+
+### Documentation
+* Release Prep: refreshed the README shell snippet, benchmark caption, and shell docs to `v0.27.4`, removed editor/assistant-specific instruction files from the repository root, and updated the architecture doc to describe the new test layout (`e2e` + `testutil` instead of the old `golden` package).
+
+### Dependencies
+* filesql v0.18.0: upgraded from v0.17.2.
+* atago v0.11.0: bumped the CI E2E and combined-coverage workflows from v0.8.0, and aligned the local install guidance and runner error message with that pin.
+
 ## [v0.27.3](https://github.com/nao1215/sqly/compare/v0.27.2...v0.27.3) (2026-07-08)
 
 ### Bug Fixes
