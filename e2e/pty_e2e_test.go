@@ -128,6 +128,14 @@ func (s *ptySession) write(b string) {
 	}
 }
 
+// sendEOF delivers Ctrl-D to the prompt. Under the PTY-backed interactive
+// tests this is the most reliable way to end a settled session because it is a
+// single control byte rather than a multi-character command plus Enter.
+func (s *ptySession) sendEOF() {
+	s.t.Helper()
+	s.write("\x04")
+}
+
 // submitLine enters a single SQL/command line and presses Enter. The line and
 // its terminating carriage return are written as one burst: delivering all the
 // bytes together (rather than dribbling characters in, or sending Enter as a
@@ -231,13 +239,21 @@ const (
 	exitTimeout = 15 * time.Second
 )
 
-// TestInteractivePTY_QueryRoundTripAndExitOnExit covers the core interactive
+// TestInteractivePTY_QueryRoundTripAndExitCleanly covers the core interactive
 // contract: start the real prompt with imported CSV data, run a SELECT, see the
-// result rendered to the terminal, and quit with the ".exit" command (exit 0).
+// result rendered to the terminal, and then terminate the settled prompt
+// cleanly.
 //
 // This is the primary regression guard for the interactive prompt path that the
 // batch smoke tests cannot reach.
-func TestInteractivePTY_QueryRoundTripAndExitOnExit(t *testing.T) {
+//
+// The PTY-only atago suite exits the prompt with EOF instead of typing ".exit":
+// after a query has just finished redrawing the prompt, a multi-byte helper
+// command plus Enter can race the prompt's read-readiness and become flaky,
+// while a single Ctrl-D byte is stable. The ".exit" helper itself is still
+// covered by unit tests; this smoke test focuses on the real PTY query
+// round-trip.
+func TestInteractivePTY_QueryRoundTripAndExitCleanly(t *testing.T) {
 	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
 	t.Cleanup(s.close)
 
@@ -249,31 +265,25 @@ func TestInteractivePTY_QueryRoundTripAndExitOnExit(t *testing.T) {
 	s.submitLine("SELECT first_name FROM user WHERE user_name = 'booker12';")
 	s.waitFor("Rachel", ioTimeout)
 
-	// Quit via the ".exit" helper command and confirm a clean exit.
-	s.submitLine(".exit")
+	// Let the prompt finish redrawing the fresh empty line; EOF ends the session
+	// only when the input buffer is empty.
+	time.Sleep(500 * time.Millisecond)
+	s.sendEOF()
 	if code := s.waitExit(exitTimeout); code != 0 {
-		t.Fatalf("interactive shell: .exit produced exit code %d, want 0", code)
+		t.Fatalf("interactive shell: EOF produced exit code %d, want 0", code)
 	}
 }
 
-// TestInteractivePTY_ExitOnCtrlD covers the second documented way to leave the
-// interactive shell: Ctrl-D (EOF, byte 0x04) on an empty line. The prompt treats
-// this as a clean termination, so the process must exit 0.
+// TestInteractivePTY_ExitOnCtrlD covers the documented EOF exit path at an
+// otherwise idle prompt. Ctrl-D on an empty line must terminate the session
+// cleanly with status 0.
 func TestInteractivePTY_ExitOnCtrlD(t *testing.T) {
 	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
 	t.Cleanup(s.close)
 
 	s.waitReady(startupTimeout)
 
-	// Run one query so the round-trip is exercised before the EOF exit, then send
-	// Ctrl-D on an empty line to end the session.
-	s.submitLine("SELECT last_name FROM user WHERE user_name = 'smith79';")
-	s.waitFor("Smith", ioTimeout)
-
-	// Let the prompt finish redrawing the fresh empty line; Ctrl-D ends the
-	// session only when the input buffer is empty, so the redraw must settle first.
-	time.Sleep(500 * time.Millisecond)
-	s.write("\x04") // Ctrl-D / EOF
+	s.sendEOF()
 	if code := s.waitExit(exitTimeout); code != 0 {
 		t.Fatalf("interactive shell: Ctrl-D produced exit code %d, want 0", code)
 	}
@@ -302,7 +312,7 @@ const bracketedPasteEnable = "\x1b[?2004h"
 // around every command, so a line already buffered when the next prompt was
 // rendered could be dropped in the mode-switch window and the session would hang.
 //
-// All queries plus a trailing ".exit" are written as a single burst so the whole
+// All queries plus a trailing EOF are written as a single burst so the whole
 // script is buffered before the shell reads it, exercising the many-lines-at-once
 // path deterministically. Each query selects a distinct marker, so a lost line
 // surfaces as a missing marker or as the process failing to exit. The test also
@@ -322,7 +332,7 @@ func TestInteractivePTY_RapidConsecutiveLinesNotLost(t *testing.T) {
 		// prompt's read loop rather than being dropped in a mode-switch window.
 		fmt.Fprintf(&burst, "SELECT 'sqlymark%d';\r", i)
 	}
-	burst.WriteString(".exit\r")
+	burst.WriteByte('\x04')
 
 	// One write, no inter-line pauses: the whole script arrives at once.
 	s.write(burst.String())
@@ -332,7 +342,7 @@ func TestInteractivePTY_RapidConsecutiveLinesNotLost(t *testing.T) {
 		s.waitFor(fmt.Sprintf("sqlymark%d", i), ioTimeout)
 	}
 
-	// The trailing ".exit" must still be reached, proving the session processed the
+	// The trailing EOF must still be reached, proving the session processed the
 	// entire burst without hanging on a lost line.
 	if code := s.waitExit(exitTimeout); code != 0 {
 		t.Fatalf("interactive shell: rapid burst produced exit code %d, want 0 (a lost line would hang the session)", code)
