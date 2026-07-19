@@ -17,7 +17,7 @@ scenarios:
           file: identifier.csv
           content: |
             id,position
-            1,developrt
+            1,developer
             2,manager
             3,neet
       - run:
