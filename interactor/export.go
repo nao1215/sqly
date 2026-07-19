@@ -90,22 +90,39 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, com
 // the file is closed (deferred close runs in reverse order), so all buffered
 // compressed bytes reach disk.
 func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
-	f, err := e.fileRepo.Create(filepath.Clean(filePath))
+	// Create a temporary file in the OS temp directory (does not require write access to target parent directory during staging).
+	tmpFile, err := e.fileRepo.CreateTemp("", "sqly-export-tmp-*")
 	if err != nil {
-		return fmt.Errorf("create output file %q: %w", filePath, err)
+		return fmt.Errorf("create temporary output file: %w", err)
 	}
+	tmpPath := tmpFile.Name()
+
+	// Ensure cleanup of the temporary file.
 	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
+		if cerr := tmpFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close temporary file: %w", cerr)
+		}
+		if rerr := e.fileRepo.Remove(tmpPath); rerr != nil && err == nil {
+			err = fmt.Errorf("remove temporary file: %w", rerr)
 		}
 	}()
 
-	w, closeComp, err := filesql.NewCompressingWriter(f, compression)
+	w, closeComp, err := filesql.NewCompressingWriter(tmpFile, compression)
 	if err != nil {
 		return fmt.Errorf("init compression for %q: %w", filePath, err)
 	}
+
+	compClosed := false
+	finalizeComp := func() error {
+		if compClosed {
+			return nil
+		}
+		compClosed = true
+		return closeComp()
+	}
+
 	defer func() {
-		if cerr := closeComp(); cerr != nil && err == nil {
+		if cerr := finalizeComp(); cerr != nil && err == nil {
 			err = fmt.Errorf("finalize compression for %q: %w", filePath, cerr)
 		}
 	}()
@@ -113,5 +130,32 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 	if err = write(w); err != nil {
 		return fmt.Errorf("dump to %q: %w", filePath, err)
 	}
+
+	// Flush and close the compression codec.
+	if err = finalizeComp(); err != nil {
+		return fmt.Errorf("finalize compression for %q: %w", filePath, err)
+	}
+
+	// Rewind the temporary file to the beginning for reading.
+	if _, err = tmpFile.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seek temporary file: %w", err)
+	}
+
+	// Open the target file in-place (this preserves original permissions, ownership, and metadata).
+	targetFile, err := e.fileRepo.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("create output file %q: %w", filePath, err)
+	}
+	defer func() {
+		if cerr := targetFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
+		}
+	}()
+
+	// Copy the validated content from the temp file to the target file.
+	if _, err = io.Copy(targetFile, tmpFile); err != nil {
+		return fmt.Errorf("write output file %q: %w", filePath, err)
+	}
+
 	return nil
 }
