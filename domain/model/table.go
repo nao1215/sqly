@@ -299,8 +299,7 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 	case PrintModeTable:
 		return t.printTable(out)
 	case PrintModeMarkdownTable:
-		t.printMarkdownTable(out)
-		return nil
+		return t.printMarkdownTable(out)
 	case PrintModeCSV:
 		return t.printCSV(out)
 	case PrintModeTSV:
@@ -397,29 +396,48 @@ func markdownCell(s string) string {
 }
 
 // printMarkdownTable print all record with header; output format is markdown
-func (t *Table) printMarkdownTable(out io.Writer) {
+func (t *Table) printMarkdownTable(out io.Writer) error {
 	// Print header row
-	fmt.Fprint(out, "|")
-	for _, h := range t.Header() {
-		fmt.Fprintf(out, " %s |", markdownCell(h))
+	if _, err := fmt.Fprint(out, "|"); err != nil {
+		return fmt.Errorf("failed to write markdown header prefix: %w", err)
 	}
-	fmt.Fprintln(out)
+	for _, h := range t.Header() {
+		if _, err := fmt.Fprintf(out, " %s |", markdownCell(h)); err != nil {
+			return fmt.Errorf("failed to write markdown header cell %q: %w", h, err)
+		}
+	}
+	if _, err := fmt.Fprintln(out); err != nil {
+		return fmt.Errorf("failed to write markdown header newline: %w", err)
+	}
 
 	// Print separator row
-	fmt.Fprint(out, "|")
-	for range t.Header() {
-		fmt.Fprint(out, "-----|")
+	if _, err := fmt.Fprint(out, "|"); err != nil {
+		return fmt.Errorf("failed to write markdown separator prefix: %w", err)
 	}
-	fmt.Fprintln(out)
+	for range t.Header() {
+		if _, err := fmt.Fprint(out, "-----|"); err != nil {
+			return fmt.Errorf("failed to write markdown separator cell: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintln(out); err != nil {
+		return fmt.Errorf("failed to write markdown separator newline: %w", err)
+	}
 
 	// Print data rows
-	for _, record := range t.Records() {
-		fmt.Fprint(out, "|")
-		for _, cell := range record {
-			fmt.Fprintf(out, " %s |", markdownCell(cell))
+	for rowIdx, record := range t.Records() {
+		if _, err := fmt.Fprint(out, "|"); err != nil {
+			return fmt.Errorf("failed to write markdown row %d prefix: %w", rowIdx, err)
 		}
-		fmt.Fprintln(out)
+		for _, cell := range record {
+			if _, err := fmt.Fprintf(out, " %s |", markdownCell(cell)); err != nil {
+				return fmt.Errorf("failed to write markdown cell: %w", err)
+			}
+		}
+		if _, err := fmt.Fprintln(out); err != nil {
+			return fmt.Errorf("failed to write markdown row %d newline: %w", rowIdx, err)
+		}
 	}
+	return nil
 }
 
 // printCSV print all record with header; output format is csv. It uses a CSV
@@ -471,7 +489,9 @@ func (t *Table) printLTSV(out io.Writer) error {
 			}
 			r = append(r, t.Header()[i]+":"+data)
 		}
-		fmt.Fprintln(out, strings.Join(r, "\t"))
+		if _, err := fmt.Fprintln(out, strings.Join(r, "\t")); err != nil {
+			return fmt.Errorf("failed to write LTSV record %v: %w", r, err)
+		}
 	}
 	return nil
 }
