@@ -37,7 +37,7 @@ specs (`e2e/atago/`) that exercises the real `sqly` binary. It runs in CI
 
 ```shell
 # Install atago once
-go install github.com/nao1215/atago@latest
+go install github.com/nao1215/atago@v0.11.0
 
 # Build the binary and run the suite
 make test-e2e

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/golden"
+	"github.com/nao1215/sqly/testutil"
 )
 
 func TestMain(m *testing.M) {
@@ -20,55 +20,37 @@ func Test_run(t *testing.T) {
 	t.Run("show version message", func(t *testing.T) {
 		args := []string{"sqly", "--version"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "version", got)
+		assertMainFixture(t, "version.golden", got)
 	})
 
 	t.Run("SELECT * FROM actor ORDER BY actor ASC LIMIT 5, print ascii table", func(t *testing.T) {
 		args := []string{"sqly", "--sql", "SELECT actor, printf('%.2f', total_gross) as total_gross, number_of_movies, printf('%.2f', average_per_movie) as average_per_movie, best_movie, printf('%.2f', gross) as gross FROM actor ORDER BY actor ASC LIMIT 5", "testdata/actor.csv"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_asc_limit5_table", got)
+		assertMainFixture(t, "select_asc_limit5_table.golden", got)
 	})
 
 	t.Run("sqly --sql 'SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id' testdata/user.csv testdata/identifier.csv", func(t *testing.T) {
 		args := []string{"sqly", "--csv", "--sql", "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id", "testdata/user.csv", "testdata/identifier.csv"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_inner_join_csv", got)
+		assertMainFixture(t, "select_inner_join_csv.golden", got)
 	})
 
 	t.Run("sqly --tsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
 		args := []string{"sqly", "--tsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_tsv", got)
+		assertMainFixture(t, "select_tsv.golden", got)
 	})
 
 	t.Run("sqly --ltsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
 		args := []string{"sqly", "--ltsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_ltsv", got)
+		assertMainFixture(t, "select_ltsv.golden", got)
 	})
 
 	t.Run("import excel, output csv", func(t *testing.T) {
 		args := []string{"sqly", "--sql", "SELECT * FROM sample_test_sheet", "-S", "test_sheet", "--csv", "testdata/sample.xlsx"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "excel_to_csv", got)
+		assertMainFixture(t, "excel_to_csv.golden", got)
 	})
 
 	t.Run("--sql-file runs a multiline query loaded from a file", func(t *testing.T) {
@@ -79,10 +61,7 @@ func Test_run(t *testing.T) {
 		}
 		args := []string{"sqly", "--csv", "--sql-file", sqlPath, "testdata/actor.csv"}
 		got := getStdoutForRunFunc(t, run, args)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "sql_file_multiline", got)
+		assertMainFixture(t, "sql_file_multiline.golden", got)
 	})
 
 	t.Run("Treat numbers as numeric types; support numerical sorting", func(t *testing.T) {
@@ -105,9 +84,7 @@ func Test_run(t *testing.T) {
 
 		args := []string{"sqly", "--sql", "SELECT * FROM numeric ORDER BY id", "--csv", "testdata/numeric.csv"}
 		got := getStdoutForRunFunc(t, run, args)
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "numeric", got)
+		assertMainFixture(t, "numeric.golden", got)
 	})
 }
 
@@ -203,4 +180,9 @@ func getStderrForRunFunc(t *testing.T, f func([]string) int, list []string) []by
 
 	f(list)
 	return buffer.Bytes()
+}
+
+func assertMainFixture(t *testing.T, name string, got []byte) {
+	t.Helper()
+	testutil.AssertFileEquals(t, filepath.Join("testdata", "golden", name), got)
 }

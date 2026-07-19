@@ -15,11 +15,11 @@ import (
 	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/golden"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/infrastructure/memory"
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
+	"github.com/nao1215/sqly/testutil"
 )
 
 func TestShellRun(t *testing.T) {
@@ -35,10 +35,7 @@ func TestShellRun(t *testing.T) {
 		defer cleanup()
 
 		got := getStdoutForRunFunc(t, shell.Run)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "version", got)
+		assertShellFixture(t, "version.golden", got)
 	})
 
 	t.Run("print help", func(t *testing.T) {
@@ -53,10 +50,7 @@ func TestShellRun(t *testing.T) {
 		defer cleanup()
 
 		got := getStdoutForRunFunc(t, shell.Run)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "help", got)
+		assertShellFixture(t, "help.golden", got)
 	})
 
 	t.Run("SELECT * FROM actor ORDER BY actor ASC LIMIT 5", func(t *testing.T) {
@@ -71,10 +65,7 @@ func TestShellRun(t *testing.T) {
 		defer cleanup()
 
 		got := getStdoutForRunFunc(t, shell.Run)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_asc_limit5_table", got)
+		assertShellFixture(t, "select_asc_limit5_table.golden", got)
 	})
 
 	t.Run("execute sql and output result to file", func(t *testing.T) {
@@ -99,10 +90,7 @@ func TestShellRun(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_csv", got)
+		assertShellFixture(t, "dump_csv.golden", got)
 	})
 }
 
@@ -115,10 +103,7 @@ func TestShell_printWelcomeMessage(t *testing.T) {
 		defer cleanup()
 
 		got := getStdout(t, shell.printWelcomeMessage)
-
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "welcome", got)
+		assertShellFixture(t, "welcome.golden", got)
 	})
 }
 
@@ -155,9 +140,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "tables", got)
+		assertShellFixture(t, "tables.golden", got)
 	})
 
 	t.Run("execute .tables: if no table exist", func(t *testing.T) {
@@ -172,9 +155,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "no_table_exist", got)
+		assertShellFixture(t, "no_table_exist.golden", got)
 	})
 
 	t.Run("execute .header", func(t *testing.T) {
@@ -192,9 +173,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "header", got)
+		assertShellFixture(t, "header.golden", got)
 	})
 
 	t.Run("execute .header: if not specify table name", func(t *testing.T) {
@@ -229,9 +208,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_csv_to_table", got)
+		assertShellFixture(t, "mode_csv_to_table.golden", got)
 
 		if shell.state.mode.PrintMode != model.PrintModeTable {
 			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeTable.String())
@@ -250,9 +227,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_csv", got)
+		assertShellFixture(t, "mode_table_to_csv.golden", got)
 
 		if shell.state.mode.PrintMode != model.PrintModeCSV {
 			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeCSV.String())
@@ -271,9 +246,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_markdown", got)
+		assertShellFixture(t, "mode_table_to_markdown.golden", got)
 
 		if shell.state.mode.PrintMode != model.PrintModeMarkdownTable {
 			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeMarkdownTable.String())
@@ -292,9 +265,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_tsv", got)
+		assertShellFixture(t, "mode_table_to_tsv.golden", got)
 
 		if shell.state.mode.PrintMode != model.PrintModeTSV {
 			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeTSV.String())
@@ -313,9 +284,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_ltsv", got)
+		assertShellFixture(t, "mode_table_to_ltsv.golden", got)
 
 		if shell.state.mode.PrintMode != model.PrintModeLTSV {
 			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeLTSV.String())
@@ -334,9 +303,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "mode_table_to_excel", got)
+		assertShellFixture(t, "mode_table_to_excel.golden", got)
 
 		if shell.state.mode.PrintMode != model.PrintModeExcel {
 			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeExcel.String())
@@ -398,9 +365,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "help_command", got)
+		assertShellFixture(t, "help_command.golden", got)
 	})
 
 	t.Run(".help is grouped, shows usage, and flags destructive save", func(t *testing.T) {
@@ -461,9 +426,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "import_csv", got)
+		assertShellFixture(t, "import_csv.golden", got)
 	})
 
 	t.Run("execute .import tsv", func(t *testing.T) {
@@ -483,9 +446,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "import_tsv", got)
+		assertShellFixture(t, "import_tsv.golden", got)
 	})
 
 	t.Run("execute .import ltsv", func(t *testing.T) {
@@ -505,9 +466,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "import_ltsv", got)
+		assertShellFixture(t, "import_ltsv.golden", got)
 	})
 
 	t.Run("execute .import without argument", func(t *testing.T) {
@@ -538,9 +497,7 @@ func TestShellExec(t *testing.T) {
 		if err == nil {
 			t.Fatal("expect cause error, however import command return nil")
 		}
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "import_not_support_file_format", []byte(err.Error()))
+		assertShellFixture(t, "import_not_support_file_format.golden", []byte(err.Error()))
 	})
 
 	t.Run("execute .dump csv (print table mode)", func(t *testing.T) {
@@ -565,9 +522,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_csv", got)
+		assertShellFixture(t, "dump_csv.golden", got)
 	})
 
 	t.Run("execute .dump csv (print csv mode)", func(t *testing.T) {
@@ -592,9 +547,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_csv", got)
+		assertShellFixture(t, "dump_csv.golden", got)
 	})
 
 	t.Run("execute .dump tsv (print tsv mode)", func(t *testing.T) {
@@ -619,9 +572,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_tsv", got)
+		assertShellFixture(t, "dump_tsv.golden", got)
 	})
 
 	t.Run("execute .dump ltsv (print ltsv mode)", func(t *testing.T) {
@@ -646,9 +597,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_ltsv", got)
+		assertShellFixture(t, "dump_ltsv.golden", got)
 	})
 
 	t.Run("execute .dump markdown (print markdown mode)", func(t *testing.T) {
@@ -673,9 +622,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_markdown", got)
+		assertShellFixture(t, "dump_markdown.golden", got)
 	})
 
 	t.Run("execute .dump with few argument", func(t *testing.T) {
@@ -711,9 +658,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal("execute .dump with bad argument(=not exist table name), however return nil")
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "dump_not_exist_table", []byte(got.Error()))
+		assertShellFixture(t, "dump_not_exist_table.golden", []byte(got.Error()))
 	})
 
 	t.Run("dump ACH table to CSV succeeds", func(t *testing.T) {
@@ -850,9 +795,7 @@ func TestShellExec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "select_asc_limit5_table", got)
+		assertShellFixture(t, "select_asc_limit5_table.golden", got)
 	})
 
 	t.Run("bad argument", func(t *testing.T) {
@@ -867,9 +810,7 @@ func TestShellExec(t *testing.T) {
 			t.Errorf("expect error, however execute sql result is nil")
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "bad_arg", []byte(err.Error()))
+		assertShellFixture(t, "bad_arg.golden", []byte(err.Error()))
 	})
 
 	t.Run("bad argument with dot prefix", func(t *testing.T) {
@@ -884,9 +825,7 @@ func TestShellExec(t *testing.T) {
 			t.Errorf("expect error, however execute sql result is nil")
 		}
 
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "bad_arg_with_dot_prefix", []byte(err.Error()))
+		assertShellFixture(t, "bad_arg_with_dot_prefix.golden", []byte(err.Error()))
 	})
 
 	t.Run("import directory with CSV files", func(t *testing.T) {
@@ -4362,4 +4301,9 @@ func TestSQLInputComplete(t *testing.T) {
 			}
 		})
 	}
+}
+
+func assertShellFixture(t *testing.T, name string, got []byte) {
+	t.Helper()
+	testutil.AssertFileEquals(t, filepath.Join("testdata", "golden", name), got)
 }

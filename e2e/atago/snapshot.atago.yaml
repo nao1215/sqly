@@ -1,11 +1,11 @@
 # Snapshot tests for sqly's stable formatted output. Unlike the contains/line
 # assertions in the other specs, these pin the exact rendered output to a
-# committed golden file, so an unintended formatting change (table borders,
+# committed snapshot file, so an unintended formatting change (table borders,
 # column order, CREATE statement text) fails loudly with a diff. atago
 # normalizes volatile details (ANSI colors, temp paths, timestamps) before
-# comparing, so the goldens stay stable across machines and CI.
+# comparing, so the snapshots stay stable across machines and CI.
 #
-# Record or refresh the goldens with:
+# Record or refresh the snapshots with:
 #   atago snapshot update e2e/atago/snapshot.atago.yaml
 # Run with: make test-e2e
 version: "1"

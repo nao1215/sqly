@@ -10,7 +10,7 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/golden"
+	"github.com/nao1215/sqly/testutil"
 )
 
 func TestCSVRepositoryDump(t *testing.T) {
@@ -42,9 +42,7 @@ func TestCSVRepositoryDump(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "sample_csv", got)
+		testutil.AssertFileEquals(t, filepath.Join("testdata", "golden", "sample_csv.golden"), got)
 	})
 }
 
@@ -77,9 +75,7 @@ func TestTSVRepositoryDump(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := golden.New(t,
-			golden.WithFixtureDir(filepath.Join("testdata", "golden")))
-		g.Assert(t, "sample_tsv", got)
+		testutil.AssertFileEquals(t, filepath.Join("testdata", "golden", "sample_tsv.golden"), got)
 	})
 }
 

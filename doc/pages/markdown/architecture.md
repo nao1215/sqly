@@ -50,10 +50,11 @@ ACH and Fedwire imports have a deterministic cleanup path. Loading registers ACH
 ├── di      # Dependency injection
 ├── doc     # Documentation
 ├── domain  # Business logic. This directory contains the model and repository interfaces.
-├── golden  # Test framework. This package is forked from https://github.com/sebdah/goldie
+├── e2e     # atago specs and smoke tests for the real sqly binary
 ├── infrastructure # Implementation of the repository interface
 ├── interactor    # Implementation of the usecase interface. This package uses the domain and infrastructure packages.
 ├── shell        # sqly shell
 ├── testdata     # Test data
+├── testutil     # Minimal shared test helpers
 └── usecase      # Use case interface. The shell calls this interface.
 ```
