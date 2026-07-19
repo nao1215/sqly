@@ -29,3 +29,13 @@ func NewFileRepository() repository.FileRepository {
 func (fr *fileRepository) Create(path string) (*os.File, error) {
 	return os.OpenFile(filepath.Clean(path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, defaultFilePerm)
 }
+
+// CreateTemp creates a temporary file in the specified directory.
+func (fr *fileRepository) CreateTemp(dir, pattern string) (*os.File, error) {
+	return os.CreateTemp(dir, pattern)
+}
+
+// Remove deletes a file.
+func (fr *fileRepository) Remove(path string) error {
+	return os.Remove(path)
+}
