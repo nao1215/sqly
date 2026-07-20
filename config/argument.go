@@ -119,8 +119,7 @@ type Arg struct {
 	// at runtime.
 	ImportMode model.MalformedRowPolicy
 	// Encoding selects how a text import without a Unicode BOM is decoded before
-	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs. The shell
-	// starts in this mode and .encoding can change it for later imports.
+	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs.
 	Encoding model.TextEncoding
 	// Version print version message
 	Version func()

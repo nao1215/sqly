@@ -18,8 +18,7 @@ type state struct {
 	// seeded from the --import-mode flag and changed by the .import-mode command.
 	importMode model.MalformedRowPolicy
 	// importEncoding is the current text-import decoding for CSV, TSV, LTSV,
-	// JSON, and JSONL inputs. It is seeded from --encoding and changed by
-	// .encoding for later imports.
+	// JSON, and JSONL inputs. It is seeded from --encoding.
 	importEncoding model.TextEncoding
 }
 

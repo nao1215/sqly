@@ -14,10 +14,9 @@ import (
 	"golang.org/x/text/transform"
 )
 
-var importCompressionFactory = filesql.NewCompressionFactory()
-
 func isTextImportPath(path string) bool {
-	base := strings.ToLower(importCompressionFactory.RemoveCompressionExtension(path))
+	compressionFactory := filesql.NewCompressionFactory()
+	base := strings.ToLower(compressionFactory.RemoveCompressionExtension(path))
 	switch filepath.Ext(base) {
 	case model.ExtCSV, model.ExtTSV, model.ExtLTSV, model.ExtJSON, model.ExtJSONL:
 		return true
@@ -31,7 +30,8 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 		return path, nil, nil
 	}
 
-	reader, cleanupReader, err := importCompressionFactory.CreateReaderForFile(path)
+	compressionFactory := filesql.NewCompressionFactory()
+	reader, cleanupReader, err := compressionFactory.CreateReaderForFile(path)
 	if err != nil {
 		return "", nil, fmt.Errorf("open import reader for %s: %w", path, err)
 	}
@@ -51,7 +51,7 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 		_ = os.RemoveAll(dir)
 	}
 
-	stagedPath := filepath.Join(dir, filepath.Base(importCompressionFactory.RemoveCompressionExtension(path)))
+	stagedPath := filepath.Join(dir, filepath.Base(compressionFactory.RemoveCompressionExtension(path)))
 	file, err := os.Create(stagedPath) //nolint:gosec // stagedPath is under a sqly-created temp dir
 	if err != nil {
 		cleanup()

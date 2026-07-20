@@ -550,10 +550,10 @@ $ sqly --import-mode skip --sql "SELECT * FROM data" data.csv
 
 ## Text encodings
 
-Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, or UTF-16 without a BOM. A Unicode BOM is still honored automatically.
+Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, UTF-16LE, or UTF-16BE without a BOM. A Unicode BOM is still honored automatically.
 
 ```shell
-$ sqly --encoding shift-jis --sql "SELECT * FROM people" people.csv
+sqly --encoding shift-jis --sql "SELECT * FROM people" people.csv
 ```
 
 ## Key bindings for the shell

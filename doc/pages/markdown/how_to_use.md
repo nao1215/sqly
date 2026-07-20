@@ -14,7 +14,7 @@ For automation-friendly output, `--json-typed` and `--ndjson-typed` (or `.mode j
 
 When a CSV/TSV row has a different field count than the header, `--import-mode` (or the `.import-mode` shell command) decides what happens: `stop` (default) fails the import and reports the mismatch, `skip` drops the malformed rows and imports the rest, and `fill` keeps every row by padding short rows with blanks and truncating long rows to the header width. The policy applies to delimited text only; Excel and LTSV already fill missing cells, and Parquet and JSON/JSONL have no per-row field-count mismatch.
 
-Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, or UTF-16 without a BOM. A Unicode BOM is still honored automatically.
+Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, UTF-16LE, or UTF-16BE without a BOM. A Unicode BOM is still honored automatically.
 
 
 ### sqly options
