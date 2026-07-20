@@ -118,6 +118,10 @@ type Arg struct {
 	// initial policy for the session; the .import-mode shell command can change it
 	// at runtime.
 	ImportMode model.MalformedRowPolicy
+	// Encoding selects how a text import without a Unicode BOM is decoded before
+	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs. The shell
+	// starts in this mode and .encoding can change it for later imports.
+	Encoding model.TextEncoding
 	// Version print version message
 	Version func()
 }
@@ -229,6 +233,7 @@ func newArg(args []string) (*Arg, error) {
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill")
+	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "text input encoding for CSV/TSV/LTSV/JSON/JSONL import: "+model.TextEncodingHelp())
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	sqlFile := flag.StringP("sql-file", "f", "", "path to a file with SQL to execute (multiline; cannot be used with --sql)")
 	output := flag.StringP("output", "o", "", "destination path for the result of --sql or a single-result --sql-file script")
@@ -361,6 +366,10 @@ func newArg(args []string) (*Arg, error) {
 	if err != nil {
 		return nil, err
 	}
+	importTextEncoding, err := model.ParseTextEncoding(*importEncoding)
+	if err != nil {
+		return nil, err
+	}
 
 	arg.Usage = usage(flag)
 	arg.Version = version
@@ -370,6 +379,7 @@ func newArg(args []string) (*Arg, error) {
 	arg.StdinFormat = *stdinFormat
 	arg.StdinTableName = *stdinName
 	arg.ImportMode = importPolicy
+	arg.Encoding = importTextEncoding
 	arg.Query = *query
 	arg.SQLFilePath = *sqlFile
 	arg.SaveDir = *saveDir

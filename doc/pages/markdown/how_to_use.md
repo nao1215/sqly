@@ -6,13 +6,15 @@ Flags may appear before or after the file and directory arguments; `sqly --csv d
 
 sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version`, not `sqly help` or `sqly version`; those forms are read as input paths, and sqly will point you to the right flag. Helper commands such as `.tables` and `.import` run inside the interactive shell or batch stdin mode, not as command-line arguments.
 
-sqly can also download a supported file over HTTP or HTTPS before importing it. The same remote URL works both as a CLI input argument and via `.import`, and larger downloads print progress on stderr so they do not look stuck.
+sqly can also download a supported file over HTTP or HTTPS before importing it. The same remote URL works both as a CLI input argument and via `.import`.
 
 sqly allows you to change the display mode of SQL results with options. By default, the output is in table format. The output format can be changed to csv (`--csv`), tsv (`--tsv`), ltsv (`--ltsv`), markdown (`--markdown`), json (`--json`), or ndjson (`--ndjson`). Excel (`--excel`) and Parquet (`--parquet`) are export-only: they render as csv on screen and write a file only through `.dump` or `--output`. Since the output mode can be changed while the sqly shell is running, it is easy to execute `sqly sample.csv` and then change settings or execute SQL queries within the sqly shell.
 
 For automation-friendly output, `--json-typed` and `--ndjson-typed` (or `.mode json-typed` / `.mode ndjson-typed` in the shell) emit native JSON scalars instead of strings: a canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`. A large integer stays lossless and never regresses into scientific notation, while a value with a leading zero such as `007` remains a string. The default `--json`/`--ndjson` keep the legacy string contract. Pair `--inspect` with `--json-typed` to apply the same contract to the report's sample rows.
 
 When a CSV/TSV row has a different field count than the header, `--import-mode` (or the `.import-mode` shell command) decides what happens: `stop` (default) fails the import and reports the mismatch, `skip` drops the malformed rows and imports the rest, and `fill` keeps every row by padding short rows with blanks and truncating long rows to the header width. The policy applies to delimited text only; Excel and LTSV already fill missing cells, and Parquet and JSON/JSONL have no per-row field-count mismatch.
+
+Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, or UTF-16 without a BOM. A Unicode BOM is still honored automatically.
 
 
 ### sqly options
@@ -49,6 +51,7 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
       --stdin string    treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
       --stdin-name string   table name for the --stdin dataset (default "stdin")
       --import-mode string  how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill (default "stop")
+      --encoding string     text input encoding for CSV/TSV/LTSV/JSON/JSONL import: utf-8|shift-jis|euc-jp|iso-2022-jp|utf-16le|utf-16be (default "utf-8")
   -s, --sql string      sql query you want to execute
   -f, --sql-file string   path to a file with SQL to execute (multiline; cannot be used with --sql)
   -o, --output string   destination path for the result of --sql or a single-result --sql-file script

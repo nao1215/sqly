@@ -105,7 +105,7 @@ scenarios:
             equals: booker12
       - assert:
           stderr:
-            contains: Downloading http://127.0.0.1
+            not_contains: Downloading http://127.0.0.1
 
   - name: queries a Parquet file
     steps:

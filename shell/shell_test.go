@@ -20,6 +20,7 @@ import (
 	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/interactor"
 	"github.com/nao1215/sqly/testutil"
+	"golang.org/x/text/encoding/japanese"
 )
 
 func TestShellRun(t *testing.T) {
@@ -58,8 +59,27 @@ func TestShellRun(t *testing.T) {
 		if !strings.Contains(got, "booker12") {
 			t.Fatalf("stdout = %q, want downloaded table query result", got)
 		}
-		if !strings.Contains(stderr.String(), "Downloading "+server.URL+"/user.csv") {
-			t.Fatalf("stderr = %q, want download status", stderr.String())
+		if stderr.String() != "" {
+			t.Fatalf("stderr = %q, want no download output", stderr.String())
+		}
+	})
+
+	t.Run("imports a Shift-JIS CSV passed as a CLI input argument with --encoding", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "people.csv")
+		content := mustEncodeString(t, japanese.ShiftJIS.NewEncoder(), "id,name\n1,太郎\n2,花子\n")
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		shell, cleanup, err := newShell(t, []string{"sqly", "--encoding", "shift-jis", "--csv", "--sql", "SELECT name FROM people ORDER BY id LIMIT 1", path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "太郎") {
+			t.Fatalf("stdout = %q, want Shift-JIS decoded result", got)
 		}
 	})
 

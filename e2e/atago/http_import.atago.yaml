@@ -26,7 +26,7 @@ scenarios:
             equals: booker12
       - assert:
           stderr:
-            contains:
+            not_contains:
               - Downloading http://127.0.0.1
               - Downloaded http://127.0.0.1
 
@@ -49,6 +49,6 @@ scenarios:
               - "3"
       - assert:
           stderr:
-            contains:
+            not_contains:
               - Downloading http://127.0.0.1
               - Downloaded http://127.0.0.1

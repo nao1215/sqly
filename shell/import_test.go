@@ -16,6 +16,8 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/interactor/mock"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 // These tests intentionally avoid t.Parallel at the top level.
@@ -96,6 +98,7 @@ func copyTestFile(t *testing.T, name, dst string) {
 
 func newHTTPImportServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	shiftJISCSV := mustEncodeString(t, japanese.ShiftJIS.NewEncoder(), "id,name\n1,太郎\n2,花子\n")
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/user.csv":
@@ -105,10 +108,23 @@ func newHTTPImportServer(t *testing.T) *httptest.Server {
 			w.Header().Set("Content-Type", "text/csv")
 			w.Header().Set("Content-Disposition", `attachment; filename="remote-user.csv"`)
 			_, _ = w.Write([]byte("user_name,identifier\nbooker12,1\n"))
+		case "/shiftjis.csv":
+			w.Header().Set("Content-Type", "text/csv")
+			_, _ = w.Write(shiftJISCSV)
 		default:
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+func mustEncodeString(t *testing.T, transformer transform.Transformer, content string) []byte {
+	t.Helper()
+
+	encoded, _, err := transform.String(transformer, content)
+	if err != nil {
+		t.Fatalf("transform.String: %v", err)
+	}
+	return []byte(encoded)
 }
 
 func TestImportCommand_DownloadsHTTPURL(t *testing.T) {
@@ -141,8 +157,8 @@ func TestImportCommand_DownloadsHTTPURL(t *testing.T) {
 	if got := s.tableSources["user"]; got != server.URL+"/user.csv" {
 		t.Fatalf("table source = %q, want %q", got, server.URL+"/user.csv")
 	}
-	if out := stderr.String(); !strings.Contains(out, "Downloading "+server.URL+"/user.csv") || !strings.Contains(out, "Downloaded "+server.URL+"/user.csv") {
-		t.Fatalf("stderr = %q, want download progress", out)
+	if out := stderr.String(); out != "" {
+		t.Fatalf("stderr = %q, want no download output", out)
 	}
 }
 
@@ -163,6 +179,30 @@ func TestImportCommand_UsesContentDispositionFilenameForHTTPURL(t *testing.T) {
 
 	if _, err := s.usecases.metadata.List(context.Background(), "remote_user"); err != nil {
 		t.Fatalf("expected remote_user table from Content-Disposition filename: %v", err)
+	}
+}
+
+func TestImportCommand_DecodesShiftJISHTTPURL(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly", "--encoding", "shift-jis"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	server := newHTTPImportServer(t)
+	defer server.Close()
+	s.httpClient = server.Client()
+
+	if err := s.commands.importCommand(context.Background(), s, []string{server.URL + "/shiftjis.csv"}); err != nil {
+		t.Fatalf("importCommand: %v", err)
+	}
+
+	people, err := s.usecases.metadata.List(context.Background(), "shiftjis")
+	if err != nil {
+		t.Fatalf("List(shiftjis): %v", err)
+	}
+	if got := people.Records()[0][1]; got != "太郎" {
+		t.Fatalf("first row name = %q, want %q", got, "太郎")
 	}
 }
 
