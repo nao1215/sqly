@@ -3572,6 +3572,28 @@ func TestShellValidateSheetFlag(t *testing.T) {
 		}
 	})
 
+	t.Run("allows --sheet for a remote Excel URL", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", "https://example.com/book.xlsx"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); err != nil {
+			t.Fatalf("validateSheetFlag returned error for a remote Excel URL: %v", err)
+		}
+	})
+
+	t.Run("rejects --sheet for a remote non-Excel URL", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly", "--sheet", "A test", "https://example.com/sample.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.validateSheetFlag(); !errors.Is(err, errSheetNotExcel) {
+			t.Fatalf("validateSheetFlag error = %v, want errSheetNotExcel", err)
+		}
+	})
+
 	t.Run("allows --sheet for a directory that contains an Excel file", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, "book.xlsx"), []byte("x"), 0o600); err != nil {

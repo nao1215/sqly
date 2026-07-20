@@ -16,6 +16,8 @@ import (
 
 const remoteDownloadReportStep int64 = 4 << 20 // 4 MiB
 
+const remoteSupportedFormatsHelp = "csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed"
+
 // isRemoteURL reports whether raw is an absolute HTTP/HTTPS URL sqly can
 // download as an input dataset.
 func isRemoteURL(raw string) bool {
@@ -94,12 +96,12 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 		return "", nil, fmt.Errorf("download %s: unexpected HTTP status %s", rawURL, resp.Status)
 	}
 
-	filename, err := remoteDownloadFilename(rawURL, resp)
+	filename, err := s.remoteDownloadFilename(rawURL, resp)
 	if err != nil {
 		return "", nil, err
 	}
 	if !s.usecases.importer.IsSupportedFile(filename) {
-		return "", nil, fmt.Errorf("unsupported remote file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filename)
+		return "", nil, fmt.Errorf("unsupported remote file format: %s (supported: %s)", filename, remoteSupportedFormatsHelp)
 	}
 
 	dir, err := os.MkdirTemp("", "sqly-http-")
@@ -132,8 +134,9 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 
 // remoteDownloadFilename chooses a filename for a downloaded input: first a
 // Content-Disposition filename when present, then the URL path, then a
-// Content-Type-derived extension. The name must end in a sqly-supported format.
-func remoteDownloadFilename(rawURL string, resp *http.Response) (string, error) {
+// Content-Type-derived extension. Candidate ranking reuses the importer's
+// supported-format check so the extension list stays in one authority.
+func (s *Shell) remoteDownloadFilename(rawURL string, resp *http.Response) (string, error) {
 	var first string
 	for _, candidate := range []string{
 		contentDispositionFilename(resp.Header.Get("Content-Disposition")),
@@ -144,7 +147,7 @@ func remoteDownloadFilename(rawURL string, resp *http.Response) (string, error) 
 		if candidate == "" || candidate == "." || candidate == string(filepath.Separator) {
 			continue
 		}
-		if supportedRemoteFilename(candidate) {
+		if s.usecases.importer.IsSupportedFile(candidate) {
 			return candidate, nil
 		}
 		if first == "" {
@@ -155,22 +158,6 @@ func remoteDownloadFilename(rawURL string, resp *http.Response) (string, error) 
 		return first, nil
 	}
 	return "", fmt.Errorf("download %s: could not determine a supported filename from the URL, Content-Disposition, or Content-Type", rawURL)
-}
-
-func supportedRemoteFilename(name string) bool {
-	lower := strings.ToLower(name)
-	for _, ext := range []string{".gz", ".bz2", ".xz", ".zst", ".z", ".snappy", ".s2", ".lz4"} {
-		if before, ok := strings.CutSuffix(lower, ext); ok {
-			lower = before
-			break
-		}
-	}
-	for _, ext := range []string{".csv", ".tsv", ".ltsv", ".parquet", ".xlsx", ".json", ".jsonl", ".ach", ".fed"} {
-		if strings.HasSuffix(lower, ext) {
-			return true
-		}
-	}
-	return false
 }
 
 func contentDispositionFilename(header string) string {

@@ -12,6 +12,8 @@ Set TypingSpeed 60ms
 Hide
 Type "WORK=$(mktemp -d); cp testdata/user.csv $WORK/; python3 -m http.server 18080 --bind 127.0.0.1 --directory $WORK >/tmp/sqly-http-demo.log 2>&1 & HTTP_PID=$!; trap 'kill $HTTP_PID' EXIT; export PATH=$PWD:$PATH PS1='$ '; clear"
 Enter
+Type "until curl -fsS http://127.0.0.1:18080/user.csv >/dev/null; do sleep 0.1; done"
+Enter
 Show
 Type "sqly --csv --sql 'SELECT user_name FROM user ORDER BY identifier LIMIT 2' http://127.0.0.1:18080/user.csv"
 Enter

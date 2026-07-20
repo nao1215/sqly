@@ -741,9 +741,9 @@ func (s *Shell) resolveImportTarget(ctx context.Context, input string) (cleanPat
 
 func localImportAccessError(path string, err error) error {
 	switch {
-	case os.IsNotExist(err):
+	case errors.Is(err, os.ErrNotExist):
 		return errors.New("path does not exist: " + path)
-	case os.IsPermission(err):
+	case errors.Is(err, os.ErrPermission):
 		return errors.New("permission denied accessing path: " + path)
 	default:
 		return fmt.Errorf("failed to access path %s: %w", path, err)

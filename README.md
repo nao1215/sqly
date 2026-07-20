@@ -105,7 +105,7 @@ sqly can also download a supported file over HTTP or HTTPS before importing it. 
 ![http demo](./doc/img/http-demo.gif)
 
 ```shell
-$ python3 -m http.server 8080 --bind 127.0.0.1 --directory testdata
+$ python3 -m http.server 8080 --bind 127.0.0.1 --directory testdata >/tmp/sqly-http.log 2>&1 &
 $ sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:8080/user.csv
 
 $ sqly

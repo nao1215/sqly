@@ -177,7 +177,9 @@ func NewShell(
 		historyEnabled: true,
 		tableSources:   make(map[string]string),
 		httpClient: &http.Client{
-			Timeout: 0,
+			// Bound the full request/response body read so a server that stalls
+			// mid-download cannot hang the CLI indefinitely.
+			Timeout: 15 * time.Minute,
 			Transport: &http.Transport{
 				ResponseHeaderTimeout: 30 * time.Second,
 			},
