@@ -356,9 +356,19 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 		}
 		beforeSet := tableNameSet(before)
 
-		if err := s.usecases.importer.LoadFiles(ctx, file); err != nil {
+		loadPath := file
+		cleanupLoad := func() {}
+		if prepared, cleanup, perr := s.prepareImportLoadPath(file); perr != nil {
+			return false, skipped, fmt.Errorf("failed to prepare %s from directory %s: %w", file, displayPath, perr)
+		} else if cleanup != nil {
+			loadPath, cleanupLoad = prepared, cleanup
+		}
+
+		if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
+			cleanupLoad()
 			return false, skipped, fmt.Errorf("failed to import file %s from directory %s: %w", file, displayPath, err)
 		}
+		cleanupLoad()
 
 		// Apply --sheet filtering to Excel workbooks. A workbook that lacks the
 		// requested sheet is skipped in a multi-workbook import ();
@@ -574,14 +584,25 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	// only for an extensionless pseudo-file (e.g. /dev/stdin, /proc/self/fd/0),
 	// which is staged to a temporary CSV so it imports end-to-end.
 	loadPath := cleanPath
+	cleanupLoad := func() {}
 	if !s.usecases.importer.IsSupportedFile(cleanPath) {
 		staged, cleanup, ok := s.stagePseudoFileAsCSV(cleanPath)
 		if !ok {
 			return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
 		}
-		defer cleanup()
+		cleanupLoad = cleanup
 		loadPath = staged
 	}
+	preparedPath, cleanupPrepared, err := s.prepareImportLoadPath(loadPath)
+	if err != nil {
+		cleanupLoad()
+		return err
+	}
+	defer cleanupLoad()
+	if cleanupPrepared != nil {
+		defer cleanupPrepared()
+	}
+	loadPath = preparedPath
 
 	// Capture which tables this file creates so --inspect and write-back (.save)
 	// can map them back to their source path.

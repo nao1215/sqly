@@ -1,15 +1,16 @@
-# A leading Unicode byte-order mark must not corrupt an import. Editors and
-# shells (Excel, Notepad, PowerShell) prepend a UTF-8 BOM, and a UTF-8 or
-# UTF-16 BOM used to leak into the first column name or break parsing, so a
-# query on the plain column name failed with "no such column". filesql now
-# strips a UTF-8 BOM and transcodes UTF-16 before parsing. Run with:
+# A leading Unicode byte-order mark must not corrupt an import, and non-UTF-8
+# text imports must be decodable on demand. Editors and shells (Excel, Notepad,
+# PowerShell) prepend a UTF-8 BOM, and a UTF-8 or UTF-16 BOM used to leak into
+# the first column name or break parsing, so a query on the plain column name
+# failed with "no such column". sqly now honors BOMs and lets the user select a
+# text encoding for CSV/TSV/LTSV/JSON/JSONL imports. Run with:
 # make test-e2e
 #
-# Fixtures are base64 so the raw BOM/UTF-16 bytes survive intact.
+# Fixtures are base64 so the raw BOM/UTF-16/Shift-JIS bytes survive intact.
 version: "1"
 
 suite:
-  name: sqly Unicode BOM handling on import
+  name: sqly text encoding handling on import
 
 scenarios:
   - name: utf-8 BOM on a CSV keeps the first column queryable by its plain name
@@ -91,3 +92,15 @@ scenarios:
             contains: alice
           stderr:
             not_contains: "column count mismatch"
+
+  - name: --encoding shift-jis decodes a CSV without a BOM
+    steps:
+      - fixture:
+          file: people.csv
+          base64: "aWQsbmFtZQoxLJG+mFkKMiyJ1I5xCg=="
+      - run:
+          command: sqly --encoding shift-jis --csv --sql "SELECT name FROM people ORDER BY id LIMIT 1" people.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: 太郎

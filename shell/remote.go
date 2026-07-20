@@ -11,10 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 )
-
-const remoteDownloadReportStep int64 = 4 << 20 // 4 MiB
 
 const remoteSupportedFormatsHelp = "csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed"
 
@@ -117,8 +114,7 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 		return "", nil, fmt.Errorf("create staging file for %s: %w", rawURL, err)
 	}
 
-	progress := newDownloadProgressWriter(s.importStatusWriter(), rawURL, filename, resp.ContentLength)
-	_, copyErr := io.Copy(io.MultiWriter(f, progress), resp.Body)
+	_, copyErr := io.Copy(f, resp.Body)
 	closeErr := f.Close()
 	if copyErr != nil {
 		cleanup()
@@ -128,7 +124,6 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 		cleanup()
 		return "", nil, fmt.Errorf("close staging file for %s: %w", rawURL, closeErr)
 	}
-	progress.finish()
 	return localPath, cleanup, nil
 }
 
@@ -202,73 +197,4 @@ func filenameFromContentType(header string) string {
 	default:
 		return ""
 	}
-}
-
-type downloadProgressWriter struct {
-	out         io.Writer
-	url         string
-	filename    string
-	total       int64
-	written     int64
-	nextReport  int64
-	lastReport  time.Time
-	reportedAny bool
-}
-
-func newDownloadProgressWriter(out io.Writer, rawURL, filename string, total int64) *downloadProgressWriter {
-	fmt.Fprintf(out, "Downloading %s\n", rawURL)
-	return &downloadProgressWriter{
-		out:        out,
-		url:        rawURL,
-		filename:   filename,
-		total:      total,
-		nextReport: remoteDownloadReportStep,
-		lastReport: time.Now(),
-	}
-}
-
-func (w *downloadProgressWriter) Write(p []byte) (int, error) {
-	n := len(p)
-	w.written += int64(n)
-	if w.written >= w.nextReport || time.Since(w.lastReport) >= time.Second {
-		w.report()
-		w.nextReport = w.written + remoteDownloadReportStep
-		w.lastReport = time.Now()
-	}
-	return n, nil
-}
-
-func (w *downloadProgressWriter) report() {
-	w.reportedAny = true
-	if w.total > 0 {
-		pct := float64(w.written) * 100 / float64(w.total)
-		fmt.Fprintf(w.out, "Downloading %s: %s / %s (%.0f%%)\n", w.url, humanBytes(w.written), humanBytes(w.total), pct)
-		return
-	}
-	fmt.Fprintf(w.out, "Downloading %s: %s\n", w.url, humanBytes(w.written))
-}
-
-func (w *downloadProgressWriter) finish() {
-	if w.reportedAny {
-		fmt.Fprintf(w.out, "Downloaded %s -> %s (%s)\n", w.url, w.filename, humanBytes(w.written))
-		return
-	}
-	if w.total > 0 {
-		fmt.Fprintf(w.out, "Downloaded %s -> %s (%s)\n", w.url, w.filename, humanBytes(w.total))
-		return
-	}
-	fmt.Fprintf(w.out, "Downloaded %s -> %s (%s)\n", w.url, w.filename, humanBytes(w.written))
-}
-
-func humanBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for v := n / unit; v >= unit; v /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }

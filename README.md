@@ -100,7 +100,7 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv
 +-----------+------------+------------+-----------+
 ```
 
-sqly can also download a supported file over HTTP or HTTPS before importing it. The same remote URL works both as a CLI input argument and via `.import`, and larger downloads print progress on stderr so they do not look stuck.
+sqly can also download a supported file over HTTP or HTTPS before importing it. The same remote URL works both as a CLI input argument and via `.import`.
 
 ![http demo](./doc/img/http-demo.gif)
 
@@ -179,7 +179,7 @@ A SQL statement is buffered until it ends with `;`, so a multi-line or pasted qu
 
 ```shell
 $ sqly testdata/user.csv
-sqly v0.27.4
+sqly v0.28.0
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
@@ -548,6 +548,14 @@ When a CSV/TSV row has a different number of fields than the header, `--import-m
 $ sqly --import-mode skip --sql "SELECT * FROM data" data.csv
 ```
 
+## Text encodings
+
+Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, UTF-16LE, or UTF-16BE without a BOM. A Unicode BOM is still honored automatically.
+
+```shell
+sqly --encoding shift-jis --sql "SELECT * FROM people" people.csv
+```
+
 ## Key bindings for the shell
 
 |Key|Action|
@@ -575,7 +583,7 @@ SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `In
 |--------:|--------:|------------:|--------------:|-------------------:|
 | 100,000 | 12 | 515 ms | 161 MB | 2.82M |
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.27.4. Run `make bench` to reproduce on your machine.
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.28.0. Run `make bench` to reproduce on your machine.
 
 ## Comparison with similar tools
 

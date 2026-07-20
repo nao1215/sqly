@@ -17,6 +17,9 @@ type state struct {
 	// importMode is the current malformed-row policy for CSV/TSV imports. It is
 	// seeded from the --import-mode flag and changed by the .import-mode command.
 	importMode model.MalformedRowPolicy
+	// importEncoding is the current text-import decoding for CSV, TSV, LTSV,
+	// JSON, and JSONL inputs. It is seeded from --encoding.
+	importEncoding model.TextEncoding
 }
 
 // newState return *state.
@@ -25,10 +28,15 @@ func newState(arg *config.Arg) (*state, error) {
 	if err != nil {
 		return nil, err
 	}
+	importEncoding := arg.Encoding
+	if importEncoding == "" {
+		importEncoding = model.TextEncodingUTF8
+	}
 	return &state{
-		cwd:        dir,
-		mode:       newMode(config.Stdout, arg.Output.Mode, arg.Output.JSONTyped),
-		importMode: arg.ImportMode,
+		cwd:            dir,
+		mode:           newMode(config.Stdout, arg.Output.Mode, arg.Output.JSONTyped),
+		importMode:     arg.ImportMode,
+		importEncoding: importEncoding,
 	}, nil
 }
 

@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [v0.28.0](https://github.com/nao1215/sqly/compare/v0.27.4...v0.28.0) (2026-07-20)
+
+### New Features
+* Text Import Encoding Selection: `--encoding` now chooses how CSV, TSV, LTSV, JSON, and JSONL inputs without a Unicode BOM are decoded before parsing. `utf-8` remains the default, and sqly now accepts Shift-JIS (including common aliases such as `cp932`), EUC-JP, ISO-2022-JP, UTF-16LE, and UTF-16BE on demand.
+
+### Bug Fixes
+* Silent HTTP/HTTPS Imports: importing a supported file over HTTP or HTTPS no longer writes download status lines to stderr. Redirected or wrapped runs now stay free of `Downloading ...` / `Downloaded ...` noise even across redirects, while the remote file still imports through both CLI arguments and `.import`.
+* Legacy Encoding With BOM Handling: explicit text decoding now composes with Unicode BOM detection instead of bypassing it. A BOM-prefixed text file is still decoded by its BOM, while a BOM-less legacy-encoded file can be decoded by `--encoding`.
+
+### Testing
+* HTTP Import E2E Silence: the atago HTTP-import specs now assert that successful remote imports stay quiet on stderr, covering both direct CLI input URLs and batch-mode `.import` of a remote URL.
+* Text Encoding E2E: `encoding.atago.yaml` now covers an explicit Shift-JIS import through `--encoding`, alongside the existing UTF-8 BOM and UTF-16 fixtures.
+
+### Documentation
+* README / Demo Refresh: the HTTP import README example and VHS demo were refreshed for the silent-download behavior, and the import docs now briefly note `--encoding` and automatic BOM handling.
+
 ## [v0.27.4](https://github.com/nao1215/sqly/compare/v0.27.3...v0.27.4) (2026-07-19)
 
 ### Testing
