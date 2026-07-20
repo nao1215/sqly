@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
@@ -124,6 +126,9 @@ type Shell struct {
 	// one, rebuilding only when the table set changes (or after an import).
 	completionTableKey  string
 	completionTableCols []Suggest
+	// httpClient downloads remote datasets for HTTP/HTTPS imports. It is
+	// overridable in tests so httptest servers can supply their own transport.
+	httpClient *http.Client
 }
 
 type promptSession interface {
@@ -171,6 +176,14 @@ func NewShell(
 		isTTY:          config.IsInputFromTTY,
 		historyEnabled: true,
 		tableSources:   make(map[string]string),
+		httpClient: &http.Client{
+			// Bound the full request/response body read so a server that stalls
+			// mid-download cannot hang the CLI indefinitely.
+			Timeout: 15 * time.Minute,
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: 30 * time.Second,
+			},
+		},
 	}, nil
 }
 

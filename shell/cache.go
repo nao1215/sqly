@@ -81,6 +81,11 @@ func (s *Shell) cacheEnabled(paths []string) bool {
 	if s.argument.CachePath == "" || len(paths) == 0 || s.argument.StdinFormat != "" {
 		return false
 	}
+	for _, p := range paths {
+		if isRemoteURL(p) {
+			return false
+		}
+	}
 	// Disable caching when any input is ACH/Fedwire, including one nested inside a
 	// directory argument: a warm cache load restores plain tables but not the
 	// filesql registry those formats need for write-back, so caching them would

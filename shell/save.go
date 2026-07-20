@@ -321,6 +321,10 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 			problems = append(problems, name+": came from --stdin and has no source file to write back to")
 			continue
 		}
+		if isRemoteURL(source) {
+			problems = append(problems, fmt.Sprintf("%s: came from a remote URL (%s)", name, source))
+			continue
+		}
 		// A directory import is not a single editable source the session owns, so
 		// reject it even though its source may point at a per-file path for
 		// --inspect provenance.

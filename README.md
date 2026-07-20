@@ -100,6 +100,19 @@ $ sqly --sql "SELECT * FROM user" testdata/user.csv
 +-----------+------------+------------+-----------+
 ```
 
+sqly can also download a supported file over HTTP or HTTPS before importing it. The same remote URL works both as a CLI input argument and via `.import`, and larger downloads print progress on stderr so they do not look stuck.
+
+![http demo](./doc/img/http-demo.gif)
+
+```shell
+$ python3 -m http.server 8080 --bind 127.0.0.1 --directory testdata >/tmp/sqly-http.log 2>&1 &
+$ sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:8080/user.csv
+
+$ sqly
+sqly:~/sqly(table)$ .import http://127.0.0.1:8080/user.csv
+sqly:~/sqly(table)$ SELECT COUNT(*) AS c FROM user;
+```
+
 ## Complex queries
 
 Because every file is loaded into SQLite, the full query engine is available: CTEs, window functions, aggregates, and joins across files of different formats.
