@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -89,6 +91,78 @@ func copyTestFile(t *testing.T, name, dst string) {
 	}
 	if err := os.WriteFile(dst, data, 0o600); err != nil { //nolint:gosec // test writes to a temp path
 		t.Fatal(err)
+	}
+}
+
+func newHTTPImportServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/user.csv":
+			w.Header().Set("Content-Type", "text/csv")
+			_, _ = w.Write([]byte("user_name,identifier,first_name,last_name\nbooker12,1,Rachel,Booker\njenkins46,2,Mary,Jenkins\n"))
+		case "/download":
+			w.Header().Set("Content-Type", "text/csv")
+			w.Header().Set("Content-Disposition", `attachment; filename="remote-user.csv"`)
+			_, _ = w.Write([]byte("user_name,identifier\nbooker12,1\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+func TestImportCommand_DownloadsHTTPURL(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	server := newHTTPImportServer(t)
+	defer server.Close()
+	s.httpClient = server.Client()
+
+	backupStderr := config.Stderr
+	defer func() { config.Stderr = backupStderr }()
+	var stderr bytes.Buffer
+	config.Stderr = &stderr
+
+	if err := s.commands.importCommand(context.Background(), s, []string{server.URL + "/user.csv"}); err != nil {
+		t.Fatalf("importCommand: %v", err)
+	}
+
+	user, err := s.usecases.metadata.List(context.Background(), "user")
+	if err != nil {
+		t.Fatalf("List(user): %v", err)
+	}
+	if got := len(user.Records()); got != 2 {
+		t.Fatalf("row count = %d, want 2", got)
+	}
+	if got := s.tableSources["user"]; got != server.URL+"/user.csv" {
+		t.Fatalf("table source = %q, want %q", got, server.URL+"/user.csv")
+	}
+	if out := stderr.String(); !strings.Contains(out, "Downloading "+server.URL+"/user.csv") || !strings.Contains(out, "Downloaded "+server.URL+"/user.csv") {
+		t.Fatalf("stderr = %q, want download progress", out)
+	}
+}
+
+func TestImportCommand_UsesContentDispositionFilenameForHTTPURL(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	server := newHTTPImportServer(t)
+	defer server.Close()
+	s.httpClient = server.Client()
+
+	if err := s.commands.importCommand(context.Background(), s, []string{server.URL + "/download"}); err != nil {
+		t.Fatalf("importCommand: %v", err)
+	}
+
+	if _, err := s.usecases.metadata.List(context.Background(), "remote_user"); err != nil {
+		t.Fatalf("expected remote_user table from Content-Disposition filename: %v", err)
 	}
 }
 

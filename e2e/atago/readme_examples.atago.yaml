@@ -93,6 +93,20 @@ scenarios:
             line: 2
             equals: booker12
 
+  - name: queries a CSV served over localhost HTTP
+    steps:
+      - fixture: *user
+      - run:
+          command: sh -c 'python3 -m http.server 18082 --bind 127.0.0.1 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; sleep 0.2; sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: booker12
+      - assert:
+          stderr:
+            contains: Downloading http://127.0.0.1
+
   - name: queries a Parquet file
     steps:
       - fixture:

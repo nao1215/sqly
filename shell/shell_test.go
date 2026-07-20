@@ -38,6 +38,31 @@ func TestShellRun(t *testing.T) {
 		assertShellFixture(t, "version.golden", got)
 	})
 
+	t.Run("downloads HTTP URLs passed as CLI input arguments", func(t *testing.T) {
+		server := newHTTPImportServer(t)
+		defer server.Close()
+
+		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT user_name FROM user ORDER BY identifier LIMIT 1", server.URL + "/user.csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		shell.httpClient = server.Client()
+
+		backupStderr := config.Stderr
+		defer func() { config.Stderr = backupStderr }()
+		var stderr bytes.Buffer
+		config.Stderr = &stderr
+
+		got := string(getStdoutForRunFunc(t, shell.Run))
+		if !strings.Contains(got, "booker12") {
+			t.Fatalf("stdout = %q, want downloaded table query result", got)
+		}
+		if !strings.Contains(stderr.String(), "Downloading "+server.URL+"/user.csv") {
+			t.Fatalf("stderr = %q, want download status", stderr.String())
+		}
+	})
+
 	t.Run("print help", func(t *testing.T) {
 		config.Version = "(devel)"
 		defer func() {

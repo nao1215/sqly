@@ -82,6 +82,12 @@ func (s *Shell) validateSheetFlag() error {
 // instead of this validation misattributing it to --sheet.
 func (s *Shell) sheetAppliesTo(paths []string) bool {
 	for _, path := range paths {
+		if isRemoteURL(path) {
+			if isRemoteExcelURL(path) {
+				return true
+			}
+			continue
+		}
 		info, err := os.Stat(path)
 		if err != nil {
 			return true
@@ -210,53 +216,43 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 			continue
 		}
 
-		expanded, err := expandTilde(path)
-		if err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("invalid path %s: %v", path, err))
-			continue
-		}
-
-		cleanPath, err := validatePath(expanded)
-		if err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("invalid path %s: %v", path, err))
-			continue
-		}
-
-		info, err := os.Stat(cleanPath)
-		if err != nil {
-			switch {
-			case os.IsNotExist(err):
-				errorMessages = append(errorMessages, "path does not exist: "+path)
-			case os.IsPermission(err):
-				errorMessages = append(errorMessages, "permission denied accessing path: "+path)
-			default:
-				errorMessages = append(errorMessages, fmt.Sprintf("failed to access path %s: %v", path, err))
+		var pathImported bool
+		var pathSkipped int
+		err := func() error {
+			cleanPath, cleanup, info, err := s.resolveImportTarget(ctx, path)
+			if cleanup != nil {
+				defer cleanup()
 			}
-			continue
-		}
-
-		if info.IsDir() {
-			imported, skipped, err := s.importDirectory(ctx, cleanPath, path, sheetName, multiWorkbook)
-			skippedSheet += skipped
 			if err != nil {
-				errorMessages = append(errorMessages, err.Error())
-				continue
+				return err
 			}
-			if imported {
-				successCount++
+
+			if info.IsDir() {
+				imported, skipped, err := s.importDirectory(ctx, cleanPath, path, sheetName, multiWorkbook)
+				pathImported = imported
+				pathSkipped = skipped
+				return err
 			}
-		} else {
+
 			if err := s.importFile(ctx, cleanPath, path, sheetName); err != nil {
 				// In a multi-workbook import, a workbook that lacks the requested
 				// sheet is skipped rather than failing the whole run.
 				if multiWorkbook && errors.Is(err, errSheetNotFound) {
 					fmt.Fprintf(s.importStatusWriter(), "Skipped %s: requested sheet %q not found\n", path, sheetName)
-					skippedSheet++
-					continue
+					pathSkipped = 1
+					return nil
 				}
-				errorMessages = append(errorMessages, err.Error())
-				continue
+				return err
 			}
+			pathImported = true
+			return nil
+		}()
+		skippedSheet += pathSkipped
+		if err != nil {
+			errorMessages = append(errorMessages, err.Error())
+			continue
+		}
+		if pathImported {
 			successCount++
 		}
 	}
@@ -495,6 +491,12 @@ func (s *Shell) countExcelWorkbooks(paths []string) int {
 func (s *Shell) excelWorkbooks(paths []string) []string {
 	var books []string
 	for _, path := range paths {
+		if isRemoteURL(path) {
+			if isRemoteExcelURL(path) {
+				books = append(books, path)
+			}
+			continue
+		}
 		info, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -658,7 +660,7 @@ func (s *Shell) isRecordedSource(path string) bool {
 		if src == stdinTableSource {
 			continue
 		}
-		if sameFilePath(path, src) {
+		if sameSourceLocation(path, src) {
 			return true
 		}
 	}
@@ -694,8 +696,10 @@ func (s *Shell) anyDirImported(names []string) bool {
 // imports the source is the directory; write-back rejects those because it
 // cannot tell which file in the directory owns the table.
 func (s *Shell) recordTableSources(ctx context.Context, tableNames []string, source string) {
-	if abs, err := filepath.Abs(source); err == nil {
-		source = abs
+	if !isRemoteURL(source) {
+		if abs, err := filepath.Abs(source); err == nil {
+			source = abs
+		}
 	}
 	if s.tableSources == nil {
 		s.tableSources = make(map[string]string)
@@ -703,6 +707,46 @@ func (s *Shell) recordTableSources(ctx context.Context, tableNames []string, sou
 	for _, name := range tableNames {
 		s.tableSources[name] = source
 		s.snapshotBaseline(ctx, name)
+	}
+}
+
+func (s *Shell) resolveImportTarget(ctx context.Context, input string) (cleanPath string, cleanup func(), info os.FileInfo, err error) {
+	if isRemoteURL(input) {
+		staged, cleanup, err := s.downloadRemoteInput(ctx, input)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		info, err := os.Stat(staged)
+		if err != nil {
+			cleanup()
+			return "", nil, nil, fmt.Errorf("failed to access downloaded file for %s: %w", input, err)
+		}
+		return staged, cleanup, info, nil
+	}
+
+	expanded, err := expandTilde(input)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("invalid path %s: %w", input, err)
+	}
+	cleanPath, err = validatePath(expanded)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("invalid path %s: %w", input, err)
+	}
+	info, err = os.Stat(cleanPath)
+	if err != nil {
+		return "", nil, nil, localImportAccessError(input, err)
+	}
+	return cleanPath, nil, info, nil
+}
+
+func localImportAccessError(path string, err error) error {
+	switch {
+	case os.IsNotExist(err):
+		return errors.New("path does not exist: " + path)
+	case os.IsPermission(err):
+		return errors.New("permission denied accessing path: " + path)
+	default:
+		return fmt.Errorf("failed to access path %s: %w", path, err)
 	}
 }
 

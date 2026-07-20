@@ -1,0 +1,54 @@
+# HTTP/HTTPS input support: sqly downloads supported remote files, imports them,
+# and exposes them to both CLI SQL execution and the .import command path. The
+# scenarios stay hermetic by serving local fixtures over a temporary localhost
+# HTTP server.
+version: "1"
+
+suite:
+  name: HTTP import
+
+scenarios:
+  - name: downloads a remote CSV passed as a CLI input argument
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - run:
+          command: sh -c 'python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/sqly-http-import-cli.log 2>&1 & pid=$!; trap "kill $pid" EXIT; sleep 0.2; sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" http://127.0.0.1:18080/user.csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: booker12
+      - assert:
+          stderr:
+            contains:
+              - Downloading http://127.0.0.1
+              - Downloaded http://127.0.0.1
+
+  - name: downloads a remote CSV through .import in batch mode
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
+            jenkins46,2,Mary,Jenkins
+            smith79,3,Jamie,Smith
+      - run:
+          command: sh -c 'python3 -m http.server 18081 --bind 127.0.0.1 >/tmp/sqly-http-import-shell.log 2>&1 & pid=$!; trap "kill $pid" EXIT; sleep 0.2; printf ".import http://127.0.0.1:18081/user.csv\nSELECT COUNT(*) AS c FROM user;\n" | sqly --csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - c
+              - "3"
+      - assert:
+          stderr:
+            contains:
+              - Downloading http://127.0.0.1
+              - Downloaded http://127.0.0.1
