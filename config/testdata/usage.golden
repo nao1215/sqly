@@ -64,5 +64,6 @@ sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire wit
 [CONTACT]
   https://github.com/nao1215/sqly/issues
 
-sqly runs the DB in SQLite3 in-memory mode.
-So, SQL supported by sqly is the same as SQLite3 syntax.
+sqly runs the DB in SQLite3 in-memory mode, so queries use SQLite3 syntax by default.
+Use --dialect (or .dialect in the shell) to write MySQL, PostgreSQL, or GoogleSQL
+queries instead; sqly translates them to SQLite3 before running them.

@@ -903,6 +903,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: outputModeNDJSONTyped, Description: "sqly command argument: ndjson output with native scalars"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
+		{Text: "sqlite", Description: "sqly command argument: SQLite query dialect (default)"},
 		{Text: "mysql", Description: "sqly command argument: MySQL query dialect"},
 		{Text: "postgresql", Description: "sqly command argument: PostgreSQL query dialect"},
 		{Text: "googlesql", Description: "sqly command argument: GoogleSQL query dialect"},

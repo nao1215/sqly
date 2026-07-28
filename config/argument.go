@@ -526,8 +526,9 @@ func usage(flag pflag.FlagSet) string {
 	s += "[CONTACT]\n"
 	s += "  https://github.com/nao1215/sqly/issues\n"
 	s += "\n"
-	s += "sqly runs the DB in SQLite3 in-memory mode.\n"
-	s += "So, SQL supported by sqly is the same as SQLite3 syntax.\n"
+	s += "sqly runs the DB in SQLite3 in-memory mode, so queries use SQLite3 syntax by default.\n"
+	s += "Use --dialect (or .dialect in the shell) to write MySQL, PostgreSQL, or GoogleSQL\n"
+	s += "queries instead; sqly translates them to SQLite3 before running them.\n"
 	return s
 }
 
