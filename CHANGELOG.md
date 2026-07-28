@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v0.29.0](https://github.com/nao1215/sqly/compare/v0.28.0...v0.29.0) (2026-07-29)
+
+### New Features
+* SQL Dialect Support: `--dialect` (and `.dialect` in the interactive shell) now let you write queries in MySQL, PostgreSQL, or GoogleSQL (BigQuery / Cloud Spanner) instead of SQLite; sqly translates them to SQLite before running. Loading files always uses SQLite, so only the queries you write are affected. Translation is best-effort compatibility: common incompatibilities (identifier quoting, `DATE_ADD`, `EXTRACT`, `::`/`SAFE_CAST` casts, `ILIKE`, `SPLIT_PART`, `SAFE_DIVIDE`, and more) are rewritten or backed by helper functions, constructs with no SQLite equivalent (for example `QUALIFY` or `DISTINCT ON`) fail with a clear error, and everything else is passed through. Requires filesql v0.19.0.
+
+### Testing
+* Dialect E2E: `dialect.atago.yaml` adds 20 atago scenarios covering each dialect's rewrite rules and helper functions, double-quoted-string handling, unknown-dialect and unsupported-construct errors, `.dialect` inside a shell session, "loading always stays SQLite", and complex queries (joins, aggregation with `HAVING`, CTEs, window functions, correlated subqueries, and nested translations).
+
+### Documentation
+* README: a new "Query in another SQL dialect: --dialect" section documents `--dialect` and `.dialect`, and the coverage treemap was regenerated.
+
 ## [v0.28.0](https://github.com/nao1215/sqly/compare/v0.27.4...v0.28.0) (2026-07-20)
 
 ### New Features
