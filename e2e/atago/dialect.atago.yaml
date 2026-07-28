@@ -1,0 +1,267 @@
+# SQL dialect support (--dialect / .dialect). sqly translates queries written in
+# MySQL, PostgreSQL, or GoogleSQL to SQLite before running them, while loading
+# always uses SQLite. Run with: make test-e2e
+#
+# sqly derives the table name from the file name, so users.csv -> table "users".
+version: "1"
+
+suite:
+  name: sqly SQL dialects
+
+scenarios:
+  - name: "default dialect is sqlite (no translation)"
+    steps:
+      - fixture: &users
+          file: users.csv
+          content: |
+            id,name,age
+            1,Alice,30
+            2,Bob,25
+            3,Carol,35
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM users" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: "mysql dialect translates backtick identifiers and IF()"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT `name`, IF(`age` >= 30, 'senior', 'junior') AS tier FROM `users` ORDER BY `id`" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice,senior"
+              - "Bob,junior"
+              - "Carol,senior"
+
+  - name: "mysql dialect reads a double-quoted string literal"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT \"hello\" AS s FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "hello"
+
+  - name: "mysql dialect translates DATE_ADD, DIV, CAST, EXTRACT, and DATE_FORMAT"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_FORMAT('2026-01-15', '%Y/%m/%d') AS a, LPAD(id, 3, '0') AS b, 7 DIV 2 AS c, EXTRACT(YEAR FROM '2026-03-01') AS d, DATE_ADD('2026-01-15', INTERVAL 3 DAY) AS e FROM `users` WHERE id = 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "2026/01/15,001,3,2026,2026-01-18 00:00:00"
+
+  - name: "mysql dialect translates GROUP_CONCAT SEPARATOR, SUBSTRING_INDEX, and RLIKE"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT GROUP_CONCAT(name SEPARATOR '|') AS g, SUBSTRING_INDEX('a.b.c', '.', 2) AS s FROM (SELECT name FROM users WHERE name RLIKE '^[AB]' ORDER BY id) t" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice|Bob,a.b"
+
+  - name: "mysql dialect rejects an unsupported INTERVAL unit"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 WEEK)" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "unsupported INTERVAL unit"
+
+  - name: "postgresql dialect translates :: cast, ILIKE, and SPLIT_PART"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT name, age::text AS a, SPLIT_PART('x-y-z', '-', 2) AS p FROM users WHERE name ILIKE 'a%' ORDER BY id" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice,30,y"
+
+  - name: "postgresql dialect translates SUBSTRING FROM/FOR, POSITION, INITCAP, LEFT, and TO_CHAR"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT SUBSTRING('abcdef' FROM 2 FOR 3) AS s, POSITION('c' IN 'abc') AS p, INITCAP('hello world') AS i, LEFT('abcdef', 3) AS l, TO_CHAR('2026-01-15 13:00:00', 'YYYY/MM/DD') AS t" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "bcd,3,Hello World,abc,2026/01/15"
+
+  - name: "postgresql dialect translates STRING_AGG and the ~ regex operator"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT STRING_AGG(name, '-') AS g FROM (SELECT name FROM users WHERE name ~ '^[AB]' ORDER BY id) t" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice-Bob"
+
+  - name: "googlesql dialect translates SAFE_CAST and SAFE_DIVIDE"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST(age AS INT64) AS a, SAFE_DIVIDE(age, 2) AS h FROM `users` WHERE id = 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "30,15"
+
+  - name: "googlesql dialect translates DATE literals, FORMAT, DATE_DIFF, and helper functions"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT DATE '2026-01-15' AS d, FORMAT('%d-%s', 5, 'x') AS f, DATE_DIFF('2026-01-10', '2026-01-01', DAY) AS diff, STARTS_WITH('foobar', 'foo') AS sw, REGEXP_CONTAINS('abc123', '[0-9]+') AS rc" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "2026-01-15,5-x,9,1,1"
+
+  - name: "googlesql dialect rejects an unsupported construct (QUALIFY)"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect bigquery --sql "SELECT name FROM users QUALIFY ROW_NUMBER() OVER (ORDER BY id) = 1" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "QUALIFY is not supported"
+
+  - name: "shell .dialect switches the dialect and reports the current one"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv users.csv
+          stdin: ".dialect mysql\nSELECT `name` FROM `users` WHERE `id` = 1;\n.dialect\n.exit\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "dialect set to mysql"
+              - "Alice"
+              - "current dialect: mysql"
+
+  - name: "an unknown --dialect is rejected"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect oracle --sql "SELECT 1" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "unknown SQL dialect"
+              - "supported"
+
+  - name: "an unsupported construct is rejected with a clear error"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect postgres --sql "SELECT DISTINCT ON (name) name FROM users" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "not supported"
+
+  - name: "loading always uses sqlite even under a non-sqlite dialect"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT COUNT(*) AS c FROM users" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  # Complex, realistic queries that combine several dialect features at once
+  # (joins, aggregation, HAVING, CTEs, window functions, correlated subqueries,
+  # and nested translations) to exercise translation beyond single expressions.
+  # These share an employees + departments dataset.
+  - name: "mysql: join + aggregate + EXTRACT filter + CAST + HAVING"
+    steps:
+      - fixture: &employees
+          file: employees.csv
+          content: |
+            id,name,dept_id,salary,hire_date
+            1,Alice,10,50000,2020-03-15
+            2,Bob,10,45000,2021-06-01
+            3,Carol,20,60000,2019-01-20
+            4,Dave,20,55000,2022-09-10
+            5,Eve,10,48000,2020-11-05
+      - fixture: &departments
+          file: departments.csv
+          content: |
+            dept_id,dept_name
+            10,Engineering
+            20,Sales
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT d.dept_name, COUNT(*) AS headcount, CAST(AVG(e.salary) AS SIGNED) AS avg_sal FROM employees e JOIN departments d ON e.dept_id = d.dept_id WHERE EXTRACT(YEAR FROM e.hire_date) >= 2020 GROUP BY d.dept_name HAVING COUNT(*) >= 2 ORDER BY d.dept_name" employees.csv departments.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Engineering,3,47666"
+
+  - name: "mysql: correlated subquery with nested DIV-in-CAST and DATE_FORMAT"
+    steps:
+      - fixture: *employees
+      - fixture: *departments
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT e.name, DATE_FORMAT(e.hire_date, '%Y') AS hire_year, CAST(e.salary DIV 1000 AS CHAR) AS k FROM employees e WHERE e.salary > (SELECT AVG(salary) FROM employees WHERE dept_id = e.dept_id) ORDER BY e.name" employees.csv departments.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice,2020,50"
+              - "Carol,2019,60"
+              - "Eve,2020,48"
+
+  - name: "postgresql: CTE + :: cast + ILIKE + window RANK + STRING_AGG"
+    steps:
+      - fixture: *employees
+      - fixture: *departments
+      - run:
+          command: sqly --csv --dialect postgres --sql "WITH ranked AS (SELECT name, dept_id, salary::float / 1000 AS k, RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS rnk FROM employees WHERE name ILIKE '%a%') SELECT dept_id, STRING_AGG(name, ', ') AS people, SUM(k) AS total_k FROM ranked WHERE rnk <= 2 GROUP BY dept_id ORDER BY dept_id" employees.csv departments.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "10,Alice,50"
+              - '20,"Carol, Dave",115'
+
+  - name: "googlesql: join + SAFE_CAST aggregate + DATE_DIFF + group by"
+    steps:
+      - fixture: *employees
+      - fixture: *departments
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT d.dept_name, COUNT(*) AS n, SAFE_CAST(AVG(e.salary) AS INT64) AS avg_sal, MAX(DATE_DIFF('2026-01-01', e.hire_date, DAY)) AS max_tenure FROM employees e JOIN departments d ON e.dept_id = d.dept_id GROUP BY d.dept_name ORDER BY d.dept_name" employees.csv departments.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Engineering,3,47666,2118"
+              - "Sales,2,57500,2538"

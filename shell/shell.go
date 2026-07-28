@@ -46,6 +46,7 @@ const (
 	schemaCommand     = ".schema"
 	describeCommand   = ".describe"
 	saveCommand       = ".save"
+	dialectCommand    = ".dialect"
 
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
@@ -151,6 +152,9 @@ func NewShell(
 	if err != nil {
 		return nil, err
 	}
+	// Apply the initial SQL dialect from --dialect. Loading always uses SQLite;
+	// only user queries run through ExecSQL are translated.
+	usecases.query.SetDialect(arg.Dialect)
 	return &Shell{
 		argument: arg,
 		config:   cfg,
@@ -899,6 +903,10 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: outputModeNDJSONTyped, Description: "sqly command argument: ndjson output with native scalars"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
+		{Text: "sqlite", Description: "sqly command argument: SQLite query dialect (default)"},
+		{Text: "mysql", Description: "sqly command argument: MySQL query dialect"},
+		{Text: "postgresql", Description: "sqly command argument: PostgreSQL query dialect"},
+		{Text: "googlesql", Description: "sqly command argument: GoogleSQL query dialect"},
 	}
 
 	for _, v := range s.commands {

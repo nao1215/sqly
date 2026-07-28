@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
+	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/infrastructure/filesql"
@@ -29,6 +30,10 @@ type SQLite3Interactor struct {
 	r       repository.SQLite3Repository
 	sql     *SQL
 	adapter *filesql.FileSQLAdapter
+	// sqlDialect is the SQL dialect applied to user queries run through ExecSQL.
+	// It only affects user SQL; the internally generated SQLite statements that
+	// other commands run go straight to the repository untranslated.
+	sqlDialect dialect.Dialect
 }
 
 // NewSQLite3Interactor returns a new SQLite3Interactor that implements the
@@ -39,10 +44,27 @@ func NewSQLite3Interactor(
 	adapter *filesql.FileSQLAdapter,
 ) *SQLite3Interactor {
 	return &SQLite3Interactor{
-		r:       r,
-		sql:     sql,
-		adapter: adapter,
+		r:          r,
+		sql:        sql,
+		adapter:    adapter,
+		sqlDialect: dialect.SQLite,
 	}
+}
+
+// SetDialect sets the SQL dialect applied to subsequent user queries.
+func (si *SQLite3Interactor) SetDialect(d dialect.Dialect) {
+	if d == "" {
+		d = dialect.SQLite
+	}
+	si.sqlDialect = d
+}
+
+// Dialect returns the current SQL dialect.
+func (si *SQLite3Interactor) Dialect() dialect.Dialect {
+	if si.sqlDialect == "" {
+		return dialect.SQLite
+	}
+	return si.sqlDialect
 }
 
 // NewQueryUsecase exposes the interactor as the focused QueryUsecase.
@@ -119,6 +141,13 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	if stmt == "" {
 		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
+	// Translate the user statement from the configured dialect to SQLite before
+	// classification and execution. This is a no-op for the SQLite dialect.
+	translated, err := dialect.Translate(si.Dialect(), stmt)
+	if err != nil {
+		return nil, 0, fmt.Errorf("translate error (%s): %w: %s", si.Dialect(), err, color.CyanString(statement))
+	}
+	stmt = translated
 	// Rewrite shorthands the engine does not accept (e.g. "TABLE name").
 	stmt = normalizeStatement(stmt)
 

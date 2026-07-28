@@ -8,6 +8,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
+	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/spf13/pflag"
 )
@@ -121,6 +122,10 @@ type Arg struct {
 	// Encoding selects how a text import without a Unicode BOM is decoded before
 	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs.
 	Encoding model.TextEncoding
+	// Dialect is the SQL dialect applied to user queries (loading always uses
+	// SQLite). It sets the initial dialect for the session; the .dialect shell
+	// command can change it at runtime.
+	Dialect dialect.Dialect
 	// Version print version message
 	Version func()
 }
@@ -233,6 +238,7 @@ func newArg(args []string) (*Arg, error) {
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill")
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "text input encoding for CSV/TSV/LTSV/JSON/JSONL import: "+model.TextEncodingHelp())
+	sqlDialect := flag.String("dialect", string(dialect.SQLite), "SQL dialect for queries (loading always uses sqlite): sqlite|mysql|postgresql|googlesql")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
 	sqlFile := flag.StringP("sql-file", "f", "", "path to a file with SQL to execute (multiline; cannot be used with --sql)")
 	output := flag.StringP("output", "o", "", "destination path for the result of --sql or a single-result --sql-file script")
@@ -369,6 +375,12 @@ func newArg(args []string) (*Arg, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Parse --dialect, rejecting any value the dialect package does not recognize
+	// so a typo fails fast with the list of supported dialects.
+	sqlDialectValue, err := dialect.Parse(*sqlDialect)
+	if err != nil {
+		return nil, fmt.Errorf("unknown SQL dialect %q (supported: sqlite, mysql, postgresql, googlesql)", *sqlDialect)
+	}
 
 	arg.Usage = usage(flag)
 	arg.Version = version
@@ -379,6 +391,7 @@ func newArg(args []string) (*Arg, error) {
 	arg.StdinTableName = *stdinName
 	arg.ImportMode = importPolicy
 	arg.Encoding = importTextEncoding
+	arg.Dialect = sqlDialectValue
 	arg.Query = *query
 	arg.SQLFilePath = *sqlFile
 	arg.SaveDir = *saveDir
@@ -513,8 +526,9 @@ func usage(flag pflag.FlagSet) string {
 	s += "[CONTACT]\n"
 	s += "  https://github.com/nao1215/sqly/issues\n"
 	s += "\n"
-	s += "sqly runs the DB in SQLite3 in-memory mode.\n"
-	s += "So, SQL supported by sqly is the same as SQLite3 syntax.\n"
+	s += "sqly runs the DB in SQLite3 in-memory mode, so queries use SQLite3 syntax by default.\n"
+	s += "Use --dialect (or .dialect in the shell) to write MySQL, PostgreSQL, or GoogleSQL\n"
+	s += "queries instead; sqly translates them to SQLite3 before running them.\n"
 	return s
 }
 
