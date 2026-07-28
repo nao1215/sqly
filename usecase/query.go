@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 
+	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/domain/model"
 )
 
@@ -23,4 +24,9 @@ type QueryUsecase interface {
 	Exec(ctx context.Context, statement string) (int64, error)
 	// ExecSQL executes "SELECT/EXPLAIN" query or "INSERT/UPDATE/DELETE" statement
 	ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error)
+	// SetDialect sets the SQL dialect applied to subsequent user queries run via
+	// ExecSQL. Loading and internally generated statements always use SQLite.
+	SetDialect(d dialect.Dialect)
+	// Dialect returns the current SQL dialect.
+	Dialect() dialect.Dialect
 }

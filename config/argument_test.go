@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/testutil"
 )
@@ -556,6 +558,41 @@ func TestNewArg(t *testing.T) {
 		t.Parallel()
 		if _, err := NewArg([]string{"sqly", "--encoding", "latin1"}); err == nil {
 			t.Fatal("NewArg with --encoding latin1 returned nil error, want an error")
+		}
+	})
+
+	t.Run("--dialect defaults to sqlite and parses names and aliases", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			args []string
+			want dialect.Dialect
+		}{
+			{[]string{"sqly"}, dialect.SQLite},
+			{[]string{"sqly", "--dialect", "sqlite"}, dialect.SQLite},
+			{[]string{"sqly", "--dialect", "mysql"}, dialect.MySQL},
+			{[]string{"sqly", "--dialect", "postgresql"}, dialect.PostgreSQL},
+			{[]string{"sqly", "--dialect", "postgres"}, dialect.PostgreSQL},
+			{[]string{"sqly", "--dialect", "bigquery"}, dialect.GoogleSQL},
+		}
+		for _, tc := range cases {
+			arg, err := NewArg(tc.args)
+			if err != nil {
+				t.Fatalf("NewArg(%v) unexpected error: %v", tc.args, err)
+			}
+			if arg.Dialect != tc.want {
+				t.Errorf("NewArg(%v).Dialect = %q, want %q", tc.args, arg.Dialect, tc.want)
+			}
+		}
+	})
+
+	t.Run("an invalid --dialect is rejected", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewArg([]string{"sqly", "--dialect", "oracle"})
+		if err == nil {
+			t.Fatal("NewArg with --dialect oracle returned nil error, want an error")
+		}
+		if !strings.Contains(err.Error(), "unknown SQL dialect") {
+			t.Fatalf("error = %v, want it to mention the unknown dialect", err)
 		}
 	})
 }

@@ -113,6 +113,30 @@ sqly:~/sqly(table)$ .import http://127.0.0.1:8080/user.csv
 sqly:~/sqly(table)$ SELECT COUNT(*) AS c FROM user;
 ```
 
+## Query in another SQL dialect: --dialect
+
+By default sqly uses SQLite syntax. `--dialect` lets you write queries in MySQL, PostgreSQL, or GoogleSQL (BigQuery / Cloud Spanner) instead; sqly translates them to SQLite before running. Loading files always uses SQLite, so only the queries you write are affected.
+
+```shell
+# PostgreSQL syntax: "::" cast and ILIKE
+$ sqly --dialect postgres --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" testdata/user.csv
+
+# MySQL syntax: backtick identifiers and IF()
+$ sqly --dialect mysql --sql "SELECT \`user_name\`, IF(\`identifier\` = 1, 'first', 'other') AS tag FROM \`user\`" testdata/user.csv
+```
+
+Inside the shell, `.dialect` shows or switches the dialect for the rest of the session:
+
+```shell
+sqly:~/sqly(table)$ .dialect mysql
+dialect set to mysql
+sqly:~/sqly(table)$ SELECT `user_name` FROM `user` LIMIT 1;
+sqly:~/sqly(table)$ .dialect
+current dialect: mysql (available: sqlite, mysql, postgresql, googlesql)
+```
+
+Translation is best-effort compatibility, not a full emulator. Common incompatibilities (identifier quoting, `DATE_ADD`, `EXTRACT`, `::`/`SAFE_CAST` casts, `ILIKE`, `SPLIT_PART`, `SAFE_DIVIDE`, and more) are rewritten or backed by helper functions; constructs with no SQLite equivalent (for example `QUALIFY` or `DISTINCT ON`) fail with a clear error; anything else is passed through to SQLite. See the [filesql `dialect` package](https://github.com/nao1215/filesql/tree/main/dialect) for the full list of supported translations.
+
 ## Complex queries
 
 Because every file is loaded into SQLite, the full query engine is available: CTEs, window functions, aggregates, and joins across files of different formats.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/nao1215/filesql/dialect"
 	"modernc.org/sqlite"
 )
 
@@ -62,10 +63,42 @@ func NewInMemHistoryDB() (HistoryDB, func(), error) {
 var sqlite3RegisterOnce sync.Once
 
 // InitSQLite3 registers the sqlite3 driver. It is safe to call multiple times.
+//
+// It also registers the dialect helper functions (NOW, SPLIT_PART, SAFE_DIVIDE,
+// ...) so queries translated from MySQL/PostgreSQL/GoogleSQL resolve them. This
+// runs before any database connection is opened, which is required because
+// modernc exposes registered functions only to connections opened afterward.
+// The helper functions are available under every dialect, including the default
+// SQLite one.
 func InitSQLite3() {
 	sqlite3RegisterOnce.Do(func() {
-		sql.Register("sqlite3", sqliteDriver{Driver: &sqlite.Driver{}})
+		// A registration failure would be a programming error in the dialect
+		// package (an invalid function definition); its own tests cover that, so
+		// a failure here only leaves the helpers unavailable, which surfaces as a
+		// clear "no such function" error at query time.
+		_ = dialect.RegisterFunctions()
+		sql.Register("sqlite3", sqliteDriver{Driver: moderncSQLiteDriver()})
 	})
+}
+
+// moderncSQLiteDriver returns the *sqlite.Driver instance modernc registered
+// under its "sqlite" name. The "sqlite3" driver wraps this instance rather than
+// a fresh &sqlite.Driver{} because modernc binds functions registered via
+// dialect.RegisterFunctions to that specific instance; a fresh instance would
+// not expose them, so a translated NOW()/SPLIT_PART()/... would fail with "no
+// such function".
+func moderncSQLiteDriver() *sqlite.Driver {
+	// sql.Open is lazy, so this does not open a real connection; it only exposes
+	// the registered driver instance via (*sql.DB).Driver.
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return &sqlite.Driver{}
+	}
+	defer func() { _ = db.Close() }()
+	if d, ok := db.Driver().(*sqlite.Driver); ok {
+		return d
+	}
+	return &sqlite.Driver{}
 }
 
 // sqliteDriver is a driver that enables foreign keys.

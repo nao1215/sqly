@@ -39,6 +39,7 @@ func NewCommands() CommandList {
 	c[schemaCommand] = command{execute: c.schemaCommand, name: schemaCommand, description: "print CREATE TABLE statement of a table"}
 	c[describeCommand] = command{execute: c.describeCommand, name: describeCommand, description: "print column information of a table"}
 	c[saveCommand] = command{execute: c.saveCommand, name: saveCommand, description: "write tables back to files: .save DIR (to a directory) or .save --force (overwrite sources)"}
+	c[dialectCommand] = command{execute: c.dialectCommand, name: dialectCommand, description: "show or set the SQL dialect for queries (sqlite|mysql|postgresql|googlesql)"}
 	return c
 }
 

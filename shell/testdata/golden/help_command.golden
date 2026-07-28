@@ -3,6 +3,7 @@ sqly helper commands (run inside the shell; SQL needs no leading dot):
 Session
   .help              show this help
   .mode MODE         change output mode (table, csv, tsv, ltsv, json, ndjson, markdown, ...)
+  .dialect [NAME]    show or set the query dialect (sqlite, mysql, postgresql, googlesql)
   .clear             clear the terminal screen
   .exit              exit sqly
 

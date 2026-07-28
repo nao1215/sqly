@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	dialect "github.com/nao1215/filesql/dialect"
 	model "github.com/nao1215/sqly/domain/model"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -39,6 +40,44 @@ func NewMockQueryUsecase(ctrl *gomock.Controller) *MockQueryUsecase {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockQueryUsecase) EXPECT() *MockQueryUsecaseMockRecorder {
 	return m.recorder
+}
+
+// Dialect mocks base method.
+func (m *MockQueryUsecase) Dialect() dialect.Dialect {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Dialect")
+	ret0, _ := ret[0].(dialect.Dialect)
+	return ret0
+}
+
+// Dialect indicates an expected call of Dialect.
+func (mr *MockQueryUsecaseMockRecorder) Dialect() *MockQueryUsecaseDialectCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dialect", reflect.TypeOf((*MockQueryUsecase)(nil).Dialect))
+	return &MockQueryUsecaseDialectCall{Call: call}
+}
+
+// MockQueryUsecaseDialectCall wrap *gomock.Call
+type MockQueryUsecaseDialectCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockQueryUsecaseDialectCall) Return(arg0 dialect.Dialect) *MockQueryUsecaseDialectCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockQueryUsecaseDialectCall) Do(f func() dialect.Dialect) *MockQueryUsecaseDialectCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockQueryUsecaseDialectCall) DoAndReturn(f func() dialect.Dialect) *MockQueryUsecaseDialectCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Exec mocks base method.
@@ -193,6 +232,42 @@ func (c *MockQueryUsecaseQueryStreamCall) Do(f func(context.Context, string, fun
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockQueryUsecaseQueryStreamCall) DoAndReturn(f func(context.Context, string, func([]string, []bool) error) error) *MockQueryUsecaseQueryStreamCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SetDialect mocks base method.
+func (m *MockQueryUsecase) SetDialect(d dialect.Dialect) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetDialect", d)
+}
+
+// SetDialect indicates an expected call of SetDialect.
+func (mr *MockQueryUsecaseMockRecorder) SetDialect(d any) *MockQueryUsecaseSetDialectCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDialect", reflect.TypeOf((*MockQueryUsecase)(nil).SetDialect), d)
+	return &MockQueryUsecaseSetDialectCall{Call: call}
+}
+
+// MockQueryUsecaseSetDialectCall wrap *gomock.Call
+type MockQueryUsecaseSetDialectCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockQueryUsecaseSetDialectCall) Return() *MockQueryUsecaseSetDialectCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockQueryUsecaseSetDialectCall) Do(f func(dialect.Dialect)) *MockQueryUsecaseSetDialectCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockQueryUsecaseSetDialectCall) DoAndReturn(f func(dialect.Dialect)) *MockQueryUsecaseSetDialectCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
