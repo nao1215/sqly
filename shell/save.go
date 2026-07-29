@@ -15,6 +15,12 @@ import (
 // forceArg is the .save argument that selects destructive in-place overwrite.
 const forceArg = "--force"
 
+// noDataChangedMessage explains a save that wrote nothing because the run left
+// every table as imported. Both the .save command and the non-interactive
+// --save/--save-dir path report it, so a read-only run never looks like a
+// successful write-back that silently produced no file.
+const noDataChangedMessage = "no table data changed in this session; nothing to save"
+
 // saveCommand writes the current tables back to files from the interactive
 // shell. ".save DIR" writes into a directory without touching the sources;
 // ".save --force" overwrites the source files in place.
@@ -55,7 +61,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	// non-interactive --save/--save-dir contract, which also skips write-back for
 	// a read-only run.
 	if !s.dataChanged {
-		fmt.Fprintln(config.Stderr, "no table data changed in this session; nothing to save")
+		fmt.Fprintln(config.Stderr, noDataChangedMessage)
 		return nil
 	}
 	if argv[0] == forceArg {
@@ -168,11 +174,20 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 // EXPLAIN, or a zero-row DML leaves the imported tables unchanged, so write-back
 // is skipped to avoid rewriting source files.
 func (s *Shell) finishNonInteractive(ctx context.Context) error {
-	if s.saveRequested() && s.dataChanged {
-		// Run write-back first. If it fails, return before flushing the buffered
-		// affected counts so stdout stays free of success text.
-		if err := s.maybeSave(ctx); err != nil {
-			return err
+	if s.saveRequested() {
+		switch {
+		case s.dataChanged:
+			// Run write-back first. If it fails, return before flushing the buffered
+			// affected counts so stdout stays free of success text.
+			if err := s.maybeSave(ctx); err != nil {
+				return err
+			}
+		default:
+			// Say so instead of exiting 0 in silence. A run that asked to persist and
+			// wrote no file otherwise looks like it succeeded, and the missing
+			// destination is only noticed later. The .save command already reports the
+			// same thing for the same reason.
+			fmt.Fprintln(config.Stderr, noDataChangedMessage)
 		}
 	}
 	// The run succeeded (write-back ran, or there was nothing to write back), so

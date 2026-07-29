@@ -101,6 +101,64 @@ scenarios:
             path: u.csv
             contains: BATCH
 
+  # A read-only run persists nothing on purpose, so the only thing separating it
+  # from a successful write-back is what sqly says. It used to say nothing at all
+  # and exit 0, leaving --save-dir looking like it had written the directory.
+  - name: reports that a read-only --save-dir run wrote nothing
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "SELECT * FROM u" u.csv --save-dir out
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+          stderr:
+            contains: "no table data changed in this session; nothing to save"
+          changes:
+            created: []
+            modified: []
+            deleted: []
+      - assert:
+          file:
+            path: out/u.csv
+            exists: false
+
+  - name: reports that a read-only --save --force run wrote nothing
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "SELECT COUNT(*) AS c FROM u" u.csv --save --force
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "no table data changed in this session; nothing to save"
+            not_contains: "Saved u to"
+          changes:
+            created: []
+            modified: []
+            deleted: []
+
+  # A DML statement that matches no row leaves the table as imported, so it takes
+  # the same path as a read-only run and must report the same thing rather than
+  # rewriting the source with identical content.
+  - name: reports that a zero-row UPDATE wrote nothing
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --sql "UPDATE u SET first_name = 'NOPE' WHERE identifier = 999" u.csv --save --force
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: u.csv
+            not_contains: NOPE
+          changes:
+            created: []
+            modified: []
+            deleted: []
+
   - name: guides a non-interactive --save with no input files toward passing input
     steps:
       - run:

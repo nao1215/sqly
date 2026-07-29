@@ -365,6 +365,19 @@ scenarios:
             path: out
             exists: false
 
+  - name: reports a read-only --save-dir run as nothing to save
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --sql "SELECT * FROM user" --save-dir out user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            equals: "no table data changed in this session; nothing to save"
+          file:
+            path: out
+            exists: false
+
   - name: overwrites the source in place with --save --force
     steps:
       - fixture: *user
