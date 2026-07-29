@@ -1,0 +1,215 @@
+# GoogleSQL (BigQuery / Cloud Spanner) dialect defects observed from sqly's CLI
+# surface.
+#
+# Expected to fail today. See README.md; run with scripts/run_known_bugs.sh.
+version: "1"
+
+suite:
+  name: sqly known GoogleSQL dialect bugs
+
+scenarios:
+  - name: "googlesql SAFE_CAST should return null instead of a wrong value"
+    description: "SAFE_CAST is defined as 'cast, or NULL when the cast fails'. sqly rewrites it to a plain CAST, so every failing cast yields SQLite's fallback instead: 0 for numeric targets and the original string for date targets. That inverts the whole point of the function, since the user chose SAFE_CAST precisely to detect bad rows."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS INT64) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS FLOAT64) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('2026-13-40' AS DATE) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('not-a-timestamp' AS TIMESTAMP) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+
+  - name: "googlesql SAFE_CAST to BOOL should preserve a valid literal"
+    description: "SAFE_CAST('true' AS BOOL) is true and SAFE_CAST('nope' AS BOOL) is NULL. sqly returns 0 for both, so a valid true is indistinguishable from a parse failure. SQLite has no boolean type, so the fixed result is the integer 1."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('true' AS BOOL) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "googlesql CAST of a BOOL to STRING should spell it out"
+    description: "BigQuery CAST(TRUE AS STRING) is 'true'. sqly returns '1' because SQLite has no boolean type and TRUE is already an integer by the time the cast runs."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT CAST(TRUE AS STRING) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "true"
+
+  - name: "googlesql DATE_ADD should clamp a month-end rollover"
+    description: "BigQuery DATE_ADD(DATE '2026-01-31', INTERVAL 1 MONTH) clamps to 2026-02-28. sqly returns 2026-03-03 because SQLite normalizes February 31 forward."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT DATE_ADD(DATE '2026-01-31', INTERVAL 1 MONTH) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-02-28"
+
+  - name: "googlesql DATE_SUB should clamp a month-end rollover"
+    description: "BigQuery DATE_SUB(DATE '2026-03-31', INTERVAL 1 MONTH) clamps to 2026-02-28. sqly returns 2026-03-03."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT DATE_SUB(DATE '2026-03-31', INTERVAL 1 MONTH) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-02-28"
+
+  - name: "googlesql INTERVAL should accept the WEEK unit"
+    description: "BigQuery supports INTERVAL n WEEK for DATE_ADD and DATE_SUB. sqly rejects it with 'unsupported INTERVAL unit', although DATE_DIFF already understands WEEK."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT DATE_ADD(DATE '2026-01-01', INTERVAL 1 WEEK) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-01-08"
+
+  - name: "googlesql DATE_TRUNC should take the BigQuery argument order"
+    description: "BigQuery spells it DATE_TRUNC(date, MONTH) with the part as a bare keyword, the reverse of PostgreSQL's DATE_TRUNC('month', ts). sqly only implements the PostgreSQL form, so the keyword reaches SQLite as an identifier and the query fails with 'no such column: MONTH'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT DATE_TRUNC(DATE '2026-03-15', MONTH) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-03-01"
+
+  - name: "googlesql TIMESTAMP_TRUNC should work"
+    description: "TIMESTAMP_TRUNC(ts, HOUR) is the timestamp counterpart of DATE_TRUNC and is not implemented at all; sqly fails with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT TIMESTAMP_TRUNC(TIMESTAMP '2026-03-15 10:20:30', HOUR) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-03-15 10:00:00"
+
+  - name: "googlesql FORMAT_DATE and PARSE_DATE should work"
+    description: "These are the BigQuery equivalents of MySQL DATE_FORMAT and STR_TO_DATE, which filesql already implements. Only the MySQL spellings are registered, so both fail with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT FORMAT_DATE('%Y-%m', DATE '2026-03-15') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-03"
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT PARSE_DATE('%Y-%m-%d', '2026-03-15') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-03-15"
+
+  - name: "googlesql CURRENT_DATE() should accept empty parentheses"
+    description: "BigQuery writes CURRENT_DATE(), CURRENT_TIMESTAMP(), and CURRENT_TIME() with parentheses. SQLite only accepts the bare keyword, so sqly fails with a parse error on the most basic 'what is today' query."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT LENGTH(CAST(CURRENT_DATE() AS STRING)) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "10"
+
+  - name: "googlesql COUNTIF should work"
+    description: "COUNTIF(cond) is a BigQuery staple and maps directly onto SQLite's SUM(cond). sqly fails with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT COUNTIF(x > 1) AS v FROM (SELECT 1 AS x UNION ALL SELECT 2) t"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "googlesql LOGICAL_AND and LOGICAL_OR should work"
+    description: "These are BigQuery's boolean aggregates, the counterparts of PostgreSQL BOOL_AND and BOOL_OR. Both fail with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT LOGICAL_AND(x) AS a, LOGICAL_OR(x) AS o FROM (SELECT TRUE AS x UNION ALL SELECT FALSE) t"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0,1"
+
+  - name: "googlesql UNIX_SECONDS should work"
+    description: "UNIX_SECONDS(ts) converts a timestamp to an epoch second count, which SQLite spells strftime('%s', ts). sqly fails with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT UNIX_SECONDS(TIMESTAMP '2026-01-01 00:00:00') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1767225600"
+
+  - name: "googlesql SAFE_ADD should return null on overflow"
+    description: "The SAFE_ arithmetic family (SAFE_ADD, SAFE_SUBTRACT, SAFE_MULTIPLY, SAFE_NEGATE) returns NULL instead of raising. Only SAFE_DIVIDE exists in filesql; the rest fail with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_ADD(1, 2) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: "googlesql EXTRACT(DATE FROM timestamp) should work"
+    description: "BigQuery allows DATE, TIME, and DATETIME as EXTRACT parts, not just the numeric fields. sqly rewrites EXTRACT to DATE_PART and then fails with 'unsupported date part \"date\"'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT EXTRACT(DATE FROM TIMESTAMP '2026-03-15 10:00:00') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-03-15"
+
+  - name: "googlesql TO_HEX and IS_NAN should work"
+    description: "Two more BigQuery scalars with straightforward SQLite equivalents (hex() and a self-comparison). Both fail with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT TO_HEX(b'ab') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "6162"
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT IS_NAN(1.0) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0"

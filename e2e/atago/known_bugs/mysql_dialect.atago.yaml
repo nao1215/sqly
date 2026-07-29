@@ -1,0 +1,283 @@
+# MySQL-only dialect defects observed from sqly's CLI surface.
+#
+# Expected to fail today. See README.md; run with scripts/run_known_bugs.sh.
+version: "1"
+
+suite:
+  name: sqly known MySQL dialect bugs
+
+scenarios:
+  - name: "mysql DATE_ADD should clamp a month-end rollover"
+    description: "MySQL DATE_ADD('2026-01-31', INTERVAL 1 MONTH) clamps to 2026-02-28. sqly returns 2026-03-03 because SQLite's datetime modifier normalizes February 31 forward instead of clamping."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-31', INTERVAL 1 MONTH) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-02-28"
+
+  - name: "mysql DATE_SUB should clamp a month-end rollover"
+    description: "MySQL DATE_SUB('2026-03-31', INTERVAL 1 MONTH) clamps to 2026-02-28. sqly returns 2026-03-03."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_SUB('2026-03-31', INTERVAL 1 MONTH) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-02-28"
+
+  - name: "mysql DATE_ADD on a date should not grow a time part"
+    description: "MySQL returns a DATE when the argument is a date and the unit has no time component, so DATE_ADD('2026-01-01', INTERVAL 1 DAY) is '2026-01-02'. sqly returns '2026-01-02 00:00:00' because the rewrite always calls SQLite datetime()."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 DAY) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-01-02"
+
+  - name: "mysql INTERVAL should accept WEEK and QUARTER"
+    description: "MySQL supports WEEK and QUARTER interval units. sqly rejects both with 'unsupported INTERVAL unit' even though SQLite can express them as 7 days and 3 months."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 WEEK) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-01-08"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 QUARTER) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-04-01"
+
+  - name: "mysql INTERVAL should accept a negative literal"
+    description: "DATE_ADD(d, INTERVAL -1 DAY) is idiomatic MySQL. sqly rejects it with 'INTERVAL value must be a numeric literal' because the rewrite only accepts a bare number token and the minus sign arrives as a separate operator."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL -1 DAY) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2025-12-31"
+
+  - name: "mysql TIMESTAMPDIFF and TIMESTAMPADD should work"
+    description: "Both are core MySQL date functions and neither is translated, so the bare unit keyword reaches SQLite as an identifier and the query fails with 'no such column: DAY'."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT TIMESTAMPDIFF(DAY, '2026-01-01', '2026-01-10') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "9"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT TIMESTAMPADD(DAY, 3, '2026-01-01') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-01-04"
+
+  - name: "mysql LAST_DAY should work"
+    description: "LAST_DAY is the standard way to get a month end in MySQL. sqly fails with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT LAST_DAY('2026-02-05') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-02-28"
+
+  - name: "mysql UNIX_TIMESTAMP and FROM_UNIXTIME should work"
+    description: "Epoch conversion is a routine MySQL operation and SQLite has strftime('%s') and datetime(x, 'unixepoch') for it. sqly fails with 'no such function' for both."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT UNIX_TIMESTAMP('2026-01-01 00:00:00') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1767225600"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT FROM_UNIXTIME(0) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1970-01-01"
+
+  - name: "mysql MONTHNAME and DAYNAME should work"
+    description: "DATE_FORMAT already knows the month and weekday names, so these two are a thin wrapper away. sqly fails with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT MONTHNAME('2026-02-05') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "February"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DAYNAME('2026-02-05') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "Thursday"
+
+  - name: "mysql CAST to DECIMAL should honor the scale"
+    description: "MySQL CAST('3.567' AS DECIMAL(10,2)) rounds to 3.57. sqly returns 3.567: the type rewrite maps DECIMAL to REAL and drops the precision and scale."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT CAST('3.567' AS DECIMAL(10,2)) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3.57"
+
+  - name: "mysql CAST to CHAR should honor the length"
+    description: "MySQL CAST('abcdefghijk' AS CHAR(3)) truncates to 'abc'. sqly returns the whole string because CHAR(n) maps to TEXT and the length is discarded."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT CAST('abcdefghijk' AS CHAR(3)) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "abc"
+
+  - name: "mysql HEX of a number should be its hexadecimal digits"
+    description: "MySQL HEX(255) is 'FF'. sqly returns '323535', which is SQLite's HEX applied to the text bytes '255'. The query succeeds, so nothing signals the difference."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT HEX(255) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "FF"
+
+  - name: "mysql GROUP_CONCAT should keep its SEPARATOR next to ORDER BY"
+    description: "GROUP_CONCAT(x ORDER BY x SEPARATOR '|') must join with '|'. sqly returns comma-joined output: the rewrite turns SEPARATOR into a comma, and SQLite then reads the separator as a second ORDER BY term. Silently wrong, and the plain SEPARATOR form works, which makes it easy to miss."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT GROUP_CONCAT(x ORDER BY x SEPARATOR '|') AS v FROM (SELECT 'a' AS x UNION ALL SELECT 'b') t"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a|b"
+
+  - name: "mysql GROUP_CONCAT should accept DISTINCT with a SEPARATOR"
+    description: "GROUP_CONCAT(DISTINCT x SEPARATOR '|') is valid MySQL. sqly fails with 'DISTINCT aggregates must have exactly one argument' because the rewrite adds the separator as a second argument."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT GROUP_CONCAT(DISTINCT x SEPARATOR '|') AS v FROM (SELECT 'a' AS x UNION ALL SELECT 'b') t"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a|b"
+
+  - name: "mysql should accept typed date literals"
+    description: "DATE '2026-01-01' and TIMESTAMP '...' are valid MySQL. sqly fails with a SQLite parse error; the equivalent rewrite already exists for GoogleSQL but is not applied to MySQL."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE '2026-01-01' AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-01-01"
+
+  - name: "mysql should accept SUBSTRING FROM and POSITION IN"
+    description: "MySQL supports the SQL-standard SUBSTRING(x FROM n) and POSITION(x IN y) spellings, and the PostgreSQL pass already rewrites both. sqly fails on them under the MySQL dialect."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT SUBSTRING('abcdef' FROM 2) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "bcdef"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT POSITION('c' IN 'abc') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: "mysql should support the null-safe equality operator"
+    description: "NULL <=> NULL is 1 in MySQL. sqly fails with a SQLite parse error; SQLite spells the same thing 'IS'."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT NULL <=> NULL AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "mysql || should mean OR"
+    description: "With the default sql_mode MySQL reads || as a logical OR, so 1 || 0 is 1. sqly returns '10' because SQLite concatenates. A condition written for MySQL silently becomes a string."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT 1 || 0 AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "mysql string helpers should work"
+    description: "REVERSE, FIND_IN_SET, FIELD, and ELT are common MySQL string functions with no SQLite equivalent. Each fails with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT REVERSE('abc') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "cba"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT FIND_IN_SET('b', 'a,b,c') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT FIELD('b', 'a', 'b', 'c') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT ELT(2, 'a', 'b') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "b"
+
+  - name: "mysql aggregate helpers should work"
+    description: "ANY_VALUE and STD are MySQL aggregates that SQLite lacks. Both fail with 'no such function'."
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT ANY_VALUE(1) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT STD(1) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0"

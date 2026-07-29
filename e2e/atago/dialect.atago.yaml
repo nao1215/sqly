@@ -72,6 +72,18 @@ scenarios:
             contains:
               - "Alice|Bob,a.b"
 
+  - name: "mysql dialect translates DATE_SUB and negative SUBSTRING_INDEX"
+    description: "Exercises the less common MySQL date-arithmetic and suffix-splitting rewrites at the sqly CLI layer, not just in filesql unit tests."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_SUB('2026-01-15', INTERVAL 2 MONTH) AS d, SUBSTRING_INDEX('a.b.c.d', '.', -2) AS s FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "2025-11-15 00:00:00,c.d"
+
   - name: "mysql dialect rejects an unsupported INTERVAL unit"
     steps:
       - fixture: *users
@@ -82,6 +94,30 @@ scenarios:
           stderr:
             contains:
               - "unsupported INTERVAL unit"
+
+  - name: "mysql dialect passes SQLite-native helpers through untouched"
+    description: "CONCAT_WS, POW, and the bitwise operators exist in both MySQL and SQLite; the rewrite must leave them alone."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT CONCAT_WS('-', 'a', 'b') AS c, POW(2, 3) AS p, 5 & 3 AS b FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a-b,8,1"
+
+  - name: "mysql dialect handles a backtick identifier containing a space"
+    description: "M-1 has to survive a name that cannot be written unquoted, which is the case that separates real tokenizing from a naive backtick strip."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT `full name` FROM (SELECT name AS `full name` FROM users WHERE id = 1) t" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "Alice"
 
   - name: "postgresql dialect translates :: cast, ILIKE, and SPLIT_PART"
     steps:
@@ -94,6 +130,19 @@ scenarios:
             contains:
               - "Alice,30,y"
 
+  - name: "postgresql dialect translates NOT ILIKE"
+    description: "Covers the negated case-insensitive matcher, which goes through a different rewrite than plain ILIKE."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT name FROM users WHERE name NOT ILIKE 'a%' ORDER BY id" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Bob"
+              - "Carol"
+
   - name: "postgresql dialect translates SUBSTRING FROM/FOR, POSITION, INITCAP, LEFT, and TO_CHAR"
     steps:
       - fixture: *users
@@ -105,6 +154,66 @@ scenarios:
             contains:
               - "bcd,3,Hello World,abc,2026/01/15"
 
+  - name: "postgresql dialect translates a chained :: cast"
+    description: "a::int::text must nest into CAST(CAST(a AS INTEGER) AS TEXT); a left-to-right slip would drop the inner cast."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT '5'::int::text AS v FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "5"
+
+  - name: "postgresql dialect reads E'' and dollar-quoted strings"
+    description: "P-7 is a tokenizer rule, so it is only reachable end to end through the CLI: E'\\t' must become a real tab and $$...$$ must keep its contents verbatim."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT E'a\tb' AS esc, $$raw text$$ AS dollar FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "raw text"
+
+  - name: "postgresql dialect keeps json operators and IS NOT DISTINCT FROM working"
+    description: "-> and ->> are SQLite-native, so the rewrite must leave them alone rather than mistake :: neighbours for a cast."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT '{\"a\":1}'::jsonb->>'a' AS j, (NULL IS NOT DISTINCT FROM NULL) AS d FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1,1"
+
+  - name: "postgresql dialect translates the ~* regex operator"
+    description: "The positive case-insensitive form takes a different branch from !~*, which the suite already covers."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT name FROM users WHERE name ~* '^c' ORDER BY id" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "Carol"
+
+  - name: "postgresql dialect rejects LATERAL"
+    description: "LATERAL has no SQLite equivalent, so it must fail loudly instead of producing a confusing SQLite parse error."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect postgres --sql "SELECT * FROM users, LATERAL (SELECT 1) t" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "LATERAL is not supported"
+
   - name: "postgresql dialect translates STRING_AGG and the ~ regex operator"
     steps:
       - fixture: *users
@@ -115,6 +224,19 @@ scenarios:
           stdout:
             contains:
               - "Alice-Bob"
+
+  - name: "postgresql dialect translates the !~* regex operator"
+    description: "Locks in the case-insensitive negated regex rewrite, which is easy to regress because it rewrites both the operator and the pattern literal."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT name FROM users WHERE name !~* '^a' ORDER BY id" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Bob"
+              - "Carol"
 
   - name: "googlesql dialect translates SAFE_CAST and SAFE_DIVIDE"
     steps:
@@ -137,6 +259,91 @@ scenarios:
           stdout:
             contains:
               - "2026-01-15,5-x,9,1,1"
+
+  - name: "googlesql dialect translates ENDS_WITH and STRPOS"
+    description: "Locks in two string helpers that look simple but come from distinct rewrites in filesql."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT ENDS_WITH(name, 'e') AS e, STRPOS(name, 'l') AS p FROM users WHERE id = 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1,2"
+
+  - name: "googlesql dialect translates TIMESTAMP_SUB and TIMESTAMP_DIFF"
+    description: "Covers the timestamp-specific GoogleSQL helpers, which take a different code path from the DATE_* functions."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT TIMESTAMP_SUB('2026-01-15 13:00:00', INTERVAL 2 HOUR) AS ts, TIMESTAMP_DIFF('2026-01-15 13:00:00', '2026-01-15 10:30:00', MINUTE) AS diff FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "2026-01-15 11:00:00,150"
+
+  - name: "googlesql dialect keeps # comments and raw strings intact"
+    description: "G-5 and G-10 are tokenizer rules: a # comment must be stripped and r'...' must not interpret the backslash. The query lives in a file because a shell command line cannot carry a trailing # comment."
+    steps:
+      - fixture: *users
+      - fixture:
+          file: raw.sql
+          content: |
+            SELECT r'a\db' AS raw # trailing comment
+            FROM users
+            LIMIT 1;
+      - run:
+          command: sqly --csv --dialect bigquery --sql-file raw.sql users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a\\db"
+
+  - name: "googlesql dialect passes SQLite-native helpers through untouched"
+    description: "MOD, CEIL, LPAD, and IFNULL exist in both GoogleSQL and SQLite, so the rewrite must not rename or wrap them."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT MOD(7, 3) AS m, CEIL(1.2) AS c, LPAD('7', 3, '0') AS p, IFNULL(NULL, 'x') AS i FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1,2,007,x"
+
+  - name: "googlesql dialect translates a negative DATE_DIFF and the WEEK unit"
+    description: "DATE_DIFF must keep its sign when the first argument is the earlier date, and WEEK counts whole week boundaries."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT DATE_DIFF(DATE '2026-01-01', DATE '2026-03-15', DAY) AS back, DATE_DIFF(DATE '2026-03-15', DATE '2026-01-01', WEEK) AS weeks FROM users LIMIT 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "-73,10"
+
+  - name: "googlesql dialect rejects SELECT * EXCEPT and ARRAY types"
+    description: "Both are GoogleSQL-only syntax with no SQLite equivalent; each must name itself in the error so the user knows which construct to drop."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect bigquery --sql "SELECT * EXCEPT(id) FROM users" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "SELECT * EXCEPT is not supported"
+      - run:
+          command: sqly --dialect bigquery --sql "SELECT ARRAY<INT64>[1] AS v" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "ARRAY type is not supported"
 
   - name: "googlesql dialect rejects an unsupported construct (QUALIFY)"
     steps:
@@ -163,6 +370,44 @@ scenarios:
               - "Alice"
               - "current dialect: mysql"
 
+  - name: "batch .dialect applies to later stdin SQL statements"
+    description: "The non-TTY batch reader must carry a .dialect change forward to the next SQL statement in the same stdin script."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv users.csv
+          stdin: |
+            .dialect postgres
+            SELECT name FROM users WHERE name ILIKE 'a%' ORDER BY id;
+            .exit
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "dialect set to postgresql"
+              - "Alice"
+
+  - name: "mysql --sql-file translates a multiline query file"
+    description: "Covers the --sql-file path under a non-SQLite dialect, so multiline script parsing and MySQL rewriting are exercised together."
+    steps:
+      - fixture: *users
+      - fixture:
+          file: query.sql
+          content: |
+            SELECT `name`,
+                   IF(`age` >= 30, 'senior', 'junior') AS tier
+            FROM `users`
+            ORDER BY `id`
+            LIMIT 2;
+      - run:
+          command: sqly --csv --dialect mysql --sql-file query.sql users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "Alice,senior"
+              - "Bob,junior"
+
   - name: "an unknown --dialect is rejected"
     steps:
       - fixture: *users
@@ -174,6 +419,52 @@ scenarios:
             contains:
               - "unknown SQL dialect"
               - "supported"
+
+  - name: "dialect names are accepted case-insensitively and by alias"
+    description: "postgres/postgresql and bigquery/googlesql/spanner name the same dialect, and the flag must not care about letter case."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv --dialect MySQL --sql "SELECT `name` FROM users WHERE id = 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "Alice"
+      - run:
+          command: sqly --csv --dialect postgresql --sql "SELECT name FROM users WHERE name ILIKE 'a%'" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "Alice"
+      - run:
+          command: sqly --csv --dialect spanner --sql "SELECT ENDS_WITH(name, 'e') AS e FROM users WHERE id = 1" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "a translate error stops a batch script and names the statement"
+    description: "Translation happens before execution, so a rejected construct must fail the batch the same way a SQL error does instead of silently skipping the statement."
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --csv users.csv
+          stdin: |
+            .dialect mysql
+            SELECT DATE_ADD('2026-01-01', INTERVAL 1 WEEK) AS v;
+            SELECT 'not reached' AS v;
+            .exit
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: "not reached"
+          stderr:
+            contains:
+              - "unsupported INTERVAL unit"
+              - "batch stopped"
 
   - name: "an unsupported construct is rejected with a clear error"
     steps:
