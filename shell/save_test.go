@@ -746,10 +746,10 @@ func TestCommitStagedFile(t *testing.T) {
 		}
 	})
 
-	// The move-aside fallback is what runs on Windows whenever the destination is
-	// open. It is driven directly because a plain rename succeeds on Unix, so
+	// The copy fallback is what runs on Windows whenever the destination is open.
+	// It is driven directly because a plain rename succeeds on Unix, so
 	// commitStagedFile never reaches it on this platform.
-	t.Run("the move-aside fallback replaces the destination", func(t *testing.T) {
+	t.Run("the copy fallback replaces the destination", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -762,8 +762,8 @@ func TestCommitStagedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := commitByMovingAside(staging, dest); err != nil {
-			t.Fatalf("commitByMovingAside() error = %v", err)
+		if err := commitByCopy(staging, dest); err != nil {
+			t.Fatalf("commitByCopy() error = %v", err)
 		}
 		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
 		if err != nil {
@@ -772,16 +772,10 @@ func TestCommitStagedFile(t *testing.T) {
 		if string(got) != "new" {
 			t.Errorf("destination = %q, want %q", got, "new")
 		}
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Errorf("directory holds %d entries, want 1 (nothing moved aside may be left)", len(entries))
-		}
+		assertNoBackupLeft(t, dir)
 	})
 
-	t.Run("the move-aside fallback restores the destination when it cannot finish", func(t *testing.T) {
+	t.Run("the copy fallback restores the destination when it cannot finish", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -790,10 +784,10 @@ func TestCommitStagedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// A staged file that is not there makes the second rename fail, after the
-		// destination has already been moved aside.
-		if err := commitByMovingAside(filepath.Join(dir, "missing"), dest); err == nil {
-			t.Error("commitByMovingAside() succeeded with no staged file, want an error")
+		// A staged file that is not there makes the copy fail, after the backup has
+		// been taken.
+		if err := commitByCopy(filepath.Join(dir, "missing"), dest); err == nil {
+			t.Error("commitByCopy() succeeded with no staged file, want an error")
 		}
 
 		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
@@ -803,12 +797,21 @@ func TestCommitStagedFile(t *testing.T) {
 		if string(got) != "precious" {
 			t.Errorf("destination = %q, want the original %q back", got, "precious")
 		}
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Errorf("directory holds %d entries, want 1 (nothing moved aside may be left)", len(entries))
-		}
+		assertNoBackupLeft(t, dir)
 	})
+}
+
+// assertNoBackupLeft fails when the commit's own backup file survived the call.
+func assertNoBackupLeft(t *testing.T, dir string) {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "sqly-bak") {
+			t.Errorf("the backup must not be left behind: %s", e.Name())
+		}
+	}
 }

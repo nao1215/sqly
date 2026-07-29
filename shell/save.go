@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -545,29 +546,72 @@ func commitStagedFile(staging, dest string) error {
 		return nil
 	}
 	if _, statErr := os.Stat(dest); statErr != nil {
-		// Nothing was in the way, so moving something aside cannot help.
+		// Nothing was in the way, so the fallback cannot help.
 		return err
 	}
-	return commitByMovingAside(staging, dest)
+	return commitByCopy(staging, dest)
 }
 
-// commitByMovingAside renames dest out of the way, renames the staged file into
-// its place, and discards what it moved aside. A failure puts dest back, so a
-// refused commit never costs the file it was replacing.
-func commitByMovingAside(staging, dest string) error {
-	aside := dest + ".sqly-replaced"
-	// Clear any leftover from an interrupted save so the move below is not
-	// blocked by it.
-	_ = os.Remove(aside)
-	if err := os.Rename(dest, aside); err != nil {
+// commitByCopy writes the staged bytes over dest after taking a copy of dest, so
+// a failure partway can put it back. It is the fallback for a destination that
+// cannot be renamed at all: while another handle has the file open, Windows
+// refuses both to rename over it and to rename it out of the way, and an
+// in-place save overwrites exactly the files the session imported from.
+//
+// This is not atomic — a reader watching during the copy can see a partial file
+// — but it keeps the guarantee that matters: a failure does not cost the data
+// that was already there.
+func commitByCopy(staging, dest string) error {
+	backup, err := copyToBackup(dest)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(staging, dest); err != nil {
-		_ = os.Rename(aside, dest)
-		return err
+	defer func() { _ = os.Remove(backup) }()
+
+	if copyErr := copyOnto(staging, dest); copyErr != nil {
+		// Put back what was there. Best effort: if the restore fails too, the write
+		// error is still the one worth reporting.
+		_ = copyOnto(backup, dest)
+		return copyErr
 	}
-	_ = os.Remove(aside)
 	return nil
+}
+
+// copyToBackup copies path to a temporary file beside it and returns that path.
+func copyToBackup(path string) (string, error) {
+	backup, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".sqly-bak*")
+	if err != nil {
+		return "", err
+	}
+	name := backup.Name()
+	if err := backup.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := copyOnto(path, name); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
+// copyOnto replaces dest's contents with src's, truncating whatever was there.
+func copyOnto(src, dest string) error {
+	in, err := os.Open(src) //nolint:gosec // src is a file sqly created or was given as the output
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // dest is the destination the caller asked to save to
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // stageWriteTarget writes one target to a scratch path next to its destination
