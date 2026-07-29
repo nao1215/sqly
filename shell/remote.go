@@ -33,6 +33,32 @@ func isRemoteURL(raw string) bool {
 	}
 }
 
+// unfetchableURLScheme returns the scheme of an input written as a URL that sqly
+// cannot download, and "" for anything else. Only "<scheme>://" counts, and the
+// scheme must be at least two characters, so a Windows drive path ("C:/data") and
+// a local file name that merely contains a colon ("weird:name.csv") stay local
+// paths. Recognizing these is what lets the import error say the scheme is
+// unsupported instead of reporting the URL as a missing file.
+func unfetchableURLScheme(raw string) string {
+	if isRemoteURL(raw) {
+		return ""
+	}
+	sep := strings.Index(raw, "://")
+	if sep < 2 {
+		return ""
+	}
+	scheme := raw[:sep]
+	for i, r := range scheme {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+		case i > 0 && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.'):
+		default:
+			return ""
+		}
+	}
+	return strings.ToLower(scheme)
+}
+
 // sameSourceLocation compares imported sources. Local files use sameFilePath so
 // symlink aliases still match; remote URLs compare after normalization.
 func sameSourceLocation(a, b string) bool {

@@ -52,3 +52,46 @@ scenarios:
             not_contains:
               - Downloading http://127.0.0.1
               - Downloaded http://127.0.0.1
+  # A URL sqly cannot fetch used to fall through to the local-path branch and be
+  # reported as "path does not exist", which reads as a missing file and sends
+  # the user to check a URL that was never going to be downloaded.
+  - name: names the scheme when a URL is not http or https
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" s3://bucket/data.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - 's3://bucket/data.csv'
+              - 'only http and https URLs'
+            not_contains: "path does not exist"
+
+  - name: names the scheme for a file:// URL and points at the plain path
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --sql "SELECT 1" file:///tmp/user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "file"
+              - 'only http and https URLs'
+            not_contains: "path does not exist"
+
+  # A local file whose name merely contains a colon is not a URL, so it must keep
+  # the missing-file message rather than being explained as a bad scheme.
+  - name: keeps the missing-path message for a colon in a local file name
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" weird:name.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "path does not exist"
+            not_contains: "only http and https URLs"

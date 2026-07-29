@@ -763,6 +763,14 @@ func (s *Shell) resolveImportTarget(ctx context.Context, input string) (cleanPat
 func localImportAccessError(path string, err error) error {
 	switch {
 	case errors.Is(err, os.ErrNotExist):
+		// A URL sqly cannot fetch reaches here as a local path that happens not to
+		// exist. Reporting it as a missing file sends the user to check a URL that
+		// was never going to be downloaded, so name the scheme and the two that work.
+		if scheme := unfetchableURLScheme(path); scheme != "" {
+			return fmt.Errorf(
+				"cannot import %s: only http and https URLs are downloaded, but this one uses the %q scheme; download the file first and pass its local path",
+				path, scheme)
+		}
 		return errors.New("path does not exist: " + path)
 	case errors.Is(err, os.ErrPermission):
 		return errors.New("permission denied accessing path: " + path)

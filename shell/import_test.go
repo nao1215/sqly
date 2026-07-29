@@ -1364,3 +1364,42 @@ func TestStagePseudoFileScopedToPseudoFiles(t *testing.T) {
 		t.Error("importFile accepted a non-pseudo extensionless file, want an unsupported-format error")
 	}
 }
+
+func TestUnfetchableURLScheme(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"s3 url", "s3://bucket/data.csv", "s3"},
+		{"file url", "file:///tmp/user.csv", "file"},
+		{"ftp url", "ftp://example.com/a.csv", "ftp"},
+		{"scheme case is normalized", "S3://bucket/data.csv", "s3"},
+		{"scheme may carry digits and punctuation", "git+ssh://host/repo", "git+ssh"},
+		// http and https are downloaded, so they are not unfetchable.
+		{"http url", "http://example.com/a.csv", ""},
+		{"https url", "https://example.com/a.csv", ""},
+		{"uppercase http url", "HTTP://example.com/a.csv", ""},
+		// Local paths that only look URL-ish must stay local paths, so the caller
+		// keeps reporting them as missing files.
+		{"plain relative path", "data.csv", ""},
+		{"plain absolute path", "/tmp/data.csv", ""},
+		{"colon in file name", "weird:name.csv", ""},
+		{"windows drive path", "C://data.csv", ""},
+		{"scheme starting with a digit", "1a://host/x", ""},
+		{"empty scheme", "://host/x", ""},
+		{"empty input", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := unfetchableURLScheme(tt.input); got != tt.want {
+				t.Errorf("unfetchableURLScheme(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
