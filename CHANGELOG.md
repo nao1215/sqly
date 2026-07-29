@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* MySQL And GoogleSQL `CONCAT` Swallowed A NULL: both dialects return NULL when any argument is NULL, but SQLite's own `concat()` treats a NULL as an empty string and the call was passed straight through. `CONCAT(first_name, middle_name)` with a NULL middle name answered the first name where MySQL and BigQuery answer NULL, so a query written to detect incomplete rows reported them as complete. PostgreSQL's `concat()` genuinely does ignore NULLs and is unchanged, as is `CONCAT_WS`. Requires filesql v0.25.0.
+
 * Setting A Mode To Its Current Value Failed: `.mode` and `.import-mode` now accept the value already in effect as a no-op instead of returning an error. In a batch script an error is fatal, so a script that set a mode defensively died on a line that changed nothing, and the natural combination of the flag with the script — `sqly --csv data.csv` fed a script opening with `.mode csv`, or `--import-mode skip` with a script restating `skip` — exited 1 before running a single query. A name that is not a mode at all is still rejected, and a real switch still prints its banner.
 
 * Half-Saved Session On A Failed Write-Back: a `--save`, `--save-dir`, or `.save` run covering several files is now all-or-nothing. Targets were written to their destinations one at a time, and some failures only surface while a file is being encoded (the ACH and Fedwire writers validate as they encode, so a value the format cannot hold is rejected mid-write), so an earlier file was already overwritten when a later one failed. The run exited 1 with the session half-persisted and nothing saying which files had changed, and `--save-dir` had already created part of its output. Every target is now written to a scratch path beside its destination, every destination that already exists is copied aside, and only then are the targets moved into place; a commit that fails partway restores the destinations it already replaced, so a failed save leaves every destination and every source as it was. Windows refuses to rename over a file another handle still has open, which is every in-place save, so there the staged bytes are copied over it instead. A rejected ACH or Fedwire write also no longer damages the file it was overwriting, which used to come back empty (ACH) or deleted (Fedwire). Requires filesql v0.23.0.
@@ -23,6 +25,7 @@
 
 ### Testing
 * Mode Idempotence: `e2e/atago/mode_idempotent.atago.yaml` adds 7 scenarios covering `.mode` and `.import-mode` set to their current value, both alone and combined with the flag that already selected it, and pins that an unknown name is still rejected.
+* Dialect CONCAT: `dialect_cross.atago.yaml` adds a scenario asserting the NULL-propagating result under MySQL and GoogleSQL, that PostgreSQL still ignores a NULL, and that `CONCAT_WS` is untouched.
 * Dialect Limits: `e2e/atago/dialect_limits.atago.yaml` pins what `--dialect` does not do — a construct rejected by name, and the four divergences where SQLite's answer differs from the source dialect's with no error (MySQL's case-insensitive collation, `ONLY_FULL_GROUP_BY`, 1-based `SUBSTR`, and casting a boolean to text). Every claim on the dialects page comes from a scenario here, and `TestDialectsPage_PassThroughClaimsAreSpecified` fails if the page ever documents one the spec does not assert.
 * Dialect Rewrites In Complex Expressions: `e2e/atago/dialect_windows.atago.yaml` adds 11 scenarios guarding the operator rewrites in the positions that are easy to get wrong, including windowed and filtered aggregates, named windows, `CASE`, subqueries, and `GROUP BY`.
 * Dialect E2E: 58 atago scenarios in `e2e/atago/dialect_cross.atago.yaml`, `dialect_mysql.atago.yaml`, `dialect_postgresql.atago.yaml`, and `dialect_googlesql.atago.yaml` pin the semantics above from the CLI, each with a description of what SQLite would have done instead. `dialect.atago.yaml` adds 12 more covering chained `::` casts, `E''` and dollar-quoted strings, json operators, `~*`, `LATERAL` rejection, backtick names containing a space, `#` comments and raw strings, negative `DATE_DIFF`, `SELECT * EXCEPT` and `ARRAY<>` rejection, dialect name aliases, and a batch script stopped by a translate error.
@@ -41,7 +44,7 @@
 * Cookbook E2E: `e2e/atago/cookbook.atago.yaml` runs 15 of the documented commands against the real binary, including the thirty-second example pinned to its exact output, so a copied command cannot silently stop working.
 
 ### Dependencies
-* filesql v0.24.0: upgraded from v0.21.0 across three releases, for the non-Latin table-name fix (v0.22.0), the staged ACH/Fedwire write (v0.23.0), and the staged table dump plus the compressed-dump close error (v0.24.0).
+* filesql v0.25.0: upgraded from v0.21.0 across four releases, for the non-Latin table-name fix (v0.22.0), the staged ACH/Fedwire write (v0.23.0), the staged table dump plus the compressed-dump close error (v0.24.0), and NULL-propagating `CONCAT` under MySQL and GoogleSQL (v0.25.0).
 * prompt v0.0.12: upgraded from v0.0.11 for `WithContinuationPrefix`.
 
 ## [v0.29.0](https://github.com/nao1215/sqly/compare/v0.28.0...v0.29.0) (2026-07-29)
