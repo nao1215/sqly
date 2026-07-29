@@ -113,12 +113,7 @@ sqly:~/sqly(table)$ .import http://127.0.0.1:8080/user.csv
 sqly:~/sqly(table)$ SELECT COUNT(*) AS c FROM user;
 ```
 
-Only `http` and `https` are downloaded. A URL written with any other scheme names the scheme it cannot use rather than reporting the URL as a missing file:
-
-```shell
-$ sqly --sql "SELECT 1" s3://bucket/data.csv
-cannot import s3://bucket/data.csv: only http and https URLs are downloaded, but this one uses the "s3" scheme; download the file first and pass its local path
-```
+Only `http` and `https` are downloaded; a URL with any other scheme is rejected by name.
 
 ## Query in another SQL dialect: --dialect
 
@@ -204,12 +199,7 @@ $ sqly --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2)
 
 Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysql`: type SQL, or a helper command that begins with a dot. Tab completes keywords and table names, and history is kept across sessions.
 
-A SQL statement is buffered until it ends with `;`, so a multi-line or pasted query runs as one statement instead of executing each line. While a statement is being buffered the prompt becomes `   ...> `. Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
-
-```text
-sqly:~/sqly(table)$ SELECT user_name,
-   ...> identifier FROM user;
-```
+A SQL statement is buffered until it ends with `;`, so a multi-line or pasted query runs as one statement instead of executing each line; the prompt becomes `   ...> ` while it is buffering. Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
 
 ![shell demo](./doc/img/shell-demo.gif)
 
@@ -436,16 +426,11 @@ $ sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir ./out testda
 --save/--save-dir cannot persist "CREATE TABLE backup AS SELECT * FROM user": ... only INSERT/UPDATE/DELETE on imported tables are saved
 ```
 
-A run that changes no row writes no file, so a read-only query or an `UPDATE` that matches nothing leaves the source (and `--save-dir`) alone instead of rewriting identical bytes. sqly says so on stderr and still exits 0:
-
-```shell
-$ sqly --sql "SELECT * FROM user" --save-dir ./out testdata/user.csv
-no table data changed in this session; nothing to save
-```
+A run that changes no row writes no file, and says so on stderr.
 
 Tabular tables that map one-to-one to a single CSV, TSV, LTSV, or Parquet source are written individually. ACH and Fedwire sources are reconstructed as a whole: their related tables (for ACH, the file-header, batches, and entries tables) are rewritten together into one valid `.ach`/`.fed` file, and `--save`/`--save-dir` validate that the required companion tables are still present before writing, failing with an explicit error if the set is incomplete. ACH/Fedwire write-back persists in-place `UPDATE`s to existing rows; adding or removing records is not supported by the native format reconstruction. Tables created by SQL, directory imports, and Excel sources are still rejected for write-back with a clear error before anything is written.
 
-A save covering several files is all-or-nothing. Some failures can only surface while a file is being encoded (an ACH or Fedwire value the format cannot hold is rejected mid-write), so every file is written to a scratch path beside its destination and moved into place only once all of them have been written. A failed save therefore leaves every destination, and every source, exactly as it was.
+A save covering several files is all-or-nothing: if any file cannot be written, none of them is, and every source is left as it was.
 
 ```shell
 $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry_index = 0" --save --force payment.ach
@@ -563,10 +548,6 @@ Spaces, hyphens, and dots become `_`; punctuation and symbols are removed; a nam
 | `data@v2.csv` | `datav2` |
 | `売上.csv` | `売上` |
 | `data.xlsx` sheet `Café` | `data_Café` |
-
-```shell
-$ sqly --csv --sql 'SELECT amount FROM "売上" WHERE id = 2' 売上.csv
-```
 
 ## Supported file formats
 

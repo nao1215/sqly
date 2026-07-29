@@ -30,7 +30,7 @@
 * Read-Only Write-Back: `save.atago.yaml` adds three scenarios pinning that a read-only `--save-dir`, a read-only `--save --force`, and a zero-row `UPDATE` each report "nothing to save" and leave the workdir untouched, asserted through `changes` so a stray file would fail.
 
 ### Documentation
-* README: the write-back section documents that a run changing no row writes no file, with the message it prints, and the HTTP import section documents that only http and https are downloaded, with the error a different scheme produces. `readme_examples.atago.yaml` runs both examples against the binary. The table-name rules now state that letters and digits in any script are kept, with a Japanese example.
+* README: the table-name rules were wrong about non-ASCII names and are corrected. One-line notes record the contracts the fixes above establish: a run changing no row writes no file, only http and https URLs are downloaded, a multi-file save is all-or-nothing, and the shell prompt shows `   ...> ` while buffering.
 
 ### Dependencies
 * filesql v0.23.0: upgraded from v0.21.0 across two releases, for the non-Latin table-name fix (v0.22.0) and the staged ACH/Fedwire write (v0.23.0).
