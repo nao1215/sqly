@@ -500,7 +500,7 @@ func TestDialectsPage_PassThroughClaimsAreSpecified(t *testing.T) {
 		spec    = "e2e/atago/dialect_limits.atago.yaml"
 	)
 
-	data, err := os.ReadFile(page) //nolint:gosec // page is a repo-relative doc
+	data, err := os.ReadFile(page)
 	if err != nil {
 		t.Fatalf("read %s: %v", page, err)
 	}
@@ -518,7 +518,7 @@ func TestDialectsPage_PassThroughClaimsAreSpecified(t *testing.T) {
 		rest = rest[:end]
 	}
 
-	specData, err := os.ReadFile(spec) //nolint:gosec // spec is a repo-relative path
+	specData, err := os.ReadFile(spec)
 	if err != nil {
 		t.Fatalf("read %s: %v", spec, err)
 	}
