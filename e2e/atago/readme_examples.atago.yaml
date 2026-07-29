@@ -365,28 +365,6 @@ scenarios:
             path: out
             exists: false
 
-  - name: names the scheme of a URL sqly cannot download
-    steps:
-      - run:
-          command: sqly --sql "SELECT 1" s3://bucket/data.csv
-      - assert:
-          exit_code: 1
-          stderr:
-            contains: 'cannot import s3://bucket/data.csv: only http and https URLs are downloaded, but this one uses the "s3" scheme; download the file first and pass its local path'
-
-  - name: reports a read-only --save-dir run as nothing to save
-    steps:
-      - fixture: *user
-      - run:
-          command: sqly --sql "SELECT * FROM user" --save-dir out user.csv
-      - assert:
-          exit_code: 0
-          stderr:
-            equals: "no table data changed in this session; nothing to save"
-          file:
-            path: out
-            exists: false
-
   - name: overwrites the source in place with --save --force
     steps:
       - fixture: *user

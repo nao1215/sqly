@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -467,8 +468,33 @@ func (s *Shell) planFinancialSet(ctx context.Context, source, format string, cur
 	return writeTarget{table: base, dest: dest, setKind: format, baseName: base, members: members}, "", false
 }
 
+// stagedWrite is one target written to a scratch path, waiting to be moved onto
+// its destination once every other target has been written too.
+type stagedWrite struct {
+	target  writeTarget
+	staging string
+	// baselines names the tables whose import baseline advances once the move
+	// lands: the one table for a tabular target, every member for a financial set.
+	baselines []string
+	// message is the confirmation printed after the move, so a target that never
+	// reaches its destination is never announced as saved.
+	message string
+	// backup is a copy of the destination taken before the commit phase, used to
+	// put it back if a later target fails to commit. Empty when the destination
+	// did not exist.
+	backup string
+}
+
 // executeWriteBack writes the planned targets to disk. Callers run planWriteBack
 // first, so by this point every target has been validated.
+//
+// A save covering several files is all-or-nothing. planWriteBack rejects what it
+// can see up front, but the ACH and Fedwire writers validate as they encode, so a
+// value the format cannot hold is only rejected once that file is being written.
+// Writing each target straight to its destination therefore left the earlier ones
+// saved and the rest not, with no record of which. Every target is written to a
+// scratch path beside its destination first; only when all of them have been
+// written are they moved into place.
 func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []writeTarget) error {
 	if destDir != "" {
 		if err := os.MkdirAll(destDir, 0o750); err != nil {
@@ -476,51 +502,205 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 		}
 	}
 
-	for _, tgt := range targets {
-		if tgt.setKind != "" {
-			if err := s.writeFinancialSet(ctx, tgt); err != nil {
-				return err
+	staged := make([]stagedWrite, 0, len(targets))
+	// Discard whatever has been staged unless the moves below claimed it, and
+	// discard the backups the commit phase took, so a save leaves behind only what
+	// it meant to write.
+	defer func() {
+		for _, w := range staged {
+			_ = os.Remove(w.staging)
+			if w.backup != "" {
+				_ = os.Remove(w.backup)
 			}
-			continue
 		}
-		table, err := s.usecases.metadata.List(ctx, tgt.table)
+	}()
+
+	for _, tgt := range targets {
+		w, err := s.stageWriteTarget(ctx, tgt)
 		if err != nil {
-			return fmt.Errorf("failed to read table %s: %w", tgt.table, err)
+			return err
 		}
-		if err := s.usecases.export.DumpTable(tgt.dest, table, tgt.format, tgt.comp); err != nil {
-			return fmt.Errorf("failed to save table %s to %s: %w", tgt.table, tgt.dest, err)
+		staged = append(staged, w)
+	}
+
+	// Copy every destination that already exists before touching any of them, so
+	// a commit that fails halfway can put back the ones it already replaced. A
+	// commit is a rename where the platform allows one, but not always (see
+	// commitStagedFile), and even a rename can fail on the last target after the
+	// first has landed.
+	for i := range staged {
+		backup, err := backupExisting(staged[i].target.dest)
+		if err != nil {
+			return fmt.Errorf("failed to prepare %s for saving: %w", staged[i].target.dest, err)
 		}
-		// The file now matches the table, so move the baseline forward. A later .save
-		// in the same session then treats the table as unchanged and does not rewrite
-		// an identical file.
-		s.snapshotBaseline(ctx, tgt.table)
+		staged[i].backup = backup
+	}
+
+	for i, w := range staged {
+		if err := commitStagedFile(w.staging, w.target.dest); err != nil {
+			rollbackCommitted(staged[:i])
+			return fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
+		}
+	}
+
+	for _, w := range staged {
+		for _, name := range w.baselines {
+			// The file now matches the table, so move the baseline forward. A later
+			// .save in the same session then treats the table as unchanged and does not
+			// rewrite an identical file.
+			s.snapshotBaseline(ctx, name)
+		}
 		// Write-back is a file-output operation; its confirmation is control-plane
 		// output and goes to stderr so stdout stays free of non-data noise.
-		fmt.Fprintf(config.Stderr, "Saved %s to %s\n", tgt.table, tgt.dest)
+		fmt.Fprintln(config.Stderr, w.message)
 	}
 	return nil
 }
 
-// writeFinancialSet reconstructs one ACH/Fedwire file from its table set and
-// advances the baseline of every member table so a later .save in the same
-// session does not rewrite an unchanged file.
-func (s *Shell) writeFinancialSet(ctx context.Context, tgt writeTarget) error {
+// rollbackCommitted undoes the commits that already landed, so a save that fails
+// partway leaves every destination as it was. It is best effort: a restore that
+// fails cannot be reported without hiding the error that caused the rollback,
+// which is the one worth showing.
+func rollbackCommitted(done []stagedWrite) {
+	for i := len(done) - 1; i >= 0; i-- {
+		w := done[i]
+		if w.backup == "" {
+			// The destination did not exist before this save created it.
+			_ = os.Remove(w.target.dest)
+			continue
+		}
+		_ = copyOnto(w.backup, w.target.dest)
+	}
+}
+
+// backupExisting copies path to a temporary file beside it, or returns "" when
+// path does not exist yet.
+func backupExisting(path string) (string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	return copyToBackup(path)
+}
+
+// commitStagedFile moves a staged file onto its destination.
+//
+// A plain rename is the goal: it is atomic, so nothing ever sees a half-written
+// file. Windows refuses to rename over a destination another handle still has
+// open, and an in-place save overwrites exactly the files the session imported
+// from, so there the staged bytes are copied over it instead. The caller holds a
+// copy of the destination and restores it if this fails.
+func commitStagedFile(staging, dest string) error {
+	err := os.Rename(staging, dest)
+	if err == nil {
+		return nil
+	}
+	if _, statErr := os.Stat(dest); statErr != nil {
+		// Nothing was in the way, so the copy cannot help either.
+		return err
+	}
+	return copyOnto(staging, dest)
+}
+
+// copyToBackup copies path to a temporary file beside it and returns that path.
+func copyToBackup(path string) (string, error) {
+	backup, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".sqly-bak*")
+	if err != nil {
+		return "", err
+	}
+	name := backup.Name()
+	if err := backup.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := copyOnto(path, name); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
+// copyOnto replaces dest's contents with src's, truncating whatever was there.
+func copyOnto(src, dest string) error {
+	in, err := os.Open(src) //nolint:gosec // src is a file sqly created or was given as the output
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // dest is the destination the caller asked to save to
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// stageWriteTarget writes one target to a scratch path next to its destination
+// and returns what the caller needs to finish the save. The scratch file lives in
+// the destination's own directory so the later move stays within one filesystem,
+// where a rename is atomic; a dot prefix keeps it out of the way of a directory
+// listing if the process dies between the write and the move.
+func (s *Shell) stageWriteTarget(ctx context.Context, tgt writeTarget) (stagedWrite, error) {
+	dir := filepath.Dir(tgt.dest)
+	f, err := os.CreateTemp(dir, "."+filepath.Base(tgt.dest)+".sqly-save-*")
+	if err != nil {
+		return stagedWrite{}, fmt.Errorf("failed to stage the save for %s: %w", tgt.dest, err)
+	}
+	staging := f.Name()
+	// The writers below open the path themselves; the handle is only how the name
+	// was reserved.
+	if err := f.Close(); err != nil {
+		_ = os.Remove(staging)
+		return stagedWrite{}, fmt.Errorf("failed to stage the save for %s: %w", tgt.dest, err)
+	}
+
+	w := stagedWrite{target: tgt, staging: staging}
+	if tgt.setKind != "" {
+		if err := s.writeFinancialSet(ctx, tgt, staging); err != nil {
+			_ = os.Remove(staging)
+			return stagedWrite{}, err
+		}
+		w.baselines = tgt.members
+		w.message = fmt.Sprintf("Saved %s set %s to %s", strings.ToUpper(tgt.setKind), tgt.baseName, tgt.dest)
+		return w, nil
+	}
+
+	table, err := s.usecases.metadata.List(ctx, tgt.table)
+	if err != nil {
+		_ = os.Remove(staging)
+		return stagedWrite{}, fmt.Errorf("failed to read table %s: %w", tgt.table, err)
+	}
+	if err := s.usecases.export.DumpTable(staging, table, tgt.format, tgt.comp); err != nil {
+		_ = os.Remove(staging)
+		return stagedWrite{}, fmt.Errorf("failed to save table %s to %s: %w", tgt.table, tgt.dest, err)
+	}
+	w.baselines = []string{tgt.table}
+	w.message = fmt.Sprintf("Saved %s to %s", tgt.table, tgt.dest)
+	return w, nil
+}
+
+// writeFinancialSet reconstructs one ACH/Fedwire file from its table set into
+// path. The error names the target's real destination, not the scratch path the
+// data is written to, so a failure reads the way the user asked for the save.
+func (s *Shell) writeFinancialSet(ctx context.Context, tgt writeTarget, path string) error {
 	var err error
 	switch tgt.setKind {
 	case model.FinancialFormatACH:
-		err = s.usecases.persistence.DumpACHFile(ctx, tgt.baseName, tgt.dest)
+		err = s.usecases.persistence.DumpACHFile(ctx, tgt.baseName, path)
 	case model.FinancialFormatFedWire:
-		err = s.usecases.persistence.DumpFedWireFile(ctx, tgt.baseName, tgt.dest)
+		err = s.usecases.persistence.DumpFedWireFile(ctx, tgt.baseName, path)
 	default:
 		return fmt.Errorf("unknown financial set kind %q", tgt.setKind)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to save %s set %s to %s: %w", strings.ToUpper(tgt.setKind), tgt.baseName, tgt.dest, err)
 	}
-	for _, m := range tgt.members {
-		s.snapshotBaseline(ctx, m)
-	}
-	fmt.Fprintf(config.Stderr, "Saved %s set %s to %s\n", strings.ToUpper(tgt.setKind), tgt.baseName, tgt.dest)
 	return nil
 }
 

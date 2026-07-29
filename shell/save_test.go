@@ -682,3 +682,171 @@ func TestSave_EmptyNonInteractiveRunGuidesToInputFiles(t *testing.T) {
 		t.Errorf("error %q should explain the empty run and suggest input files", runErr.Error())
 	}
 }
+
+// TestCommitStagedFile covers the commit half of the staged write-back,
+// including the copy taken when the platform refuses the rename. Windows does
+// refuse it when another handle still has the destination open, which is every
+// in-place save, so the fallback is not a rare path there.
+func TestCommitStagedFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("replaces an existing destination", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		staging := filepath.Join(dir, "staging")
+		dest := filepath.Join(dir, "dest")
+		if err := os.WriteFile(staging, []byte("new"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, []byte("old content that is longer"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := commitStagedFile(staging, dest); err != nil {
+			t.Fatalf("commitStagedFile() error = %v", err)
+		}
+		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "new" {
+			t.Errorf("destination = %q, want %q", got, "new")
+		}
+	})
+
+	t.Run("creates a destination that does not exist", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		staging := filepath.Join(dir, "staging")
+		dest := filepath.Join(dir, "dest")
+		if err := os.WriteFile(staging, []byte("new"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := commitStagedFile(staging, dest); err != nil {
+			t.Fatalf("commitStagedFile() error = %v", err)
+		}
+		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "new" {
+			t.Errorf("destination = %q, want %q", got, "new")
+		}
+	})
+
+	t.Run("reports a staged file that is gone", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		if err := commitStagedFile(filepath.Join(dir, "missing"), filepath.Join(dir, "dest")); err == nil {
+			t.Error("commitStagedFile() succeeded with no staged file, want an error")
+		}
+	})
+
+	// The copy fallback is what runs on Windows whenever the destination is open.
+	// It is driven directly because a plain rename succeeds on Unix, so
+	// commitStagedFile never reaches it on this platform.
+	t.Run("the copy path replaces the destination", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		staging := filepath.Join(dir, "staging")
+		dest := filepath.Join(dir, "dest")
+		if err := os.WriteFile(staging, []byte("new"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, []byte("old content that is longer"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := copyOnto(staging, dest); err != nil {
+			t.Fatalf("commitByCopy() error = %v", err)
+		}
+		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "new" {
+			t.Errorf("destination = %q, want %q", got, "new")
+		}
+		assertNoBackupLeft(t, dir)
+	})
+
+	t.Run("the copy path reports a source that is gone", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		dest := filepath.Join(dir, "dest")
+		if err := os.WriteFile(dest, []byte("precious"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := copyOnto(filepath.Join(dir, "missing"), dest); err == nil {
+			t.Error("copyOnto() succeeded with no source, want an error")
+		}
+		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "precious" {
+			t.Errorf("destination = %q, want it untouched when the source cannot be opened", got)
+		}
+	})
+}
+
+// assertNoBackupLeft fails when the commit's own backup file survived the call.
+func assertNoBackupLeft(t *testing.T, dir string) {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "sqly-bak") {
+			t.Errorf("the backup must not be left behind: %s", e.Name())
+		}
+	}
+}
+
+// TestRollbackCommitted covers the undo the commit phase runs when a later
+// target fails to land: every destination already replaced goes back to what it
+// held, and one this save created is removed again.
+func TestRollbackCommitted(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Two destinations that existed and were replaced, and one this save created.
+	replaced := filepath.Join(dir, "replaced.csv")
+	if err := os.WriteFile(replaced, []byte("committed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(dir, "replaced.bak")
+	if err := os.WriteFile(backup, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	created := filepath.Join(dir, "created.csv")
+	if err := os.WriteFile(created, []byte("committed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	rollbackCommitted([]stagedWrite{
+		{target: writeTarget{dest: replaced}, backup: backup},
+		{target: writeTarget{dest: created}},
+	})
+
+	got, err := os.ReadFile(replaced) //nolint:gosec // Test path from t.TempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "original" {
+		t.Errorf("replaced destination = %q, want the original %q back", got, "original")
+	}
+	if _, err := os.Stat(created); !os.IsNotExist(err) {
+		t.Errorf("a destination this save created must be removed again, stat err = %v", err)
+	}
+}
