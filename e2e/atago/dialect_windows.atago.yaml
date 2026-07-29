@@ -1,0 +1,199 @@
+# Dialect translation in the expression positions that are easy to get wrong.
+#
+# The operator rewrites (division, LIKE, ^) work by walking back from the
+# operator to the primary expression beside it. A windowed aggregate ends in its
+# own clause's parentheses, which is exactly the shape that scanner can mistake
+# for the whole operand, so each of these is a regression guard rather than a
+# feature test.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly dialect rewrites in complex expressions
+
+scenarios:
+  - name: "mysql divides a windowed aggregate"
+    description: "SUM(x) OVER (ORDER BY id) / 2 must keep the OVER clause on the sum. Treating the clause's parentheses as the left operand turns this into a parse error."
+    steps:
+      - fixture: &scores
+          file: scores.csv
+          content: |
+            id,name,score
+            1,Alice,10
+            2,Bob,20
+            3,Carol,30
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT SUM(score) OVER (ORDER BY id) / 2 AS w FROM scores ORDER BY id" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "5"
+
+  - name: "googlesql divides by a windowed count"
+    description: "score / COUNT(*) OVER () must keep the OVER clause on the count. Attaching it to the division helper instead fails with 'may not be used as a window function'."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT score / COUNT(*) OVER () AS r FROM scores ORDER BY id" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3.3333333333333335"
+
+  - name: "mysql divides a named window and a filtered aggregate"
+    description: "OVER window_name has no parentheses at all, and FILTER (WHERE ...) sits between the call and OVER; both are part of the operand."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT SUM(score) OVER win / 2 AS w FROM scores WINDOW win AS (ORDER BY id) ORDER BY id" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "5"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT COUNT(*) FILTER (WHERE id > 1) / 2 AS c FROM scores" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "postgresql matches a windowed value with LIKE"
+    description: "The LIKE rewrite uses the same operand scanner as division, so a windowed left operand has to survive it too."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT CAST(SUM(score) OVER (ORDER BY id) AS TEXT) LIKE '1%' AS m FROM scores ORDER BY id" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "mysql accepts an expression as the INTERVAL amount"
+    description: "MySQL allows a column or an expression where the interval amount goes, not only a literal."
+    steps:
+      - fixture: &events
+          file: events.csv
+          content: |
+            id,at,offset_days
+            1,2026-01-01,3
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD(at, INTERVAL offset_days DAY) AS d, DATE_SUB(at, INTERVAL offset_days DAY) AS e FROM events" events.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-01-04,2025-12-29"
+
+  - name: "the rewrites survive CASE, subqueries, and boolean contexts"
+    description: "A rewritten operator has to remain a valid expression wherever an expression is allowed, not only in a bare SELECT list."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT CASE WHEN name LIKE 'A%' THEN 1 ELSE 0 END AS f FROM scores ORDER BY id" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1"
+              - "0"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT (SELECT COUNT(*) FROM scores WHERE name LIKE 'A%') AS c" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT COUNT(*) AS c FROM scores GROUP BY name LIKE 'A%' ORDER BY c" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT (score/10)/2 AS q, -score/10 AS r FROM scores WHERE id = 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0.5,-1"
+
+  - name: "mysql LENGTH counts bytes and CHAR_LENGTH counts characters"
+    description: "MySQL LENGTH is a byte count; SQLite's own length() counts characters, so a multi-byte string is where the two part ways and the query succeeds either way."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT LENGTH('あい') AS bytes, CHAR_LENGTH('あい') AS chars FROM scores LIMIT 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "6,2"
+
+  - name: "the SQL-standard TRIM form works in MySQL and PostgreSQL"
+    description: "TRIM(BOTH 'x' FROM s) is the standard spelling both dialects accept; SQLite only takes the comma form."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT TRIM(BOTH 'x' FROM 'xxaxx') AS b, TRIM(LEADING 'x' FROM 'xxaxx') AS l FROM scores LIMIT 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a,axx"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT BTRIM('xxaxx', 'x') AS b, OVERLAY('abcdef' PLACING 'XY' FROM 2) AS o FROM scores LIMIT 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a,aXYdef"
+
+  - name: "googlesql JSON_VALUE and JSON_QUERY differ on quoting"
+    description: "JSON_VALUE returns the scalar itself; JSON_QUERY keeps its result in JSON text, so a string stays quoted. Mapping both to the same SQLite function would lose that distinction silently."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT JSON_VALUE('{\"a\":\"x\"}', '$.a') AS v FROM scores LIMIT 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "x"
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT BYTE_LENGTH('あい') AS b, CHAR_LENGTH('あい') AS c FROM scores LIMIT 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "6,2"
+
+  - name: "UNION DISTINCT is accepted where the dialect allows it"
+    description: "MySQL and GoogleSQL spell the deduplicating union UNION DISTINCT; SQLite rejects the keyword even though its plain UNION already deduplicates."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT id FROM scores WHERE id = 1 UNION DISTINCT SELECT id FROM scores WHERE id = 1" scores.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: "a postgresql array literal is rejected by name"
+    description: "Arrays have no SQLite equivalent. Naming the construct beats letting SQLite fail on the bracket, which tells the user nothing about what to change."
+    steps:
+      - fixture: *scores
+      - run:
+          command: sqly --dialect postgres --sql "SELECT name FROM scores WHERE name LIKE ANY(ARRAY['A%'])" scores.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "array literals are not supported"
