@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e coverage smoke demo clean vet fmt chkfmt
+.PHONY: build test test-e2e coverage smoke demo clean vet fmt chkfmt website website-serve
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
