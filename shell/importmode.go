@@ -35,8 +35,13 @@ func (c CommandList) importModeCommand(_ context.Context, s *Shell, argv []strin
 	if err != nil {
 		return err
 	}
+	// Selecting the policy already in effect is a no-op, not a failure: an error
+	// here made a script fatal on a line that changed nothing, including the
+	// natural combination of `--import-mode skip` with a script that restates it.
+	// An unrecognized policy name is still rejected, by ParseMalformedRowPolicy
+	// above.
 	if policy == s.state.importMode {
-		return fmt.Errorf("already %s mode", policy)
+		return nil
 	}
 
 	fmt.Fprintf(config.Stderr, "Change import mode from %s to %s\n", s.state.importMode, policy)

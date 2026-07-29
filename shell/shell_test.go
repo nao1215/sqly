@@ -355,16 +355,24 @@ func TestShellExec(t *testing.T) {
 		}
 	})
 
-	t.Run("execute .mode: table to same mode", func(t *testing.T) {
+	// Selecting the mode already in effect is a no-op, not an error: reporting it
+	// as one made a batch script fatal on a line that changed nothing.
+	t.Run("execute .mode: table to same mode is a silent no-op", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Error(err)
 		}
 		defer cleanup()
 
-		_, err = getExecStdOutput(t, shell.exec, ".mode table")
-		if !strings.Contains(err.Error(), "already table mode") {
-			t.Fatal(err)
+		got, err := getExecStdOutput(t, shell.exec, ".mode table")
+		if err != nil {
+			t.Fatalf("selecting the current mode returned %v, want nil", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("a no-op printed %q, want nothing", got)
+		}
+		if shell.state.mode.PrintMode != model.PrintModeTable {
+			t.Errorf("mode changed to %s, want it unchanged", shell.state.mode.String())
 		}
 	})
 

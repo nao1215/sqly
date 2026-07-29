@@ -44,7 +44,6 @@ func TestCommandList_importModeCommand_Errors(t *testing.T) {
 		{name: "no argument reports usage as an error", argv: nil},
 		{name: "unknown policy is rejected", argv: []string{"keep"}},
 		{name: "more than one argument is rejected", argv: []string{"skip", "fill"}},
-		{name: "setting the current policy is rejected", argv: []string{"stop"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -65,5 +64,31 @@ func TestCommandList_importModeCommand_Errors(t *testing.T) {
 				t.Fatalf("state.importMode changed to %v on an error path", shell.state.importMode)
 			}
 		})
+	}
+}
+
+// TestCommandList_importModeCommand_CurrentPolicyIsANoOp pins that selecting the
+// policy already in effect succeeds quietly. It used to be an error, which made
+// a batch script fatal on a line that changed nothing — including the natural
+// combination of --import-mode with a script that restates the same policy.
+func TestCommandList_importModeCommand_CurrentPolicyIsANoOp(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	importer := mock.NewMockImportUsecase(ctrl)
+	// No SetMalformedRowPolicy call is expected: nothing changed.
+	shell := newBoundaryTestShell(t, Usecases{importer: importer})
+
+	backup := config.Stderr
+	defer func() { config.Stderr = backup }()
+	var buf bytes.Buffer
+	config.Stderr = &buf
+
+	if err := NewCommands().importModeCommand(context.Background(), shell, []string{"stop"}); err != nil {
+		t.Fatalf("selecting the current policy returned %v, want nil", err)
+	}
+	if shell.state.importMode != model.MalformedRowStop {
+		t.Fatalf("state.importMode = %v, want it unchanged", shell.state.importMode)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("a no-op wrote %q to stderr, want nothing", buf.String())
 	}
 }
