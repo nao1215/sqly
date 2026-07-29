@@ -749,7 +749,7 @@ func TestCommitStagedFile(t *testing.T) {
 	// The copy fallback is what runs on Windows whenever the destination is open.
 	// It is driven directly because a plain rename succeeds on Unix, so
 	// commitStagedFile never reaches it on this platform.
-	t.Run("the copy fallback replaces the destination", func(t *testing.T) {
+	t.Run("the copy path replaces the destination", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -762,7 +762,7 @@ func TestCommitStagedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := commitByCopy(staging, dest); err != nil {
+		if err := copyOnto(staging, dest); err != nil {
 			t.Fatalf("commitByCopy() error = %v", err)
 		}
 		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
@@ -775,7 +775,7 @@ func TestCommitStagedFile(t *testing.T) {
 		assertNoBackupLeft(t, dir)
 	})
 
-	t.Run("the copy fallback restores the destination when it cannot finish", func(t *testing.T) {
+	t.Run("the copy path reports a source that is gone", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -784,20 +784,16 @@ func TestCommitStagedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// A staged file that is not there makes the copy fail, after the backup has
-		// been taken.
-		if err := commitByCopy(filepath.Join(dir, "missing"), dest); err == nil {
-			t.Error("commitByCopy() succeeded with no staged file, want an error")
+		if err := copyOnto(filepath.Join(dir, "missing"), dest); err == nil {
+			t.Error("copyOnto() succeeded with no source, want an error")
 		}
-
 		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
 		if err != nil {
 			t.Fatal(err)
 		}
 		if string(got) != "precious" {
-			t.Errorf("destination = %q, want the original %q back", got, "precious")
+			t.Errorf("destination = %q, want it untouched when the source cannot be opened", got)
 		}
-		assertNoBackupLeft(t, dir)
 	})
 }
 
@@ -813,5 +809,44 @@ func assertNoBackupLeft(t *testing.T, dir string) {
 		if strings.Contains(e.Name(), "sqly-bak") {
 			t.Errorf("the backup must not be left behind: %s", e.Name())
 		}
+	}
+}
+
+// TestRollbackCommitted covers the undo the commit phase runs when a later
+// target fails to land: every destination already replaced goes back to what it
+// held, and one this save created is removed again.
+func TestRollbackCommitted(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Two destinations that existed and were replaced, and one this save created.
+	replaced := filepath.Join(dir, "replaced.csv")
+	if err := os.WriteFile(replaced, []byte("committed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(dir, "replaced.bak")
+	if err := os.WriteFile(backup, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	created := filepath.Join(dir, "created.csv")
+	if err := os.WriteFile(created, []byte("committed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	rollbackCommitted([]stagedWrite{
+		{target: writeTarget{dest: replaced}, backup: backup},
+		{target: writeTarget{dest: created}},
+	})
+
+	got, err := os.ReadFile(replaced) //nolint:gosec // Test path from t.TempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "original" {
+		t.Errorf("replaced destination = %q, want the original %q back", got, "original")
+	}
+	if _, err := os.Stat(created); !os.IsNotExist(err) {
+		t.Errorf("a destination this save created must be removed again, stat err = %v", err)
 	}
 }

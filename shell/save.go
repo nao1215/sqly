@@ -479,6 +479,10 @@ type stagedWrite struct {
 	// message is the confirmation printed after the move, so a target that never
 	// reaches its destination is never announced as saved.
 	message string
+	// backup is a copy of the destination taken before the commit phase, used to
+	// put it back if a later target fails to commit. Empty when the destination
+	// did not exist.
+	backup string
 }
 
 // executeWriteBack writes the planned targets to disk. Callers run planWriteBack
@@ -499,11 +503,15 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	}
 
 	staged := make([]stagedWrite, 0, len(targets))
-	// Discard whatever has been staged unless the moves below claimed it, so a
-	// failed save leaves the working directory exactly as it was.
+	// Discard whatever has been staged unless the moves below claimed it, and
+	// discard the backups the commit phase took, so a save leaves behind only what
+	// it meant to write.
 	defer func() {
 		for _, w := range staged {
 			_ = os.Remove(w.staging)
+			if w.backup != "" {
+				_ = os.Remove(w.backup)
+			}
 		}
 	}()
 
@@ -515,10 +523,27 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 		staged = append(staged, w)
 	}
 
-	for _, w := range staged {
+	// Copy every destination that already exists before touching any of them, so
+	// a commit that fails halfway can put back the ones it already replaced. A
+	// commit is a rename where the platform allows one, but not always (see
+	// commitStagedFile), and even a rename can fail on the last target after the
+	// first has landed.
+	for i := range staged {
+		backup, err := backupExisting(staged[i].target.dest)
+		if err != nil {
+			return fmt.Errorf("failed to prepare %s for saving: %w", staged[i].target.dest, err)
+		}
+		staged[i].backup = backup
+	}
+
+	for i, w := range staged {
 		if err := commitStagedFile(w.staging, w.target.dest); err != nil {
+			rollbackCommitted(staged[:i])
 			return fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
 		}
+	}
+
+	for _, w := range staged {
 		for _, name := range w.baselines {
 			// The file now matches the table, so move the baseline forward. A later
 			// .save in the same session then treats the table as unchanged and does not
@@ -532,49 +557,51 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	return nil
 }
 
+// rollbackCommitted undoes the commits that already landed, so a save that fails
+// partway leaves every destination as it was. It is best effort: a restore that
+// fails cannot be reported without hiding the error that caused the rollback,
+// which is the one worth showing.
+func rollbackCommitted(done []stagedWrite) {
+	for i := len(done) - 1; i >= 0; i-- {
+		w := done[i]
+		if w.backup == "" {
+			// The destination did not exist before this save created it.
+			_ = os.Remove(w.target.dest)
+			continue
+		}
+		_ = copyOnto(w.backup, w.target.dest)
+	}
+}
+
+// backupExisting copies path to a temporary file beside it, or returns "" when
+// path does not exist yet.
+func backupExisting(path string) (string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	return copyToBackup(path)
+}
+
 // commitStagedFile moves a staged file onto its destination.
 //
 // A plain rename is the goal: it is atomic, so nothing ever sees a half-written
 // file. Windows refuses to rename over a destination another handle still has
 // open, and an in-place save overwrites exactly the files the session imported
-// from. There the destination is renamed out of the way first — moving an open
-// file is allowed where replacing one is not — and put back if the second rename
-// fails, so a refused commit leaves it exactly as it was.
+// from, so there the staged bytes are copied over it instead. The caller holds a
+// copy of the destination and restores it if this fails.
 func commitStagedFile(staging, dest string) error {
 	err := os.Rename(staging, dest)
 	if err == nil {
 		return nil
 	}
 	if _, statErr := os.Stat(dest); statErr != nil {
-		// Nothing was in the way, so the fallback cannot help.
+		// Nothing was in the way, so the copy cannot help either.
 		return err
 	}
-	return commitByCopy(staging, dest)
-}
-
-// commitByCopy writes the staged bytes over dest after taking a copy of dest, so
-// a failure partway can put it back. It is the fallback for a destination that
-// cannot be renamed at all: while another handle has the file open, Windows
-// refuses both to rename over it and to rename it out of the way, and an
-// in-place save overwrites exactly the files the session imported from.
-//
-// This is not atomic — a reader watching during the copy can see a partial file
-// — but it keeps the guarantee that matters: a failure does not cost the data
-// that was already there.
-func commitByCopy(staging, dest string) error {
-	backup, err := copyToBackup(dest)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(backup) }()
-
-	if copyErr := copyOnto(staging, dest); copyErr != nil {
-		// Put back what was there. Best effort: if the restore fails too, the write
-		// error is still the one worth reporting.
-		_ = copyOnto(backup, dest)
-		return copyErr
-	}
-	return nil
+	return copyOnto(staging, dest)
 }
 
 // copyToBackup copies path to a temporary file beside it and returns that path.
