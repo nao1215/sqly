@@ -60,8 +60,8 @@ github.com/mattn/go-colorable v0.1.15 h1:+u9SLTRGnXv73cEsnsmoZBom+dMU88B2M0aDcWy
 github.com/mattn/go-colorable v0.1.15/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/mattn/go-isatty v0.0.22 h1:j8l17JJ9i6VGPUFUYoTUKPSgKe/83EYU2zBC7YNKMw4=
 github.com/mattn/go-isatty v0.0.22/go.mod h1:ZXfXG4SQHsB/w3ZeOYbR0PrPwLy+n6xiMrJlRFqopa4=
-github.com/mattn/go-runewidth v0.0.23 h1:7ykA0T0jkPpzSvMS5i9uoNn2Xy3R383f9HDx3RybWcw=
-github.com/mattn/go-runewidth v0.0.23/go.mod h1:XBkDxAl56ILZc9knddidhrOlY5R/pDhgLpndooCuJAs=
+github.com/mattn/go-runewidth v0.0.27 h1:Feg/Oou5zI/wnpgDF6omIU0OokC9GxLC/WRknhVlIR0=
+github.com/mattn/go-runewidth v0.0.27/go.mod h1:3qAiGCV4Koz/yuveO58qUefmUTRm8r0IGEXZ9jeHp/8=
 github.com/mattn/go-tty v0.0.8 h1:yxtc0Ye17/1ne/bjy993YUoyP8bJJFa9n5M9XTdwoZQ=
 github.com/mattn/go-tty v0.0.8/go.mod h1:f2i5ZOvXBU/tCABmLmOfzLz9azMo5wdAaElRNnJKr+k=
 github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 h1:AMFGa4R4MiIpspGNG7Z948v4n35fFGB3RR3G/ry4FWs=
@@ -82,8 +82,8 @@ github.com/nao1215/fileparser v0.5.2 h1:IXhH5m3UJf/TMidfTcVen8CSlZ4KEFEgBz6+2o+5
 github.com/nao1215/fileparser v0.5.2/go.mod h1:Jb16QbtYfgzQ2BR+UOVNSa1WeKMP2o+xnwBYFUNAG2Y=
 github.com/nao1215/filesql v0.25.0 h1:qeac33cjGOmVi4oFehjg5RwpHFwtGom7GrDp4Ma/ZN8=
 github.com/nao1215/filesql v0.25.0/go.mod h1:qm+43sfrlIr4Mcuo9EP+XSY2xi4R/oIGz8nY/sHHSpM=
-github.com/nao1215/prompt v0.0.12 h1:4Q/U8zpaav0xQ5zvskhS0WumLZq/0pZcFJ1/I7mzAnM=
-github.com/nao1215/prompt v0.0.12/go.mod h1:UqCLZ1fyxwWhEBTLAVvRVIzW8Tyl74o4Du0e0gQrWN4=
+github.com/nao1215/prompt v0.0.13 h1:a94GZTfuz+f9Z2AXmMh5ediOPM5j25nS646gyeC+ofM=
+github.com/nao1215/prompt v0.0.13/go.mod h1:jcU0SPfCTCBHDQ4Uu0n7ZLrV/+hGXVJ64YRV2aKnqxA=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 h1:zrbMGy9YXpIeTnGj4EljqMiZsIcE09mmF8XsD5AYOJc=
