@@ -35,7 +35,7 @@
 * Cookbook E2E: `e2e/atago/cookbook.atago.yaml` runs 15 of the documented commands against the real binary, including the thirty-second example pinned to its exact output, so a copied command cannot silently stop working.
 
 ### Dependencies
-* filesql v0.23.0: upgraded from v0.21.0 across two releases, for the non-Latin table-name fix (v0.22.0) and the staged ACH/Fedwire write (v0.23.0).
+* filesql v0.24.0: upgraded from v0.21.0 across three releases, for the non-Latin table-name fix (v0.22.0), the staged ACH/Fedwire write (v0.23.0), and the staged table dump plus the compressed-dump close error (v0.24.0).
 * prompt v0.0.12: upgraded from v0.0.11 for `WithContinuationPrefix`.
 
 ## [v0.29.0](https://github.com/nao1215/sqly/compare/v0.28.0...v0.29.0) (2026-07-29)
