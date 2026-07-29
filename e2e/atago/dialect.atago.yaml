@@ -180,7 +180,7 @@ scenarios:
               - "raw text"
 
   - name: "postgresql dialect keeps json operators and IS NOT DISTINCT FROM working"
-    description: "-> and ->> are SQLite-native, so the rewrite must leave them alone rather than mistake :: neighbours for a cast."
+    description: "-> and ->> are SQLite-native, so the rewrite must leave them alone rather than mistake :: neighbors for a cast."
     steps:
       - fixture: *users
       - run:

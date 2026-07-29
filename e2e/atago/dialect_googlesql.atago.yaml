@@ -165,7 +165,7 @@ scenarios:
             equals: "1767225600"
 
   - name: "googlesql SAFE_ADD should return null on overflow"
-    description: "The SAFE_ arithmetic family (SAFE_ADD, SAFE_SUBTRACT, SAFE_MULTIPLY, SAFE_NEGATE) returns NULL instead of raising. SAFE_DIVIDE was the only one of the family that existed."
+    description: "The SAFE_ arithmetic family (SAFE_ADD, SAFE_SUBTRACT, SAFE_MULTIPLY, SAFE_NEGATE) returns NULL instead of raising. Overflowing INT64 is the case that separates it from plain arithmetic, so it is asserted alongside the ordinary one; SAFE_DIVIDE was the only member of the family that existed."
     steps:
       - run:
           command: sqly --csv --dialect bigquery --sql "SELECT SAFE_ADD(1, 2) AS v"
@@ -174,6 +174,20 @@ scenarios:
           stdout:
             line: 2
             equals: "3"
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_ADD(9223372036854775807, 1) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_MULTIPLY(9223372036854775807, 2) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
 
   - name: "googlesql EXTRACT(DATE FROM timestamp) should work"
     description: "BigQuery allows DATE, TIME, and DATETIME as EXTRACT parts, not just the numeric fields. EXTRACT is rewritten to DATE_PART, so DATE_PART has to understand those parts too."
