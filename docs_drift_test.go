@@ -321,7 +321,9 @@ func shellFields(s string) ([]string, error) {
 			filled = false
 		}
 	}
-	for i := range len(s) {
+	// Not a range-over-int loop: the escape case advances i to consume the
+	// character it just wrote, and a range loop resets i every iteration.
+	for i := 0; i < len(s); i++ {
 		c := s[i]
 		switch {
 		case c == '\\' && quote != '\'' && i+1 < len(s):
@@ -390,4 +392,95 @@ func markdownSections(t *testing.T, path string) []string {
 		}
 	}
 	return sections
+}
+
+// TestShellFields pins the tokenizer the doc guards rely on. It only has to
+// handle the quoting documented commands actually use, but it has to handle it
+// exactly: a command it mis-splits is a command the parser is asked the wrong
+// question about, or skips entirely.
+func TestShellFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{"plain", `sqly --sql SELECT user.csv`, []string{"sqly", "--sql", "SELECT", "user.csv"}},
+		{"double quotes hold spaces", `sqly --sql "SELECT * FROM user"`, []string{"sqly", "--sql", "SELECT * FROM user"}},
+		{"single quotes hold spaces", `sqly --sql 'SELECT * FROM user'`, []string{"sqly", "--sql", "SELECT * FROM user"}},
+		{"escaped quote inside double quotes", `sqly --sql "SELECT FROM \"user\""`, []string{"sqly", "--sql", `SELECT FROM "user"`}},
+		{"backslash is literal inside single quotes", `sqly --sql 'a \$.name b'`, []string{"sqly", "--sql", `a \$.name b`}},
+		{"escaped dollar outside quotes", `sqly --sql \$x`, []string{"sqly", "--sql", "$x"}},
+		{"escaped space joins one field", `sqly my\ file.csv`, []string{"sqly", "my file.csv"}},
+		{"empty quoted argument is kept", `sqly --output ""`, []string{"sqly", "--output", ""}},
+		{"adjacent quoted parts are one field", `sqly "a"'b'`, []string{"sqly", "ab"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := shellFields(tt.input)
+			if err != nil {
+				t.Fatalf("shellFields(%q) error = %v", tt.input, err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("shellFields(%q) = %#v, want %#v", tt.input, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("shellFields(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+
+	if _, err := shellFields(`sqly --sql "unterminated`); err == nil {
+		t.Error("shellFields accepted an unterminated quote, want an error")
+	}
+}
+
+// TestSqlyInvocation pins which documented command lines are recognized as sqly
+// invocations, and with what arguments. A line wrongly skipped here is a command
+// the guards never check.
+func TestSqlyInvocation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+		ok    bool
+	}{
+		{"plain", `sqly --csv user.csv`, []string{"--csv", "user.csv"}, true},
+		{"go run form", `go run github.com/nao1215/sqly@latest --json user.csv`, []string{"--json", "user.csv"}, true},
+		{"second stage of a pipeline", `cat user.csv | sqly --stdin csv --sql "SELECT 1"`, []string{"--stdin", "csv", "--sql", "SELECT 1"}, true},
+		{"first stage of a pipeline", `sqly --json user.csv | jq .`, []string{"--json", "user.csv"}, true},
+		{"a pipe inside quotes is not a stage", `sqly --sql "SELECT 'a|b'"`, []string{"--sql", "SELECT 'a|b'"}, true},
+		{"not sqly", `brew install nao1215/tap/sqly`, nil, false},
+		{"go install is not an invocation", `go install github.com/nao1215/sqly@latest`, nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ok := sqlyInvocation(tt.input)
+			if ok != tt.ok {
+				t.Fatalf("sqlyInvocation(%q) ok = %v, want %v (args %#v)", tt.input, ok, tt.ok, got)
+			}
+			if !tt.ok {
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("sqlyInvocation(%q) = %#v, want %#v", tt.input, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("sqlyInvocation(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
 }
