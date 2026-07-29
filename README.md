@@ -547,14 +547,19 @@ $ sqly data.xlsx --sheet "A test"
 
 ## Table name rules
 
-Spaces, hyphens, and dots become `_`; other special characters are removed; a name starting with a digit gets a `sheet_` prefix. Excel sheet names are sanitized the same way, with non-ASCII characters removed.
+Spaces, hyphens, and dots become `_`; punctuation and symbols are removed; a name starting with a digit gets a `sheet_` prefix; a name left with nothing becomes `sheet`. Letters and digits in any script are kept, so a file named in Japanese, Chinese, Korean, Cyrillic, or accented Latin keeps its name; quote it in queries. Excel sheet names follow the same rules.
 
 | Input | Table |
 |:--|:--|
 | `bug-syntax-error.csv` | `bug_syntax_error` |
 | `2023-data.csv` | `sheet_2023_data` |
 | `data@v2.csv` | `datav2` |
-| `data.xlsx` sheet `Café` | `data_Caf` |
+| `売上.csv` | `売上` |
+| `data.xlsx` sheet `Café` | `data_Café` |
+
+```shell
+$ sqly --csv --sql 'SELECT amount FROM "売上" WHERE id = 2' 売上.csv
+```
 
 ## Supported file formats
 
