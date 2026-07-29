@@ -124,8 +124,14 @@ func (m *mode) displayName() string {
 // stdout, so a banner there would corrupt it; keeping the status message on
 // stderr preserves stdout purity for every mode.
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
+	// Selecting the mode that is already in effect is what the caller asked for,
+	// so it succeeds silently. Reporting it as an error made a batch script fatal
+	// on a line that changed nothing: `sqly --csv data.csv` fed a script opening
+	// with `.mode csv` died before running a single query, and so did any script
+	// that set the mode defensively. The banner is skipped because nothing
+	// changed; an unknown name still fails below.
 	if modeName == m.displayName() {
-		return fmt.Errorf("already %s mode", modeName)
+		return nil
 	}
 
 	// Resolve the requested name to a target PrintMode and typed flag before
