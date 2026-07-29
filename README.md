@@ -204,7 +204,12 @@ $ sqly --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2)
 
 Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysql`: type SQL, or a helper command that begins with a dot. Tab completes keywords and table names, and history is kept across sessions.
 
-A SQL statement is buffered until it ends with `;`, so a multi-line or pasted query runs as one statement instead of executing each line. Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
+A SQL statement is buffered until it ends with `;`, so a multi-line or pasted query runs as one statement instead of executing each line. While a statement is being buffered the prompt becomes `   ...> `. Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
+
+```text
+sqly:~/sqly(table)$ SELECT user_name,
+   ...> identifier FROM user;
+```
 
 ![shell demo](./doc/img/shell-demo.gif)
 

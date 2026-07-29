@@ -11,7 +11,7 @@ require (
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.15
 	github.com/nao1215/filesql v0.22.0
-	github.com/nao1215/prompt v0.0.11
+	github.com/nao1215/prompt v0.0.12
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/spf13/pflag v1.0.10
 	github.com/xuri/excelize/v2 v2.11.0

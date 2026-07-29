@@ -171,6 +171,7 @@ func NewShell(
 				prompt.WithTheme(prompt.ThemeNightOwl),
 				prompt.WithMultiline(true),
 				prompt.WithIsComplete(sqlInputComplete),
+				prompt.WithContinuationPrefix(continuationPrefix),
 				prompt.WithWordEscape(),
 				prompt.WithKeyMap(sqlyKeyMap()),
 				prompt.WithPersistentRawMode(),
@@ -689,6 +690,13 @@ func (s *Shell) prompt(p promptSession) (string, error) {
 	p.SetPrefix(s.promptPrefix())
 	return p.Run()
 }
+
+// continuationPrefix marks the lines of a statement sqly is still collecting.
+// A query typed without a trailing ";" is buffered (see sqlInputComplete), and
+// without a marker the cursor simply dropped to a bare line, which looks exactly
+// like a hung program: nothing says the shell is waiting for the rest of the
+// statement rather than stuck. sqlite3, psql, and mysql all show one.
+const continuationPrefix = "   ...> "
 
 func (s *Shell) promptPrefix() string {
 	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.displayName())
