@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -515,7 +516,7 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	}
 
 	for _, w := range staged {
-		if err := os.Rename(w.staging, w.target.dest); err != nil {
+		if err := commitStagedFile(w.staging, w.target.dest); err != nil {
 			return fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
 		}
 		for _, name := range w.baselines {
@@ -529,6 +530,37 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 		fmt.Fprintln(config.Stderr, w.message)
 	}
 	return nil
+}
+
+// commitStagedFile moves a staged file onto its destination.
+//
+// A rename is the goal: it is atomic, so nothing ever sees a half-written file.
+// It is not always available. Windows refuses to rename over a destination
+// another handle still has open, and an in-place save overwrites exactly the
+// files the session imported from. When the rename is refused, the staged bytes
+// are copied over the destination instead. That keeps what the staging exists
+// for — no destination is touched until every target has been written — and
+// gives up only atomicity against a reader watching during the copy.
+func commitStagedFile(staging, dest string) error {
+	if err := os.Rename(staging, dest); err == nil {
+		return nil
+	}
+
+	src, err := os.Open(staging) //nolint:gosec // staging is the file sqly just wrote
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // dest is the destination the caller asked to save to
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, src); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // stageWriteTarget writes one target to a scratch path next to its destination
