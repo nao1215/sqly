@@ -1,0 +1,197 @@
+# PostgreSQL-specific translation behavior, exercised through sqly's CLI. The
+# cast scenarios matter most: a cast is how a user validates input, and before
+# filesql v0.20.0 an invalid value passed through as if it were fine.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly PostgreSQL dialect semantics
+
+scenarios:
+  - name: "postgresql CAST to INTEGER should reject a non-numeric string"
+    description: "PostgreSQL raises 'invalid input syntax for type integer' for CAST('abc' AS INTEGER). SQLite would return 0, so a typo in a data file becomes a real-looking zero."
+    steps:
+      - run:
+          command: sqly --dialect postgres --sql "SELECT CAST('abc' AS INTEGER) AS v"
+      - assert:
+          exit_code: 1
+
+  - name: "postgresql ::boolean should preserve true and false"
+    description: "'true'::boolean is true and 'false'::boolean is false. SQLite would return 0 for both, because the cast maps to SQLite INTEGER affinity and the word 'true' is not numeric. Every boolean-typed column read this way collapses to false."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT 'true'::boolean AS t, 'false'::boolean AS f"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1,0"
+
+  - name: "postgresql ::boolean should reject an invalid literal"
+    description: "'nope'::boolean is an error in PostgreSQL. SQLite would return 0."
+    steps:
+      - run:
+          command: sqly --dialect postgres --sql "SELECT 'nope'::boolean AS v"
+      - assert:
+          exit_code: 1
+
+  - name: "postgresql ::date should reject an invalid literal"
+    description: "'not-a-date'::date is an error in PostgreSQL. SQLite's type affinity would pass the string through unchanged, so an invalid date silently survives into the result."
+    steps:
+      - run:
+          command: sqly --dialect postgres --sql "SELECT 'not-a-date'::date AS v"
+      - assert:
+          exit_code: 1
+
+  - name: "postgresql ::timestamp should reject an invalid literal"
+    description: "'not-a-time'::timestamp is an error in PostgreSQL. SQLite's type affinity would pass the string through unchanged."
+    steps:
+      - run:
+          command: sqly --dialect postgres --sql "SELECT 'not-a-time'::timestamp AS v"
+      - assert:
+          exit_code: 1
+
+  - name: "postgresql ::uuid should reject an invalid literal"
+    description: "'not-a-uuid'::uuid is an error in PostgreSQL. SQLite's type affinity would pass the string through unchanged."
+    steps:
+      - run:
+          command: sqly --dialect postgres --sql "SELECT 'not-a-uuid'::uuid AS v"
+      - assert:
+          exit_code: 1
+
+  - name: "postgresql ::jsonb should reject invalid JSON"
+    description: "'{bad json}'::jsonb is an error in PostgreSQL. SQLite would return the text unchanged, so a malformed document flows into later json operators."
+    steps:
+      - run:
+          command: sqly --dialect postgres --sql "SELECT '{bad json}'::jsonb AS v"
+      - assert:
+          exit_code: 1
+
+  - name: "postgresql should accept typed date literals"
+    description: "DATE '2026-01-01' and TIMESTAMP '...' are standard PostgreSQL. SQLite parses neither, and without the rewrite even an ordinary predicate such as BETWEEN DATE 'a' AND DATE 'b' fails."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT DATE '2026-01-01' AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-01-01"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT TIMESTAMP '2026-01-01 10:00:00' AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2026-01-01 10:00:00"
+
+  - name: "postgresql should support INTERVAL arithmetic"
+    description: "x + INTERVAL '1 day' is the canonical way to do date arithmetic in PostgreSQL; there is no DATE_ADD. SQLite has no interval type, so without this rewrite the dialect has no working date arithmetic at all."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT DATE '2026-01-15' + INTERVAL '1 day' AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2026-01-16"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT DATE '2026-01-31' - INTERVAL '1 month' AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2025-12-31"
+
+  - name: "postgresql REGEXP_REPLACE should accept the flags argument"
+    description: "REGEXP_REPLACE(source, pattern, replacement, 'g') is the usual PostgreSQL spelling for replace-all. Without 'g' only the first match is replaced, and 'i' matches case insensitively."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT REGEXP_REPLACE('a1b2', '[0-9]', '', 'g') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "ab"
+
+  - name: "postgresql ^ should be exponentiation"
+    description: "In PostgreSQL 2 ^ 3 is 8. SQLite has no ^ operator at all, so it maps to power()."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT 2 ^ 3 AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "8"
+
+  - name: "postgresql TO_CHAR should format numbers"
+    description: "TO_CHAR(1234.5, '9999.99') is ' 1234.50' in PostgreSQL. A TO_CHAR that only handled dates would silently return NULL here, which is worse than an error."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT TRIM(TO_CHAR(1234.5, '9999.99')) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1234.50"
+
+  - name: "postgresql string helpers should work"
+    description: "MD5, ASCII, CHR, and TRANSLATE are core PostgreSQL string functions with no SQLite equivalent."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT MD5('a') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0cc175b9c0f1b6a831c399e269772661"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT ASCII('A') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "65"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT CHR(65) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "A"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT TRANSLATE('abc', 'ab', 'xy') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "xyc"
+
+  - name: "postgresql statistical and boolean aggregates should work"
+    description: "STDDEV, VARIANCE, BOOL_AND, and BOOL_OR are standard PostgreSQL aggregates SQLite lacks. The driver has no aggregate registration hook, so each is rewritten into a SQLite expression; a bare STDDEV is the sample estimator here, not the population one."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT STDDEV(x) AS v FROM (SELECT 1 AS x UNION ALL SELECT 3) t"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1.4142135623730951"
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT BOOL_AND(x) AS a, BOOL_OR(x) AS o FROM (SELECT TRUE AS x UNION ALL SELECT FALSE) t"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0,1"
+
+  - name: "postgresql SIMILAR TO should work"
+    description: "SIMILAR TO is SQL-standard pattern matching that PostgreSQL supports and SQLite does not; it becomes an anchored regular expression."
+    steps:
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT 'abc' SIMILAR TO 'a%' AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"

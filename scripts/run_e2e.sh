@@ -90,6 +90,82 @@ for spec in "$ROOT"/e2e/atago/*.atago.yaml; do
 	NON_PTY_SPECS="$NON_PTY_SPECS $spec"
 done
 
+# When a focused `--filter` selects only non-PTY scenarios (or only PTY ones),
+# atago's CI mode rejects the empty second pass as a silent suite disable. Check
+# the selected scenario names up front and skip passes that cannot match the
+# requested filter, while preserving atago's native "no scenarios matched"
+# failure when the filter misses the whole suite.
+FILTER_PATTERNS=""
+append_filter_patterns() {
+	if [ -z "$FILTER_PATTERNS" ]; then
+		FILTER_PATTERNS=$1
+	else
+		FILTER_PATTERNS="$FILTER_PATTERNS,$1"
+	fi
+}
+
+collect_filter_patterns() {
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+			--filter)
+				shift
+				[ "$#" -gt 0 ] || break
+				append_filter_patterns "$1"
+				;;
+			--filter=*)
+				append_filter_patterns "${1#--filter=}"
+				;;
+		esac
+		shift
+	done
+}
+
+spec_matches_filter() {
+	spec=$1
+	[ -z "$FILTER_PATTERNS" ] && return 0
+	names="$(sed -n \
+		-e 's/^[[:space:]]*-[[:space:]]*name:[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' \
+		-e "s/^[[:space:]]*-[[:space:]]*name:[[:space:]]*'\\(.*\\)'[[:space:]]*$/\\1/p" \
+		-e 's/^[[:space:]]*-[[:space:]]*name:[[:space:]]*\([^"'"'"'"'"'"'"'"'"'].*\)$/\1/p' \
+		"$spec")"
+	old_ifs=$IFS
+	IFS=','
+	for needle in $FILTER_PATTERNS; do
+		case "$names" in
+			*"$needle"*)
+				IFS=$old_ifs
+				return 0
+				;;
+		esac
+	done
+	IFS=$old_ifs
+	return 1
+}
+
+spec_group_matches_filter() {
+	[ "$#" -gt 0 ] || return 1
+	[ -z "$FILTER_PATTERNS" ] && return 0
+	for spec in "$@"; do
+		if spec_matches_filter "$spec"; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+collect_filter_patterns "$@"
+
+ran_any=false
+
 # shellcheck disable=SC2086 # intentional word splitting over the spec list
-atago run --ci --retry-failed 3 "$@" $NON_PTY_SPECS
-atago run --ci --parallel 1 --retry-failed 5 "$@" "$PTY_SPEC"
+if spec_group_matches_filter $NON_PTY_SPECS; then
+	ran_any=true
+	atago run --ci --retry-failed 3 "$@" $NON_PTY_SPECS
+fi
+if spec_group_matches_filter "$PTY_SPEC"; then
+	ran_any=true
+	atago run --ci --parallel 1 --retry-failed 5 "$@" "$PTY_SPEC"
+fi
+if [ "$ran_any" = false ]; then
+	atago run --ci --retry-failed 3 "$@" $NON_PTY_SPECS "$PTY_SPEC"
+fi

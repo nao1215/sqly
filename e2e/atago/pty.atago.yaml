@@ -84,6 +84,31 @@ scenarios:
       - assert:
           exit_code: 0
 
+  - name: .dialect changes translation for a later interactive query
+    description: "Covers the real prompt path: the helper command mutates shell state, and the next query is translated under that dialect before execution."
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".dialect postgres\r"
+            - expect: "dialect set to postgresql"
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE name ILIKE 'a%';\r"
+            - expect: "Alice"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "dialect set to postgresql"
+              - "Alice"
+
   - name: .tables lists the imported table
     steps:
       - fixture: *people
