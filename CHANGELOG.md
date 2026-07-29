@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.30.0](https://github.com/nao1215/sqly/compare/v0.29.0...v0.30.0) (2026-07-29)
+
 ### Bug Fixes
 * MySQL And GoogleSQL `CONCAT` Swallowed A NULL: both dialects return NULL when any argument is NULL, but SQLite's own `concat()` treats a NULL as an empty string and the call was passed straight through. `CONCAT(first_name, middle_name)` with a NULL middle name answered the first name where MySQL and BigQuery answer NULL, so a query written to detect incomplete rows reported them as complete. PostgreSQL's `concat()` genuinely does ignore NULLs and is unchanged, as is `CONCAT_WS`. Requires filesql v0.25.0.
 
