@@ -8,20 +8,49 @@
 ![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
 [![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nao1215/sqly/total)](https://github.com/nao1215/sqly/releases)
 
+
 # sqly
 
-sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It imports them into an [SQLite3](https://www.sqlite.org/index.html) in-memory database, so joins, CTEs, and aggregates all work. Compressed files (`.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`) are read transparently.
+sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It loads them into an in-memory SQLite3 database, so joins, CTEs, window functions, and aggregates all work — across formats, in one query. Compressed files (`.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`) are read transparently.
 
-Run a query directly, or open the interactive shell with completion and history.
+Documentation: **https://nao1215.github.io/sqly/**
 
 ![demo](./doc/img/demo.gif)
 
+## Try it in 30 seconds
+
+If you have Go, paste this:
+
 ```shell
-sqly --sql "SELECT * FROM data" data.csv.gz
-sqly --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id" testdata/user.csv testdata/identifier.csv
+printf 'name,dept,salary\nalice,eng,120\nbob,sales,90\ncarol,eng,140\n' > staff.csv
+go run github.com/nao1215/sqly@latest --sql "SELECT dept, ROUND(AVG(salary)) AS avg FROM staff GROUP BY dept" staff.csv
 ```
 
-sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version`, not `sqly help` or `sqly version` (those are read as input paths). Helper commands such as `.tables` and `.import` run inside the interactive shell or batch stdin mode, not as command-line arguments.
+```text
++-------+-----+
+| dept  | avg |
++-------+-----+
+| eng   | 130 |
+| sales |  90 |
++-------+-----+
+```
+
+The file is the table: `staff.csv` became `staff`. No schema to declare, no import step.
+
+## Why sqly?
+
+Pick the tool that fits the job:
+
+| You want | Use |
+|:--|:--|
+| A field-oriented text processor for logs and columns | [awk](https://www.gnu.org/software/gawk/), [Miller](https://miller.readthedocs.io/) |
+| A CSV-native SQL dialect with its own engine and cursors | [csvq](https://github.com/mithrandie/csvq) |
+| SQL over CSV/TSV/JSON with a choice of backend engines | [trdsql](https://github.com/noborus/trdsql) |
+| SQL over CSV with long-standing, mature tooling | [q](https://github.com/harelba/q), [textql](https://github.com/dinedal/textql) |
+| A terminal UI over a DBMS and local files | [sqluv](https://github.com/nao1215/sqluv) |
+| SQL over files, with an interactive shell, cross-format joins, and write-back | sqly |
+
+sqly's emphasis is the session: an interactive shell with completion and history, files of different formats joined as peers, and the ability to write edits back into the source file.
 
 ## Install
 
@@ -39,586 +68,123 @@ Arch Linux users can install the [AUR package](https://aur.archlinux.org/package
 yay -S sqly-bin
 ```
 
-Without an AUR helper:
-
-```shell
-git clone https://aur.archlinux.org/sqly-bin.git
-cd sqly-bin
-makepkg -si
-```
-
-sqly is in the [aqua](https://aquaproj.github.io/) standard registry:
+sqly is in the [aqua](https://aquaproj.github.io/) standard registry, and [mise](https://mise.jdx.dev/) installs it through the same registry:
 
 ```shell
 aqua g -i nao1215/sqly
-```
-
-[mise](https://mise.jdx.dev/) can install it through the same registry with the aqua backend:
-
-```shell
 mise use aqua:nao1215/sqly
 ```
 
-Runs on Windows, macOS, and Linux. Requires Go 1.25 or later when building from source.
+Prebuilt binaries are on the [release page](https://github.com/nao1215/sqly/releases). Runs on Windows, macOS, and Linux; building from source needs Go 1.25 or later. Releases ship cosign-signed checksums, an SPDX SBOM, and SLSA provenance — see [Install](https://nao1215.github.io/sqly/install/) for the verification commands.
 
-## Verifying release integrity
-Every release ships supply-chain metadata so you can verify what you download:
+## Recipes
 
-- Signed checksums: `checksums.txt` is signed with [cosign](https://github.com/sigstore/cosign) (keyless), producing `checksums.txt.sigstore.json`.
-- SBOM: an SPDX Software Bill of Materials is attached to each release archive.
-- Build provenance: SLSA build provenance is attested via GitHub OIDC.
-
-Verify the signed checksums (then check your archive against `checksums.txt`):
+The [cookbook](https://nao1215.github.io/sqly/cookbook/) is the fastest way in. A sample:
 
 ```shell
-cosign verify-blob \
-  --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp 'https://github.com/nao1215/sqly/\.github/workflows/release\.yml@refs/tags/.*' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  checksums.txt
-sha256sum --check --ignore-missing checksums.txt
+# Look at a file you have never seen
+sqly --inspect user.csv
+
+# Convert: csv -> json, excel, parquet, markdown, gzipped csv
+sqly --json    --output user.json    --sql "SELECT * FROM user" user.csv
+sqly --excel   --output user.xlsx    --sql "SELECT * FROM user" user.csv
+sqly --parquet --output user.parquet --sql "SELECT * FROM user" user.csv
+
+# Join two files, of any format, in one query
+sqly --sql "SELECT u.user_name, i.position
+            FROM user u JOIN identifier i ON u.identifier = i.id" user.csv.gz identifier.parquet
+
+# Pull fields out of JSONL
+sqly --sql "SELECT json_extract(data, '\$.name') AS name FROM sample" sample.jsonl
+
+# Load a whole directory, or a URL, or a pipe
+sqly ./data --sql "SELECT * FROM users"
+sqly --sql "SELECT * FROM user" https://example.com/user.csv
+cat user.csv | sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
+
+# Rank with a window function
+sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
+
+# Find nulls, blanks, and duplicates
+sqly --profile --profile-format text user.csv
+
+# Diff two files by key
+sqly --compare --compare-key id before.csv after.csv
+
+# Edit a file in place
+sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save --force user.csv
+
+# Write MySQL, PostgreSQL, or BigQuery syntax and have it translated
+sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" user.csv
 ```
 
-Verify the build provenance of a downloaded artifact with the GitHub CLI:
+## The shell
 
-```shell
-gh attestation verify sqly_<version>_<os>_<arch>.tar.gz --repo nao1215/sqly
-```
-
-## Run SQL: --sql
-
-Pass file or directory paths as arguments; sqly imports each one and names the table after the file (so `user.csv` becomes table `user`).
-
-```shell
-$ sqly --sql "SELECT * FROM user" testdata/user.csv
-+-----------+------------+------------+-----------+
-| user_name | identifier | first_name | last_name |
-+-----------+------------+------------+-----------+
-| booker12  |          1 | Rachel     | Booker    |
-| jenkins46 |          2 | Mary       | Jenkins   |
-| smith79   |          3 | Jamie      | Smith     |
-+-----------+------------+------------+-----------+
-```
-
-sqly can also download a supported file over HTTP or HTTPS before importing it. The same remote URL works both as a CLI input argument and via `.import`.
-
-![http demo](./doc/img/http-demo.gif)
-
-```shell
-$ python3 -m http.server 8080 --bind 127.0.0.1 --directory testdata >/tmp/sqly-http.log 2>&1 &
-$ sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:8080/user.csv
-
-$ sqly
-sqly:~/sqly(table)$ .import http://127.0.0.1:8080/user.csv
-sqly:~/sqly(table)$ SELECT COUNT(*) AS c FROM user;
-```
-
-Only `http` and `https` are downloaded; a URL with any other scheme is rejected by name.
-
-## Query in another SQL dialect: --dialect
-
-By default sqly uses SQLite syntax. `--dialect` lets you write queries in MySQL, PostgreSQL, or GoogleSQL (BigQuery / Cloud Spanner) instead; sqly translates them to SQLite before running. Loading files always uses SQLite, so only the queries you write are affected.
-
-```shell
-# PostgreSQL syntax: "::" cast and ILIKE
-$ sqly --dialect postgres --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" testdata/user.csv
-
-# MySQL syntax: backtick identifiers and IF()
-$ sqly --dialect mysql --sql "SELECT \`user_name\`, IF(\`identifier\` = 1, 'first', 'other') AS tag FROM \`user\`" testdata/user.csv
-```
-
-Inside the shell, `.dialect` shows or switches the dialect for the rest of the session:
-
-```shell
-sqly:~/sqly(table)$ .dialect mysql
-dialect set to mysql
-sqly:~/sqly(table)$ SELECT `user_name` FROM `user` LIMIT 1;
-sqly:~/sqly(table)$ .dialect
-current dialect: mysql (available: sqlite, mysql, postgresql, googlesql)
-```
-
-Translation is best-effort compatibility, not a full emulator. Common incompatibilities (identifier quoting, `DATE_ADD`, `EXTRACT`, `::`/`SAFE_CAST` casts, `ILIKE`, `SPLIT_PART`, `SAFE_DIVIDE`, and more) are rewritten or backed by helper functions; constructs with no SQLite equivalent (for example `QUALIFY` or `DISTINCT ON`) fail with a clear error; anything else is passed through to SQLite. See the [filesql `dialect` package](https://github.com/nao1215/filesql/tree/main/dialect) for the full list of supported translations.
-
-## Complex queries
-
-Because every file is loaded into SQLite, the full query engine is available: CTEs, window functions, aggregates, and joins across files of different formats.
-
-Window functions and CTEs (here read from a file with `--sql-file`):
-
-![analytics demo](./doc/img/analytics-demo.gif)
-
-```sql
--- analytics.sql, run with: sqly --sql-file analytics.sql actor.csv
-WITH ranked AS (
-  SELECT actor, total_gross,
-         RANK() OVER (ORDER BY total_gross DESC) AS rank
-  FROM actor
-)
-SELECT rank, actor, total_gross FROM ranked WHERE rank <= 5 ORDER BY rank;
-
-SELECT CASE WHEN number_of_movies >= 50 THEN '50+ movies'
-            WHEN number_of_movies >= 35 THEN '35-49 movies'
-            ELSE 'under 35' END AS bucket,
-       COUNT(*) AS actors, ROUND(AVG(total_gross), 1) AS avg_gross
-FROM actor GROUP BY bucket ORDER BY avg_gross DESC;
-```
-
-JSON and JSONL rows land in a single `data` column; pull fields out with `json_extract()`:
-
-![json demo](./doc/img/json-demo.gif)
-
-```shell
-$ sqly --sql "SELECT json_extract(data, '$.name') AS name, json_extract(data, '$.age') AS age FROM sample WHERE json_extract(data, '$.age') >= 30 ORDER BY age DESC" testdata/sample.jsonl
-```
-
-Formats and compression mix freely. A gzipped CSV is read transparently and joins a plain CSV; a Parquet file is just another table:
-
-![mixed format demo](./doc/img/mixed-demo.gif)
-
-```shell
-$ sqly --sql "SELECT name, price FROM products ORDER BY CAST(price AS REAL) DESC" testdata/products.parquet
-$ sqly --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id" testdata/user.csv.gz testdata/identifier.csv
-```
-
-A JOIN can cross formats directly. Here a Parquet table of products joins a CSV of sales, with revenue computed in the query:
-
-![cross-format join demo](./doc/img/crossjoin-demo.gif)
-
-```shell
-$ sqly --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2) AS revenue FROM products p JOIN sales s ON p.id = s.product_id ORDER BY revenue DESC" testdata/products.parquet testdata/sales.csv
-+----------+--------+----------+---------+
-|   name   | price  | quantity | revenue |
-+----------+--------+----------+---------+
-| Laptop   | 999.99 |        3 | 2999.97 |
-| Keyboard |  79.99 |        5 |  399.95 |
-| Mouse    |  29.99 |       10 |   299.9 |
-+----------+--------+----------+---------+
-```
-
-## Interactive shell
-
-Run `sqly` without `--sql` to open the shell. It behaves like `sqlite3` or `mysql`: type SQL, or a helper command that begins with a dot. Tab completes keywords and table names, and history is kept across sessions.
-
-A SQL statement is buffered until it ends with `;`, so a multi-line or pasted query runs as one statement instead of executing each line; the prompt becomes `...>` while it is buffering. Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
+`sqly` with no `--sql` opens a REPL: tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for everything SQL has no syntax for.
 
 ![shell demo](./doc/img/shell-demo.gif)
 
-```shell
-$ sqly testdata/user.csv
-sqly v0.29.0
-
-enter "SQL query" or "sqly command that begins with a dot".
-.help print usage, .exit exit sqly.
-
-sqly:~/sqly(table)$ .help
-        .cd: change directory
-     .clear: clear terminal screen
-  .describe: print column information of a table
-      .dump: dump db table to file in a format according to output mode (default: csv)
-      .exit: exit sqly
-    .header: print table header
-      .help: print help message
-    .import: import file(s) and/or directory(ies)
-        .ls: print directory contents
-      .mode: change output mode
-       .pwd: print current working directory
-      .save: write tables back to files: .save DIR (to a directory) or .save --force (overwrite sources)
-    .schema: print CREATE TABLE statement of a table
-    .tables: print tables
+```text
+sqly:~/data(table)$ .import user.csv
+sqly:~/data(table)$ SELECT user_name FROM user
+   ...> WHERE identifier = 1;
+sqly:~/data(table)$ .mode json
+sqly:~/data(json)$ .save ./out
 ```
 
-History is stored in a SQLite database under the config directory. If that location is not writable, sqly disables history for the session with a warning and keeps running. Set `SQLY_HISTORY_DB_PATH` to choose another path.
+`.help` lists every command; the [shell page](https://nao1215.github.io/sqly/shell/) documents them.
 
-## Output formats
+## Write changes back
 
-The default is an ASCII table. Switch with a flag (`--csv`, `--tsv`, `--ltsv`, `--json`, `--ndjson`, `--markdown`), or in the shell with `.mode <name>`. Values are emitted as strings.
-
-![formats demo](./doc/img/formats-demo.gif)
-
-```shell
-$ sqly --csv --sql "SELECT user_name, identifier FROM user LIMIT 2" testdata/user.csv
-user_name,identifier
-booker12,1
-jenkins46,2
-
-$ sqly --json --sql "SELECT user_name, identifier FROM user LIMIT 2" testdata/user.csv
-[
-  {"user_name":"booker12","identifier":"1"},
-  {"user_name":"jenkins46","identifier":"2"}
-]
-
-$ sqly --ndjson --sql "SELECT user_name, identifier FROM user LIMIT 2" testdata/user.csv
-{"user_name":"booker12","identifier":"1"}
-{"user_name":"jenkins46","identifier":"2"}
-```
-
-For automation and ML workflows, `--json-typed` and `--ndjson-typed` emit native JSON scalars instead of strings: a value that is a canonical JSON number becomes a number, `true`/`false` become booleans, and a SQL NULL becomes `null`. A large integer is preserved exactly and never falls back to scientific notation; a value with a leading zero (such as `007`) stays a string. The default `--json`/`--ndjson` keep the string contract for compatibility. The same opt-in applies to the `--inspect` sample rows via `--inspect --json-typed`.
-
-```shell
-$ sqly --json-typed --sql "SELECT identifier, user_name FROM user LIMIT 2" testdata/user.csv
-[
-  {"identifier":1,"user_name":"booker12"},
-  {"identifier":2,"user_name":"jenkins46"}
-]
-```
-
-Excel (`--excel`) and Parquet (`--parquet`) are export-only: they render as CSV on screen and write a real `.xlsx`/`.parquet` file through `--output` or `.dump`. Parquet needs at least one row to infer its schema.
-
-```shell
-$ sqly --parquet --output result.parquet --sql "SELECT * FROM user" testdata/user.csv
-Output sql result to result.parquet (output mode=parquet)
-```
-
-## Write results to a file: --output
-
-Redirection works on Unix; `--output` works everywhere and may appear before or after the file arguments.
-
-```shell
-$ sqly --csv --sql "SELECT * FROM user" testdata/user.csv > out.csv
-$ sqly --sql "SELECT * FROM user" --output out.csv testdata/user.csv
-$ sqly --sql "SELECT * FROM user" testdata/user.csv --output out.csv
-```
-
-The format and compression are inferred from the `--output` extension when no mode flag is given (the same applies to `.dump`). Text and JSON formats accept `.gz`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4`. A mode flag that disagrees with the extension is rejected, as are `.bz2` and compression on Parquet or Excel.
-
-```shell
-$ sqly --sql "SELECT * FROM user" --output result.ndjson.gz testdata/user.csv
-```
-
-Because the format is inferred from the extension, `--output` doubles as a converter: query a CSV once and write JSON, Parquet, or Excel. Each result is a normal table you can query again.
-
-![format converter demo](./doc/img/convert-demo.gif)
-
-```shell
-$ sqly --sql "SELECT user_name, identifier FROM user" --output users.json testdata/user.csv
-$ sqly --sql "SELECT user_name, identifier FROM user" --output users.parquet testdata/user.csv
-$ sqly --sql "SELECT user_name, identifier FROM user" --output users.xlsx testdata/user.csv
-```
-
-## Pipe data in: --stdin
-
-Piped stdin is read as commands by default (see batch mode below). Use `--stdin <format>` to treat it as a dataset instead; the format is explicit (`csv`, `tsv`, `ltsv`, `json`, `jsonl`) because a pipe has no filename. The table is `stdin` unless you set `--stdin-name`. Piped data joins file arguments.
-
-![stdin demo](./doc/img/stdin-demo.gif)
-
-```shell
-$ cat testdata/user.csv | sqly --stdin csv --sql "SELECT user_name FROM stdin LIMIT 1"
-+-----------+
-| user_name |
-+-----------+
-| booker12  |
-+-----------+
-
-$ cat testdata/user.csv | sqly --stdin csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" testdata/identifier.csv
-```
-
-## Batch mode
-
-When stdin is not a terminal and `--stdin` is not given, sqly reads SQL and dot commands from it instead of starting the shell. A SQL statement ends at a top-level `;` and may span lines; dot commands are single-line. A failed statement exits non-zero, so batch runs are scriptable.
-
-```shell
-$ printf '.tables\nSELECT COUNT(*) FROM user\n' | sqly testdata/user.csv
-+------------+
-| TABLE NAME |
-+------------+
-| user       |
-+------------+
-+----------+
-| COUNT(*) |
-+----------+
-|        3 |
-+----------+
-```
-
-## Load SQL from a file: --sql-file
-
-`--sql-file PATH` runs SQL read from a file (multiple `;`-separated statements allowed). It cannot be combined with `--sql`. Because the query comes from a file, stdin stays free for a dataset:
-
-![sql-file demo](./doc/img/sql-file-demo.gif)
-
-```shell
-$ cat testdata/user.csv | sqly --stdin csv --sql-file doc/vhs/join.sql testdata/identifier.csv
-```
-
-where `doc/vhs/join.sql` holds:
-
-```sql
-SELECT s.user_name, i.position
-FROM stdin s
-JOIN identifier i ON s.identifier = i.id
-ORDER BY s.identifier;
-```
-
-`--sql-file` can also export with `--output` when the script produces exactly one result set, so a saved script works in the same pipelines as `--sql`. Setup statements may run first; the single result is written to the file. A script that yields no result set or more than one is rejected.
-
-```shell
-$ sqly --sql-file report.sql --output out.csv data.csv
-```
-
-## Inspect tables: --inspect
-
-`--inspect` imports the inputs, prints a JSON report of every table (name, source, columns, row count, sample rows), and exits without the shell. It is the non-interactive equivalent of `.tables` + `.schema` + `.describe`, useful for scripts and LLMs. Import progress goes to stderr, so stdout is JSON only. `--inspect-sample N` sets the sample size (default 5; `0` for schema only).
-
-![inspect demo](./doc/img/inspect-demo.gif)
-
-```shell
-$ sqly --inspect --inspect-sample 1 testdata/identifier.csv
-{
-  "tables": [
-    {
-      "name": "identifier",
-      "source": "testdata/identifier.csv",
-      "row_count": 3,
-      "columns": [
-        {"name": "id", "type": "INTEGER", "nullable": true, "primary_key": false},
-        {"name": "position", "type": "TEXT", "nullable": true, "primary_key": false}
-      ],
-      "sample_rows": [
-        {"id": "1", "position": "developrt"}
-      ]
-    }
-  ]
-}
-```
-
-Use `--inspect-sample 0` for a schema-only report (no `sample_rows`), so a script can read column types without pulling any data:
-
-```shell
-$ sqly --inspect --inspect-sample 0 testdata/identifier.csv
-```
-
-## Inspect schema: .schema and .describe
-
-```shell
-sqly:~/data(table)$ .schema user
-CREATE TABLE "user" ("user_name" TEXT, "identifier" INTEGER, "first_name" TEXT, "last_name" TEXT)
-
-sqly:~/data(table)$ .describe user
-+-----+------------+---------+---------+------------+----+
-| cid |    name    |  type   | notnull | dflt_value | pk |
-+-----+------------+---------+---------+------------+----+
-|   0 | user_name  | TEXT    |       0 |            |  0 |
-|   1 | identifier | INTEGER |       0 |            |  0 |
-|   2 | first_name | TEXT    |       0 |            |  0 |
-|   3 | last_name  | TEXT    |       0 |            |  0 |
-+-----+------------+---------+---------+------------+----+
-```
-
-## Write changes back: --save and --save-dir
-
-A session is in-memory only: `UPDATE`/`INSERT`/`DELETE` change the loaded tables but never touch files unless you opt in. `--save-dir DIR` writes each table into DIR (preserving format, compression, and name) and leaves originals untouched. `--save` overwrites the source files in place and requires `--force`. In the shell, `.save DIR` and `.save --force` do the same.
+A session is in-memory only. `--save-dir DIR` writes each changed table into a directory and leaves the sources alone; `--save` overwrites them and requires `--force`.
 
 ![save demo](./doc/img/save-demo.gif)
 
 ```shell
-$ sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out testdata/user.csv
-$ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force testdata/user.csv
+sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out user.csv
+sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
 ```
 
-Write-back is deliberately strict about what it will touch. `--save` refuses to run without `--force`, and a run whose SQL changes schema (DDL such as `CREATE TABLE ... AS SELECT`) is rejected up front, before any output is written, since only row changes map back to a file:
+Format and compression are preserved, a run that changes no row writes no file, and a save covering several files is all-or-nothing. Only row changes are persisted; a schema change is rejected before anything is written.
 
-![write-back safety demo](./doc/img/writeback-demo.gif)
+## Formats
 
-```shell
-$ sqly --sql "UPDATE user SET identifier = identifier + 100" --save testdata/user.csv
---save overwrites source files; pass --force to confirm, or use --save-dir DIR to write elsewhere
-$ sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir ./out testdata/user.csv
---save/--save-dir cannot persist "CREATE TABLE backup AS SELECT * FROM user": ... only INSERT/UPDATE/DELETE on imported tables are saved
-```
-
-A run that changes no row writes no file, and says so on stderr.
-
-Tabular tables that map one-to-one to a single CSV, TSV, LTSV, or Parquet source are written individually. ACH and Fedwire sources are reconstructed as a whole: their related tables (for ACH, the file-header, batches, and entries tables) are rewritten together into one valid `.ach`/`.fed` file, and `--save`/`--save-dir` validate that the required companion tables are still present before writing, failing with an explicit error if the set is incomplete. ACH/Fedwire write-back persists in-place `UPDATE`s to existing rows; adding or removing records is not supported by the native format reconstruction. Tables created by SQL, directory imports, and Excel sources are still rejected for write-back with a clear error before anything is written.
-
-A save covering several files is all-or-nothing: if any file cannot be written, none of them is, and every source is left as it was.
-
-```shell
-$ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry_index = 0" --save --force payment.ach
-Saved ACH set payment to payment.ach
-```
-
-## Reuse imports: --cache
-
-For repeated queries against the same large inputs, `--cache PATH` snapshots the imported tables to a standalone SQLite file. A later run with unchanged inputs reloads from the snapshot instead of re-parsing the source files, which is much faster for big CSVs. The cache key is each input's path, size, and a SHA-256 hash of its contents, so it invalidates automatically when a source changes. `--cache-clear` forces a cold rebuild, and a cache that is unavailable or unwritable falls back to a normal import with a warning rather than failing the query.
-
-```shell
-$ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # cold: parses and snapshots
-$ sqly --cache ./sqly.cache --sql "SELECT COUNT(*) FROM big" big.csv   # warm: reloads the snapshot
-```
-
-Caching is skipped for `--stdin` datasets and for ACH/Fedwire inputs. Because the cache key includes a SHA-256 content hash, an in-place edit is detected even when the file's size and modification time are unchanged.
-
-## Profile data quality: --profile
-
-`--profile` prints a machine-readable data-quality report for every imported table, so you can understand unfamiliar data before writing SQL. For each table it reports row and column counts and, per column, null and blank counts, distinct and numeric counts, and safe warnings: a mix of numeric and non-numeric values, null-like placeholder text (`NULL`, `N/A`, ...), and leading or trailing whitespace. JSON is the default; `--profile-format text` prints a human-readable summary. It works for files, directories, stdin datasets, and multi-table imports.
-
-```shell
-$ sqly --profile --profile-format text data.csv
-table data: 3 rows, 3 columns
-  id (INTEGER): nulls=0 blanks=0 distinct=3 numeric=3
-  score (TEXT): nulls=0 blanks=1 distinct=2 numeric=1
-    warning: mixed numeric and non-numeric values (1 numeric, 1 non-numeric)
-```
-
-## Compare two datasets: --compare
-
-`--compare` diffs two imported tables from the command line, without entering the shell. It reports schema differences (columns unique to each side and type changes) and a row-count delta; add `--compare-key COL` to also diff rows by a key column into added, removed, and modified rows. JSON is the default automation contract; `--compare-format text` prints a human-readable summary.
-
-The two tables are the pair you import; use `--compare-tables "left,right"` to choose the pair explicitly (for example two sheets of one Excel file). Errors are explicit for a missing or non-unique key, a missing named table, or an import that did not produce exactly two tables.
-
-```shell
-$ sqly --compare --compare-key id revision1.csv revision2.csv
-{
-  "left": "revision1",
-  "right": "revision2",
-  "schema": { "equal": true, "left_only_columns": null, "right_only_columns": null, "type_changes": [] },
-  "row_count": { "left": 3, "right": 3, "delta": 0 },
-  "rows": { "key": "id", "added": [ ... ], "removed": [ ... ], "modified": [ ... ] }
-}
-```
-
-## Directory import
-
-A directory argument imports every supported file under it recursively, and you can mix files and directories.
-
-```shell
-$ sqly ./data_directory
-$ sqly file1.csv ./data_directory file2.tsv --sql "SELECT * FROM users"
-```
-
-Point sqly at a folder of mixed-format files and join across them in one query:
-
-![directory import demo](./doc/img/directory-demo.gif)
-
-```shell
-$ sqly ./shop --sql "SELECT p.name, s.quantity FROM products p JOIN sales s ON p.id = s.product_id ORDER BY p.name"
-```
-
-The shell `.import` command does the same:
-
-```shell
-sqly:~/data$ .import ./csv_files
-Successfully imported 3 tables from directory ./csv_files: [users products orders]
-sqly:~/data$ .import --sheet "Q1 Sales" report.xlsx
-```
-
-## ACH files
-
-ACH (`.ach`) files load as several tables for easy querying:
-
-```shell
-$ printf '.tables\n' | sqly testdata/ppd-debit.ach
-+-----------------------+
-|      TABLE NAME       |
-+-----------------------+
-| ppd_debit_file_header |
-| ppd_debit_batches     |
-| ppd_debit_entries     |
-+-----------------------+
-
-$ sqly --sql "SELECT amount FROM ppd_debit_entries WHERE amount > 10000" testdata/ppd-debit.ach
-```
-
-`{filename}_entries` holds the entry detail records. Addenda become `{filename}_addenda`; IAT files add `_iat_batches`, `_iat_entries`, and `_iat_addenda`.
-
-## Fedwire files
-
-Fedwire (`.fed`) files load as a single `{filename}_message` table with all FEDWireMessage fields.
-
-```shell
-$ sqly --sql "SELECT * FROM customer_transfer_message" testdata/customer-transfer.fed
-```
-
-## Excel sheets
-
-Each Excel sheet becomes a table named `filename_sheetname`. Pick one with `--sheet` using its original name.
-
-```shell
-$ sqly data.xlsx --sheet "A test"
-```
-
-## Table name rules
-
-Spaces, hyphens, and dots become `_`; punctuation and symbols are removed; a name starting with a digit gets a `sheet_` prefix; a name left with nothing becomes `sheet`. Letters and digits in any script are kept, so a file named in Japanese, Chinese, Korean, Cyrillic, or accented Latin keeps its name; quote it in queries. Excel sheet names follow the same rules.
-
-| Input | Table |
-|:--|:--|
-| `bug-syntax-error.csv` | `bug_syntax_error` |
-| `2023-data.csv` | `sheet_2023_data` |
-| `data@v2.csv` | `datav2` |
-| `売上.csv` | `売上` |
-| `data.xlsx` sheet `Café` | `data_Café` |
-
-## Supported file formats
-
-| Format | Extensions | Notes |
+| Format | Extensions | Becomes |
 |:--|:--|:--|
-| CSV | `.csv` | |
-| TSV | `.tsv` | |
-| LTSV | `.ltsv` | |
-| JSON | `.json` | Stored in a `data` column; query with `json_extract()` |
-| JSONL | `.jsonl` | Stored in a `data` column; query with `json_extract()` |
-| Parquet | `.parquet` | |
-| Excel | `.xlsx` | Each sheet becomes a table |
-| ACH | `.ach` | Creates several tables (`_file_header`, `_batches`, `_entries`, `_addenda`) |
-| Fedwire | `.fed` | Creates a single `_message` table |
+| CSV / TSV / LTSV | `.csv` `.tsv` `.ltsv` | one table, columns from the header |
+| JSON / JSONL | `.json` `.jsonl` | one table with a `data` column; query with `json_extract()` |
+| Parquet | `.parquet` | one table |
+| Excel | `.xlsx` | one table per sheet, named `file_sheet` |
+| ACH | `.ach` | several tables (`_file_header`, `_batches`, `_entries`, `_addenda`) |
+| Fedwire | `.fed` | one `_message` table |
 
-CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel also read these compression extensions: `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4` (e.g. `.csv.gz`, `.tsv.bz2`).
+All except ACH and Fedwire also read the compression extensions above. Text inputs without a BOM decode as UTF-8, or as Shift-JIS, EUC-JP, ISO-2022-JP, or UTF-16 with `--encoding`. See [Formats](https://nao1215.github.io/sqly/formats/).
 
-## Handle malformed rows: --import-mode
+## Flags
 
-When a CSV/TSV row has a different number of fields than the header, `--import-mode` (or the `.import-mode` shell command) chooses what happens:
+sqly is flag-driven and has no subcommands: use `sqly --help` and `sqly --version`, not `sqly help` or `sqly version` (those are read as input paths). Helper commands such as `.tables` and `.import` run inside the shell or batch stdin mode, not as arguments.
 
-| Policy | Behavior |
-|:--|:--|
-| `stop` (default) | Fail the import and report the mismatch |
-| `skip` | Drop the malformed rows, import the rest |
-| `fill` | Pad short rows with blanks, truncate long rows |
+The [reference](https://nao1215.github.io/sqly/reference/) lists every flag, the table name rules, and the exit codes.
 
-```shell
-$ sqly --import-mode skip --sql "SELECT * FROM data" data.csv
-```
+## Limitations
 
-## Text encodings
+sqly runs each statement in its own transaction on an in-memory database, so a few SQLite statements are rejected with a clear error rather than failing confusingly:
 
-Text inputs default to UTF-8. Use `--encoding` when a CSV/TSV/LTSV/JSON/JSONL file is encoded as Shift-JIS, EUC-JP, ISO-2022-JP, UTF-16LE, or UTF-16BE without a BOM. A Unicode BOM is still honored automatically.
-
-```shell
-sqly --encoding shift-jis --sql "SELECT * FROM people" people.csv
-```
-
-## Key bindings for the shell
-
-|Key|Action|
-|:--|:--|
-|Ctrl + A / Ctrl + E|Beginning / end of line|
-|Ctrl + P / Ctrl + N|Previous / next command|
-|Ctrl + F / Ctrl + B|Forward / backward one character|
-|Ctrl + D|Delete character under cursor|
-|Ctrl + H|Delete character before cursor|
-|Ctrl + W|Cut word before cursor|
-|Ctrl + K / Ctrl + U|Cut line after / before cursor|
-|Ctrl + L|Clear screen|
-|TAB|Completion|
-|↑ / ↓|Previous / next command|
+- Explicit transaction control: `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`
+- `VACUUM` / `VACUUM INTO`, and `ATTACH` / `DETACH DATABASE`
+- DCL such as `GRANT` / `REVOKE`
 
 ## Benchmark
 
 `make bench` measures one full run (import the CSV into the in-memory DB, then run the query) over `testdata/benchmark/customers100000.csv` (100,000 rows, 12 columns):
 
-```sql
-SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC LIMIT 1000
-```
-
 | Records | Columns | Time per op | Memory per op | Allocations per op |
 |--------:|--------:|------------:|--------------:|-------------------:|
 | 100,000 | 12 | 515 ms | 161 MB | 2.82M |
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.29.0. Run `make bench` to reproduce on your machine.
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.29.0.
 
-## Comparison with similar tools
-
-The same query on the same 100,000-row, 12-column CSV (top 10 countries by row count), best of 5 end-to-end runs (process start, parse, query) on an AMD Ryzen 7 5800U:
+The same query on the same file (top 10 countries by row count), best of 5 end-to-end runs:
 
 | Tool | Time | Reads |
 |:--|--:|:--|
@@ -627,46 +193,24 @@ The same query on the same 100,000-row, 12-column CSV (top 10 countries by row c
 | sqly | 0.49s | CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire (+ compression) |
 | [textql](https://github.com/dinedal/textql) | 0.52s | CSV, TSV |
 
-sqly stays in the same sub-second range as the CSV-focused tools while reading the widest set of formats, shipping an interactive shell, and building as a pure-Go binary with no CGO or external SQLite toolchain. Pick the tool that fits the job; sqly optimizes for format breadth and an interactive workflow over raw single-query speed.
-
-## Alternative tools
-
-|Name| Description|
-|:--|:--|
-|[nao1215/sqluv](https://github.com/nao1215/sqluv)|Simple terminal UI for DBMS and local CSV/TSV/LTSV|
-|[harelba/q](https://github.com/harelba/q)|Run SQL directly on delimited files and multi-file sqlite databases|
-|[dinedal/textql](https://github.com/dinedal/textql)|Execute SQL against structured text like CSV or TSV|
-|[noborus/trdsql](https://github.com/noborus/trdsql)|CLI tool that can execute SQL queries on CSV, LTSV, JSON, YAML and TBLN. Can output to various formats.|
-|[mithrandie/csvq](https://github.com/mithrandie/csvq)|SQL-like query language for csv|
-
-## Limitations (not supported)
-
-sqly runs each statement in its own transaction on an in-memory database, so a few SQLite statements are rejected with a clear error rather than failing in confusing ways:
-
-- Explicit transaction control: `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`
-- `VACUUM` / `VACUUM INTO`, and `ATTACH` / `DETACH DATABASE`
-- DCL such as `GRANT` / `REVOKE`
-
-DDL (`CREATE`, `DROP`, `ALTER`, ...) runs against the in-memory tables, but a non-interactive `--save`/`--save-dir` run rejects a schema change up front, since only `INSERT`/`UPDATE`/`DELETE` on an imported table can be written back to a file.
+sqly stays in the same sub-second range as the CSV-focused tools while reading the widest set of formats, shipping an interactive shell, and building as a pure-Go binary with no CGO.
 
 ## Contributing
 
-Thanks for taking the time to contribute! See [CONTRIBUTING.md](./CONTRIBUTING.md) for details. Contributions are not only about code; a GitHub Star also motivates development.
+Thanks for taking the time to contribute; see [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). Contributions are not only about code: a GitHub Star also motivates development.
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nao1215/sqly&type=Date)](https://star-history.com/#nao1215/sqly&Date)
 
-## How to develop
-
-See the [developer documentation](https://nao1215.github.io/sqly/). When adding features or fixing bugs, please write unit tests; sqly aims for unit-test coverage across all packages, as the tree map shows. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (regenerate with `make demo`), and their commands are exercised end-to-end by the atago suite in `e2e/atago/` (`make test-e2e`).
+When adding features or fixing bugs, please write unit tests; sqly aims for unit-test coverage across all packages, as the tree map shows. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`), and their commands are exercised end-to-end by the atago suite in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
 
 ![treemap](./doc/img/cover-tree.svg)
 
-If you would like to report a bug or request a feature, please open a [GitHub Issue](https://github.com/nao1215/sqly/issues).
+Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/issues).
 
 ## Libraries used
 
-- [filesql](https://github.com/nao1215/filesql) - SQL database interface for CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel files with automatic type detection and compressed file support
-- [prompt](https://github.com/nao1215/prompt) - Powers the interactive shell with SQL completion and command history
+- [filesql](https://github.com/nao1215/filesql) — the `database/sql` driver that loads and writes back every supported file format, and the dialect translation behind `--dialect`
+- [prompt](https://github.com/nao1215/prompt) — the line editor behind the interactive shell
 
 ## LICENSE
 

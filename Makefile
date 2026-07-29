@@ -34,6 +34,12 @@ test-e2e: ## Run atago end-to-end tests in a hermetic temp-backed sandbox (requi
 coverage: ## Combine unit + self-hosted E2E coverage into coverage.out / cover.html (uses a `go build -cover` sqly; scratch under .coverage/)
 	sh scripts/coverage.sh
 
+website: ## Build the documentation website into website/public (requires hugo)
+	cd website && hugo --gc --minify --cleanDestinationDir
+
+website-serve: ## Serve the documentation website locally with live reload (requires hugo)
+	cd website && hugo server
+
 demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, ffmpeg)
 	for tape in doc/vhs/*.tape; do vhs "$$tape"; done
 

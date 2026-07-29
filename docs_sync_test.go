@@ -29,7 +29,7 @@ func TestDocsMakeCommandsExist(t *testing.T) {
 	docs := []string{
 		"README.md",
 		"CONTRIBUTING.md",
-		"doc/pages/markdown/build_and_test.md",
+		"doc/build_and_test.md",
 	}
 	for _, doc := range docs {
 		refs, err := docMakeTargets(doc)
@@ -53,58 +53,37 @@ func TestDocsMakeCommandsExist(t *testing.T) {
 func TestHelperCommandDocsMatchBehavior(t *testing.T) {
 	t.Parallel()
 
-	const path = "doc/pages/markdown/sqly_helper_command.md"
-	dump, err := docSection(path, "dump command")
+	shell, err := os.ReadFile("website/content/shell.md")
 	if err != nil {
-		t.Fatalf("read .dump section: %v", err)
+		t.Fatalf("read the shell page: %v", err)
 	}
-	if strings.Contains(dump, "If mode is table, .dump output CSV file") {
-		t.Errorf(".dump docs still claim table mode always writes CSV; it infers the format from the destination extension")
+	dump := lineContaining(string(shell), "`.dump TABLE FILE`")
+	if dump == "" {
+		t.Fatal("the shell page no longer documents .dump")
 	}
 	if !strings.Contains(dump, "extension") {
-		t.Errorf(".dump docs should describe extension-driven format inference in table mode")
+		t.Errorf(".dump docs should describe extension-driven format inference in table mode, got: %s", dump)
 	}
 
-	save, err := docSection(path, "save command")
+	reference, err := os.ReadFile("website/content/reference.md")
 	if err != nil {
-		t.Fatalf("read .save section: %v", err)
+		t.Fatalf("read the reference page: %v", err)
 	}
-	if !strings.Contains(save, "ACH") || !strings.Contains(save, "Fedwire") {
-		t.Errorf(".save docs should mention ACH/Fedwire whole-set write-back")
+	if !strings.Contains(string(reference), "ACH") || !strings.Contains(string(reference), "Fedwire") {
+		t.Errorf("the write-back reference should mention ACH/Fedwire whole-set write-back")
 	}
 }
 
-// docSection returns the body of the Markdown section introduced by the heading
-// "### <title>", up to the next "### " heading or end of file. It lets a
-// docs-sync test assert on one command's description without matching text from
-// a neighboring section.
-func docSection(path, title string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	heading := "### " + title
-	var b strings.Builder
-	inSection := false
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "### ") {
-			if inSection {
-				break // reached the next section
-			}
-			inSection = strings.TrimSpace(line) == heading
-			continue
-		}
-		if inSection {
-			b.WriteString(line)
-			b.WriteByte('\n')
+// lineContaining returns the first line of doc holding needle, or "" when no
+// line does. The helper-command reference is a table, so one row is the unit a
+// docs-sync check asserts on.
+func lineContaining(doc, needle string) string {
+	for line := range strings.SplitSeq(doc, "\n") {
+		if strings.Contains(line, needle) {
+			return line
 		}
 	}
-	if !inSection && b.Len() == 0 {
-		return "", os.ErrNotExist
-	}
-	return b.String(), scanner.Err()
+	return ""
 }
 
 // makefileTargets returns the set of target names declared in the Makefile (a
