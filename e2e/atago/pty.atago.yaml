@@ -215,6 +215,53 @@ scenarios:
           stdout:
             contains: "no such table"
 
+  # A statement without a trailing ";" is buffered until it is complete. The
+  # continuation prompt is the only thing that says so: without it the cursor
+  # dropped to a bare line, which is indistinguishable from a hung shell.
+  - name: a statement without a semicolon shows the continuation prompt
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name,\r" # incomplete: the buffer continues instead of running
+            - expect: '\.\.\.>' # the continuation marker, not a bare line
+            - send: "age FROM people WHERE age = 41;\r"
+            - expect: "Carol" # the two lines ran as one statement
+            - expect: '\(table\)\$' # and the main prompt came back
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "...>"
+              - "Carol"
+
+  # A dot-command is always complete, so it must run on the first Enter rather
+  # than opening a continuation the user then has to escape.
+  - name: a dot-command never opens a continuation
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".tables\r"
+            - expect: "people"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: "...>"
+
   - name: EOF at the prompt exits the shell cleanly
     steps:
       - fixture: *people
