@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -534,33 +533,41 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 
 // commitStagedFile moves a staged file onto its destination.
 //
-// A rename is the goal: it is atomic, so nothing ever sees a half-written file.
-// It is not always available. Windows refuses to rename over a destination
-// another handle still has open, and an in-place save overwrites exactly the
-// files the session imported from. When the rename is refused, the staged bytes
-// are copied over the destination instead. That keeps what the staging exists
-// for — no destination is touched until every target has been written — and
-// gives up only atomicity against a reader watching during the copy.
+// A plain rename is the goal: it is atomic, so nothing ever sees a half-written
+// file. Windows refuses to rename over a destination another handle still has
+// open, and an in-place save overwrites exactly the files the session imported
+// from. There the destination is renamed out of the way first — moving an open
+// file is allowed where replacing one is not — and put back if the second rename
+// fails, so a refused commit leaves it exactly as it was.
 func commitStagedFile(staging, dest string) error {
-	if err := os.Rename(staging, dest); err == nil {
+	err := os.Rename(staging, dest)
+	if err == nil {
 		return nil
 	}
+	if _, statErr := os.Stat(dest); statErr != nil {
+		// Nothing was in the way, so moving something aside cannot help.
+		return err
+	}
+	return commitByMovingAside(staging, dest)
+}
 
-	src, err := os.Open(staging) //nolint:gosec // staging is the file sqly just wrote
-	if err != nil {
+// commitByMovingAside renames dest out of the way, renames the staged file into
+// its place, and discards what it moved aside. A failure puts dest back, so a
+// refused commit never costs the file it was replacing.
+func commitByMovingAside(staging, dest string) error {
+	aside := dest + ".sqly-replaced"
+	// Clear any leftover from an interrupted save so the move below is not
+	// blocked by it.
+	_ = os.Remove(aside)
+	if err := os.Rename(dest, aside); err != nil {
 		return err
 	}
-	defer src.Close()
-
-	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // dest is the destination the caller asked to save to
-	if err != nil {
+	if err := os.Rename(staging, dest); err != nil {
+		_ = os.Rename(aside, dest)
 		return err
 	}
-	if _, err := io.Copy(out, src); err != nil {
-		_ = out.Close()
-		return err
-	}
-	return out.Close()
+	_ = os.Remove(aside)
+	return nil
 }
 
 // stageWriteTarget writes one target to a scratch path next to its destination
