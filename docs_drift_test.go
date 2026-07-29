@@ -484,3 +484,52 @@ func TestSqlyInvocation(t *testing.T) {
 		})
 	}
 }
+
+// TestDialectsPage_PassThroughClaimsAreSpecified ties the dialect page's most
+// perishable section to the spec that proves it. The "what passes through"
+// examples are the ones that would quietly become wrong: each is a divergence
+// sqly could fix later, and a page still listing a fixed divergence as a
+// limitation is worse than no page. Every command quoted there must therefore
+// appear in the spec named on the page, which asserts the output beside it.
+func TestDialectsPage_PassThroughClaimsAreSpecified(t *testing.T) {
+	t.Parallel()
+
+	const (
+		page    = "website/content/dialects.md"
+		section = "## What passes through, and can differ"
+		spec    = "e2e/atago/dialect_limits.atago.yaml"
+	)
+
+	data, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("read %s: %v", page, err)
+	}
+	body := string(data)
+	if !strings.Contains(body, spec) {
+		t.Fatalf("%s no longer names %s as the spec behind its claims", page, spec)
+	}
+
+	start := strings.Index(body, section)
+	if start < 0 {
+		t.Fatalf("%s no longer has the %q section", page, section)
+	}
+	rest := body[start+len(section):]
+	if end := strings.Index(rest, "\n## "); end >= 0 {
+		rest = rest[:end]
+	}
+
+	specData, err := os.ReadFile(spec)
+	if err != nil {
+		t.Fatalf("read %s: %v", spec, err)
+	}
+
+	queries := regexp.MustCompile(`--sql "([^"]+)"`).FindAllStringSubmatch(rest, -1)
+	if len(queries) < 3 {
+		t.Fatalf("only %d quoted queries found in the pass-through section; the page or the parser changed", len(queries))
+	}
+	for _, m := range queries {
+		if !strings.Contains(string(specData), m[1]) {
+			t.Errorf("%s documents %q as a pass-through divergence, but %s does not assert it", page, m[1], spec)
+		}
+	}
+}

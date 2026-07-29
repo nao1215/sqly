@@ -427,6 +427,11 @@ sqly:~(table)$ .dialect
 
 Loading files always uses SQLite; only the queries you write are translated.
 
+Translation is best effort: a construct with no SQLite equivalent is rejected by
+name, but SQL that SQLite accepts is passed through and can answer differently
+from the source dialect without any error. See the dialects page for what is
+translated, what is rejected, and what diverges.
+
 ## Ragged rows
 
 A CSV or TSV row whose field count differs from the header stops the import by

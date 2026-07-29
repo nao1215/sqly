@@ -111,3 +111,47 @@ scenarios:
           stdout:
             line: 2
             equals: "1"
+
+  - name: "CONCAT propagates a NULL where the dialect says it should"
+    description: >
+      MySQL and GoogleSQL CONCAT return NULL when any argument is NULL.
+      SQLite's own concat() treats a NULL as an empty string, so the call used to
+      answer a plausible non-NULL string with no error — a query written to find
+      rows with a missing field reported them as complete. PostgreSQL's concat()
+      genuinely does ignore NULLs, so it keeps SQLite's behavior.
+    steps:
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT CONCAT('a', 'b') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ab
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT CONCAT('a', NULL) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+      - run:
+          command: sqly --csv --dialect bigquery --sql "SELECT CONCAT('a', NULL) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: ""
+      - run:
+          command: sqly --csv --dialect postgres --sql "SELECT CONCAT('a', NULL) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: a
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT CONCAT_WS(',', 'a', NULL, 'b') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: '"a,b"'
