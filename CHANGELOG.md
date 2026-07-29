@@ -30,7 +30,9 @@
 * Read-Only Write-Back: `save.atago.yaml` adds three scenarios pinning that a read-only `--save-dir`, a read-only `--save --force`, and a zero-row `UPDATE` each report "nothing to save" and leave the workdir untouched, asserted through `changes` so a stray file would fail.
 
 ### Documentation
-* README: the table-name rules were wrong about non-ASCII names and are corrected. One-line notes record the contracts the fixes above establish: a run changing no row writes no file, only http and https URLs are downloaded, a multi-file save is all-or-nothing, and the shell prompt shows `...>` while buffering.
+* Documentation Site: `https://nao1215.github.io/sqly/` is rebuilt as a Hugo site under `website/`, replacing the MkDocs setup. It leads with runnable commands rather than prose: a front page you can paste from, a getting-started page, a cookbook of copyable one-liners indexed by task, and reference pages for the shell, the formats, and every flag. `doc/cookbook.md` is the source of the cookbook page, so it reads on GitHub too, and the developer docs move to `doc/architecture.md`, `doc/design_overview.md`, and `doc/build_and_test.md`.
+* README: cut from 730 lines to 250. The reference material moved to the site; what stays is the pitch, a thirty-second example, a block of one-liner recipes, install, and the benchmark. The table-name rules were wrong about non-ASCII names and are corrected, and one-line notes record the contracts the fixes above establish: a run changing no row writes no file, only http and https URLs are downloaded, a multi-file save is all-or-nothing, and the shell prompt shows `...>` while buffering.
+* Cookbook E2E: `e2e/atago/cookbook.atago.yaml` runs 15 of the documented commands against the real binary, including the thirty-second example pinned to its exact output, so a copied command cannot silently stop working.
 
 ### Dependencies
 * filesql v0.23.0: upgraded from v0.21.0 across two releases, for the non-Latin table-name fix (v0.22.0) and the staged ACH/Fedwire write (v0.23.0).
