@@ -113,6 +113,13 @@ sqly:~/sqly(table)$ .import http://127.0.0.1:8080/user.csv
 sqly:~/sqly(table)$ SELECT COUNT(*) AS c FROM user;
 ```
 
+Only `http` and `https` are downloaded. A URL written with any other scheme names the scheme it cannot use rather than reporting the URL as a missing file:
+
+```shell
+$ sqly --sql "SELECT 1" s3://bucket/data.csv
+cannot import s3://bucket/data.csv: only http and https URLs are downloaded, but this one uses the "s3" scheme; download the file first and pass its local path
+```
+
 ## Query in another SQL dialect: --dialect
 
 By default sqly uses SQLite syntax. `--dialect` lets you write queries in MySQL, PostgreSQL, or GoogleSQL (BigQuery / Cloud Spanner) instead; sqly translates them to SQLite before running. Loading files always uses SQLite, so only the queries you write are affected.
