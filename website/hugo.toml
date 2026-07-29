@@ -46,6 +46,11 @@ pageRef = "/formats"
 weight = 50
 
 [[menus.main]]
+name = "Dialects"
+pageRef = "/dialects"
+weight = 55
+
+[[menus.main]]
 name = "Reference"
 pageRef = "/reference"
 weight = 60

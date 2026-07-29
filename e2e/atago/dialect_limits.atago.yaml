@@ -1,0 +1,104 @@
+# What --dialect does NOT do. Translation is best-effort: a construct with no
+# SQLite equivalent is rejected by name, but SQL that SQLite happens to accept is
+# passed through and runs with SQLite's semantics, which can differ from the
+# source dialect's without any error.
+#
+# Every scenario here pins the behavior sqly has today, and every claim on the
+# documentation's dialect page comes from one of them. A scenario that starts
+# failing means the page needs updating — or that a limit became a fix.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly dialect limits
+
+scenarios:
+  # ---- Rejected by name: a clear error, not a confusing SQLite parse failure.
+  - name: an unsupported construct is named rather than passed to SQLite
+    steps:
+      - fixture: &rows
+          file: t.csv
+          content: |
+            id,g,v
+            1,a,10
+            2,a,20
+            3,b,30
+      - run:
+          command: sqly --dialect postgresql --sql "SELECT DISTINCT ON (g) g, v FROM t" t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "DISTINCT ON is not supported"
+
+  # ---- Passed through: SQLite runs it, and the answer can differ silently.
+  - name: string comparison stays case-sensitive under mysql
+    description: >
+      MySQL's default collation is case-insensitive, so 'A' = 'a' is 1 there.
+      SQLite compares bytes, and a collation is not something a query rewrite can
+      supply, so the comparison keeps SQLite's answer.
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "0"
+
+  - name: a non-aggregated column in GROUP BY is answered, not rejected
+    description: >
+      MySQL runs with ONLY_FULL_GROUP_BY by default and rejects this query.
+      SQLite picks an arbitrary row from each group, so sqly answers where MySQL
+      would have told the user the query is ambiguous.
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a,10"
+
+  - name: SUBSTR from position 0 keeps SQLite's answer
+    description: >
+      MySQL and GoogleSQL are 1-based and return an empty string for position 0.
+      SQLite treats 0 as the slot before the first character, so the same call
+      returns one character.
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: a
+
+  - name: casting a boolean to text gives SQLite's 1, not the spelled-out word
+    description: >
+      BigQuery CAST(TRUE AS STRING) is 'true' and MySQL CAST(TRUE AS CHAR) is
+      '1'. SQLite has no boolean type, so TRUE is already the integer 1 before
+      the cast runs and nothing downstream can tell it from a plain 1.
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  # ---- The boundary the translation never crosses.
+  - name: loading a file always uses sqlite, whatever the query dialect
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --csv --dialect mysql --sql "SELECT COUNT(*) AS c FROM t" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
