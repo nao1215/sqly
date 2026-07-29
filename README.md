@@ -445,6 +445,8 @@ no table data changed in this session; nothing to save
 
 Tabular tables that map one-to-one to a single CSV, TSV, LTSV, or Parquet source are written individually. ACH and Fedwire sources are reconstructed as a whole: their related tables (for ACH, the file-header, batches, and entries tables) are rewritten together into one valid `.ach`/`.fed` file, and `--save`/`--save-dir` validate that the required companion tables are still present before writing, failing with an explicit error if the set is incomplete. ACH/Fedwire write-back persists in-place `UPDATE`s to existing rows; adding or removing records is not supported by the native format reconstruction. Tables created by SQL, directory imports, and Excel sources are still rejected for write-back with a clear error before anything is written.
 
+A save covering several files is all-or-nothing. Some failures can only surface while a file is being encoded (an ACH or Fedwire value the format cannot hold is rejected mid-write), so every file is written to a scratch path beside its destination and moved into place only once all of them have been written. A failed save therefore leaves every destination, and every source, exactly as it was.
+
 ```shell
 $ sqly --sql "UPDATE payment_entries SET individual_name = 'Updated' WHERE entry_index = 0" --save --force payment.ach
 Saved ACH set payment to payment.ach

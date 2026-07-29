@@ -1,0 +1,181 @@
+# Write-back is all-or-nothing across a session. The checks that can run up
+# front already do (planWriteBack validates every target and writes nothing when
+# any of them is unpersistable), but some failures only surface while a file is
+# being encoded: the ACH and Fedwire writers validate as they encode, so a value
+# the format cannot hold is rejected mid-write. Each target used to be written
+# straight to its destination in turn, so an earlier one was already saved when a
+# later one failed — the session ended half-persisted, with exit 1 and nothing
+# saying which files had changed. Every target is now staged beside its
+# destination and moved into place only after all of them have been written.
+#
+# The reproducer needs a target that succeeds followed by one that fails, and a
+# financial set is the only target whose write can fail on its data, so these
+# scenarios use two of them. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly write-back atomicity
+
+scenarios:
+  - name: a failing second ACH set leaves the first one unwritten
+    steps:
+      - fixture: &first_ach
+          file: adebit.ach
+          from: testdata/ppd-debit.ach
+      - fixture: &second_ach
+          file: zdebit.ach
+          from: testdata/ppd-debit.ach
+      - fixture:
+          file: script.sql
+          content: |
+            UPDATE adebit_entries SET individual_name = 'RENAMED';
+            UPDATE zdebit_entries SET amount = 999999999999;
+      - run:
+          command: sqly --save --force --sql-file script.sql adebit.ach zdebit.ach
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "does not match formatted value"
+            not_contains: "Saved"
+          changes:
+            created: []
+            modified: []
+            deleted: []
+      - run:
+          command: sqly --csv --sql "SELECT individual_name FROM adebit_entries" adebit.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: RENAMED
+
+  - name: a failing Fedwire set leaves a successful ACH set unwritten
+    steps:
+      - fixture: *first_ach
+      - fixture:
+          file: zwire.fed
+          from: testdata/customer-transfer.fed
+      - fixture:
+          file: script.sql
+          content: |
+            UPDATE adebit_entries SET individual_name = 'RENAMED';
+            UPDATE zwire_message SET amount = 'BADAMOUNT';
+      - run:
+          command: sqly --save --force --sql-file script.sql adebit.ach zwire.fed
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "incorrect amount format"
+          changes:
+            created: []
+            modified: []
+            deleted: []
+
+  # The file that failed is not damaged either: filesql stages its own write, so
+  # a rejected encode leaves the source byte-for-byte intact instead of
+  # truncating it to nothing (ACH) or deleting it (Fedwire).
+  - name: the failing source itself is left intact and still imports
+    steps:
+      - fixture: *first_ach
+      - run:
+          command: sqly --save --force --sql "UPDATE adebit_entries SET amount = 999999999999" adebit.ach
+      - assert:
+          exit_code: 1
+          changes:
+            created: []
+            modified: []
+            deleted: []
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM adebit_entries" adebit.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: a failing --save-dir run creates no destination files
+    steps:
+      - fixture: *first_ach
+      - fixture: *second_ach
+      - fixture:
+          file: script.sql
+          content: |
+            UPDATE adebit_entries SET individual_name = 'RENAMED';
+            UPDATE zdebit_entries SET amount = 999999999999;
+      - run:
+          command: sqly --save-dir out --sql-file script.sql adebit.ach zdebit.ach
+      - assert:
+          exit_code: 1
+      - assert:
+          file:
+            path: out/adebit.ach
+            exists: false
+      - assert:
+          file:
+            path: out/zdebit.ach
+            exists: false
+
+  - name: a write-back that succeeds still writes every target
+    steps:
+      - fixture: &rows
+          file: rows.csv
+          content: |
+            id,name
+            1,alice
+      - fixture: *first_ach
+      - fixture:
+          file: script.sql
+          content: |
+            UPDATE rows SET name = 'CHANGED';
+            UPDATE adebit_entries SET individual_name = 'RENAMED';
+      - run:
+          command: sqly --save --force --sql-file script.sql rows.csv adebit.ach
+      - assert:
+          exit_code: 0
+          stderr:
+            contains:
+              - "Saved rows to"
+              - "Saved ACH set adebit to"
+          file:
+            path: rows.csv
+            contains: CHANGED
+          changes:
+            created: []
+            modified:
+              - rows.csv
+              - adebit.ach
+            deleted: []
+      - run:
+          command: sqly --csv --sql "SELECT individual_name FROM adebit_entries" adebit.ach
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: RENAMED
+
+  - name: a successful --save-dir run writes every target and touches no source
+    steps:
+      - fixture: *rows
+      - fixture: *first_ach
+      - fixture:
+          file: script.sql
+          content: |
+            UPDATE rows SET name = 'CHANGED';
+            UPDATE adebit_entries SET individual_name = 'RENAMED';
+      - run:
+          command: sqly --save-dir out --sql-file script.sql rows.csv adebit.ach
+      - assert:
+          exit_code: 0
+          changes:
+            created:
+              - out/rows.csv
+              - out/adebit.ach
+            modified: []
+            deleted: []
+      - assert:
+          file:
+            path: rows.csv
+            not_contains: CHANGED
+      - assert:
+          file:
+            path: out/rows.csv
+            contains: CHANGED
