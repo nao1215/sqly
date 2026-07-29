@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Bug Fixes
+* Non-Latin File Names Lost Their Table Name: a file named in Japanese, Chinese, Korean, Cyrillic, or accented Latin now keeps its name as the table name. Table names were sanitized against the ASCII letter range, so every other letter was deleted: `売上.csv` and `Данные.csv` both became `sheet`, `café.csv` became `caf`, and an Excel sheet named `Café` became `data_Caf`. Two such files in one run therefore collided on the same fallback name and the second failed to import, so the run exited 1 with one of the inputs missing. Table names are always emitted double-quoted, so the restriction bought nothing. Punctuation, symbols, and quotes are still removed, a name starting with a digit still gets a `sheet_` prefix, and a name left with nothing still falls back to `sheet`. Requires filesql v0.22.0.
+
 * Unfetchable URL Reported As A Missing File: an input written as a URL sqly cannot download now names the scheme instead of claiming the path does not exist. `sqly --sql ... s3://bucket/data.csv` (and `file://`, `ftp://`, `gs://`, and the rest) fell through to the local-path branch and failed with "path does not exist", which reads as a typo in the URL rather than a scheme sqly was never going to fetch. It now says only http and https are downloaded, names the scheme it found, and points at passing a local path. A local file name that merely contains a colon, and a Windows drive path, are still treated as paths.
 
 * Silent Read-Only Write-Back: a `--save` or `--save-dir` run whose SQL changed no row now says so on stderr instead of exiting 0 in silence. Write-back deliberately skips a run that left every table as imported, so a read-only query, an `EXPLAIN`, or an `UPDATE` matching no row wrote no file and printed nothing; `--save-dir` in particular looked like it had written the directory, and the absence was only noticed later. It reports "no table data changed in this session; nothing to save", the same note the `.save` command already printed for the same case, and still exits 0.
@@ -17,11 +19,15 @@
 * Dialect Rewrites In Complex Expressions: `e2e/atago/dialect_windows.atago.yaml` adds 11 scenarios guarding the operator rewrites in the positions that are easy to get wrong, including windowed and filtered aggregates, named windows, `CASE`, subqueries, and `GROUP BY`.
 * Dialect E2E: 58 atago scenarios in `e2e/atago/dialect_cross.atago.yaml`, `dialect_mysql.atago.yaml`, `dialect_postgresql.atago.yaml`, and `dialect_googlesql.atago.yaml` pin the semantics above from the CLI, each with a description of what SQLite would have done instead. `dialect.atago.yaml` adds 12 more covering chained `::` casts, `E''` and dollar-quoted strings, json operators, `~*`, `LATERAL` rejection, backtick names containing a space, `#` comments and raw strings, negative `DATE_DIFF`, `SELECT * EXCEPT` and `ARRAY<>` rejection, dialect name aliases, and a batch script stopped by a translate error.
 * Known Limitations: `e2e/atago/known_bugs/` records dialect behavior sqly cannot reproduce as executable specs that are expected to fail, run by `scripts/run_known_bugs.sh` and kept out of CI.
+* Non-Latin Table Names: `e2e/atago/unicode_table_names.atago.yaml` adds 9 scenarios covering a Japanese, Cyrillic, and accented-Latin file name queried by its own name, two Japanese-named files joined in one run (the collision that used to drop an input), the name reported by `--inspect` and `.tables`, write-back to a Japanese-named source, a non-Latin Excel sheet name, and the characters that must still be dropped or fall back.
 * Unfetchable URL Schemes: `http_import.atago.yaml` adds three scenarios covering `s3://`, `file://`, and a local file name containing a colon, and `TestUnfetchableURLScheme` pins the detector against Windows drive paths, uppercase schemes, and plain relative paths.
 * Read-Only Write-Back: `save.atago.yaml` adds three scenarios pinning that a read-only `--save-dir`, a read-only `--save --force`, and a zero-row `UPDATE` each report "nothing to save" and leave the workdir untouched, asserted through `changes` so a stray file would fail.
 
 ### Documentation
-* README: the write-back section documents that a run changing no row writes no file, with the message it prints, and the HTTP import section documents that only http and https are downloaded, with the error a different scheme produces. `readme_examples.atago.yaml` runs both examples against the binary.
+* README: the write-back section documents that a run changing no row writes no file, with the message it prints, and the HTTP import section documents that only http and https are downloaded, with the error a different scheme produces. `readme_examples.atago.yaml` runs both examples against the binary. The table-name rules now state that letters and digits in any script are kept, with a Japanese example.
+
+### Dependencies
+* filesql v0.22.0: upgraded from v0.21.0 for the non-Latin table-name fix.
 
 ## [v0.29.0](https://github.com/nao1215/sqly/compare/v0.28.0...v0.29.0) (2026-07-29)
 

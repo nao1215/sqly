@@ -1,0 +1,171 @@
+# A table name comes from the file name, and filesql used to sanitize it against
+# the ASCII letter range. Every other letter was deleted, so "売上.csv" and
+# "Данные.csv" both became "sheet" and "café.csv" became "caf": a file named in
+# any non-Latin script lost its identity, and two of them in one run collided on
+# the fallback name so only one loaded. filesql v0.22.0 judges letters and digits
+# by Unicode category; table names are always emitted double-quoted, so nothing
+# needed escaping in the first place. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly non-Latin table names
+
+scenarios:
+  - name: queries a table named in Japanese by its own name
+    steps:
+      - fixture: &sales
+          file: 売上.csv
+          content: |
+            id,amount
+            1,100
+            2,250
+      - run:
+          command: sqly --csv --sql 'SELECT amount FROM "売上" WHERE id = 2' 売上.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "250"
+
+  # The collision that made this a data-loss bug rather than a naming quirk: two
+  # differently named files both sanitized to "sheet", so the second import failed
+  # and the run exited 1.
+  - name: loads two Japanese-named files without a table-name collision
+    steps:
+      - fixture: *sales
+      - fixture: &customers
+          file: 顧客.csv
+          content: |
+            id,name
+            1,alice
+            2,bob
+      - run:
+          command: sqly --csv --sql 'SELECT c.name FROM "顧客" AS c JOIN "売上" AS s ON s.id = c.id WHERE s.amount = 250' 売上.csv 顧客.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: bob
+
+  - name: keeps a Cyrillic file name
+    steps:
+      - fixture:
+          file: Данные.csv
+          content: |
+            id,value
+            1,42
+      - run:
+          command: sqly --csv --sql 'SELECT value FROM "Данные"' Данные.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "42"
+
+  # An accented Latin name lost only the accented character, so "café" silently
+  # became "caf" rather than falling back; the failure looked like a typo.
+  - name: keeps an accented Latin file name
+    steps:
+      - fixture:
+          file: café.csv
+          content: |
+            id,city
+            1,Paris
+      - run:
+          command: sqly --csv --sql 'SELECT city FROM "café"' café.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: Paris
+
+  - name: reports the real table name in --inspect and .tables
+    steps:
+      - fixture: *sales
+      - fixture: *customers
+      - run:
+          command: sqly --inspect --inspect-sample 0 売上.csv 顧客.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].name"
+              equals: "売上"
+      - assert:
+          stdout:
+            json:
+              path: "$.tables[1].name"
+              equals: "顧客"
+      - run:
+          command: sqly 売上.csv
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "売上"
+            not_contains: sheet
+
+  # The characters that must still be dropped: a table name is interpolated into
+  # a quoted identifier, so a quote would break it, and punctuation and symbols
+  # have no place in a name.
+  - name: still drops punctuation and symbols from a file name
+    steps:
+      - fixture:
+          file: 売上@2026!.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --csv --sql 'SELECT id FROM "売上2026"' 売上@2026!.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  # A name that sanitizes to nothing still falls back, so the fallback path did
+  # not go away with the ASCII restriction.
+  - name: falls back for a name with no letters or digits
+    steps:
+      - fixture:
+          file: "@#$.csv"
+          content: |
+            id
+            7
+      - run:
+          command: sqly --csv --sql "SELECT id FROM sheet" "@#$.csv"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "7"
+
+  - name: writes a Japanese-named table back to its source
+    steps:
+      - fixture: *sales
+      - run:
+          command: sqly --save --force --sql 'UPDATE "売上" SET amount = 999 WHERE id = 1' 売上.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Saved 売上 to"
+      - run:
+          command: sqly --csv --sql 'SELECT amount FROM "売上" WHERE id = 1' 売上.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "999"
+
+  - name: names an Excel sheet written in a non-Latin script
+    steps:
+      - fixture:
+          file: book.xlsx
+          from: testdata/sheet_with_accents.xlsx
+      - run:
+          command: sqly --csv --sql 'SELECT COUNT(*) AS c FROM "book_Café"' book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"

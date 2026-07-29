@@ -10,7 +10,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.15
-	github.com/nao1215/filesql v0.21.0
+	github.com/nao1215/filesql v0.22.0
 	github.com/nao1215/prompt v0.0.11
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/spf13/pflag v1.0.10
