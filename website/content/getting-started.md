@@ -1,0 +1,95 @@
+---
+title: Getting started
+description: Run your first sqly query, learn how files become tables, and see the four ways to give sqly input.
+weight: 20
+---
+
+## 1. The file is the table
+
+Pass paths as arguments. Each file becomes a table named after it, minus the extension and any compression suffix.
+
+```shell
+$ sqly --sql "SELECT * FROM user" testdata/user.csv
++-----------+------------+------------+-----------+
+| user_name | identifier | first_name | last_name |
++-----------+------------+------------+-----------+
+| booker12  |          1 | Rachel     | Booker    |
+| jenkins46 |          2 | Mary       | Jenkins   |
+| smith79   |          3 | Jamie      | Smith     |
++-----------+------------+------------+-----------+
+```
+
+`user.csv.gz` is also table `user`. A name that is not a bare identifier gets quoted in queries: `2023-data.csv` becomes `sheet_2023_data`, and `売上.csv` stays `売上`. See [Table name rules](/reference/#table-name-rules).
+
+Not sure what you have? `--inspect` prints the inferred schema, row counts, and sample rows as JSON:
+
+```shell
+sqly --inspect user.csv
+```
+
+## 2. Several files are several tables
+
+```shell
+sqly --sql "SELECT u.user_name, i.position
+            FROM user u JOIN identifier i ON u.identifier = i.id" user.csv identifier.csv
+```
+
+Formats mix. A gzipped CSV joins a Parquet file joins an Excel sheet — once loaded, they are all SQLite tables.
+
+A directory argument loads every supported file inside it.
+
+## 3. Choose the output
+
+The default is an ASCII table for a terminal. One flag switches it:
+
+```shell
+sqly --csv      --sql "SELECT * FROM user" user.csv
+sqly --json     --sql "SELECT * FROM user" user.csv
+sqly --markdown --sql "SELECT * FROM user" user.csv
+```
+
+`--output PATH` writes to a file instead of stdout, and the extension must agree with the format:
+
+```shell
+sqly --json --output user.json --sql "SELECT * FROM user" user.csv
+```
+
+Full list on the [reference page](/reference/#output-formats).
+
+## 4. Four ways in
+
+| Input | How |
+|:--|:--|
+| Files and directories | `sqly ... file.csv ./dir` |
+| A URL | `sqly ... https://example.com/user.csv` |
+| A pipe | `cat user.csv \| sqly --stdin csv --sql "SELECT * FROM stdin"` |
+| A script on stdin | `printf '.tables\nSELECT 1;\n' \| sqly user.csv` |
+
+## 5. The interactive shell
+
+`sqly` with no `--sql` opens the shell. It is the same engine with completion, history, and dot-commands:
+
+```text
+$ sqly user.csv
+sqly:~/data(table)$ .tables
+sqly:~/data(table)$ SELECT * FROM user LIMIT 1;
+sqly:~/data(table)$ .mode csv
+sqly:~/data(csv)$ .exit
+```
+
+See [Shell](/shell/).
+
+## 6. Save your edits
+
+`UPDATE`, `INSERT`, and `DELETE` change the in-memory tables only. To persist them:
+
+```shell
+sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out user.csv
+sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
+```
+
+`--save-dir` writes into a directory and leaves the sources alone. `--save` overwrites them, and requires `--force`. Either way the format and compression of each source are preserved, a run that changes no row writes no file, and a save covering several files is all-or-nothing.
+
+## Next
+
+The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, profiling data, diffing two files, and writing MySQL or BigQuery syntax.

@@ -1,0 +1,81 @@
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "doc/cookbook.md"
+      - "doc/img/**"
+      - ".github/workflows/website.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "doc/cookbook.md"
+      - "doc/img/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      HUGO_VERSION: 0.164.0
+      HUGO_SHA256: d9c8b17285ea4ec004d9f814273ea910f2051ce02c284993fd1f91ba455ae50d
+      PAGEFIND_VERSION: 1.5.2
+      PAGEFIND_SHA256: afb824a9e7f64905a934900481cea5be679c03975e527329e0e5e6cc70f5feda
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Hugo
+        run: |
+          curl -fsSL -o "${RUNNER_TEMP}/hugo.tar.gz" \
+            "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_${HUGO_VERSION}_linux-amd64.tar.gz"
+          echo "${HUGO_SHA256}  ${RUNNER_TEMP}/hugo.tar.gz" | sha256sum --check -
+          tar -C "${RUNNER_TEMP}" -xzf "${RUNNER_TEMP}/hugo.tar.gz" hugo
+          sudo mv "${RUNNER_TEMP}/hugo" /usr/local/bin/hugo
+          hugo version
+
+      - name: Build website
+        run: make website
+
+      - name: Index the site with Pagefind
+        run: |
+          curl -fsSL -o "${RUNNER_TEMP}/pagefind.tar.gz" \
+            "https://github.com/Pagefind/pagefind/releases/download/v${PAGEFIND_VERSION}/pagefind-v${PAGEFIND_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${PAGEFIND_SHA256}  ${RUNNER_TEMP}/pagefind.tar.gz" | sha256sum --check -
+          tar -C "${RUNNER_TEMP}" -xzf "${RUNNER_TEMP}/pagefind.tar.gz" pagefind
+          "${RUNNER_TEMP}/pagefind" --site website/public
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/public
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

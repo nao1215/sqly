@@ -1,0 +1,285 @@
+# The recipes shown on the front page of the docs and in doc/cookbook.md, run
+# against the real binary so a copied command cannot silently stop working. Each
+# scenario is the command as written, with the fixture the reader is told to
+# create. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: cookbook recipes
+
+scenarios:
+  # The first command anyone runs. Its output is quoted verbatim on the site, so
+  # the whole table is pinned, not just a substring.
+  - name: the thirty-second example prints the documented table
+    steps:
+      - fixture: &staff
+          file: staff.csv
+          content: |
+            name,dept,salary
+            alice,eng,120
+            bob,sales,90
+            carol,eng,140
+      - run:
+          command: sqly --sql "SELECT dept, ROUND(AVG(salary)) AS avg FROM staff GROUP BY dept" staff.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              +-------+-----+
+              | dept  | avg |
+              +-------+-----+
+              | eng   | 130 |
+              | sales |  90 |
+              +-------+-----+
+
+  - name: inspect reports the schema of an unfamiliar file
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --inspect --inspect-sample 0 staff.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].name"
+              equals: staff
+
+  - name: converts a csv to json, excel, and parquet
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --json --output staff.json --sql "SELECT * FROM staff" staff.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: staff.json
+            contains: alice
+      - run:
+          command: sqly --excel --output staff.xlsx --sql "SELECT * FROM staff" staff.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: staff.xlsx
+            exists: true
+      - run:
+          command: sqly --parquet --output staff.parquet --sql "SELECT * FROM staff" staff.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM staff" staff.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: joins a gzipped csv with a parquet file
+    steps:
+      - fixture: &orders
+          file: orders.csv
+          content: |
+            id,pid
+            1,10
+            2,20
+      - fixture: &products
+          file: products.csv
+          content: |
+            id,name
+            10,widget
+            20,gadget
+      - run:
+          command: sqly --parquet --output products.parquet --sql "SELECT * FROM products" products.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: gzip -f orders.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT p.name FROM orders o JOIN products p ON o.pid = p.id ORDER BY o.id" orders.csv.gz products.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - widget
+              - gadget
+
+  - name: pulls a field out of a jsonl file
+    steps:
+      - fixture:
+          file: sample.jsonl
+          content: |
+            {"name":"alice","age":30}
+            {"name":"bob","age":22}
+      - run:
+          command: sqly --csv --sql "SELECT json_extract(data, '$.name') AS name FROM sample WHERE json_extract(data, '$.age') >= 30" sample.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: alice
+
+  - name: counts rows piped in on stdin
+    steps:
+      - fixture: *staff
+      - run:
+          command: sh -c 'cat staff.csv | sqly --csv --stdin csv --sql "SELECT COUNT(*) AS c FROM stdin"'
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: loads every supported file in a directory
+    steps:
+      - fixture:
+          file: data/users.csv
+          content: |
+            id,name
+            1,alice
+      - fixture:
+          file: data/orders.csv
+          content: |
+            id,user_id
+            9,1
+      - run:
+          command: sqly --csv --sql "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id" data
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: alice
+
+  - name: ranks rows with a window function
+    steps:
+      - fixture: &actor
+          file: actor.csv
+          content: |
+            actor,total_gross
+            Harrison Ford,4871.7
+            Samuel Jackson,4772.8
+            Morgan Freeman,4468.3
+      - run:
+          command: sqly --csv --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "Harrison Ford,1"
+
+  - name: reports data quality as text
+    steps:
+      - fixture:
+          file: people.csv
+          content: |
+            id,email
+            1,a@example.com
+            2,
+      - run:
+          command: sqly --profile --profile-format text people.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "table people: 2 rows, 2 columns"
+              - "blanks=1"
+
+  - name: diffs two files by key
+    steps:
+      - fixture:
+          file: old.csv
+          content: |
+            id,v
+            1,a
+            2,b
+      - fixture:
+          file: new.csv
+          content: |
+            id,v
+            1,a
+            3,c
+      - run:
+          command: sqly --compare --compare-key id --compare-format text old.csv new.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "keyed by id: 1 added, 1 removed, 0 modified"
+
+  - name: edits a file in place
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name
+            booker12,1,Rachel
+            jenkins46,2,Mary
+      - run:
+          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save --force user.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: user.csv
+            contains: Rachelle
+
+  - name: translates postgresql syntax
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --csv --dialect postgresql --sql "SELECT user_name FROM \"user\" WHERE user_name ILIKE 'B%'" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: booker12
+
+  - name: skips a ragged row instead of failing the import
+    steps:
+      - fixture: &ragged
+          file: ragged.csv
+          content: |
+            id,name
+            1,alice
+            2,bob,extra
+      - run:
+          command: sqly --csv --import-mode skip --sql "SELECT COUNT(*) AS c FROM ragged" ragged.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+      - run:
+          command: sqly --sql "SELECT 1" ragged.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: column count mismatch
+
+  - name: reuses an import cache while the input is unchanged
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --cache staff.cache --csv --sql "SELECT COUNT(*) AS c FROM staff" staff.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --cache staff.cache --csv --sql "SELECT COUNT(*) AS c FROM staff" staff.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "cache: reused"
+          stdout:
+            line: 2
+            equals: "3"
+
+  - name: runs a script from a heredoc in batch mode
+    steps:
+      - fixture: *staff
+      - run:
+          command: sh -c "printf '.mode csv\nSELECT name FROM staff ORDER BY name;\n' | sqly staff.csv"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - alice
+              - bob
+              - carol

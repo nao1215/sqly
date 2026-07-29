@@ -1,0 +1,86 @@
+# Configuration for the hosted documentation website (GitHub Pages).
+# Content comes from the repository itself: doc/cookbook.md is mounted read-only
+# and turned into a page by content/_content.gotmpl, so the committed file stays
+# the single source of truth.
+baseURL = "https://nao1215.github.io/sqly/"
+locale = "en"
+title = "sqly"
+disableKinds = ["taxonomy", "term", "rss"]
+enableRobotsTXT = true
+timeZone = "UTC"
+
+[params]
+tagline = "SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire"
+description = "sqly runs SQL over your data files. Joins across formats, an interactive shell, MySQL/PostgreSQL/GoogleSQL dialects, and write-back to the source."
+
+[markup.highlight]
+noClasses = false
+
+[markup.tableOfContents]
+startLevel = 2
+endLevel = 3
+
+[[menus.main]]
+name = "Install"
+pageRef = "/install"
+weight = 10
+
+[[menus.main]]
+name = "Getting started"
+pageRef = "/getting-started"
+weight = 20
+
+[[menus.main]]
+name = "Cookbook"
+pageRef = "/cookbook"
+weight = 30
+
+[[menus.main]]
+name = "Shell"
+pageRef = "/shell"
+weight = 40
+
+[[menus.main]]
+name = "Formats"
+pageRef = "/formats"
+weight = 50
+
+[[menus.main]]
+name = "Reference"
+pageRef = "/reference"
+weight = 60
+
+[[menus.main]]
+name = "About"
+pageRef = "/about"
+weight = 70
+
+[module]
+[[module.mounts]]
+source = "content"
+target = "content"
+
+[[module.mounts]]
+source = "layouts"
+target = "layouts"
+
+[[module.mounts]]
+source = "assets"
+target = "assets"
+
+# Repository docs, mounted so pages can be generated from the committed files.
+[[module.mounts]]
+source = "../doc/cookbook.md"
+target = "assets/doc/cookbook.md"
+
+# Images served as-is.
+[[module.mounts]]
+source = "../doc/img"
+target = "static/img"
+
+# The same images, mounted again as processable assets so the layouts can derive
+# sized variants at build time (a right-ratio social card, a square favicon)
+# without committing any extra binary.
+[[module.mounts]]
+source = "../doc/img"
+target = "assets/imgsrc"
