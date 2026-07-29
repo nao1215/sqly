@@ -96,6 +96,14 @@ func TestSmoke_VersionAndHelpFlags(t *testing.T) {
 	if !strings.Contains(out, "Usage") {
 		t.Errorf("--help stdout = %q, want usage text", out)
 	}
+	for _, want := range []string{
+		"Documentation: https://nao1215.github.io/sqly/",
+		"GitHub Sponsors: https://github.com/sponsors/nao1215",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--help stdout does not contain %q: %q", want, out)
+		}
+	}
 }
 
 func TestSmoke_BatchHelperCommands(t *testing.T) {
