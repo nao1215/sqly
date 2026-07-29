@@ -1,16 +1,17 @@
-# Dialect defects that show up in more than one dialect for the same reason:
-# SQLite's own semantics leak through because the translation only rewrites
-# syntax, not evaluation. These are silent wrong answers, not errors.
+# Dialect behavior that is the same in more than one dialect and differs from
+# SQLite's own. Each of these was a silent wrong answer before filesql v0.20.0:
+# the query ran and returned a plausible value the source dialect would never
+# give, so nothing warned the user.
 #
-# Expected to fail today. See README.md; run with scripts/run_known_bugs.sh.
+# Run with: make test-e2e
 version: "1"
 
 suite:
-  name: sqly known cross-dialect bugs
+  name: sqly cross-dialect semantics
 
 scenarios:
   - name: "mysql division should return a float"
-    description: "MySQL / is float division, so 5/2 is 2.5. sqly returns 2 because SQLite does integer division on two integers, and no rewrite compensates."
+    description: "MySQL / is float division, so 5/2 is 2.5. SQLite would return 2 because SQLite does integer division on two integers."
     steps:
       - run:
           command: sqly --csv --dialect mysql --sql "SELECT 5/2 AS v"
@@ -21,7 +22,7 @@ scenarios:
             equals: "2.5"
 
   - name: "googlesql division should return a float"
-    description: "BigQuery / always yields FLOAT64, so 5/2 is 2.5. sqly returns 2. This is the worst kind of divergence: an average or a ratio comes out silently truncated."
+    description: "BigQuery / always yields FLOAT64, so 5/2 is 2.5. SQLite would return 2. This is the worst kind of divergence: an average or a ratio comes out silently truncated."
     steps:
       - run:
           command: sqly --csv --dialect bigquery --sql "SELECT 5/2 AS v"
@@ -32,7 +33,7 @@ scenarios:
             equals: "2.5"
 
   - name: "postgresql LIKE should stay case-sensitive"
-    description: "PostgreSQL LIKE is case-sensitive and ILIKE is the case-insensitive form. sqly reports 1 for 'ABC' LIKE 'abc' because SQLite's LIKE folds ASCII case, which also makes ILIKE indistinguishable from LIKE."
+    description: "PostgreSQL LIKE is case-sensitive and ILIKE is the case-insensitive form. SQLite would report 1 for 'ABC' LIKE 'abc' because SQLite's LIKE folds ASCII case, which also makes ILIKE indistinguishable from LIKE."
     steps:
       - run:
           command: sqly --csv --dialect postgres --sql "SELECT 'ABC' LIKE 'abc' AS v"
@@ -43,7 +44,7 @@ scenarios:
             equals: "0"
 
   - name: "googlesql LIKE should stay case-sensitive"
-    description: "GoogleSQL LIKE is case-sensitive. sqly reports 1 for 'ABC' LIKE 'abc', so a filter written against BigQuery silently matches extra rows."
+    description: "GoogleSQL LIKE is case-sensitive. SQLite would report 1 for 'ABC' LIKE 'abc', so a filter written against BigQuery silently matches extra rows."
     steps:
       - run:
           command: sqly --csv --dialect bigquery --sql "SELECT 'ABC' LIKE 'abc' AS v"
@@ -54,7 +55,7 @@ scenarios:
             equals: "0"
 
   - name: "mysql CAST to an integer type should round"
-    description: "MySQL CAST(1.9 AS SIGNED) is 2. sqly returns 1 because SQLite's CAST truncates toward zero."
+    description: "MySQL CAST(1.9 AS SIGNED) is 2. SQLite would return 1 because SQLite's CAST truncates toward zero."
     steps:
       - run:
           command: sqly --csv --dialect mysql --sql "SELECT CAST(1.9 AS SIGNED) AS v"
@@ -65,7 +66,7 @@ scenarios:
             equals: "2"
 
   - name: "postgresql CAST to an integer type should round"
-    description: "PostgreSQL CAST(1.9 AS INTEGER) is 2 (round half to even). sqly returns 1."
+    description: "PostgreSQL CAST(1.9 AS INTEGER) is 2 (round half to even). SQLite would return 1."
     steps:
       - run:
           command: sqly --csv --dialect postgres --sql "SELECT CAST(1.9 AS INTEGER) AS v"
@@ -76,7 +77,7 @@ scenarios:
             equals: "2"
 
   - name: "googlesql CAST to INT64 should round"
-    description: "BigQuery CAST(1.9 AS INT64) is 2 (round half away from zero). sqly returns 1."
+    description: "BigQuery CAST(1.9 AS INT64) is 2 (round half away from zero). SQLite would return 1."
     steps:
       - run:
           command: sqly --csv --dialect bigquery --sql "SELECT CAST(1.9 AS INT64) AS v"
@@ -87,7 +88,7 @@ scenarios:
             equals: "2"
 
   - name: "LEAST and GREATEST should work in every dialect"
-    description: "All three dialects have LEAST/GREATEST; SQLite spells them min/max with several arguments. sqly fails with 'no such function' in each dialect."
+    description: "All three dialects have LEAST/GREATEST. SQLite spells the same idea min/max with several arguments, which collides with the aggregate forms, so each needs its own helper."
     steps:
       - run:
           command: sqly --csv --dialect mysql --sql "SELECT LEAST(3, 1, 2) AS v"

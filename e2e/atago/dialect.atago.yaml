@@ -59,7 +59,7 @@ scenarios:
           exit_code: 0
           stdout:
             contains:
-              - "2026/01/15,001,3,2026,2026-01-18 00:00:00"
+              - "2026/01/15,001,3,2026,2026-01-18"
 
   - name: "mysql dialect translates GROUP_CONCAT SEPARATOR, SUBSTRING_INDEX, and RLIKE"
     steps:
@@ -82,13 +82,14 @@ scenarios:
           exit_code: 0
           stdout:
             contains:
-              - "2025-11-15 00:00:00,c.d"
+              - "2025-11-15,c.d"
 
   - name: "mysql dialect rejects an unsupported INTERVAL unit"
+    description: "MySQL's compound units (DAY_HOUR and friends) have no single-unit equivalent, so they must be reported rather than silently approximated."
     steps:
       - fixture: *users
       - run:
-          command: sqly --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 WEEK)" users.csv
+          command: sqly --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 DAY_HOUR)" users.csv
       - assert:
           exit_code: 1
           stderr:
@@ -454,7 +455,7 @@ scenarios:
           command: sqly --csv users.csv
           stdin: |
             .dialect mysql
-            SELECT DATE_ADD('2026-01-01', INTERVAL 1 WEEK) AS v;
+            SELECT DATE_ADD('2026-01-01', INTERVAL 1 DAY_HOUR) AS v;
             SELECT 'not reached' AS v;
             .exit
       - assert:
@@ -493,6 +494,7 @@ scenarios:
   # and nested translations) to exercise translation beyond single expressions.
   # These share an employees + departments dataset.
   - name: "mysql: join + aggregate + EXTRACT filter + CAST + HAVING"
+    description: "CAST(AVG(...) AS SIGNED) rounds the 47666.67 average the way MySQL does, rather than truncating it the way SQLite's own CAST would."
     steps:
       - fixture: &employees
           file: employees.csv
@@ -515,7 +517,7 @@ scenarios:
           exit_code: 0
           stdout:
             contains:
-              - "Engineering,3,47666"
+              - "Engineering,3,47667"
 
   - name: "mysql: correlated subquery with nested DIV-in-CAST and DATE_FORMAT"
     steps:
@@ -554,5 +556,5 @@ scenarios:
           exit_code: 0
           stdout:
             contains:
-              - "Engineering,3,47666,2118"
+              - "Engineering,3,47667,2118"
               - "Sales,2,57500,2538"

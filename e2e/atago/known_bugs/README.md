@@ -1,36 +1,20 @@
-# Known dialect bugs
+# Known dialect limitations
 
-Reproductions of SQL-dialect defects observed from sqly's CLI surface. Every
-scenario here is expected to fail today: it asserts the behavior sqly should
-have once the underlying filesql translation is fixed, not the behavior it has
-now.
+Dialect behavior sqly cannot currently reproduce. Every scenario here is
+expected to fail: it asserts what the source dialect does, so it fails today and
+would start passing if the obstacle ever went away.
 
-These specs are deliberately outside the `e2e/atago/*.atago.yaml` glob that
-`scripts/run_e2e.sh` uses, so CI stays green while the fixes land.
-
-Run them with:
+These specs sit outside the `e2e/atago/*.atago.yaml` glob that
+`scripts/run_e2e.sh` uses, so CI stays green.
 
 ```sh
 sh scripts/run_known_bugs.sh
-sh scripts/run_known_bugs.sh --filter "month-end"
 ```
 
-| File | Scope |
-|------|-------|
-| cross_dialect.atago.yaml | Defects that hit more than one dialect the same way |
-| mysql_dialect.atago.yaml | MySQL-only |
-| postgresql_dialect.atago.yaml | PostgreSQL-only |
-| googlesql_dialect.atago.yaml | GoogleSQL / BigQuery-only |
-
-Two kinds of defect appear here, and they are worth telling apart:
-
-Silent wrong answers are the dangerous ones. The query succeeds and returns a
-plausible value that the source dialect would never produce, so nothing warns
-the user. Integer division, case-insensitive `LIKE`, and truncating casts are
-all in this class.
-
-Missing constructs fail loudly with `no such function` or a SQLite parse error.
-They cost the user a workaround, but they never corrupt a result.
+This directory started as a set of reproductions for the SQL-dialect defects
+found by probing sqly's CLI. filesql v0.20.0 fixed all but one of them, and
+those scenarios moved into the active suite as `e2e/atago/dialect_*.atago.yaml`.
+What remains is the one case that needs more than a translation rule.
 
 When a scenario here starts passing, move it into the matching
 `e2e/atago/*.atago.yaml` suite so CI protects it from regressing.

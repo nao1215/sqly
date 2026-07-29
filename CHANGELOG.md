@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Bug Fixes
+* SQL Dialect Semantics: queries written in MySQL, PostgreSQL, or GoogleSQL now evaluate the way those dialects do, not the way SQLite happens to. The divergences were silent, so a query returned a plausible wrong answer rather than an error. `5/2` was 2 instead of 2.5 under MySQL and GoogleSQL, and every average or ratio came out truncated. `LIKE` matched case-insensitively under PostgreSQL and GoogleSQL, so a filter caught rows it should not have, and `ILIKE` was indistinguishable from it. A cast applied SQLite's type affinity: `CAST(1.9 AS SIGNED)` truncated to 1 where every dialect rounds to 2, `CAST('abc' AS INTEGER)` answered 0 where PostgreSQL and GoogleSQL raise, `'true'::boolean` collapsed to 0, an invalid date or UUID or JSON document passed straight through, and `SAFE_CAST` returned that fallback instead of the NULL it exists to produce. `DATE_ADD('2026-01-31', INTERVAL 1 MONTH)` rolled forward to 2026-03-03 instead of clamping to 2026-02-28, and adding a day to a date grew a `00:00:00`. MySQL `||` concatenated instead of meaning OR, `HEX(255)` returned the bytes of the string `255`, and `GROUP_CONCAT(x ORDER BY y SEPARATOR '|')` silently joined with a comma. Requires filesql v0.20.0.
+* SQL Dialect Coverage: the constructs that used to fail outright now work. Shared: `LEAST`, `GREATEST`. MySQL: `TIMESTAMPDIFF`, `TIMESTAMPADD`, `LAST_DAY`, `UNIX_TIMESTAMP`, `FROM_UNIXTIME`, `MONTHNAME`, `DAYNAME`, `REVERSE`, `FIND_IN_SET`, `FIELD`, `ELT`, `ANY_VALUE`, `STD`, `<=>`, typed date literals, `CURRENT_DATE()`, `POSITION(x IN y)`, `SUBSTRING(x FROM n)`, and the `WEEK`, `QUARTER`, and negative `INTERVAL` forms. PostgreSQL: `x + INTERVAL '1 day'` (its only date arithmetic), typed date literals, `MD5`, `ASCII`, `CHR`, `TRANSLATE`, `SIMILAR TO`, `^`, numeric `TO_CHAR`, four-argument `REGEXP_REPLACE`, `BOOL_AND`, `BOOL_OR`, and the `STDDEV`/`VARIANCE` family. GoogleSQL: `DATE_TRUNC(value, PART)` with `TIMESTAMP_TRUNC` and `DATETIME_TRUNC`, `FORMAT_DATE`, `PARSE_DATE`, `CURRENT_DATE()`, `COUNTIF`, `LOGICAL_AND`, `LOGICAL_OR`, `UNIX_SECONDS`, `TO_HEX`, `IS_NAN`, the `SAFE_` arithmetic family, and `EXTRACT(DATE FROM ...)`.
+
+### Testing
+* Dialect E2E: 58 atago scenarios in `e2e/atago/dialect_cross.atago.yaml`, `dialect_mysql.atago.yaml`, `dialect_postgresql.atago.yaml`, and `dialect_googlesql.atago.yaml` pin the semantics above from the CLI, each with a description of what SQLite would have done instead. `dialect.atago.yaml` adds 12 more covering chained `::` casts, `E''` and dollar-quoted strings, json operators, `~*`, `LATERAL` rejection, backtick names containing a space, `#` comments and raw strings, negative `DATE_DIFF`, `SELECT * EXCEPT` and `ARRAY<>` rejection, dialect name aliases, and a batch script stopped by a translate error.
+* Known Limitations: `e2e/atago/known_bugs/` records dialect behavior sqly cannot reproduce as executable specs that are expected to fail, run by `scripts/run_known_bugs.sh` and kept out of CI.
+
 ## [v0.29.0](https://github.com/nao1215/sqly/compare/v0.28.0...v0.29.0) (2026-07-29)
 
 ### New Features
