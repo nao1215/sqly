@@ -34,7 +34,7 @@ scenarios:
           command: >-
             python3 -m http.server 18090 --bind 127.0.0.1 >/dev/null 2>&1 & pid=$!;
             trap "kill $pid" EXIT;
-            i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18090)))"; do i=$((i+1)); [ $i -ge 50 ] && break; sleep 0.1; done;
+            i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18090)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done;
             curl -s http://127.0.0.1:18090/sales.csv | sqly --csv --stdin csv --sql "SELECT region, SUM(amount) AS total FROM stdin GROUP BY region ORDER BY region"
       - assert:
           exit_code: 0
