@@ -74,6 +74,9 @@ scenarios:
             equals: "3"
 
   - name: joins a gzipped csv with a parquet file
+    # Needs the gzip(1) binary to build the compressed input.
+    skip:
+      os: windows
     steps:
       - fixture: &orders
           file: orders.csv
@@ -120,6 +123,9 @@ scenarios:
             equals: alice
 
   - name: counts rows piped in on stdin
+    # Needs a POSIX shell for the pipeline.
+    skip:
+      os: windows
     steps:
       - fixture: *staff
       - run:
@@ -272,6 +278,9 @@ scenarios:
             equals: "3"
 
   - name: runs a script from a heredoc in batch mode
+    # Needs a POSIX shell for the pipeline.
+    skip:
+      os: windows
     steps:
       - fixture: *staff
       - run:

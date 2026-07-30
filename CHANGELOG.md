@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Testing
+* Windows Behavior Coverage: the full atago suite now runs on Windows, not only the interactive-shell pty specs. sqly ships for Windows, but 611 of its 622 scenarios had never executed there — write-back, caching, path handling, every format, and the dialects were asserted on Linux and macOS alone. Windows-only defects are invisible from a Unix run: `os.Rename` refuses to replace a file another handle still has open, which is every in-place save. Six scenarios that need a POSIX shell (an `http.server` fixture, `gzip(1)`, a pipeline) carry `skip: {os: windows}` and stay covered on the other two platforms.
+
+
 ## [v0.30.0](https://github.com/nao1215/sqly/compare/v0.29.0...v0.30.0) (2026-07-29)
 
 ### Bug Fixes
