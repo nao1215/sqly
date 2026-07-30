@@ -11,6 +11,7 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | Flag | Format |
 |:--|:--|
 | (default) | ASCII table |
+| `--vertical` | one column per line, in a block per record; for rows too wide to read across |
 | `-c`, `--csv` | CSV |
 | `-t`, `--tsv` | TSV |
 | `-l`, `--ltsv` | LTSV |

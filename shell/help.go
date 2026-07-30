@@ -30,7 +30,7 @@ func helpGroups() []helpGroup {
 	return []helpGroup{
 		{"Session", []helpLine{
 			{helpCommand, "show this help"},
-			{modeCommand + " MODE", "change output mode (table, csv, tsv, ltsv, json, ndjson, markdown, ...)"},
+			{modeCommand + " MODE", "change output mode (table, vertical, csv, tsv, ltsv, json, ndjson, markdown, ...)"},
 			{dialectCommand + " [NAME]", "show or set the query dialect (sqlite, mysql, postgresql, googlesql)"},
 			{clearCommand, "clear the terminal screen"},
 			{exitCommand, "exit sqly"},

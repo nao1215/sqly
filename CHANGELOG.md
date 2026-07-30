@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### New Features
+* Vertical Output Mode For Rows Too Wide To Read: `--vertical`, and `.mode vertical` in the shell, print one column per line in a block per record instead of laying the record out along the line. Every other mode fails at the width sqly was written for — a 300-column row is a single 2700-character line as a table, as CSV, as TSV, and as LTSV alike, so no terminal shows it and the column holding the bad value has no name beside it to search for. Vertical spends vertical space, which a terminal scrolls, and puts the name and the value on one short line, so the bad column is one `grep` away. The layout follows psql's expanded output: a numbered record rule, then names left-aligned in a gutter measured in terminal cells, so a full-width Japanese header lines up with an ASCII one. It names no file format, so `.dump` and `--output` take the format from the destination's extension exactly as they do in table mode.
+
 ### Bug Fixes
 * A One-Column Export Lost Its Empty Rows: in CSV and TSV a record of one empty field, written plainly, is a blank line — and a blank line is not a record, so a reader skips it. `sqly --csv --sql "SELECT v FROM t" --output out.csv` over three rows whose middle value was empty wrote three rows and read back as two, and the export reported success both times. Such a record is now written as `""`, which says "one field, and it is empty". A row of several columns is unaffected, because its delimiters already say how many fields there are. filesql had the same bug on its own dump path and is fixed in v0.29.0, taken below.
 

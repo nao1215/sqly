@@ -10,6 +10,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.15
+	github.com/mattn/go-runewidth v0.0.27
 	github.com/nao1215/filesql v0.29.0
 	github.com/nao1215/prompt v0.0.13
 	github.com/olekukonko/tablewriter v1.1.4
@@ -40,7 +41,6 @@ require (
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
-	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/mattn/go-tty v0.0.8 // indirect
 	github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 // indirect
 	github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 // indirect

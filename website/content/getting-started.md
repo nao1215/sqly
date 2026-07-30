@@ -56,6 +56,37 @@ sqly --json --output user.json --sql "SELECT * FROM user" user.csv
 
 Full list on the [reference page](/reference/#output-formats).
 
+### A row too wide to read across
+
+Every format above lays a record out along the line, and that stops working on the
+files sqly was written for. A 300-column row is one 2700-character line as a table,
+as CSV, as TSV, and as LTSV alike — no terminal shows it, and the column holding the
+bad value has no name beside it to search for.
+
+`--vertical` turns the row on its side: one column per line, in a block per record.
+
+```shell
+sqly --vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
+```
+
+```text
+-[ RECORD 1 ]-----------------------------------------------
+col_001 | v1
+col_002 | v2
+col_003 | BAD
+```
+
+Now the name and the value sit on one short line, so the bad column is one `grep`
+away:
+
+```shell
+sqly --vertical --sql "SELECT * FROM wide" wide.csv | grep BAD
+```
+
+In the shell it is `.mode vertical`. Vertical output is for reading, not for
+parsing — it names no file format, so `.dump` and `--output` take the format from
+the destination's extension, exactly as they do in table mode.
+
 ## 4. Four ways in
 
 | Input | How |

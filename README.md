@@ -85,6 +85,9 @@ The [cookbook](https://nao1215.github.io/sqly/cookbook/) is the fastest way in. 
 # Look at a file you have never seen
 sqly --inspect user.csv
 
+# Read a row too wide to fit a terminal: one column per line, in a block per record
+sqly --vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
+
 # Convert: csv -> json, excel, parquet, markdown, gzipped csv
 sqly --json    --output user.json    --sql "SELECT * FROM user" user.csv
 sqly --excel   --output user.xlsx    --sql "SELECT * FROM user" user.csv

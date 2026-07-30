@@ -38,7 +38,7 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.help` | show the command list |
-| `.mode MODE` | change the output mode: `table`, `csv`, `tsv`, `ltsv`, `json`, `ndjson`, `json-typed`, `ndjson-typed`, `markdown`, `excel`, `parquet` |
+| `.mode MODE` | change the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `ndjson`, `json-typed`, `ndjson-typed`, `markdown`, `excel`, `parquet` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
 | `.clear` | clear the screen |
 | `.exit` | quit (so does `Ctrl-D`) |

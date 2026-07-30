@@ -17,6 +17,7 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 			"  .mode OUTPUT_MODE   ※ current mode=%s\n"+
 			"[Output mode list]\n"+
 			"  table\n"+
+			"  vertical ※ one column per line, in a block per record; for rows too wide to read across\n"+
 			"  markdown\n"+
 			"  csv\n"+
 			"  tsv\n"+
