@@ -23,9 +23,10 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 			"[Usage]\n" +
 			"  .dump TABLE_NAME FILE_PATH\n" +
 			"[Note]\n" +
-			"  The format comes from .mode. When .mode is table, it is inferred from the\n" +
-			"  file extension (e.g. .tsv, .parquet), falling back to CSV (written to the\n" +
-			"  path as given) when the extension is unknown.\n" +
+			"  The format comes from .mode. When .mode only decides what the screen looks\n" +
+			"  like (table, vertical), the format is inferred from the file extension\n" +
+			"  (e.g. .tsv, .parquet), falling back to CSV (written to the path as given)\n" +
+			"  when the extension is unknown.\n" +
 			"  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).\n" +
 			"  A .mode that disagrees with the extension is rejected instead of normalizing.\n" +
 			"  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format")
@@ -70,10 +71,11 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// a typed mode; ignored for every other export format.
 	table.SetJSONTyped(s.state.mode.jsonTyped)
 
-	// The current .mode sets the format unless it is table; otherwise the format
-	// (and any compression) is inferred from the destination path.
+	// The current .mode sets the format unless it is display-only (table,
+	// vertical); otherwise the format (and any compression) is inferred from the
+	// destination path.
 	mode := s.state.mode.PrintMode
-	exportFmt, compression, err := model.ResolveOutputTarget(userPath, model.ExportFormatFromPrintMode(mode), mode != model.PrintModeTable)
+	exportFmt, compression, err := model.ResolveOutputTarget(userPath, model.ExportFormatFromPrintMode(mode), !mode.IsDisplayOnly())
 	if err != nil {
 		return err
 	}

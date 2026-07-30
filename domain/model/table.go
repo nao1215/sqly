@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/nao1215/sqly/domain"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -82,6 +83,7 @@ const (
 	formatJSON     = "json"
 	formatNDJSON   = "ndjson"
 	formatParquet  = "parquet"
+	formatVertical = "vertical"
 )
 
 // Extension name constants.
@@ -117,6 +119,11 @@ const (
 	// PrintModeParquet is an export-only mode; on screen it renders like CSV and
 	// only writes a Parquet file via .dump or --output (same pattern as Excel).
 	PrintModeParquet
+	// PrintModeVertical prints one column per line, in a block per record. It is
+	// display-only, like PrintModeTable: a row wider than the terminal is what the
+	// table, csv, tsv, and ltsv modes all fail at, and a 300-column row is the case
+	// sqly exists for.
+	PrintModeVertical
 )
 
 // String return string of PrintMode.
@@ -140,8 +147,22 @@ func (p PrintMode) String() string {
 		return formatNDJSON
 	case PrintModeParquet:
 		return formatParquet
+	case PrintModeVertical:
+		return formatVertical
 	}
 	return "unknown"
+}
+
+// IsDisplayOnly reports whether the mode only decides what the screen looks like,
+// so it names no export format.
+//
+// The export path asks this to decide whether the mode chose the destination's
+// format or the destination's extension did: `.dump out.tsv` while the session is
+// in a display-only mode writes a TSV, where the same call in csv mode is a
+// conflict the caller has to resolve. Table and vertical are the two — vertical is
+// a way of reading a wide row, not a file format anything else can parse back.
+func (p PrintMode) IsDisplayOnly() bool {
+	return p == PrintModeTable || p == PrintModeVertical
 }
 
 // Table is DB table.
@@ -316,6 +337,8 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 		// Export-only: on screen, render like CSV. The Parquet file is written
 		// by the export path (.dump / --output), not here.
 		return t.printCSV(out)
+	case PrintModeVertical:
+		return t.printVertical(out)
 	default:
 		return t.printTable(out)
 	}
@@ -491,6 +514,58 @@ func (t *Table) printLTSV(out io.Writer) error {
 		}
 		if _, err := fmt.Fprintln(out, strings.Join(r, "\t")); err != nil {
 			return fmt.Errorf("failed to write LTSV record %v: %w", r, err)
+		}
+	}
+	return nil
+}
+
+// verticalRecordRuleWidth is the total width of a record's separator line, so
+// the rules line up whatever the record number is.
+const verticalRecordRuleWidth = 60
+
+// printVertical prints one column per line, in a block per record.
+//
+// Every other mode lays a record out across the line, which stops working at the
+// width sqly exists for: a 300-column row is one 2700-character line in table,
+// csv, tsv, and ltsv alike, and no terminal shows it. Turning the row on its side
+// costs vertical space, which a terminal scrolls, instead of horizontal space,
+// which it does not.
+//
+// The layout follows psql's expanded output: a numbered record rule, then the
+// column names left-aligned in a gutter as wide as the longest one, so scanning
+// down the names reads as a list. The gutter is measured in terminal cells, not
+// runes or bytes: a full-width character such as 名 occupies two cells, so a
+// Japanese header counted by runes left the ASCII names beside it out of line.
+//
+// A value is written as it is, including a newline. Vertical output is for
+// reading, not for parsing, and the modes that have to stay machine-readable —
+// csv, tsv, ltsv, json — are unaffected.
+func (t *Table) printVertical(out io.Writer) error {
+	gutter := 0
+	for _, h := range t.Header() {
+		if n := runewidth.StringWidth(h); n > gutter {
+			gutter = n
+		}
+	}
+
+	for i, record := range t.Records() {
+		rule := fmt.Sprintf("-[ RECORD %d ]", i+1)
+		if pad := verticalRecordRuleWidth - runewidth.StringWidth(rule); pad > 0 {
+			rule += strings.Repeat("-", pad)
+		}
+		if _, err := fmt.Fprintln(out, rule); err != nil {
+			return fmt.Errorf("failed to write vertical record rule: %w", err)
+		}
+
+		for j, header := range t.Header() {
+			value := ""
+			if j < len(record) {
+				value = record[j]
+			}
+			name := header + strings.Repeat(" ", gutter-runewidth.StringWidth(header))
+			if _, err := fmt.Fprintf(out, "%s | %s\n", name, value); err != nil {
+				return fmt.Errorf("failed to write vertical column %s: %w", header, err)
+			}
 		}
 	}
 	return nil

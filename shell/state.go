@@ -168,6 +168,8 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	case model.PrintModeParquet.String():
 		target = model.PrintModeParquet
 		suffix = " (active only when executing .dump, otherwise same as csv mode)"
+	case model.PrintModeVertical.String():
+		target = model.PrintModeVertical
 	default:
 		return fmt.Errorf("invalid output mode: %s", modeName)
 	}

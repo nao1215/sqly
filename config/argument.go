@@ -141,6 +141,7 @@ const (
 	outJSON     = "json"
 	outNDJSON   = "ndjson"
 	outParquet  = "parquet"
+	outVertical = "vertical"
 	// Typed JSON variants: same JSON/NDJSON format, but native scalars instead of
 	// strings. They select the JSON/NDJSON mode and set Output.JSONTyped.
 	outJSONTyped   = "json-typed"
@@ -157,6 +158,7 @@ type outputFlag struct {
 	json     bool
 	ndjson   bool
 	parquet  bool
+	vertical bool
 
 	jsonTyped   bool
 	ndjsonTyped bool
@@ -178,6 +180,7 @@ func (of outputFlag) selectedNames() []string {
 		{outJSON, of.json},
 		{outNDJSON, of.ndjson},
 		{outParquet, of.parquet},
+		{outVertical, of.vertical},
 		{outJSONTyped, of.jsonTyped},
 		{outNDJSONTyped, of.ndjsonTyped},
 	}
@@ -231,6 +234,7 @@ func newArg(args []string) (*Arg, error) {
 	flag.BoolVarP(&oFlag.json, outJSON, "j", false, "change output format to json (default: table)")
 	flag.BoolVarP(&oFlag.ndjson, outNDJSON, "n", false, "change output format to ndjson (default: table)")
 	flag.BoolVarP(&oFlag.parquet, outParquet, "p", false, "export results as parquet (export-only; use with --output or .dump)")
+	flag.BoolVar(&oFlag.vertical, outVertical, false, "change output format to one column per line, in a block per record (default: table); for rows too wide to read across")
 	flag.BoolVar(&oFlag.jsonTyped, outJSONTyped, false, "change output format to json with native scalars (numbers, booleans, nulls) instead of strings")
 	flag.BoolVar(&oFlag.ndjsonTyped, outNDJSONTyped, false, "change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings")
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
@@ -480,6 +484,8 @@ func newOutput(filePath string, of outputFlag) *Output {
 		output.JSONTyped = true
 	case of.parquet:
 		output.Mode = model.PrintModeParquet
+	case of.vertical:
+		output.Mode = model.PrintModeVertical
 	default:
 		output.Mode = model.PrintModeTable
 	}

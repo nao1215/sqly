@@ -1154,7 +1154,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	}
 	mode := s.state.mode.PrintMode
 	explicit := model.ExportFormatFromPrintMode(mode)
-	exportFmt, compression, err := model.ResolveOutputTarget(s.argument.Output.FilePath, explicit, mode != model.PrintModeTable)
+	exportFmt, compression, err := model.ResolveOutputTarget(s.argument.Output.FilePath, explicit, !mode.IsDisplayOnly())
 	if err != nil {
 		return err
 	}

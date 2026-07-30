@@ -1,0 +1,146 @@
+# Vertical output: one column per line, in a block per record.
+#
+# Every other mode lays a record out across the line, which stops working at the
+# width sqly exists for. A 300-column row is a single 2700-character line in
+# table, csv, tsv, and ltsv alike, and no terminal shows it; the column holding
+# the bad value has no name on that line to search for. Turning the row on its
+# side spends vertical space, which a terminal scrolls.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly vertical output mode
+
+scenarios:
+  - name: --vertical prints one column per line, in a block per record
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name
+            booker12,1,Rachel
+            jenkins46,2,Mary
+      - run:
+          command: sqly --vertical --sql "SELECT * FROM user ORDER BY identifier" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              -[ RECORD 1 ]-----------------------------------------------
+              user_name  | booker12
+              identifier | 1
+              first_name | Rachel
+              -[ RECORD 2 ]-----------------------------------------------
+              user_name  | jenkins46
+              identifier | 2
+              first_name | Mary
+
+  - name: .mode vertical switches the session and announces it
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode vertical\nSELECT user_name FROM user ORDER BY identifier LIMIT 1;\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Change output mode from table to vertical"
+          stdout:
+            equals: |
+              -[ RECORD 1 ]-----------------------------------------------
+              user_name | booker12
+
+  - name: .mode vertical accepts being set again, like every other mode
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --vertical user.csv
+          stdin: ".mode vertical\nSELECT 1 AS x;\n"
+      - assert:
+          exit_code: 0
+
+  - name: the column names line up when a header is full-width
+    steps:
+      - fixture:
+          file: ja.csv
+          content: |
+            名前,id,備考
+            アリス,1,ok
+      - run:
+          command: sqly --vertical --sql "SELECT * FROM ja" ja.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              -[ RECORD 1 ]-----------------------------------------------
+              名前 | アリス
+              id   | 1
+              備考 | ok
+
+  - name: a wide row becomes one short line per column, each greppable by name
+    steps:
+      - fixture:
+          file: wide.csv
+          content: |
+            col_001,col_002,col_003,col_004,col_005
+            v1,v2,BAD,v4,v5
+      # The flat modes put every value on one line, so the odd one has no column
+      # name beside it to search for.
+      - run:
+          command: sqly --csv --sql "SELECT * FROM wide" wide.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              col_001,col_002,col_003,col_004,col_005
+              v1,v2,BAD,v4,v5
+      - run:
+          command: sqly --vertical --sql "SELECT * FROM wide" wide.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "col_003 | BAD"
+
+  - name: vertical is display-only, so a dump takes its format from the destination
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --vertical user.csv
+          stdin: ".dump user out.tsv\n"
+      - assert:
+          exit_code: 0
+      - assert:
+          file:
+            path: out.tsv
+            equals: "user_name\tidentifier\tfirst_name\nbooker12\t1\tRachel\njenkins46\t2\tMary\n"
+
+  - name: vertical cannot be combined with a report flag, like any output mode
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --profile --vertical user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--profile cannot be combined with an output mode flag (--vertical)"
+
+  - name: vertical conflicts with another output mode flag
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --vertical --csv --sql "SELECT 1" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            empty: false
+
+  - name: an empty result set prints nothing in vertical mode
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --vertical --sql "SELECT * FROM user WHERE identifier = 999" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: ""
