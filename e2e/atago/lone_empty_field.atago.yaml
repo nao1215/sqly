@@ -1,0 +1,97 @@
+# A one-column result whose value is empty has to survive being written and read
+# again. In CSV and TSV a record of one empty field, written plainly, is a blank
+# line — and a blank line is not a record, so a reader skips it. An export of
+# `SELECT v FROM t` over alice, "", bob wrote three rows and read back as two,
+# and the export reported success.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly lone empty field
+
+scenarios:
+  - name: a one-column export keeps its empty rows through a reimport
+    steps:
+      - fixture: &src
+          file: src.csv
+          content: |
+            v,w
+            alice,1
+            ,2
+            bob,3
+      - run:
+          command: sqly --csv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.csv
+            equals: "v\nalice\n\"\"\nbob\n"
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              3
+
+  - name: the reimported values match what was exported
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --csv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT COALESCE(v,'<null>') AS v FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              v
+              alice
+
+              bob
+
+  - name: a one-column TSV export keeps its empty rows
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --tsv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.tsv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.tsv
+            equals: "v\nalice\n\"\"\nbob\n"
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              3
+
+  - name: a multi-column row of empty values keeps its delimiters
+    steps:
+      - fixture:
+          file: two.csv
+          content: |
+            a,b
+            ,
+      - run:
+          command: sqly --csv --sql "SELECT a, b FROM two" two.csv --output out.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.csv
+            equals: "a,b\n,\n"
+      - run:
+          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              1

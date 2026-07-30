@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"bytes"
 	"encoding/csv"
 	"io"
 	"os"
@@ -108,4 +109,83 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 		records = append(records, model.NewRecord(row))
 	}
 	return model.NewTable(filepath.Base(path), model.NewHeader(header), records)
+}
+
+// TestDelimitedRepositoryDumpLoneEmptyField pins that a one-column row whose
+// only value is empty is written as "".
+//
+// Written plainly it is a blank line, and a blank line is not a record: a reader
+// skips it. `SELECT v FROM t` over alice, "", bob wrote three rows and read back
+// as two, and the export reported success.
+func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		repo func() interface {
+			Dump(io.Writer, *model.Table) error
+		}
+		want string
+	}{
+		{
+			name: "csv",
+			repo: func() interface {
+				Dump(io.Writer, *model.Table) error
+			} { return NewCSVRepository() },
+			want: "v\nalice\n\"\"\nbob\n",
+		},
+		{
+			name: "tsv",
+			repo: func() interface {
+				Dump(io.Writer, *model.Table) error
+			} { return NewTSVRepository() },
+			want: "v\nalice\n\"\"\nbob\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			table := model.NewTable("t", model.Header{"v"}, []model.Record{
+				{"alice"}, {""}, {"bob"},
+			})
+
+			var buf bytes.Buffer
+			if err := tt.repo().Dump(&buf, table); err != nil {
+				t.Fatalf("Dump() error = %v, want nil", err)
+			}
+			if got := buf.String(); got != tt.want {
+				t.Errorf("Dump() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("a multi-column row of empty values keeps its delimiters", func(t *testing.T) {
+		t.Parallel()
+
+		table := model.NewTable("t", model.Header{"a", "b"}, []model.Record{{"", ""}})
+
+		var buf bytes.Buffer
+		if err := NewCSVRepository().Dump(&buf, table); err != nil {
+			t.Fatalf("Dump() error = %v, want nil", err)
+		}
+		if got, want := buf.String(), "a,b\n,\n"; got != want {
+			t.Errorf("Dump() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a lone empty header is written the same way", func(t *testing.T) {
+		t.Parallel()
+
+		table := model.NewTable("t", model.Header{""}, []model.Record{{"x"}})
+
+		var buf bytes.Buffer
+		if err := NewCSVRepository().Dump(&buf, table); err != nil {
+			t.Fatalf("Dump() error = %v, want nil", err)
+		}
+		if got, want := buf.String(), "\"\"\nx\n"; got != want {
+			t.Errorf("Dump() = %q, want %q", got, want)
+		}
+	})
 }
