@@ -783,6 +783,45 @@ func renderCompareText(r compareReport) string {
 	if r.Rows != nil {
 		fmt.Fprintf(&b, "keyed by %s: %d added, %d removed, %d modified\n",
 			r.Rows.Key, len(r.Rows.Added), len(r.Rows.Removed), len(r.Rows.Modified))
+		writeCompareRowDetail(&b, *r.Rows)
 	}
 	return b.String()
+}
+
+// writeCompareRowDetail lists the keys that differ, one line each. Counts alone
+// answer "did anything change?" but not "what changed?", which is the question a
+// person running the text format is asking; the JSON format already carried the
+// detail, so the human-readable one was the poorer of the two.
+//
+// A modified row is followed by one line per column whose value differs, so a
+// wide table does not reprint the columns that stayed the same.
+func writeCompareRowDetail(b *strings.Builder, rows compareRows) {
+	for _, row := range rows.Added {
+		fmt.Fprintf(b, "  + %s=%s\n", rows.Key, compareCell(row[rows.Key]))
+	}
+	for _, row := range rows.Removed {
+		fmt.Fprintf(b, "  - %s=%s\n", rows.Key, compareCell(row[rows.Key]))
+	}
+	for _, mod := range rows.Modified {
+		fmt.Fprintf(b, "  ~ %s=%s\n", rows.Key, mod.Key)
+		for _, col := range sortedKeys(mod.Left) {
+			if col == rows.Key {
+				continue
+			}
+			left, right := compareCell(mod.Left[col]), compareCell(mod.Right[col])
+			if left == right {
+				continue
+			}
+			fmt.Fprintf(b, "      %s: %s -> %s\n", col, left, right)
+		}
+	}
+}
+
+// compareCell renders one cell for the text report, distinguishing a SQL NULL
+// from an empty string the way the JSON report does.
+func compareCell(v *string) string {
+	if v == nil {
+		return "NULL"
+	}
+	return *v
 }
