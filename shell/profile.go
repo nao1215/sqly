@@ -247,13 +247,40 @@ func renderProfileText(r profileReport) string {
 			fmt.Fprintln(&b)
 		}
 		fmt.Fprintf(&b, "table %s: %d rows, %d columns\n", t.Name, t.RowCount, t.ColumnCount)
+
+		// Lead with the columns that have something wrong. sqly exists for wide
+		// CSVs — the founding case is hunting one bad column among three hundred —
+		// and printing every column in file order buried the two that mattered in
+		// three hundred lines of clean ones. Every column is still listed below, so
+		// nothing is hidden; the flagged ones just come first and are counted.
+		flagged := make([]profileColumn, 0, len(t.Columns))
 		for _, c := range t.Columns {
-			fmt.Fprintf(&b, "  %s (%s): nulls=%d blanks=%d distinct=%d numeric=%d\n",
-				c.Name, c.Type, c.NullCount, c.BlankCount, c.DistinctCount, c.NumericCount)
-			for _, w := range c.Warnings {
-				fmt.Fprintf(&b, "    warning: %s\n", w)
+			if len(c.Warnings) > 0 {
+				flagged = append(flagged, c)
 			}
+		}
+		if len(flagged) == 0 {
+			fmt.Fprintf(&b, "  no warnings\n")
+		} else {
+			fmt.Fprintf(&b, "  %d of %d columns have warnings:\n", len(flagged), len(t.Columns))
+			for _, c := range flagged {
+				writeProfileColumn(&b, c, "  ")
+			}
+			fmt.Fprintf(&b, "  all %d columns:\n", len(t.Columns))
+		}
+		for _, c := range t.Columns {
+			writeProfileColumn(&b, c, "")
 		}
 	}
 	return b.String()
+}
+
+// writeProfileColumn renders one column's counts and its warnings, indented by
+// the given prefix so the leading summary can nest under its heading.
+func writeProfileColumn(b *strings.Builder, c profileColumn, indent string) {
+	fmt.Fprintf(b, "%s  %s (%s): nulls=%d blanks=%d distinct=%d numeric=%d\n",
+		indent, c.Name, c.Type, c.NullCount, c.BlankCount, c.DistinctCount, c.NumericCount)
+	for _, w := range c.Warnings {
+		fmt.Fprintf(b, "%s    warning: %s\n", indent, w)
+	}
 }
