@@ -9,6 +9,10 @@ suite:
 
 scenarios:
   - name: downloads a remote CSV passed as a CLI input argument
+    # Needs a POSIX shell and python3 to serve the fixture over HTTP; the
+    # download path itself is exercised on Linux and macOS.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: user.csv
@@ -31,6 +35,10 @@ scenarios:
               - Downloaded http://127.0.0.1
 
   - name: downloads a remote CSV through .import in batch mode
+    # Needs a POSIX shell and python3 to serve the fixture over HTTP; the
+    # download path itself is exercised on Linux and macOS.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: user.csv

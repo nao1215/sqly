@@ -94,6 +94,10 @@ scenarios:
             equals: booker12
 
   - name: queries a CSV served over localhost HTTP
+    # Needs a POSIX shell and python3 to serve the fixture over HTTP; the
+    # download path itself is exercised on Linux and macOS.
+    skip:
+      os: windows
     steps:
       - fixture: *user
       - run:

@@ -41,7 +41,10 @@ scenarios:
 
   - name: expands a bare ~ in .cd to the home directory
     env: &home
+      # os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows, so both are
+      # set; overriding only HOME let the Windows run reach the real profile.
       HOME: "${workdir}/home"
+      USERPROFILE: "${workdir}/home"
     steps:
       - fixture:
           file: home/sqly_tilde.csv
@@ -211,7 +214,11 @@ scenarios:
       - assert:
           exit_code: 1
           stderr:
-            contains: "no such file or directory"
+            # The chdir wording comes from the OS, so assert the part sqly writes:
+            # the failing statement, named and stopping the script.
+            contains:
+              - 'batch statement 1 failed at line 1: ".cd no_such_dir"'
+              - "batch stopped: statement failed"
 
   - name: .header fails on a missing table
     steps:
