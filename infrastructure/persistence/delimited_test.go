@@ -120,27 +120,19 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 	t.Parallel()
 
+	// Both repositories write through the same delimited writer, so one local
+	// interface names what the table needs from them.
+	type dumper interface {
+		Dump(io.Writer, *model.Table) error
+	}
+
 	tests := []struct {
 		name string
-		repo func() interface {
-			Dump(io.Writer, *model.Table) error
-		}
+		repo dumper
 		want string
 	}{
-		{
-			name: "csv",
-			repo: func() interface {
-				Dump(io.Writer, *model.Table) error
-			} { return NewCSVRepository() },
-			want: "v\nalice\n\"\"\nbob\n",
-		},
-		{
-			name: "tsv",
-			repo: func() interface {
-				Dump(io.Writer, *model.Table) error
-			} { return NewTSVRepository() },
-			want: "v\nalice\n\"\"\nbob\n",
-		},
+		{name: "csv", repo: NewCSVRepository(), want: "v\nalice\n\"\"\nbob\n"},
+		{name: "tsv", repo: NewTSVRepository(), want: "v\nalice\n\"\"\nbob\n"},
 	}
 
 	for _, tt := range tests {
@@ -152,7 +144,7 @@ func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 			})
 
 			var buf bytes.Buffer
-			if err := tt.repo().Dump(&buf, table); err != nil {
+			if err := tt.repo.Dump(&buf, table); err != nil {
 				t.Fatalf("Dump() error = %v, want nil", err)
 			}
 			if got := buf.String(); got != tt.want {
