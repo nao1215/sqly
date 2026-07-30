@@ -2,6 +2,12 @@
 # and exposes them to both CLI SQL execution and the .import command path. The
 # scenarios stay hermetic by serving local fixtures over a temporary localhost
 # HTTP server.
+#
+# Each server is waited for by connecting to its port rather than by sleeping a
+# fixed interval. A loaded runner can take longer than any interval worth waiting
+# to bind a socket, and the client then gets "connection refused" — a failure that
+# says nothing about sqly. Polling ends as soon as the port answers, so the common
+# case is also faster than the sleep it replaces.
 version: "1"
 
 suite:
@@ -22,7 +28,7 @@ scenarios:
             jenkins46,2,Mary,Jenkins
             smith79,3,Jamie,Smith
       - run:
-          command: sh -c 'python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/sqly-http-import-cli.log 2>&1 & pid=$!; trap "kill $pid" EXIT; sleep 0.2; sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" http://127.0.0.1:18080/user.csv'
+          command: sh -c 'python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/sqly-http-import-cli.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18080)))"; do i=$((i+1)); [ $i -ge 50 ] && break; sleep 0.1; done; sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" http://127.0.0.1:18080/user.csv'
       - assert:
           exit_code: 0
           stdout:
@@ -48,7 +54,7 @@ scenarios:
             jenkins46,2,Mary,Jenkins
             smith79,3,Jamie,Smith
       - run:
-          command: sh -c 'python3 -m http.server 18081 --bind 127.0.0.1 >/tmp/sqly-http-import-shell.log 2>&1 & pid=$!; trap "kill $pid" EXIT; sleep 0.2; printf ".import http://127.0.0.1:18081/user.csv\nSELECT COUNT(*) AS c FROM user;\n" | sqly --csv'
+          command: sh -c 'python3 -m http.server 18081 --bind 127.0.0.1 >/tmp/sqly-http-import-shell.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18081)))"; do i=$((i+1)); [ $i -ge 50 ] && break; sleep 0.1; done; printf ".import http://127.0.0.1:18081/user.csv\nSELECT COUNT(*) AS c FROM user;\n" | sqly --csv'
       - assert:
           exit_code: 0
           stdout:
