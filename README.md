@@ -105,6 +105,10 @@ sqly ./data --sql "SELECT * FROM users"
 sqly --sql "SELECT * FROM user" https://example.com/user.csv
 cat user.csv | sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
 
+# Pipe the result on: ndjson for jq, tsv for cut/awk/sort
+sqly --ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+
 # Rank with a window function
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
 

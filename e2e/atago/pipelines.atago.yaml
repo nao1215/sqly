@@ -1,0 +1,185 @@
+# sqly as a stage in a shell pipeline.
+#
+# The cookbook documents the input side well — --stdin, an http(s) argument — but
+# nothing asserted the output side: that sqly's stdout is something the next tool
+# in the pipe can actually consume, and that its exit code can gate a script.
+# These scenarios run real pipelines through the binary.
+#
+# The scenarios that need a POSIX shell (a pipe, an http.server fixture, jq) skip
+# on Windows, the same way the other shell-dependent specs do; every one of them
+# runs on Linux and macOS. Each local server is waited for by connecting to its
+# port rather than by sleeping, so a loaded runner cannot lose the race.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly shell pipelines
+
+scenarios:
+  - name: a downloaded CSV is queried through a pipe, with no temporary file
+    # Needs a POSIX shell and python3 to serve the fixture over HTTP.
+    skip:
+      os: windows
+    steps:
+      - fixture: &sales
+          file: sales.csv
+          content: |
+            region,amount
+            east,100
+            west,250
+            east,50
+      - run:
+          shell: true
+          command: >-
+            python3 -m http.server 18090 --bind 127.0.0.1 >/dev/null 2>&1 & pid=$!;
+            trap "kill $pid" EXIT;
+            i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18090)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done;
+            curl -s http://127.0.0.1:18090/sales.csv | sqly --csv --stdin csv --sql "SELECT region, SUM(amount) AS total FROM stdin GROUP BY region ORDER BY region"
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              region,total
+              east,150
+              west,250
+
+  - name: ndjson output feeds jq one object per line
+    # Needs a POSIX shell and jq.
+    skip:
+      os: windows
+    steps:
+      - fixture: &logs
+          file: logs.csv
+          content: |
+            path,status
+            /a,200
+            /b,500
+            /c,503
+      - run:
+          shell: true
+          command: sqly --ndjson --sql "SELECT path, status FROM logs WHERE status >= 500 ORDER BY path" logs.csv | jq -r '.path'
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              /b
+              /c
+
+  - name: SQL filters before jq shapes, so jq sees only the rows that matter
+    # Needs a POSIX shell and jq.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: events.jsonl
+          content: |
+            {"id":1,"user":{"name":"alice"},"level":"info"}
+            {"id":2,"user":{"name":"bob"},"level":"error"}
+            {"id":3,"user":{"name":"carol"},"level":"error"}
+      - run:
+          shell: true
+          command: sqly --ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error' ORDER BY id" events.jsonl | jq -r '"\(.id):\(.name)"'
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              2:bob
+              3:carol
+
+  - name: tsv output composes with cut, sort, and head
+    steps:
+      - fixture: *logs
+      - run:
+          shell: true
+          command: sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | tail -n +2 | cut -f1 | sort -rn | head -n 1
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              503
+
+  # sqly exits non-zero on a failed query, which is what set -e acts on. Note the
+  # shell's own rule: in `sqly ... | cat` the pipeline's status is cat's, so a
+  # failing sqly there does not stop the script unless the shell has pipefail.
+  # Asserted without a pipe, which is where the guarantee actually holds.
+  - name: a failing query stops a script under set -e
+    # Needs a POSIX shell: `set -e` and the `;` separator are shell syntax, and on
+    # Windows they arrive as literal arguments. The exit code itself is asserted on
+    # every platform by the specs that check it directly.
+    skip:
+      os: windows
+    steps:
+      - fixture: *logs
+      - run:
+          shell: true
+          command: set -e; sqly --csv --sql "SELECT * FROM no_such_table" logs.csv; echo reached
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: reached
+
+  - name: a failing sqly inside a pipe is only seen with pipefail
+    # Needs a POSIX shell for `;` and `$?`.
+    skip:
+      os: windows
+    steps:
+      - fixture: *logs
+      - run:
+          shell: true
+          command: sqly --csv --sql "SELECT * FROM no_such_table" logs.csv | cat; echo "pipeline status $?"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "pipeline status 0"
+
+  - name: the exit code gates a shell script
+    # Needs a POSIX shell for command substitution and `if`.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: users.csv
+          content: |
+            id,email
+            1,a@example.com
+            2,
+      - run:
+          shell: true
+          command: >-
+            blank=$(sqly --csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1);
+            if [ "$blank" != "0" ]; then echo "found $blank rows with no email"; exit 1; fi
+      - assert:
+          exit_code: 1
+          stdout:
+            contains: "found 1 rows with no email"
+
+  - name: sqly sits in the middle of a pipe, reading stdin and writing to the next stage
+    steps:
+      - fixture: *sales
+      - run:
+          shell: true
+          command: cat sales.csv | sqly --csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75 ORDER BY region" | tail -n +2 | sort -u
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              east
+              west
+
+  - name: a compressed source needs no decompression stage
+    # Needs a POSIX shell and gzip(1) to build the fixture; reading a .gz is
+    # asserted on every platform by compression_roundtrip.atago.yaml.
+    skip:
+      os: windows
+    steps:
+      - fixture: *sales
+      - run:
+          shell: true
+          command: gzip -c sales.csv > sales.csv.gz && sqly --csv --sql "SELECT COUNT(*) AS n FROM sales" sales.csv.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              3

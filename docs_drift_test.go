@@ -102,6 +102,7 @@ var cookbookCoverage = map[string]string{
 	"Excel workbooks":         "e2e/atago/excel_export.atago.yaml",
 	"Files over HTTP":         "e2e/atago/http_import.atago.yaml",
 	"Pipe data in":            "e2e/atago/cookbook.atago.yaml",
+	"Pipe data out":           "e2e/atago/pipelines.atago.yaml",
 	"Load a directory":        "e2e/atago/cookbook.atago.yaml",
 	"Run SQL from a file":     "e2e/atago/sql_file.atago.yaml",
 	"Analytics":               "e2e/atago/cookbook.atago.yaml",
