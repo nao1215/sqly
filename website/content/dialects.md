@@ -97,7 +97,14 @@ $ sqly --csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
 1
 ```
 
-Collation is the structural one: it is a property of the column and the comparison, not something a query rewrite can supply, so any string comparison, `ORDER BY`, `DISTINCT`, or `GROUP BY` on text uses SQLite's byte ordering.
+None of these four is going to be fixed one dialect at a time. A rewrite that gives MySQL its answer and leaves PostgreSQL and GoogleSQL on SQLite's replaces one divergence you can look up with three that depend on which `--dialect` you passed. So a case is fixed when it can be fixed for every dialect that has an opinion about it, and documented here when it cannot.
+
+Each of the four fails that test for its own reason:
+
+- Collation is a property of the column and the comparison, not of the call being rewritten. Supplying MySQL's would mean attaching it to every string comparison, `ORDER BY`, `DISTINCT`, `GROUP BY`, `LIKE`, and `IN`; doing less leaves `=` case-insensitive while `GROUP BY` stays case-sensitive, which is harder to reason about than one byte ordering everywhere.
+- `ONLY_FULL_GROUP_BY` is a strictness setting rather than a construct to translate, and reproducing it means refusing a query SQLite can answer. sqly answers with a row from each group instead, which is the more useful reading for a tool you point at a file to find out what is in it.
+- `SUBSTR` from position 0 is an off-by-one each dialect resolves its own way, so reproducing it means one helper that knows every dialect's rule, not a MySQL special case bolted onto a shared function.
+- The boolean cast is only recoverable where the expression is syntactically a boolean. `CAST(col AS STRING)` over a column of 0 and 1 is not, because SQLite has no boolean type and nothing downstream can tell that column from a plain integer one.
 
 ## When to reach for something else
 
