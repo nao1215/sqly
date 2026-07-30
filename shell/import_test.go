@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -1401,5 +1402,51 @@ func TestUnfetchableURLScheme(t *testing.T) {
 				t.Errorf("unfetchableURLScheme(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestLocalImportAccessError_URLSchemeReportedOnAnyError pins that an input
+// written as a URL sqly cannot fetch is named by its scheme regardless of which
+// error the filesystem produced. The scheme check used to sit inside the
+// not-exist branch, which is what Unix returns; Windows rejects
+// "s3://bucket/x.csv" as an invalid filename instead, so the explanation never
+// appeared on the platform where the raw error is least readable.
+func TestLocalImportAccessError_URLSchemeReportedOnAnyError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{"not exist, as Unix reports it", os.ErrNotExist},
+		{"invalid filename, as Windows reports it", syscall.EINVAL},
+		{"permission denied", os.ErrPermission},
+		{"an unclassified error", errors.New("some other failure")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := localImportAccessError("s3://bucket/data.csv", tt.err).Error()
+			if !strings.Contains(got, "only http and https URLs") {
+				t.Errorf("localImportAccessError(...) = %q, want it to name the unsupported scheme", got)
+			}
+			if !strings.Contains(got, `"s3"`) {
+				t.Errorf("localImportAccessError(...) = %q, want it to quote the scheme", got)
+			}
+		})
+	}
+}
+
+// TestLocalImportAccessError_PlainPathsKeepTheirMessage keeps the scheme check
+// from swallowing the ordinary path errors.
+func TestLocalImportAccessError_PlainPathsKeepTheirMessage(t *testing.T) {
+	t.Parallel()
+
+	if got := localImportAccessError("data.csv", os.ErrNotExist).Error(); got != "path does not exist: data.csv" {
+		t.Errorf("missing file = %q, want the path-does-not-exist message", got)
+	}
+	if got := localImportAccessError("data.csv", os.ErrPermission).Error(); !strings.Contains(got, "permission denied") {
+		t.Errorf("permission error = %q, want the permission message", got)
 	}
 }
