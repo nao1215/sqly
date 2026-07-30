@@ -157,6 +157,12 @@ scenarios:
 
   - name: "googlesql JSON_VALUE and JSON_QUERY differ on quoting"
     description: "JSON_VALUE returns the scalar itself; JSON_QUERY keeps its result in JSON text, so a string stays quoted. Mapping both to the same SQLite function would lose that distinction silently."
+    # The SQL needs both quote characters — a double-quoted identifier or JSON
+    # key alongside a single-quoted literal — and atago keeps a backslash
+    # literal on Windows so a C:\ path survives, which leaves no way to escape
+    # one inside the other. The behavior itself is covered on Linux and macOS.
+    skip:
+      os: windows
     steps:
       - fixture: *scores
       - run:

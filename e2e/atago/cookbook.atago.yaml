@@ -228,6 +228,12 @@ scenarios:
             contains: Rachelle
 
   - name: translates postgresql syntax
+    # The SQL needs both quote characters — a double-quoted identifier or JSON
+    # key alongside a single-quoted literal — and atago keeps a backslash
+    # literal on Windows so a C:\ path survives, which leaves no way to escape
+    # one inside the other. The behavior itself is covered on Linux and macOS.
+    skip:
+      os: windows
     steps:
       - fixture: *user
       - run:

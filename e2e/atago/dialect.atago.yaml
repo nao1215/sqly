@@ -43,7 +43,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT \"hello\" AS s FROM users LIMIT 1" users.csv
+          command: sqly --csv --dialect mysql --sql 'SELECT "hello" AS s FROM users LIMIT 1' users.csv
       - assert:
           exit_code: 0
           stdout:
@@ -181,6 +181,12 @@ scenarios:
 
   - name: "postgresql dialect keeps json operators and IS NOT DISTINCT FROM working"
     description: "-> and ->> are SQLite-native, so the rewrite must leave them alone rather than mistake :: neighbors for a cast."
+    # The SQL needs both quote characters — a double-quoted identifier or JSON
+    # key alongside a single-quoted literal — and atago keeps a backslash
+    # literal on Windows so a C:\ path survives, which leaves no way to escape
+    # one inside the other. The behavior itself is covered on Linux and macOS.
+    skip:
+      os: windows
     steps:
       - fixture: *users
       - run:
