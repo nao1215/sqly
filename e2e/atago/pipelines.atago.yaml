@@ -104,6 +104,11 @@ scenarios:
   # failing sqly there does not stop the script unless the shell has pipefail.
   # Asserted without a pipe, which is where the guarantee actually holds.
   - name: a failing query stops a script under set -e
+    # Needs a POSIX shell: `set -e` and the `;` separator are shell syntax, and on
+    # Windows they arrive as literal arguments. The exit code itself is asserted on
+    # every platform by the specs that check it directly.
+    skip:
+      os: windows
     steps:
       - fixture: *logs
       - run:
@@ -115,6 +120,9 @@ scenarios:
             not_contains: reached
 
   - name: a failing sqly inside a pipe is only seen with pipefail
+    # Needs a POSIX shell for `;` and `$?`.
+    skip:
+      os: windows
     steps:
       - fixture: *logs
       - run:
@@ -126,6 +134,9 @@ scenarios:
             contains: "pipeline status 0"
 
   - name: the exit code gates a shell script
+    # Needs a POSIX shell for command substitution and `if`.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: users.csv
@@ -157,6 +168,10 @@ scenarios:
               west
 
   - name: a compressed source needs no decompression stage
+    # Needs a POSIX shell and gzip(1) to build the fixture; reading a .gz is
+    # asserted on every platform by compression_roundtrip.atago.yaml.
+    skip:
+      os: windows
     steps:
       - fixture: *sales
       - run:
