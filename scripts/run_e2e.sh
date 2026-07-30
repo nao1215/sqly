@@ -79,8 +79,16 @@ export PATH
 # when the pty sessions are starved of CPU by the other scenarios running in
 # parallel. The rest of the suite runs in parallel; the pty specs then run on their
 # own with --parallel 1 so each session gets uncontended CPU, and with extra
-# retries. --retry-failed reports a recovered scenario as flaky, never hides it, and
-# a real regression still fails after the retries.
+# retries.
+#
+# Only the pty pass retries. --retry-failed reports a recovered scenario as flaky
+# rather than hiding it, but a flaky scenario does not fail the run, and that is
+# the wrong answer for a scenario whose result is supposed to be fixed: filesql
+# built an LTSV table's column list by ranging over a map, so `SELECT *` answered
+# in a different order on every run, and the retries turned that into "flaky,
+# PASSED" instead of a failure. The non-pty specs assert fixed output from a
+# subprocess and have no timing to lose, so a retry there can only paper over a
+# real nondeterminism.
 PTY_SPEC="$ROOT/e2e/atago/pty.atago.yaml"
 
 # Every spec except the pty one, collected so the parallel pass can skip it.
@@ -160,12 +168,15 @@ ran_any=false
 # shellcheck disable=SC2086 # intentional word splitting over the spec list
 if spec_group_matches_filter $NON_PTY_SPECS; then
 	ran_any=true
-	atago run --ci --retry-failed 3 "$@" $NON_PTY_SPECS
+	atago run --ci --retry-failed 0 "$@" $NON_PTY_SPECS
 fi
 if spec_group_matches_filter "$PTY_SPEC"; then
 	ran_any=true
 	atago run --ci --parallel 1 --retry-failed 5 "$@" "$PTY_SPEC"
 fi
 if [ "$ran_any" = false ]; then
-	atago run --ci --retry-failed 3 "$@" $NON_PTY_SPECS "$PTY_SPEC"
+	# Neither group matched, so nothing was selected; run everything and let atago
+	# report the empty selection. The pty retry count applies because this pass
+	# includes the pty spec.
+	atago run --ci --parallel 1 --retry-failed 5 "$@" $NON_PTY_SPECS "$PTY_SPEC"
 fi
