@@ -18,6 +18,7 @@ SQLite can do, sqly can do — the file is just the table.
 | Pick one sheet out of a workbook | [Excel workbooks](#excel-workbooks) |
 | Query a file on a web server | [Files over HTTP](#files-over-http) |
 | Pipe data in from another command | [Pipe data in](#pipe-data-in) |
+| Pipe the result into jq, awk, or sort | [Pipe data out](#pipe-data-out) |
 | Load a whole directory | [Load a directory](#load-a-directory) |
 | Run a saved `.sql` script | [Run SQL from a file](#run-sql-from-a-file) |
 | Rank, bucket, or window over rows | [Analytics](#analytics) |
@@ -256,6 +257,70 @@ dot-commands, one per line:
 
 ```shell
 printf '.tables\nSELECT COUNT(*) FROM user;\n' | sqly user.csv
+```
+
+## Pipe data out
+
+sqly's non-table output is meant for the next command in the pipe. `--ndjson`
+gives one object per line, which is what `jq` reads without buffering the whole
+result:
+
+```shell
+sqly --ndjson --sql "SELECT path, status FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+```
+
+Filtering in SQL before `jq` shapes means `jq` only sees the rows that matter,
+which is the division of labour worth reaching for on a large file — SQL has the
+`WHERE`, `GROUP BY`, and `JOIN`; `jq` has the string formatting:
+
+```shell
+sqly --ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error'" events.jsonl | jq -r '"\(.id):\(.name)"'
+```
+
+For nested JSON, sqly can replace `jq` outright: `json_extract` reaches into the
+document, and SQL does the aggregation `jq` makes hard. See
+[JSON and JSONL](#json-and-jsonl).
+
+`--tsv` is the format for the classic text tools, because a tab is the field
+separator `cut`, `awk`, and `sort -k` already expect. `tail -n +2` drops the
+header:
+
+```shell
+sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | tail -n +2 | cut -f1 | sort -rn | head -n 1
+```
+
+sqly reads and writes the same pipe, so it can sit in the middle of one:
+
+```shell
+cat sales.csv | sqly --csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75" | sort -u
+```
+
+A compressed source needs no decompression stage in front of it:
+
+```shell
+sqly --csv --sql "SELECT COUNT(*) FROM sales" sales.csv.gz
+```
+
+### Exit codes in a pipeline
+
+sqly exits non-zero when an import or a query fails, so `set -e` stops the script:
+
+```shell
+set -e
+sqly --csv --sql "SELECT * FROM no_such_table" logs.csv
+echo "not reached"
+```
+
+One shell rule to know: a pipeline's status is its **last** command's, so a
+failing sqly in `sqly ... | cat` does not stop anything — `$?` is `cat`'s zero.
+Put sqly last, capture it in a variable, or use a shell with `pipefail`:
+
+```shell
+blank=$(sqly --csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1)
+if [ "$blank" != "0" ]; then
+  echo "found $blank rows with no email" >&2
+  exit 1
+fi
 ```
 
 ## Load a directory

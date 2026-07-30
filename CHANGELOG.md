@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Documentation
+* sqly Reads And Writes A Pipe, And The Docs Now Say So: the input side was documented — `--stdin`, an `http(s)` argument — but the output side was one line in the last section of the cookbook, so nothing said sqly is a filter rather than a destination. A new [Pipe data out](https://nao1215.github.io/sqly/cookbook/#pipe-data-out) recipe covers `--ndjson` feeding `jq` one object per line, filtering in SQL so `jq` only sees the rows that matter, `--tsv` for `cut`/`awk`/`sort -k`, sqly sitting in the middle of a pipe, a compressed source needing no decompression stage, and the shell rule that a pipeline's status is its last command's — so a failing sqly in `sqly ... | cat` stops nothing unless the shell has `pipefail`. The front page and README now lead with a pipeline instead of burying it.
+
+### Testing
+* Shell Pipelines: `e2e/atago/pipelines.atago.yaml` adds 9 scenarios running real pipelines through the binary — a fixture served over HTTP and piped into `--stdin`, `--ndjson` into `jq`, `--tsv` into `cut`/`sort`/`head`, sqly as a middle stage, `set -e` stopping on a failed query, the pipefail caveat, and the exit code gating a script. Nothing asserted the output side before this.
+
 ### New Features
 * Vertical Output Mode For Rows Too Wide To Read: `--vertical`, and `.mode vertical` in the shell, print one column per line in a block per record instead of laying the record out along the line. Every other mode fails at the width sqly was written for — a 300-column row is a single 2700-character line as a table, as CSV, as TSV, and as LTSV alike, so no terminal shows it and the column holding the bad value has no name beside it to search for. Vertical spends vertical space, which a terminal scrolls, and puts the name and the value on one short line, so the bad column is one `grep` away. The layout follows psql's expanded output: a numbered record rule, then names left-aligned in a gutter measured in terminal cells, so a full-width Japanese header lines up with an ASCII one. It names no file format, so `.dump` and `--output` take the format from the destination's extension exactly as they do in table mode.
 
