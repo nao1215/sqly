@@ -6,11 +6,16 @@ import (
 	"testing"
 )
 
-// TestREADMEVersionMatchesChangelog guards against release-era version drift in
-// the README: every "sqly vX.Y.Z" string (the shell welcome snippet and the
-// benchmark caption) must match the latest version heading in CHANGELOG.md. When a
-// release bumps the changelog, this fails until the README is refreshed too, so
-// stale version strings cannot silently linger.
+// TestREADMEVersionMatchesChangelog guards against invented version strings in
+// the README: every "sqly vX.Y.Z" reference must be a version CHANGELOG.md
+// actually records, so a typo or a version that was never released fails here.
+//
+// It deliberately does not demand the latest one. The only such reference today
+// is the benchmark caption, and that names the version the numbers were measured
+// on — a release that did not re-run the benchmark must not rewrite it, or the
+// caption claims a measurement nobody took. Re-measuring is what updates it, and
+// the comparison table below it needs trdsql, csvq, and textql on one machine to
+// stay consistent, so it is a deliberate act rather than a release chore.
 func TestREADMEVersionMatchesChangelog(t *testing.T) {
 	t.Parallel()
 
@@ -18,13 +23,15 @@ func TestREADMEVersionMatchesChangelog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read CHANGELOG.md: %v", err)
 	}
-	// The first "## [vX.Y.Z]" heading is the latest released version.
 	headingRe := regexp.MustCompile(`(?m)^## \[(v\d+\.\d+\.\d+)\]`)
-	heading := headingRe.FindSubmatch(changelog)
-	if heading == nil {
+	headings := headingRe.FindAllSubmatch(changelog, -1)
+	if headings == nil {
 		t.Fatal("no version heading found in CHANGELOG.md")
 	}
-	latest := string(heading[1])
+	released := make(map[string]bool, len(headings))
+	for _, h := range headings {
+		released[string(h[1])] = true
+	}
 
 	readme, err := os.ReadFile("README.md")
 	if err != nil {
@@ -38,8 +45,8 @@ func TestREADMEVersionMatchesChangelog(t *testing.T) {
 		t.Fatal(`no "sqly vX.Y.Z" reference found in README.md`)
 	}
 	for _, m := range matches {
-		if m[1] != latest {
-			t.Errorf("README.md has %q but the latest CHANGELOG version is %q; refresh the README version strings", m[0], latest)
+		if !released[m[1]] {
+			t.Errorf("README.md has %q, which CHANGELOG.md does not record as a released version", m[0])
 		}
 	}
 }

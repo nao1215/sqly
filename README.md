@@ -191,7 +191,7 @@ sqly runs each statement in its own transaction on an in-memory database, so a f
 |--------:|--------:|------------:|--------------:|-------------------:|
 | 100,000 | 12 | 515 ms | 161 MB | 2.82M |
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.30.0.
+Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.30.0. The comparison below comes from the same run, so both are refreshed together rather than at each release.
 
 The same query on the same file (top 10 countries by row count), best of 5 end-to-end runs:
 
