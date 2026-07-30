@@ -3,11 +3,15 @@
 ## [Unreleased]
 
 ### Bug Fixes
+<<<<<<< HEAD
 * Unfetchable URL Scheme Unreported On Windows: an input written as a URL sqly cannot download named its scheme only when the filesystem answered "does not exist", which is what Unix returns. Windows rejects `s3://bucket/data.csv` as an invalid filename instead — it becomes `.\s3:\bucket\data.csv`, and the drive-letter colon is refused before anything is looked up — so the platform where the raw error is least readable was the one that never got the explanation. The scheme is now checked before the error kind. Found by the Windows suite added below, on its first run.
 
 ### Testing
 * Windows Behavior Coverage: the full atago suite now runs on Windows, not only the interactive-shell pty specs. sqly ships for Windows, but 611 of its 622 scenarios had never executed there — write-back, caching, path handling, every format, and the dialects were asserted on Linux and macOS alone. Windows-only defects are invisible from a Unix run: `os.Rename` refuses to replace a file another handle still has open, which is every in-place save. Ten scenarios are skipped there with a reason: six need a POSIX shell (an `http.server` fixture, `gzip(1)`, a pipeline), and four write SQL that needs both quote characters at once, which atago cannot express on Windows because it keeps a backslash literal so a `C:\` path survives. All ten stay covered on Linux and macOS.
 * Human-Readable Reports Carried Less Than The Machine-Readable Ones: `--compare-format text` printed only counts — "1 added, 1 removed, 1 modified" — while the JSON it was summarizing held the whole diff, so the format meant for a person could not answer "what changed?". It now lists the key of every added, removed, and modified row, and for a modified row the columns whose values differ, so a wide table does not reprint what stayed the same. `--profile-format text` printed every column in file order, so on the wide CSV sqly exists for the columns with warnings were buried: profiling a 300-column file put the one bad column on line 154 of 303. It now leads with a count and the flagged columns, then still lists every column.
+=======
+* Human-Readable Reports Carried Less Than The Machine-Readable Ones: `--compare-format text` printed only counts — "1 added, 1 removed, 1 modified" — while the JSON it was summarizing held the whole diff, so the format meant for a person could not answer "what changed?". It now lists the key of every added, removed, and modified row, and for a modified row the columns whose values differ, so a wide table does not reprint what stayed the same. `--profile-format text` printed every column in file order, so the columns with warnings were buried in the wide CSVs sqly exists for: profiling a 300-column file put the one bad column on line 154 of 303. It now leads with a count and the flagged columns, then still lists every column; a table with nothing wrong says "no warnings" instead of an empty heading.
+>>>>>>> 1997f20 (fix(compare): compare cell values, not their rendered form)
 
 
 ## [v0.30.0](https://github.com/nao1215/sqly/compare/v0.29.0...v0.30.0) (2026-07-29)

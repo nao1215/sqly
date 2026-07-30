@@ -808,13 +808,25 @@ func writeCompareRowDetail(b *strings.Builder, rows compareRows) {
 			if col == rows.Key {
 				continue
 			}
-			left, right := compareCell(mod.Left[col]), compareCell(mod.Right[col])
-			if left == right {
+			left, right := mod.Left[col], mod.Right[col]
+			if sameCompareValue(left, right) {
 				continue
 			}
-			fmt.Fprintf(b, "      %s: %s -> %s\n", col, left, right)
+			fmt.Fprintf(b, "      %s: %s -> %s\n", col, compareCell(left), compareCell(right))
 		}
 	}
+}
+
+// sameCompareValue reports whether two cells hold the same value, comparing SQL
+// NULL by identity rather than by how it prints. A NULL renders as "NULL" and so
+// does the literal string "NULL", so comparing the rendered forms would hide a
+// change between them — the one case the row-level diff already treats as a
+// modification, which is why it reached this function at all.
+func sameCompareValue(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // compareCell renders one cell for the text report, distinguishing a SQL NULL

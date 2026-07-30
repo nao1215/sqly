@@ -52,11 +52,11 @@ Each of these prints a report and exits, instead of running a query.
 | `-i`, `--inspect` | schema, row counts, and sample rows as JSON |
 | `--inspect-sample N` | rows per table in `--inspect` (default 5; `0` for schema only) |
 | `--profile` | data-quality report: nulls, blanks, distinct counts, warnings |
-| `--profile-format` | `json` (default), or `text`, which leads with the columns that have warnings |
+| `--profile-format` | `json` (default), or `text`, which leads with the columns that have warnings, then lists every column (`no warnings` when there are none) |
 | `--compare` | compare two tables: schema, row count, keyed rows |
 | `--compare-key COL` | key column for the keyed row comparison |
 | `--compare-tables "l,r"` | which two tables to compare |
-| `--compare-format` | `json` (default), or `text`, which lists the keys added, removed, and modified |
+| `--compare-format` | `json` (default), or `text`, which lists the keys added (`+`), removed (`-`), and modified (`~`), and under each modified key only the columns whose value changed |
 
 ## Write-back
 

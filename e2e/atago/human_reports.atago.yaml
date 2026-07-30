@@ -139,3 +139,27 @@ scenarios:
           stdout:
             contains: "no warnings"
             not_contains: "columns have warnings"
+
+  # A SQL NULL and the literal string "NULL" print the same, so the column filter
+  # has to compare the values rather than their rendered forms; comparing the
+  # rendered forms hid exactly this change.
+  - name: compare text shows a change between NULL and the literal "NULL"
+    steps:
+      - fixture:
+          file: ln.csv
+          content: |
+            id,v
+            1,
+      - fixture:
+          file: rn.csv
+          content: |
+            id,v
+            1,NULL
+      - run:
+          command: sqly --compare --compare-key id --compare-format text ln.csv rn.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "~ id=1"
+              - "v: "
