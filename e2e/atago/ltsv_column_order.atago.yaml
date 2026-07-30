@@ -1,0 +1,139 @@
+# LTSV has no header line, so a table's columns are the labels its records carry.
+# Up to filesql v0.26.0 those labels were collected into a map and the column list
+# was built by ranging over it, and Go randomizes map iteration: `SELECT *` on the
+# same LTSV file answered in a different order on every run of the binary, so no
+# query written against column positions could be relied on and no snapshot of one
+# could hold.
+#
+# Each scenario runs the same command several times. One run cannot tell a stable
+# order from a lucky draw, and each run is a fresh process with a fresh map seed.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly LTSV column order
+
+scenarios:
+  - name: SELECT * lists an LTSV file's columns in the order its labels appear
+    steps:
+      - fixture: &access
+          file: access.ltsv
+          content: "time:12:00:00\thost:192.168.0.1\treq:GET /list\tstatus:200\tsize:5316\n"
+      - run: &selectall
+          command: sqly --csv --sql "SELECT * FROM access" access.ltsv
+      - assert: &header
+          exit_code: 0
+          stdout:
+            equals: |
+              time,host,req,status,size
+              12:00:00,192.168.0.1,GET /list,200,5316
+      - run: *selectall
+      - assert: *header
+      - run: *selectall
+      - assert: *header
+      - run: *selectall
+      - assert: *header
+      - run: *selectall
+      - assert: *header
+
+  - name: a label that only appears in a later record becomes the last column
+    steps:
+      - fixture: &sparse
+          file: sparse.ltsv
+          content: "id:1\tname:alice\nid:2\tname:bob\tnickname:bo\n"
+      - run: &selectsparse
+          command: sqly --csv --sql "SELECT * FROM sparse ORDER BY id" sparse.ltsv
+      - assert: &sparseheader
+          exit_code: 0
+          stdout:
+            equals: |
+              id,name,nickname
+              1,alice,
+              2,bob,bo
+      - run: *selectsparse
+      - assert: *sparseheader
+      - run: *selectsparse
+      - assert: *sparseheader
+      - run: *selectsparse
+      - assert: *sparseheader
+
+  # Four labels, and the second record lists them backwards. Two would let a
+  # random order pass half the time; four leaves 24 orders, so a run that agrees
+  # with the first record is telling us something.
+  - name: a record that lists its labels in another order does not reorder the columns
+    steps:
+      - fixture:
+          file: mixed.ltsv
+          content: "id:1\tname:alice\trole:dev\tcity:tokyo\ncity:osaka\trole:ops\tname:bob\tid:2\n"
+      - run: &selectmixed
+          command: sqly --csv --sql "SELECT * FROM mixed ORDER BY id" mixed.ltsv
+      - assert: &mixedheader
+          exit_code: 0
+          stdout:
+            equals: |
+              id,name,role,city
+              1,alice,dev,tokyo
+              2,bob,ops,osaka
+      - run: *selectmixed
+      - assert: *mixedheader
+      - run: *selectmixed
+      - assert: *mixedheader
+      - run: *selectmixed
+      - assert: *mixedheader
+
+  - name: exporting an LTSV source to CSV keeps the column order it was read in
+    steps:
+      - fixture: *access
+      - run: &export
+          command: sqly --csv --sql "SELECT * FROM access" access.ltsv --output out.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT * FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              time,host,req,status,size
+              12:00:00,192.168.0.1,GET /list,200,5316
+      - run: *export
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --csv --sql "SELECT * FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              time,host,req,status,size
+              12:00:00,192.168.0.1,GET /list,200,5316
+
+  # The fixture is restored before each run because the previous one rewrote it,
+  # and the run is repeated because three labels leave six orders: once is not
+  # enough to tell a kept order from a lucky one.
+  - name: writing an UPDATE back to an LTSV source keeps its label order
+    steps:
+      - fixture: &writeback
+          file: d.ltsv
+          content: "id:1\tv:a\tnote:first\n"
+      - run: &writeback_run
+          command: sqly d.ltsv
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+      - assert: &writeback_exit
+          exit_code: 0
+      - assert: &writeback_file
+          file:
+            path: d.ltsv
+            equals: "id:1\tv:Z\tnote:first\n"
+      - fixture: *writeback
+      - run: *writeback_run
+      - assert: *writeback_exit
+      - assert: *writeback_file
+      - fixture: *writeback
+      - run: *writeback_run
+      - assert: *writeback_exit
+      - assert: *writeback_file
+      - fixture: *writeback
+      - run: *writeback_run
+      - assert: *writeback_exit
+      - assert: *writeback_file
