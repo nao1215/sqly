@@ -14,7 +14,7 @@ cd "$ROOT"
 
 if ! command -v atago >/dev/null 2>&1; then
 	echo "e2e: atago is not installed. Install it from https://github.com/nao1215/atago" >&2
-	echo "e2e: e.g. 'go install github.com/nao1215/atago@v0.17.0' (CI uses nao1215/setup-atago)" >&2
+	echo "e2e: e.g. 'go install github.com/nao1215/atago@v0.18.0' (CI uses nao1215/setup-atago)" >&2
 	exit 127
 fi
 
@@ -81,14 +81,16 @@ export PATH
 # own with --parallel 1 so each session gets uncontended CPU, and with extra
 # retries.
 #
-# Only the pty pass retries. --retry-failed reports a recovered scenario as flaky
-# rather than hiding it, but a flaky scenario does not fail the run, and that is
-# the wrong answer for a scenario whose result is supposed to be fixed: filesql
-# built an LTSV table's column list by ranging over a map, so `SELECT *` answered
-# in a different order on every run, and the retries turned that into "flaky,
-# PASSED" instead of a failure. The non-pty specs assert fixed output from a
-# subprocess and have no timing to lose, so a retry there can only paper over a
-# real nondeterminism.
+# Only the pty pass retries, and only it accepts a flaky verdict. As of atago
+# v0.18.0 a recovered scenario fails the run unless --allow-flaky says the
+# instability is expected, which is exactly the split wanted here: the pty
+# sessions lose keystrokes under CPU starvation and that is known, while the
+# non-pty specs assert fixed output from a subprocess and have no timing to lose.
+#
+# Before that split, one --retry-failed covered the whole suite and quietly
+# extended tolerance to every spec: filesql built an LTSV table's column list by
+# ranging over a map, so `SELECT *` answered in a different order on every run,
+# and the retries turned that into "flaky, PASSED" instead of a failure.
 PTY_SPEC="$ROOT/e2e/atago/pty.atago.yaml"
 
 # Every spec except the pty one, collected so the parallel pass can skip it.
@@ -172,11 +174,11 @@ if spec_group_matches_filter $NON_PTY_SPECS; then
 fi
 if spec_group_matches_filter "$PTY_SPEC"; then
 	ran_any=true
-	atago run --ci --parallel 1 --retry-failed 5 "$@" "$PTY_SPEC"
+	atago run --ci --parallel 1 --retry-failed 5 --allow-flaky "$@" "$PTY_SPEC"
 fi
 if [ "$ran_any" = false ]; then
 	# Neither group matched, so nothing was selected; run everything and let atago
 	# report the empty selection. The pty retry count applies because this pass
 	# includes the pty spec.
-	atago run --ci --parallel 1 --retry-failed 5 "$@" $NON_PTY_SPECS "$PTY_SPEC"
+	atago run --ci --parallel 1 --retry-failed 5 --allow-flaky "$@" $NON_PTY_SPECS "$PTY_SPEC"
 fi
