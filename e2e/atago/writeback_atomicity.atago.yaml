@@ -42,7 +42,7 @@ scenarios:
             modified: []
             deleted: []
       - run:
-          command: sqly --csv --sql "SELECT individual_name FROM adebit_entries" adebit.ach
+          command: sqly --output-format csv --sql "SELECT individual_name FROM adebit_entries" adebit.ach
       - assert:
           exit_code: 0
           stdout:
@@ -85,7 +85,7 @@ scenarios:
             modified: []
             deleted: []
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM adebit_entries" adebit.ach
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM adebit_entries" adebit.ach
       - assert:
           exit_code: 0
           stdout:
@@ -145,7 +145,7 @@ scenarios:
               - adebit.ach
             deleted: []
       - run:
-          command: sqly --csv --sql "SELECT individual_name FROM adebit_entries" adebit.ach
+          command: sqly --output-format csv --sql "SELECT individual_name FROM adebit_entries" adebit.ach
       - assert:
           exit_code: 0
           stdout:

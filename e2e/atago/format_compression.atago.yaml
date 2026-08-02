@@ -17,13 +17,13 @@ scenarios:
           file: s.tsv
           content: "id\tv\n1\ta\n2\tb\n"
       - run:
-          command: sqly --tsv --sql "SELECT * FROM s ORDER BY id" s.tsv --output o.tsv.gz
+          command: sqly --output-format tsv --sql "SELECT * FROM s ORDER BY id" s.tsv --output o.tsv.gz
       - assert:
           exit_code: 0
           stderr:
             contains: "output mode=tsv"
       - run:
-          command: sqly --csv --sql "SELECT id, v FROM o ORDER BY id" o.tsv.gz
+          command: sqly --output-format csv --sql "SELECT id, v FROM o ORDER BY id" o.tsv.gz
       - assert:
           exit_code: 0
           stdout:
@@ -37,13 +37,13 @@ scenarios:
           file: s.ltsv
           content: "id:1\tv:a\nid:2\tv:b\n"
       - run:
-          command: sqly --ltsv --sql "SELECT * FROM s ORDER BY id" s.ltsv --output o.ltsv.gz
+          command: sqly --output-format ltsv --sql "SELECT * FROM s ORDER BY id" s.ltsv --output o.ltsv.gz
       - assert:
           exit_code: 0
           stderr:
             contains: "output mode=ltsv"
       - run:
-          command: sqly --csv --sql "SELECT id, v FROM o ORDER BY id" o.ltsv.gz
+          command: sqly --output-format csv --sql "SELECT id, v FROM o ORDER BY id" o.ltsv.gz
       - assert:
           exit_code: 0
           stdout:
@@ -55,11 +55,11 @@ scenarios:
     steps:
       - fixture: *tsv
       - run:
-          command: sqly --tsv --sql "SELECT * FROM s ORDER BY id" s.tsv --output o.tsv.zst
+          command: sqly --output-format tsv --sql "SELECT * FROM s ORDER BY id" s.tsv --output o.tsv.zst
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT id, v FROM o ORDER BY id" o.tsv.zst
+          command: sqly --output-format csv --sql "SELECT id, v FROM o ORDER BY id" o.tsv.zst
       - assert:
           exit_code: 0
           stdout:

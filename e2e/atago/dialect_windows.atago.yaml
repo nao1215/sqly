@@ -24,7 +24,7 @@ scenarios:
             2,Bob,20
             3,Carol,30
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT SUM(score) OVER (ORDER BY id) / 2 AS w FROM scores ORDER BY id" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT SUM(score) OVER (ORDER BY id) / 2 AS w FROM scores ORDER BY id" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -36,7 +36,7 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT score / COUNT(*) OVER () AS r FROM scores ORDER BY id" scores.csv
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT score / COUNT(*) OVER () AS r FROM scores ORDER BY id" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -48,14 +48,14 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT SUM(score) OVER win / 2 AS w FROM scores WINDOW win AS (ORDER BY id) ORDER BY id" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT SUM(score) OVER win / 2 AS w FROM scores WINDOW win AS (ORDER BY id) ORDER BY id" scores.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "5"
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT COUNT(*) FILTER (WHERE id > 1) / 2 AS c FROM scores" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT COUNT(*) FILTER (WHERE id > 1) / 2 AS c FROM scores" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -67,7 +67,7 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT CAST(SUM(score) OVER (ORDER BY id) AS TEXT) LIKE '1%' AS m FROM scores ORDER BY id" scores.csv
+          command: sqly --output-format csv --dialect postgres --sql "SELECT CAST(SUM(score) OVER (ORDER BY id) AS TEXT) LIKE '1%' AS m FROM scores ORDER BY id" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -83,7 +83,7 @@ scenarios:
             id,at,offset_days
             1,2026-01-01,3
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT DATE_ADD(at, INTERVAL offset_days DAY) AS d, DATE_SUB(at, INTERVAL offset_days DAY) AS e FROM events" events.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT DATE_ADD(at, INTERVAL offset_days DAY) AS d, DATE_SUB(at, INTERVAL offset_days DAY) AS e FROM events" events.csv
       - assert:
           exit_code: 0
           stdout:
@@ -95,7 +95,7 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT CASE WHEN name LIKE 'A%' THEN 1 ELSE 0 END AS f FROM scores ORDER BY id" scores.csv
+          command: sqly --output-format csv --dialect postgres --sql "SELECT CASE WHEN name LIKE 'A%' THEN 1 ELSE 0 END AS f FROM scores ORDER BY id" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -103,21 +103,21 @@ scenarios:
               - "1"
               - "0"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT (SELECT COUNT(*) FROM scores WHERE name LIKE 'A%') AS c" scores.csv
+          command: sqly --output-format csv --dialect postgres --sql "SELECT (SELECT COUNT(*) FROM scores WHERE name LIKE 'A%') AS c" scores.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "1"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT COUNT(*) AS c FROM scores GROUP BY name LIKE 'A%' ORDER BY c" scores.csv
+          command: sqly --output-format csv --dialect postgres --sql "SELECT COUNT(*) AS c FROM scores GROUP BY name LIKE 'A%' ORDER BY c" scores.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "1"
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT (score/10)/2 AS q, -score/10 AS r FROM scores WHERE id = 1" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT (score/10)/2 AS q, -score/10 AS r FROM scores WHERE id = 1" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -129,7 +129,7 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT LENGTH('あい') AS bytes, CHAR_LENGTH('あい') AS chars FROM scores LIMIT 1" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT LENGTH('あい') AS bytes, CHAR_LENGTH('あい') AS chars FROM scores LIMIT 1" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -141,14 +141,14 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT TRIM(BOTH 'x' FROM 'xxaxx') AS b, TRIM(LEADING 'x' FROM 'xxaxx') AS l FROM scores LIMIT 1" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT TRIM(BOTH 'x' FROM 'xxaxx') AS b, TRIM(LEADING 'x' FROM 'xxaxx') AS l FROM scores LIMIT 1" scores.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "a,axx"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT BTRIM('xxaxx', 'x') AS b, OVERLAY('abcdef' PLACING 'XY' FROM 2) AS o FROM scores LIMIT 1" scores.csv
+          command: sqly --output-format csv --dialect postgres --sql "SELECT BTRIM('xxaxx', 'x') AS b, OVERLAY('abcdef' PLACING 'XY' FROM 2) AS o FROM scores LIMIT 1" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -166,14 +166,14 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT JSON_VALUE('{\"a\":\"x\"}', '$.a') AS v FROM scores LIMIT 1" scores.csv
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT JSON_VALUE('{\"a\":\"x\"}', '$.a') AS v FROM scores LIMIT 1" scores.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "x"
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT BYTE_LENGTH('あい') AS b, CHAR_LENGTH('あい') AS c FROM scores LIMIT 1" scores.csv
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT BYTE_LENGTH('あい') AS b, CHAR_LENGTH('あい') AS c FROM scores LIMIT 1" scores.csv
       - assert:
           exit_code: 0
           stdout:
@@ -185,7 +185,7 @@ scenarios:
     steps:
       - fixture: *scores
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT id FROM scores WHERE id = 1 UNION DISTINCT SELECT id FROM scores WHERE id = 1" scores.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT id FROM scores WHERE id = 1 UNION DISTINCT SELECT id FROM scores WHERE id = 1" scores.csv
       - assert:
           exit_code: 0
           stdout:

@@ -15,7 +15,7 @@ Enter
 Type "until curl -fsS http://127.0.0.1:18080/user.csv >/dev/null; do sleep 0.1; done"
 Enter
 Show
-Type "sqly --csv --sql 'SELECT user_name FROM user ORDER BY identifier LIMIT 2' http://127.0.0.1:18080/user.csv"
+Type "sqly --output-format csv --sql 'SELECT user_name FROM user ORDER BY identifier LIMIT 2' http://127.0.0.1:18080/user.csv"
 Enter
 Sleep 2s
 Type "sqly"

@@ -3,6 +3,7 @@ package filesql
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,7 +31,7 @@ func rejectLongDelimitedRows(paths []string) error {
 		}
 
 		header, err := reader.Read()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			continue
 		}
 		if err != nil {
@@ -38,7 +39,7 @@ func rejectLongDelimitedRows(paths []string) error {
 		}
 		for row := 2; ; row++ {
 			record, err := reader.Read()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			if err != nil {

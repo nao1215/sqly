@@ -20,7 +20,7 @@ weight: 50
 
 ## Write
 
-`--csv`, `--tsv`, `--ltsv`, `--json`, `--ndjson`, `--markdown`, `--excel`, `--parquet`, and the default `table`.
+`--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format ndjson`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
 
 `--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
@@ -33,7 +33,7 @@ CSV, TSV, LTSV, JSON, JSONL, Parquet, and Excel are read through `.gz`, `.bz2`, 
 Output compression comes from the destination's extension:
 
 ```shell
-sqly --csv --output out.csv.zst --sql "SELECT * FROM data" data.csv.gz
+sqly --output-format csv --output out.csv.zst --sql "SELECT * FROM data" data.csv.gz
 ```
 
 A write-back preserves each source's own compression.
@@ -56,7 +56,7 @@ Each sheet becomes `file_sheet`. `--sheet NAME` imports one sheet by its origina
 sqly --sheet "Q3 actuals" --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 ```
 
-An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--excel --output`.
+An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.
 
 ## Text encodings
 

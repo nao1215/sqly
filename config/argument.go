@@ -98,59 +98,19 @@ type Arg struct {
 	Version func()
 }
 
-// Output mode flag names, shared by the flag registration and the conflict
-// check so the strings are defined once.
 const (
-	outCSV      = "csv"
-	outTSV      = "tsv"
-	outLTSV     = "ltsv"
-	outExcel    = "excel"
-	outMarkdown = "markdown"
-	outJSON     = "json"
-	outNDJSON   = "ndjson"
-	outParquet  = "parquet"
-	outVertical = "vertical"
+	outputFormatTable    = "table"
+	outputFormatCSV      = "csv"
+	outputFormatTSV      = "tsv"
+	outputFormatLTSV     = "ltsv"
+	outputFormatExcel    = "excel"
+	outputFormatMarkdown = "markdown"
+	outputFormatJSON     = "json"
+	outputFormatNDJSON   = "ndjson"
+	outputFormatParquet  = "parquet"
+	outputFormatVertical = "vertical"
+	outputFormatHelp     = outputFormatTable + "|" + outputFormatCSV + "|" + outputFormatTSV + "|" + outputFormatLTSV + "|" + outputFormatExcel + "|" + outputFormatMarkdown + "|" + outputFormatJSON + "|" + outputFormatNDJSON + "|" + outputFormatParquet + "|" + outputFormatVertical
 )
-
-// outputFlag is a structure for managing output format options.
-type outputFlag struct {
-	csv      bool
-	tsv      bool
-	ltsv     bool
-	excel    bool
-	markdown bool
-	json     bool
-	ndjson   bool
-	parquet  bool
-	vertical bool
-}
-
-// selectedNames returns the names of the output mode flags that are set. More
-// than one means the user passed conflicting mode flags, which NewArg rejects
-// instead of silently applying a precedence.
-func (of outputFlag) selectedNames() []string {
-	flags := []struct {
-		name string
-		set  bool
-	}{
-		{outCSV, of.csv},
-		{outTSV, of.tsv},
-		{outLTSV, of.ltsv},
-		{outExcel, of.excel},
-		{outMarkdown, of.markdown},
-		{outJSON, of.json},
-		{outNDJSON, of.ndjson},
-		{outParquet, of.parquet},
-		{outVertical, of.vertical},
-	}
-	var names []string
-	for _, f := range flags {
-		if f.set {
-			names = append(names, "--"+f.name)
-		}
-	}
-	return names
-}
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 // NOTE: Adding options directly to the pflag package results in a double
@@ -175,7 +135,6 @@ func newArg(args []string) (*Arg, error) {
 	if len(args) == 0 {
 		return nil, ErrEmptyArg
 	}
-	oFlag := outputFlag{}
 	arg := &Arg{}
 
 	flag := pflag.FlagSet{}
@@ -185,17 +144,9 @@ func newArg(args []string) (*Arg, error) {
 	// that fail with "path does not exist". Interspersed parsing instead applies
 	// the flag, and an unknown flag fails fast with a clear parse error.
 	flag.SetInterspersed(true)
-	flag.BoolVarP(&oFlag.csv, outCSV, "c", false, "change output format to csv (default: table)")
-	flag.BoolVarP(&oFlag.excel, outExcel, "e", false, "change output format to excel (default: table)")
-	flag.BoolVarP(&oFlag.ltsv, outLTSV, "l", false, "change output format to ltsv (default: table)")
-	flag.BoolVarP(&oFlag.markdown, outMarkdown, "m", false, "change output format to markdown table (default: table)")
-	flag.BoolVarP(&oFlag.tsv, outTSV, "t", false, "change output format to tsv (default: table)")
-	flag.BoolVarP(&oFlag.json, outJSON, "j", false, "change output format to json (default: table)")
-	flag.BoolVarP(&oFlag.ndjson, outNDJSON, "n", false, "change output format to ndjson (default: table)")
-	flag.BoolVarP(&oFlag.parquet, outParquet, "p", false, "export results as parquet (export-only; use with --output or .dump)")
-	flag.BoolVar(&oFlag.vertical, outVertical, false, "change output format to one column per line, in a block per record (default: table); for rows too wide to read across")
+	outputFormat := flag.String("output-format", outputFormatTable, "output format: "+outputFormatHelp)
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
-	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
+	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format ("+outputFormatCSV+"|"+outputFormatTSV+"|"+outputFormatLTSV+"|"+outputFormatJSON+"|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
 	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop|skip|pad")
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "text input encoding for CSV/TSV/LTSV/JSON/JSONL import: "+model.TextEncodingHelp())
@@ -276,13 +227,6 @@ func newArg(args []string) (*Arg, error) {
 		}
 	}
 
-	// Reject conflicting output mode flags (e.g. --csv --json) instead of
-	// silently applying an internal precedence, which would discard the other
-	// flags without warning.
-	if names := oFlag.selectedNames(); len(names) > 1 {
-		return nil, fmt.Errorf("conflicting output mode flags: %s; choose one", strings.Join(names, ", "))
-	}
-
 	// Parse --import-mode into a policy, rejecting any value other than
 	// stop|skip|pad so a typo fails fast instead of silently defaulting.
 	importPolicy, err := model.ParseMalformedRowPolicy(*importMode)
@@ -299,10 +243,14 @@ func newArg(args []string) (*Arg, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unknown SQL dialect %q (supported: sqlite, mysql, postgresql, googlesql)", *sqlDialect)
 	}
+	outputMode, err := parseOutputFormat(*outputFormat)
+	if err != nil {
+		return nil, err
+	}
 
 	arg.Usage = usage(flag)
 	arg.Version = version
-	arg.Output = newOutput(*output, oFlag)
+	arg.Output = newOutput(*output, outputMode)
 	arg.FilePaths = flag.Args()
 	arg.SheetName = *sheetName
 	arg.StdinFormat = *stdinFormat
@@ -366,34 +314,36 @@ func isValidTableIdentifier(name string) bool {
 	return name != ""
 }
 
-// newOutput retur *Output
-func newOutput(filePath string, of outputFlag) *Output {
-	output := &Output{
-		FilePath: filePath,
-	}
-	switch {
-	case of.excel:
-		output.Mode = model.PrintModeExcel
-	case of.csv:
-		output.Mode = model.PrintModeCSV
-	case of.tsv:
-		output.Mode = model.PrintModeTSV
-	case of.ltsv:
-		output.Mode = model.PrintModeLTSV
-	case of.markdown:
-		output.Mode = model.PrintModeMarkdownTable
-	case of.json:
-		output.Mode = model.PrintModeJSON
-	case of.ndjson:
-		output.Mode = model.PrintModeNDJSON
-	case of.parquet:
-		output.Mode = model.PrintModeParquet
-	case of.vertical:
-		output.Mode = model.PrintModeVertical
+func parseOutputFormat(name string) (model.PrintMode, error) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case outputFormatTable:
+		return model.PrintModeTable, nil
+	case outputFormatCSV:
+		return model.PrintModeCSV, nil
+	case outputFormatTSV:
+		return model.PrintModeTSV, nil
+	case outputFormatLTSV:
+		return model.PrintModeLTSV, nil
+	case outputFormatExcel:
+		return model.PrintModeExcel, nil
+	case outputFormatMarkdown:
+		return model.PrintModeMarkdownTable, nil
+	case outputFormatJSON:
+		return model.PrintModeJSON, nil
+	case outputFormatNDJSON:
+		return model.PrintModeNDJSON, nil
+	case outputFormatParquet:
+		return model.PrintModeParquet, nil
+	case outputFormatVertical:
+		return model.PrintModeVertical, nil
 	default:
-		output.Mode = model.PrintModeTable
+		return model.PrintModeTable, fmt.Errorf("invalid output format %q: want %s", name, outputFormatHelp)
 	}
-	return output
+}
+
+// newOutput returns the output destination and its selected format.
+func newOutput(filePath string, mode model.PrintMode) *Output {
+	return &Output{FilePath: filePath, Mode: mode}
 }
 
 // NeedsOutputToFile whether the data needs to be output to the file

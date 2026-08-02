@@ -350,7 +350,7 @@ scenarios:
       os: windows
     steps:
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM stdin" /dev/stdin
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM stdin" /dev/stdin
           stdin: |
             name,score
             a,1
@@ -367,7 +367,7 @@ scenarios:
       os: linux
     steps:
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM sheet_0" /proc/self/fd/0
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM sheet_0" /proc/self/fd/0
           stdin: |
             name,score
             a,1
@@ -416,7 +416,7 @@ scenarios:
     env: *hist
     steps:
       - run:
-          command: sqly --ltsv --sql 'SELECT 1 AS "foo:bar"' --output out.ltsv
+          command: sqly --output-format ltsv --sql 'SELECT 1 AS "foo:bar"' --output out.ltsv
       - assert:
           exit_code: 1
           stderr:
@@ -426,7 +426,7 @@ scenarios:
     env: *hist
     steps:
       - run:
-          command: sqly --ltsv --sql "SELECT 1 AS x, 2 AS x" --output out.ltsv
+          command: sqly --output-format ltsv --sql "SELECT 1 AS x, 2 AS x" --output out.ltsv
       - assert:
           exit_code: 1
           stderr:

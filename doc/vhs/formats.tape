@@ -14,15 +14,15 @@ Type "sqly --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.
 Sleep 600ms
 Enter
 Sleep 1800ms
-Type "sqly --csv --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
+Type "sqly --output-format csv --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
 Sleep 600ms
 Enter
 Sleep 1800ms
-Type "sqly --json --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
+Type "sqly --output-format json --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
 Sleep 600ms
 Enter
 Sleep 1800ms
-Type "sqly --ndjson --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
+Type "sqly --output-format ndjson --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
 Sleep 600ms
 Enter
 Sleep 2500ms

@@ -7,10 +7,10 @@ suite:
   name: sqly JSON/NDJSON NULL handling
 
 scenarios:
-  - name: emits NULL as JSON null in --json
+  - name: emits NULL as JSON null in --output-format json
     steps:
       - run:
-          command: sqly --json --sql "SELECT NULL AS n, '' AS e, 1 AS x"
+          command: sqly --output-format json --sql "SELECT NULL AS n, '' AS e, 1 AS x"
       - assert:
           exit_code: 0
           stdout:
@@ -18,10 +18,10 @@ scenarios:
               - '"n":null'
               - '"e":""'
 
-  - name: emits NULL as JSON null in --ndjson
+  - name: emits NULL as JSON null in --output-format ndjson
     steps:
       - run:
-          command: sqly --ndjson --sql "SELECT NULL AS n, '' AS e, 1 AS x"
+          command: sqly --output-format ndjson --sql "SELECT NULL AS n, '' AS e, 1 AS x"
       - assert:
           exit_code: 0
           stdout:

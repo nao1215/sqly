@@ -129,25 +129,25 @@ func TestSmoke_MissingHelperArgFailsBatch(t *testing.T) {
 func TestSmoke_DirectSQLOutputFormats(t *testing.T) {
 	csv := filepath.Join("testdata", "user.csv")
 
-	out, _, code := run(t, "", "--csv", "--sql", "SELECT first_name FROM user ORDER BY first_name LIMIT 1", csv)
+	out, _, code := run(t, "", "--output-format", "csv", "--sql", "SELECT first_name FROM user ORDER BY first_name LIMIT 1", csv)
 	if code != 0 {
-		t.Fatalf("--csv --sql exit code = %d, want 0", code)
+		t.Fatalf("--output-format csv --sql exit code = %d, want 0", code)
 	}
 	if !strings.Contains(out, "first_name") {
-		t.Errorf("--csv stdout = %q, want a csv header", out)
+		t.Errorf("--output-format csv stdout = %q, want a csv header", out)
 	}
 
-	out, _, code = run(t, "", "--json", "--sql", "SELECT first_name FROM user ORDER BY first_name LIMIT 1", csv)
+	out, _, code = run(t, "", "--output-format", "json", "--sql", "SELECT first_name FROM user ORDER BY first_name LIMIT 1", csv)
 	if code != 0 {
-		t.Fatalf("--json --sql exit code = %d, want 0", code)
+		t.Fatalf("--output-format json --sql exit code = %d, want 0", code)
 	}
 	if !strings.Contains(out, "first_name") || !strings.Contains(out, "[") {
-		t.Errorf("--json stdout = %q, want a JSON array", out)
+		t.Errorf("--output-format json stdout = %q, want a JSON array", out)
 	}
 }
 
 func TestSmoke_StdinDataset(t *testing.T) {
-	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin", "csv", "--csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
+	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin", "csv", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
 	if code != 0 {
 		t.Fatalf("--stdin csv exit code = %d, want 0 (stdout=%q)", code, out)
 	}
@@ -159,7 +159,7 @@ func TestSmoke_StdinDataset(t *testing.T) {
 func TestSmoke_OutputToFileAndStderrSeparation(t *testing.T) {
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "result.csv")
-	stdout, stderr, code := run(t, "", "--csv", "--sql", "SELECT first_name FROM user LIMIT 1", "--output", outPath, filepath.Join("testdata", "user.csv"))
+	stdout, stderr, code := run(t, "", "--output-format", "csv", "--sql", "SELECT first_name FROM user LIMIT 1", "--output", outPath, filepath.Join("testdata", "user.csv"))
 	if code != 0 {
 		t.Fatalf("--output exit code = %d, want 0 (stderr=%q)", code, stderr)
 	}

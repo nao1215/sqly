@@ -13,7 +13,7 @@ suite:
   name: sqly vertical output mode
 
 scenarios:
-  - name: --vertical prints one column per line, in a block per record
+  - name: --output-format vertical prints one column per line, in a block per record
     steps:
       - fixture: &user
           file: user.csv
@@ -22,7 +22,7 @@ scenarios:
             booker12,1,Rachel
             jenkins46,2,Mary
       - run:
-          command: sqly --vertical --sql "SELECT * FROM user ORDER BY identifier" user.csv
+          command: sqly --output-format vertical --sql "SELECT * FROM user ORDER BY identifier" user.csv
       - assert:
           exit_code: 0
           stdout:
@@ -55,7 +55,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --vertical user.csv
+          command: sqly --output-format vertical user.csv
           stdin: ".mode vertical\nSELECT 1 AS x;\n"
       - assert:
           exit_code: 0
@@ -68,7 +68,7 @@ scenarios:
             名前,id,備考
             アリス,1,ok
       - run:
-          command: sqly --vertical --sql "SELECT * FROM ja" ja.csv
+          command: sqly --output-format vertical --sql "SELECT * FROM ja" ja.csv
       - assert:
           exit_code: 0
           stdout:
@@ -88,7 +88,7 @@ scenarios:
       # The flat modes put every value on one line, so the odd one has no column
       # name beside it to search for.
       - run:
-          command: sqly --csv --sql "SELECT * FROM wide" wide.csv
+          command: sqly --output-format csv --sql "SELECT * FROM wide" wide.csv
       - assert:
           exit_code: 0
           stdout:
@@ -96,7 +96,7 @@ scenarios:
               col_001,col_002,col_003,col_004,col_005
               v1,v2,BAD,v4,v5
       - run:
-          command: sqly --vertical --sql "SELECT * FROM wide" wide.csv
+          command: sqly --output-format vertical --sql "SELECT * FROM wide" wide.csv
       - assert:
           exit_code: 0
           stdout:
@@ -106,7 +106,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --vertical user.csv
+          command: sqly --output-format vertical user.csv
           stdin: ".dump user out.tsv\n"
       - assert:
           exit_code: 0
@@ -115,11 +115,11 @@ scenarios:
             path: out.tsv
             equals: "user_name\tidentifier\tfirst_name\nbooker12\t1\tRachel\njenkins46\t2\tMary\n"
 
-  - name: vertical conflicts with another output mode flag
+  - name: invalid output format is rejected
     steps:
       - fixture: *user
       - run:
-          command: sqly --vertical --csv --sql "SELECT 1" user.csv
+          command: sqly --output-format unsupported --sql "SELECT 1" user.csv
       - assert:
           exit_code: 1
           stderr:
@@ -129,7 +129,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --vertical --sql "SELECT * FROM user WHERE identifier = 999" user.csv
+          command: sqly --output-format vertical --sql "SELECT * FROM user WHERE identifier = 999" user.csv
       - assert:
           exit_code: 0
           stdout:

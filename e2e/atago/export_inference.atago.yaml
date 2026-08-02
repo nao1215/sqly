@@ -51,9 +51,9 @@ scenarios:
             booker12,1
             jenkins46,2
       - run:
-          command: sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.csv.gz
+          command: sqly --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.csv.gz
       - run:
-          command: sqly --csv --sql "SELECT user_name FROM result LIMIT 1" result.csv.gz
+          command: sqly --output-format csv --sql "SELECT user_name FROM result LIMIT 1" result.csv.gz
       - assert:
           exit_code: 0
           stdout:
@@ -115,7 +115,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --json --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.csv
+          command: sqly --output-format json --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.csv
       - assert:
           exit_code: 1
           stderr:
@@ -155,7 +155,7 @@ scenarios:
             path: dump.tsv
             exists: true
 
-  - name: keeps --json --output result.json writing json
+  - name: keeps --output-format json --output result.json writing json
     steps:
       - fixture:
           file: user.csv
@@ -164,7 +164,7 @@ scenarios:
             booker12,1
             jenkins46,2
       - run:
-          command: sqly --json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.json
+          command: sqly --output-format json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.json
       - assert:
           exit_code: 0
           stderr:

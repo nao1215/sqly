@@ -25,7 +25,7 @@ scenarios:
           stderr:
             contains: "output mode=csv"
       - run:
-          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.xz
+          command: sqly --output-format csv --sql "SELECT name FROM out WHERE id = 2" out.csv.xz
       - assert:
           exit_code: 0
           stdout:
@@ -39,7 +39,7 @@ scenarios:
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.zst
+          command: sqly --output-format csv --sql "SELECT name FROM out WHERE id = 2" out.csv.zst
       - assert:
           exit_code: 0
           stdout:
@@ -53,7 +53,7 @@ scenarios:
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.z
+          command: sqly --output-format csv --sql "SELECT name FROM out WHERE id = 2" out.csv.z
       - assert:
           exit_code: 0
           stdout:
@@ -67,7 +67,7 @@ scenarios:
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.snappy
+          command: sqly --output-format csv --sql "SELECT name FROM out WHERE id = 2" out.csv.snappy
       - assert:
           exit_code: 0
           stdout:
@@ -81,7 +81,7 @@ scenarios:
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.s2
+          command: sqly --output-format csv --sql "SELECT name FROM out WHERE id = 2" out.csv.s2
       - assert:
           exit_code: 0
           stdout:
@@ -95,7 +95,7 @@ scenarios:
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT name FROM out WHERE id = 2" out.csv.lz4
+          command: sqly --output-format csv --sql "SELECT name FROM out WHERE id = 2" out.csv.lz4
       - assert:
           exit_code: 0
           stdout:

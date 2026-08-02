@@ -17,7 +17,7 @@ import (
 //
 // The escapes are emitted only in interactive (TTY) sessions. In batch mode
 // (piped stdin) the same stdout carries machine-readable payloads such as
-// --json/--csv, so writing control sequences there would corrupt the output;
+// --output-format json/--output-format csv, so writing control sequences there would corrupt the output;
 // .clear becomes a no-op instead.
 func (c CommandList) clearCommand(_ context.Context, s *Shell, argv []string) error {
 	if len(argv) > 0 {

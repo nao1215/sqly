@@ -103,7 +103,7 @@ func (m *mode) displayName() string {
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	// Selecting the mode that is already in effect is what the caller asked for,
 	// so it succeeds silently. Reporting it as an error made a batch script fatal
-	// on a line that changed nothing: `sqly --csv data.csv` fed a script opening
+	// on a line that changed nothing: `sqly --output-format csv data.csv` fed a script opening
 	// with `.mode csv` died before running a single query, and so did any script
 	// that set the mode defensively. The banner is skipped because nothing
 	// changed; an unknown name still fails below.

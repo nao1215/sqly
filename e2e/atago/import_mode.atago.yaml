@@ -18,7 +18,7 @@ scenarios:
             2,bob,00123
             3,caro
       - run:
-          command: sqly --json --sql "SELECT name FROM ragged" ragged.csv
+          command: sqly --output-format json --sql "SELECT name FROM ragged" ragged.csv
       - assert:
           exit_code: 1
           stdout:
@@ -32,7 +32,7 @@ scenarios:
     steps:
       - fixture: *ragged
       - run:
-          command: sqly --import-mode skip --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+          command: sqly --import-mode skip --output-format csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
       - assert:
           exit_code: 0
           stdout:
@@ -47,7 +47,7 @@ scenarios:
     steps:
       - fixture: *ragged
       - run:
-          command: sqly --import-mode pad --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+          command: sqly --import-mode pad --output-format csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
       - assert:
           exit_code: 0
           stdout:
@@ -123,13 +123,13 @@ scenarios:
             id:1	name:alice	zip:01234
             id:2	name:bob
       - run:
-          command: sqly --import-mode stop --csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
+          command: sqly --import-mode stop --output-format csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
       - assert:
           exit_code: 0
           stdout:
             contains: "2"
       - run:
-          command: sqly --import-mode skip --csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
+          command: sqly --import-mode skip --output-format csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
       - assert:
           exit_code: 0
           stdout:
@@ -145,7 +145,7 @@ scenarios:
               {"name": "Bob", "age": 25}
             ]
       - run:
-          command: sqly --import-mode pad --csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
+          command: sqly --import-mode pad --output-format csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
       - assert:
           exit_code: 0
           stdout:
@@ -161,7 +161,7 @@ scenarios:
             {"id":1,"name":"alice"}
             {"id":2}
       - run:
-          command: sqly --import-mode stop --csv --sql "SELECT COUNT(*) FROM varying" varying.jsonl
+          command: sqly --import-mode stop --output-format csv --sql "SELECT COUNT(*) FROM varying" varying.jsonl
       - assert:
           exit_code: 0
           stdout:
@@ -173,7 +173,7 @@ scenarios:
           file: products.parquet
           from: testdata/products.parquet
       - run:
-          command: sqly --import-mode pad --csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
+          command: sqly --import-mode pad --output-format csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
       - assert:
           exit_code: 0
           stdout:

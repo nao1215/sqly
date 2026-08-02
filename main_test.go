@@ -29,26 +29,26 @@ func Test_run(t *testing.T) {
 		assertMainFixture(t, "select_asc_limit5_table.golden", got)
 	})
 
-	t.Run("sqly --sql 'SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id' testdata/user.csv testdata/identifier.csv", func(t *testing.T) {
-		args := []string{"sqly", "--csv", "--sql", "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id", "testdata/user.csv", "testdata/identifier.csv"}
+	t.Run("sqly --output-format csv --sql 'SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id' testdata/user.csv testdata/identifier.csv", func(t *testing.T) {
+		args := []string{"sqly", "--output-format", "csv", "--sql", "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id", "testdata/user.csv", "testdata/identifier.csv"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "select_inner_join_csv.golden", got)
 	})
 
-	t.Run("sqly --tsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
-		args := []string{"sqly", "--tsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
+	t.Run("sqly --output-format tsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
+		args := []string{"sqly", "--output-format", "tsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "select_tsv.golden", got)
 	})
 
-	t.Run("sqly --ltsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
-		args := []string{"sqly", "--ltsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
+	t.Run("sqly --output-format ltsv --sql 'SELECT * FROM user' testdata/user.csv", func(t *testing.T) {
+		args := []string{"sqly", "--output-format", "ltsv", "--sql", "SELECT * FROM user", "testdata/user.csv"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "select_ltsv.golden", got)
 	})
 
 	t.Run("import excel, output csv", func(t *testing.T) {
-		args := []string{"sqly", "--sql", "SELECT * FROM sample_test_sheet", "-S", "test_sheet", "--csv", "testdata/sample.xlsx"}
+		args := []string{"sqly", "--sql", "SELECT * FROM sample_test_sheet", "-S", "test_sheet", "--output-format", "csv", "testdata/sample.xlsx"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "excel_to_csv.golden", got)
 	})
@@ -59,7 +59,7 @@ func Test_run(t *testing.T) {
 		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		args := []string{"sqly", "--csv", "--sql-file", sqlPath, "testdata/actor.csv"}
+		args := []string{"sqly", "--output-format", "csv", "--sql-file", sqlPath, "testdata/actor.csv"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "sql_file_multiline.golden", got)
 	})
@@ -82,7 +82,7 @@ func Test_run(t *testing.T) {
 		// 11,Ringo
 		// 12,Billy
 
-		args := []string{"sqly", "--sql", "SELECT * FROM numeric ORDER BY id", "--csv", "testdata/numeric.csv"}
+		args := []string{"sqly", "--sql", "SELECT * FROM numeric ORDER BY id", "--output-format", "csv", "testdata/numeric.csv"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "numeric.golden", got)
 	})

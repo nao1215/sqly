@@ -24,7 +24,7 @@ scenarios:
             Adam Sandler
             Harrison Ford
       - run:
-          command: sqly --csv --sql "SELECT actor FROM actor ORDER BY actor LIMIT 1" actor.csv
+          command: sqly --output-format csv --sql "SELECT actor FROM actor ORDER BY actor LIMIT 1" actor.csv
       - assert:
           exit_code: 0
           stdout:

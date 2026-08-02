@@ -20,7 +20,7 @@ scenarios:
           stderr:
             contains: Saved
       - run:
-          command: sqly --json --sql "SELECT individual_name FROM payment_entries WHERE entry_index=0" payment.ach
+          command: sqly --output-format json --sql "SELECT individual_name FROM payment_entries WHERE entry_index=0" payment.ach
       - assert:
           exit_code: 0
           stdout:
@@ -35,7 +35,7 @@ scenarios:
           stderr:
             contains: Saved
       - run:
-          command: sqly --json --sql "SELECT individual_name FROM payment_entries WHERE entry_index=0" out/payment.ach
+          command: sqly --output-format json --sql "SELECT individual_name FROM payment_entries WHERE entry_index=0" out/payment.ach
       - assert:
           exit_code: 0
           stdout:
@@ -52,7 +52,7 @@ scenarios:
           stderr:
             contains: Saved
       - run:
-          command: sqly --json --sql "SELECT sender_reference FROM transfer_message" transfer.fed
+          command: sqly --output-format json --sql "SELECT sender_reference FROM transfer_message" transfer.fed
       - assert:
           exit_code: 0
           stdout:

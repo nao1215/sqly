@@ -122,14 +122,14 @@ func TestInspect_RejectsPlainJSON(t *testing.T) {
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
 
-	// Plain --json adds nothing to --inspect (already JSON) and is rejected.
-	shellPlain, cleanupPlain, err := newShell(t, []string{"sqly", "--inspect", "--json", csv})
+	// Plain --output-format json adds nothing to --inspect (already JSON) and is rejected.
+	shellPlain, cleanupPlain, err := newShell(t, []string{"sqly", "--inspect", "--output-format", "json", csv})
 	if err != nil {
 		t.Fatalf("newShell: %v", err)
 	}
 	defer cleanupPlain()
 	if err := shellPlain.Run(context.Background()); err == nil {
-		t.Error("expected --inspect --json to be rejected, got nil")
+		t.Error("expected --inspect --output-format json to be rejected, got nil")
 	}
 
 }
@@ -288,7 +288,7 @@ func TestReportOnly_DirectoryImportQuietOnStderr(t *testing.T) {
 	})
 
 	t.Run("a normal directory import still prints the banner on stderr", func(t *testing.T) {
-		stderr := runCapturingStderr(t, []string{"sqly", "--csv", "--sql", "SELECT COUNT(*) FROM one", sub})
+		stderr := runCapturingStderr(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT COUNT(*) FROM one", sub})
 		if !strings.Contains(stderr, "Successfully imported") {
 			t.Errorf("a non-report directory import should still print the banner, got %q", stderr)
 		}

@@ -21,7 +21,7 @@ scenarios:
             2,manager
             3,neet
       - run:
-          command: sqly --csv --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" user.csv identifier.csv
+          command: sqly --output-format csv --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id" user.csv identifier.csv
       - assert:
           exit_code: 0
           stdout:
@@ -37,7 +37,7 @@ scenarios:
             jenkins46,2,Mary,Jenkins
             smith79,3,Jamie,Smith
       - run:
-          command: sqly --tsv --sql "SELECT * FROM user" user.csv
+          command: sqly --output-format tsv --sql "SELECT * FROM user" user.csv
       - assert:
           exit_code: 0
           stdout:
@@ -47,7 +47,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --ltsv --sql "SELECT * FROM user" user.csv
+          command: sqly --output-format ltsv --sql "SELECT * FROM user" user.csv
       - assert:
           exit_code: 0
           stdout:
@@ -67,7 +67,7 @@ scenarios:
             ORDER BY actor ASC
             LIMIT 1;
       - run:
-          command: sqly --csv --sql-file query.sql actor.csv
+          command: sqly --output-format csv --sql-file query.sql actor.csv
       - assert:
           exit_code: 0
           stdout:
@@ -85,7 +85,7 @@ scenarios:
             11,Ringo
             12,Billy
       - run:
-          command: sqly --csv --sql "SELECT * FROM numeric ORDER BY id" numeric.csv
+          command: sqly --output-format csv --sql "SELECT * FROM numeric ORDER BY id" numeric.csv
       - assert:
           exit_code: 0
           stdout:
@@ -97,7 +97,7 @@ scenarios:
           file: sample.xlsx
           from: testdata/sample.xlsx
       - run:
-          command: sqly --csv --sql "SELECT * FROM sample_test_sheet" -S test_sheet sample.xlsx
+          command: sqly --output-format csv --sql "SELECT * FROM sample_test_sheet" -S test_sheet sample.xlsx
       - assert:
           exit_code: 0
           stdout:

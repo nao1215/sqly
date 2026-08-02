@@ -62,12 +62,11 @@ func (s *Shell) validateInspectFlags() error {
 		return errors.New("--inspect cannot be combined with --save")
 	case s.argument.SaveDir != "":
 		return errors.New("--inspect cannot be combined with --save-dir")
-	// An output mode flag (--csv, --tsv, --ltsv, --json, --ndjson, --markdown,
-	// --excel, --parquet) selects a result format, but --inspect always emits its
+	// --output-format selects a result format, but --inspect always emits its
 	// own JSON report. Reject the conflicting flag instead of silently discarding
 	// it, matching the other --inspect conflict checks.
 	case s.argument.Output != nil && s.argument.Output.Mode != model.PrintModeTable:
-		return fmt.Errorf("--inspect cannot be combined with an output mode flag (--%s)", outputModeFlagName(s.argument.Output))
+		return fmt.Errorf("--inspect cannot be combined with --output-format %s", outputModeFlagName(s.argument.Output))
 	}
 	return nil
 }

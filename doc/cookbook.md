@@ -71,20 +71,20 @@ sqly:~(table)$ .describe user
 The output flag decides the format; `--output` decides where it goes.
 
 ```shell
-sqly --json   --sql "SELECT * FROM user" --output user.json    user.csv
-sqly --ndjson --sql "SELECT * FROM user" --output user.jsonl   user.csv
-sqly --tsv    --sql "SELECT * FROM user" --output user.tsv     user.csv
-sqly --ltsv   --sql "SELECT * FROM user" --output user.ltsv    user.csv
-sqly --excel  --sql "SELECT * FROM user" --output user.xlsx    user.csv
-sqly --parquet --sql "SELECT * FROM user" --output user.parquet user.csv
-sqly --markdown --sql "SELECT * FROM user" --output user.md    user.csv
-sqly --csv    --sql "SELECT * FROM user" --output user.csv.gz  user.tsv
+sqly --output-format json   --sql "SELECT * FROM user" --output user.json    user.csv
+sqly --output-format ndjson --sql "SELECT * FROM user" --output user.jsonl   user.csv
+sqly --output-format tsv    --sql "SELECT * FROM user" --output user.tsv     user.csv
+sqly --output-format ltsv   --sql "SELECT * FROM user" --output user.ltsv    user.csv
+sqly --output-format excel  --sql "SELECT * FROM user" --output user.xlsx    user.csv
+sqly --output-format parquet --sql "SELECT * FROM user" --output user.parquet user.csv
+sqly --output-format markdown --sql "SELECT * FROM user" --output user.md    user.csv
+sqly --output-format csv    --sql "SELECT * FROM user" --output user.csv.gz  user.tsv
 ```
 
 The other direction is the same command with the input swapped:
 
 ```shell
-sqly --csv --sql "SELECT * FROM user" --output user.csv user.parquet
+sqly --output-format csv --sql "SELECT * FROM user" --output user.csv user.parquet
 ```
 
 Numbers, booleans, and nulls are emitted as native JSON scalars. Values that
@@ -92,14 +92,14 @@ are not unambiguous JSON scalars, such as zero-padded identifiers, remain
 strings:
 
 ```shell
-sqly --json --sql "SELECT identifier, user_name FROM user" user.csv
+sqly --output-format json --sql "SELECT identifier, user_name FROM user" user.csv
 ```
 
 Compression comes from the destination's extension — `.gz`, `.bz2`, `.xz`,
 `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`:
 
 ```shell
-sqly --csv --sql "SELECT * FROM user" --output user.csv.zst user.csv
+sqly --output-format csv --sql "SELECT * FROM user" --output user.csv.zst user.csv
 ```
 
 ## Join across files
@@ -157,7 +157,7 @@ sqly --sql "SELECT * FROM access" access.csv.gz
 Round-trip through a different codec:
 
 ```shell
-sqly --csv --sql "SELECT * FROM access" --output access.csv.zst access.csv.gz
+sqly --output-format csv --sql "SELECT * FROM access" --output access.csv.zst access.csv.gz
 ```
 
 ## JSON and JSONL
@@ -189,7 +189,7 @@ sqly --sql "SELECT json_extract(s.data, '\$.name') AS name, t.value AS tag
 Flatten JSONL into a CSV:
 
 ```shell
-sqly --csv --output flat.csv \
+sqly --output-format csv --output flat.csv \
      --sql "SELECT json_extract(data, '\$.id')   AS id,
                    json_extract(data, '\$.name') AS name
             FROM sample" sample.jsonl
@@ -213,7 +213,7 @@ sqly --sheet "Q3 actuals" --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 Write a result back out as a workbook:
 
 ```shell
-sqly --excel --output summary.xlsx \
+sqly --output-format excel --output summary.xlsx \
      --sql "SELECT region, SUM(amount) AS total FROM sales GROUP BY region" sales.csv
 ```
 
@@ -262,12 +262,12 @@ printf '.tables\nSELECT COUNT(*) FROM user;\n' | sqly user.csv
 
 ## Pipe data out
 
-sqly's non-table output is meant for the next command in the pipe. `--ndjson`
+sqly's non-table output is meant for the next command in the pipe. `--output-format ndjson`
 gives one object per line, which is what `jq` reads without buffering the whole
 result:
 
 ```shell
-sqly --ndjson --sql "SELECT path, status FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+sqly --output-format ndjson --sql "SELECT path, status FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
 ```
 
 Filtering in SQL before `jq` shapes means `jq` only sees the rows that matter,
@@ -275,31 +275,31 @@ which is the division of labour worth reaching for on a large file — SQL has t
 `WHERE`, `GROUP BY`, and `JOIN`; `jq` has the string formatting:
 
 ```shell
-sqly --ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error'" events.jsonl | jq -r '"\(.id):\(.name)"'
+sqly --output-format ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error'" events.jsonl | jq -r '"\(.id):\(.name)"'
 ```
 
 For nested JSON, sqly can replace `jq` outright: `json_extract` reaches into the
 document, and SQL does the aggregation `jq` makes hard. See
 [JSON and JSONL](#json-and-jsonl).
 
-`--tsv` is the format for the classic text tools, because a tab is the field
+`--output-format tsv` is the format for the classic text tools, because a tab is the field
 separator `cut`, `awk`, and `sort -k` already expect. `tail -n +2` drops the
 header:
 
 ```shell
-sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | tail -n +2 | cut -f1 | sort -rn | head -n 1
+sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | tail -n +2 | cut -f1 | sort -rn | head -n 1
 ```
 
 sqly reads and writes the same pipe, so it can sit in the middle of one:
 
 ```shell
-cat sales.csv | sqly --csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75" | sort -u
+cat sales.csv | sqly --output-format csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75" | sort -u
 ```
 
 A compressed source needs no decompression stage in front of it:
 
 ```shell
-sqly --csv --sql "SELECT COUNT(*) FROM sales" sales.csv.gz
+sqly --output-format csv --sql "SELECT COUNT(*) FROM sales" sales.csv.gz
 ```
 
 ### Exit codes in a pipeline
@@ -308,7 +308,7 @@ sqly exits non-zero when an import or a query fails, so `set -e` stops the scrip
 
 ```shell
 set -e
-sqly --csv --sql "SELECT * FROM no_such_table" logs.csv
+sqly --output-format csv --sql "SELECT * FROM no_such_table" logs.csv
 echo "not reached"
 ```
 
@@ -317,7 +317,7 @@ failing sqly in `sqly ... | cat` does not stop anything — `$?` is `cat`'s zero
 Put sqly last, capture it in a variable, or use a shell with `pipefail`:
 
 ```shell
-blank=$(sqly --csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1)
+blank=$(sqly --output-format csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1)
 if [ "$blank" != "0" ]; then
   echo "found $blank rows with no email" >&2
   exit 1
@@ -348,7 +348,7 @@ The script may hold several statements; each result is printed in turn. Send a
 single-result script straight to a file:
 
 ```shell
-sqly --csv --sql-file report.sql --output report.csv sales.csv
+sqly --output-format csv --sql-file report.sql --output report.csv sales.csv
 ```
 
 ## Analytics
@@ -532,13 +532,13 @@ sqly --sql "UPDATE payment_entries SET individual_name = 'NEW NAME' WHERE entry_
 Machine-readable output, no table borders:
 
 ```shell
-count=$(sqly --csv --sql "SELECT COUNT(*) FROM user" user.csv | tail -n 1)
+count=$(sqly --output-format csv --sql "SELECT COUNT(*) FROM user" user.csv | tail -n 1)
 ```
 
 Fail a script when a check finds anything:
 
 ```shell
-if [ "$(sqly --csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1)" != "0" ]; then
+if [ "$(sqly --output-format csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1)" != "0" ]; then
   echo "found rows with no email" >&2
   exit 1
 fi
@@ -547,7 +547,7 @@ fi
 Feed the result to another tool:
 
 ```shell
-sqly --json --sql "SELECT * FROM user" user.csv | jq '.[].user_name'
+sqly --output-format json --sql "SELECT * FROM user" user.csv | jq '.[].user_name'
 ```
 
 Batch mode from a heredoc:

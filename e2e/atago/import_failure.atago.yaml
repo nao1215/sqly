@@ -15,7 +15,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --json --sql "SELECT user_name FROM user LIMIT 1" user.csv /no/such/file.csv
+          command: sqly --output-format json --sql "SELECT user_name FROM user LIMIT 1" user.csv /no/such/file.csv
       - assert:
           exit_code: 1
           stdout:
@@ -67,7 +67,7 @@ scenarios:
   - name: keeps stdout clean when a stdin dataset fails to import
     steps:
       - run:
-          command: sqly --stdin csv --json --sql "SELECT COUNT(*) FROM stdin"
+          command: sqly --stdin csv --output-format json --sql "SELECT COUNT(*) FROM stdin"
       - assert:
           exit_code: 1
           stdout:

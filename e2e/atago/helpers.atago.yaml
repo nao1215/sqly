@@ -85,7 +85,7 @@ scenarios:
           stdout:
             empty: true
 
-  - name: keeps --json stdout parseable when .clear precedes a query
+  - name: keeps --output-format json stdout parseable when .clear precedes a query
     steps:
       - fixture: &user
           file: user.csv
@@ -93,7 +93,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --json user.csv
+          command: sqly --output-format json user.csv
           stdin: ".clear\nSELECT 1 AS x;\n"
       - assert:
           exit_code: 0

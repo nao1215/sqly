@@ -86,7 +86,7 @@ scenarios:
           file: user.csv.gz
           from: testdata/user.csv.gz
       - run:
-          command: sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv.gz
+          command: sqly --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv.gz
       - assert:
           exit_code: 0
           stdout:
@@ -101,7 +101,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sh -c 'python3 -m http.server 18082 --bind 127.0.0.1 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18082)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
+          command: sh -c 'python3 -m http.server 18082 --bind 127.0.0.1 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18082)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
       - assert:
           exit_code: 0
           stdout:
@@ -117,7 +117,7 @@ scenarios:
           file: products.parquet
           from: testdata/products.parquet
       - run:
-          command: sqly --csv --sql "SELECT name FROM products ORDER BY CAST(price AS REAL) DESC LIMIT 1" products.parquet
+          command: sqly --output-format csv --sql "SELECT name FROM products ORDER BY CAST(price AS REAL) DESC LIMIT 1" products.parquet
       - assert:
           exit_code: 0
           stdout:
@@ -129,17 +129,17 @@ scenarios:
       - fixture: *usergz
       - fixture: *identifier
       - run:
-          command: sqly --csv --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" user.csv.gz identifier.csv
+          command: sqly --output-format csv --sql "SELECT user_name, position FROM user JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" user.csv.gz identifier.csv
       - assert:
           exit_code: 0
           stdout:
             contains: developrt
 
-  - name: renders CSV with --csv
+  - name: renders CSV with --output-format csv
     steps:
       - fixture: *user
       - run:
-          command: sqly --csv --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+          command: sqly --output-format csv --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
       - assert:
           stdout:
             line: 1
@@ -153,20 +153,20 @@ scenarios:
             line: 3
             equals: jenkins46,2
 
-  - name: renders JSON with --json
+  - name: renders JSON with --output-format json
     steps:
       - fixture: *user
       - run:
-          command: sqly --json --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+          command: sqly --output-format json --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
       - assert:
           stdout:
             contains: '{"user_name":"booker12","identifier":1}'
 
-  - name: renders NDJSON with --ndjson
+  - name: renders NDJSON with --output-format ndjson
     steps:
       - fixture: *user
       - run:
-          command: sqly --ndjson --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+          command: sqly --output-format ndjson --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
       - assert:
           stdout:
             line: 1
@@ -176,11 +176,11 @@ scenarios:
             line: 2
             equals: '{"user_name":"jenkins46","identifier":2}'
 
-  - name: renders a markdown table with --markdown
+  - name: renders a markdown table with --output-format markdown
     steps:
       - fixture: *user
       - run:
-          command: sqly --markdown --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+          command: sqly --output-format markdown --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
       - assert:
           stdout:
             line: 1
@@ -189,11 +189,11 @@ scenarios:
           stdout:
             contains: "| booker12 | 1 |"
 
-  - name: renders LTSV with --ltsv
+  - name: renders LTSV with --output-format ltsv
     steps:
       - fixture: *user
       - run:
-          command: sqly --ltsv --sql "SELECT user_name, identifier FROM user LIMIT 1" user.csv
+          command: sqly --output-format ltsv --sql "SELECT user_name, identifier FROM user LIMIT 1" user.csv
       - assert:
           stdout:
             line: 1
@@ -230,7 +230,7 @@ scenarios:
     steps:
       - fixture: *identifier
       - run:
-          command: sqly --stdin csv --csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" identifier.csv
+          command: sqly --stdin csv --output-format csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" identifier.csv
           stdin: |
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
@@ -427,7 +427,7 @@ scenarios:
     steps:
       - fixture: *ach
       - run:
-          command: sqly --csv --sql "SELECT amount FROM ppd_debit_entries" ppd-debit.ach
+          command: sqly --output-format csv --sql "SELECT amount FROM ppd_debit_entries" ppd-debit.ach
       - assert:
           exit_code: 0
           stdout:

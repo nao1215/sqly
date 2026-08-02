@@ -21,7 +21,7 @@ scenarios:
     description: "'true'::boolean is true and 'false'::boolean is false. SQLite would return 0 for both, because the cast maps to SQLite INTEGER affinity and the word 'true' is not numeric. Every boolean-typed column read this way collapses to false."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT 'true'::boolean AS t, 'false'::boolean AS f"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT 'true'::boolean AS t, 'false'::boolean AS f"
       - assert:
           exit_code: 0
           stdout:
@@ -72,14 +72,14 @@ scenarios:
     description: "DATE '2026-01-01' and TIMESTAMP '...' are standard PostgreSQL. SQLite parses neither, and without the rewrite even an ordinary predicate such as BETWEEN DATE 'a' AND DATE 'b' fails."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT DATE '2026-01-01' AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT DATE '2026-01-01' AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "2026-01-01"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT TIMESTAMP '2026-01-01 10:00:00' AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT TIMESTAMP '2026-01-01 10:00:00' AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -90,13 +90,13 @@ scenarios:
     description: "x + INTERVAL '1 day' is the canonical way to do date arithmetic in PostgreSQL; there is no DATE_ADD. SQLite has no interval type, so without this rewrite the dialect has no working date arithmetic at all."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT DATE '2026-01-15' + INTERVAL '1 day' AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT DATE '2026-01-15' + INTERVAL '1 day' AS v"
       - assert:
           exit_code: 0
           stdout:
             contains: "2026-01-16"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT DATE '2026-01-31' - INTERVAL '1 month' AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT DATE '2026-01-31' - INTERVAL '1 month' AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -106,7 +106,7 @@ scenarios:
     description: "REGEXP_REPLACE(source, pattern, replacement, 'g') is the usual PostgreSQL spelling for replace-all. Without 'g' only the first match is replaced, and 'i' matches case insensitively."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT REGEXP_REPLACE('a1b2', '[0-9]', '', 'g') AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT REGEXP_REPLACE('a1b2', '[0-9]', '', 'g') AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -117,7 +117,7 @@ scenarios:
     description: "In PostgreSQL 2 ^ 3 is 8. SQLite has no ^ operator at all, so it maps to power()."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT 2 ^ 3 AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT 2 ^ 3 AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -128,7 +128,7 @@ scenarios:
     description: "TO_CHAR(1234.5, '9999.99') is ' 1234.50' in PostgreSQL. A TO_CHAR that only handled dates would silently return NULL here, which is worse than an error."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT TRIM(TO_CHAR(1234.5, '9999.99')) AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT TRIM(TO_CHAR(1234.5, '9999.99')) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -139,28 +139,28 @@ scenarios:
     description: "MD5, ASCII, CHR, and TRANSLATE are core PostgreSQL string functions with no SQLite equivalent."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT MD5('a') AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT MD5('a') AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "0cc175b9c0f1b6a831c399e269772661"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT ASCII('A') AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT ASCII('A') AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "65"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT CHR(65) AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT CHR(65) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "A"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT TRANSLATE('abc', 'ab', 'xy') AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT TRANSLATE('abc', 'ab', 'xy') AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -171,14 +171,14 @@ scenarios:
     description: "STDDEV, VARIANCE, BOOL_AND, and BOOL_OR are standard PostgreSQL aggregates SQLite lacks. The driver has no aggregate registration hook, so each is rewritten into a SQLite expression; a bare STDDEV is the sample estimator here, not the population one."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT STDDEV(x) AS v FROM (SELECT 1 AS x UNION ALL SELECT 3) t"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT STDDEV(x) AS v FROM (SELECT 1 AS x UNION ALL SELECT 3) t"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "1.4142135623730951"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT BOOL_AND(x) AS a, BOOL_OR(x) AS o FROM (SELECT TRUE AS x UNION ALL SELECT FALSE) t"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT BOOL_AND(x) AS a, BOOL_OR(x) AS o FROM (SELECT TRUE AS x UNION ALL SELECT FALSE) t"
       - assert:
           exit_code: 0
           stdout:
@@ -189,7 +189,7 @@ scenarios:
     description: "SIMILAR TO is SQL-standard pattern matching that PostgreSQL supports and SQLite does not; it becomes an anchored regular expression."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT 'abc' SIMILAR TO 'a%' AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT 'abc' SIMILAR TO 'a%' AS v"
       - assert:
           exit_code: 0
           stdout:

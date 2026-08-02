@@ -24,7 +24,7 @@ scenarios:
             1,NYC
             2,LA
       - run:
-          command: sqly --ndjson --sql "SELECT e.name, l.city FROM emp e LEFT JOIN loc l ON e.id = l.id ORDER BY e.id" emp.csv loc.csv
+          command: sqly --output-format ndjson --sql "SELECT e.name, l.city FROM emp e LEFT JOIN loc l ON e.id = l.id ORDER BY e.id" emp.csv loc.csv
       - assert:
           exit_code: 0
           stdout:
@@ -37,7 +37,7 @@ scenarios:
       - fixture: *emp
       - fixture: *loc
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM emp CROSS JOIN loc" emp.csv loc.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM emp CROSS JOIN loc" emp.csv loc.csv
       - assert:
           exit_code: 0
           stdout:
@@ -48,7 +48,7 @@ scenarios:
     steps:
       - fixture: *emp
       - run:
-          command: sqly --csv --sql "SELECT a.name AS x, b.name AS y FROM emp a JOIN emp b ON a.id < b.id ORDER BY x, y" emp.csv
+          command: sqly --output-format csv --sql "SELECT a.name AS x, b.name AS y FROM emp a JOIN emp b ON a.id < b.id ORDER BY x, y" emp.csv
       - assert:
           exit_code: 0
           stdout:
@@ -80,7 +80,7 @@ scenarios:
             10,West
             20,East
       - run:
-          command: sqly --csv --sql "SELECT c.cname, r.region, SUM(o.amt) AS total FROM orders o JOIN cust c ON o.cid = c.cid JOIN reg r ON o.cid = r.cid GROUP BY c.cname, r.region ORDER BY total DESC" orders.csv cust.csv reg.csv
+          command: sqly --output-format csv --sql "SELECT c.cname, r.region, SUM(o.amt) AS total FROM orders o JOIN cust c ON o.cid = c.cid JOIN reg r ON o.cid = r.cid GROUP BY c.cname, r.region ORDER BY total DESC" orders.csv cust.csv reg.csv
       - assert:
           exit_code: 0
           stdout:

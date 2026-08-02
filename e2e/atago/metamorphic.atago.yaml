@@ -20,13 +20,13 @@ scenarios:
             jenkins46,2
             grey07,3
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user" user.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM user" user.csv
       - assert:
           stdout:
             line: 2
             equals: "3"
       - run:
-          command: sqly --csv --sql "SELECT user_name FROM user" user.csv
+          command: sqly --output-format csv --sql "SELECT user_name FROM user" user.csv
       - assert:
           stdout:
             contains:
@@ -38,13 +38,13 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user WHERE 1=1" user.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM user WHERE 1=1" user.csv
       - assert:
           stdout:
             line: 2
             equals: "3"
       - run:
-          command: sqly --json --sql "SELECT user_name FROM user WHERE 1=0" user.csv
+          command: sqly --output-format json --sql "SELECT user_name FROM user WHERE 1=0" user.csv
       - assert:
           stdout:
             equals: "[]"
@@ -53,7 +53,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --csv --sql "SELECT user_name FROM user ORDER BY user_name DESC" user.csv
+          command: sqly --output-format csv --sql "SELECT user_name FROM user ORDER BY user_name DESC" user.csv
       - assert:
           exit_code: 0
       # Reordered, but every original member is still present.
@@ -71,7 +71,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --ndjson --sql "SELECT user_name FROM user ORDER BY identifier" user.csv
+          command: sqly --output-format ndjson --sql "SELECT user_name FROM user ORDER BY identifier" user.csv
       - assert:
           stdout:
             line: 1
@@ -88,7 +88,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".dump user rt.csv\n"
       - run:
-          command: sqly --csv --sql "SELECT * FROM rt ORDER BY identifier" rt.csv
+          command: sqly --output-format csv --sql "SELECT * FROM rt ORDER BY identifier" rt.csv
       - assert:
           exit_code: 0
           stdout:

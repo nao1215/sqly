@@ -166,7 +166,7 @@ scenarios:
     env: *hist
     steps:
       - run:
-          command: sqly --csv --sql "SELECT 1 AS x; SELECT 2 AS y" --output out.csv
+          command: sqly --output-format csv --sql "SELECT 1 AS x; SELECT 2 AS y" --output out.csv
       - assert:
           exit_code: 1
           stderr:

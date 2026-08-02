@@ -20,7 +20,7 @@ scenarios:
             1,100
             2,250
       - run:
-          command: sqly --csv --sql 'SELECT amount FROM "売上" WHERE id = 2' 売上.csv
+          command: sqly --output-format csv --sql 'SELECT amount FROM "売上" WHERE id = 2' 売上.csv
       - assert:
           exit_code: 0
           stdout:
@@ -40,7 +40,7 @@ scenarios:
             1,alice
             2,bob
       - run:
-          command: sqly --csv --sql 'SELECT c.name FROM "顧客" AS c JOIN "売上" AS s ON s.id = c.id WHERE s.amount = 250' 売上.csv 顧客.csv
+          command: sqly --output-format csv --sql 'SELECT c.name FROM "顧客" AS c JOIN "売上" AS s ON s.id = c.id WHERE s.amount = 250' 売上.csv 顧客.csv
       - assert:
           exit_code: 0
           stdout:
@@ -55,7 +55,7 @@ scenarios:
             id,value
             1,42
       - run:
-          command: sqly --csv --sql 'SELECT value FROM "Данные"' Данные.csv
+          command: sqly --output-format csv --sql 'SELECT value FROM "Данные"' Данные.csv
       - assert:
           exit_code: 0
           stdout:
@@ -72,7 +72,7 @@ scenarios:
             id,city
             1,Paris
       - run:
-          command: sqly --csv --sql 'SELECT city FROM "café"' café.csv
+          command: sqly --output-format csv --sql 'SELECT city FROM "café"' café.csv
       - assert:
           exit_code: 0
           stdout:
@@ -116,7 +116,7 @@ scenarios:
             id
             1
       - run:
-          command: sqly --csv --sql 'SELECT id FROM "売上2026"' 売上@2026!.csv
+          command: sqly --output-format csv --sql 'SELECT id FROM "売上2026"' 売上@2026!.csv
       - assert:
           exit_code: 0
           stdout:
@@ -133,7 +133,7 @@ scenarios:
             id
             7
       - run:
-          command: sqly --csv --sql "SELECT id FROM sheet" "@#$.csv"
+          command: sqly --output-format csv --sql "SELECT id FROM sheet" "@#$.csv"
       - assert:
           exit_code: 0
           stdout:
@@ -150,7 +150,7 @@ scenarios:
           stderr:
             contains: "Saved 売上 to"
       - run:
-          command: sqly --csv --sql 'SELECT amount FROM "売上" WHERE id = 1' 売上.csv
+          command: sqly --output-format csv --sql 'SELECT amount FROM "売上" WHERE id = 1' 売上.csv
       - assert:
           exit_code: 0
           stdout:
@@ -163,7 +163,7 @@ scenarios:
           file: book.xlsx
           from: testdata/sheet_with_accents.xlsx
       - run:
-          command: sqly --csv --sql 'SELECT COUNT(*) AS c FROM "book_Café"' book.xlsx
+          command: sqly --output-format csv --sql 'SELECT COUNT(*) AS c FROM "book_Café"' book.xlsx
       - assert:
           exit_code: 0
           stdout:

@@ -28,7 +28,7 @@ scenarios:
             2,10
             3,5
       - run:
-          command: sqly --csv --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2) AS revenue FROM products p JOIN sales s ON p.id = s.product_id ORDER BY revenue DESC" products.parquet sales.csv
+          command: sqly --output-format csv --sql "SELECT p.name, p.price, s.quantity, ROUND(p.price * s.quantity, 2) AS revenue FROM products p JOIN sales s ON p.id = s.product_id ORDER BY revenue DESC" products.parquet sales.csv
       - assert:
           exit_code: 0
           stdout:

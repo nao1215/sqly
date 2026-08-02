@@ -28,7 +28,7 @@ scenarios:
             path: user.parquet
             exists: true
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user" user.parquet
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM user" user.parquet
       - assert:
           exit_code: 0
           stdout:
@@ -50,7 +50,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --parquet --output q.parquet --sql "SELECT user_name FROM user LIMIT 2" user.csv
+          command: sqly --output-format parquet --output q.parquet --sql "SELECT user_name FROM user LIMIT 2" user.csv
       - assert:
           exit_code: 0
           stderr:
@@ -62,9 +62,9 @@ scenarios:
   - name: preserves leading-zero codes through a parquet round-trip
     steps:
       - run:
-          command: sqly --parquet --output codes.parquet --sql "SELECT '007' AS code, '00042' AS acct"
+          command: sqly --output-format parquet --output codes.parquet --sql "SELECT '007' AS code, '00042' AS acct"
       - run:
-          command: sqly --csv --sql "SELECT code, acct FROM codes" codes.parquet
+          command: sqly --output-format csv --sql "SELECT code, acct FROM codes" codes.parquet
       - assert:
           exit_code: 0
           stdout:
@@ -75,9 +75,9 @@ scenarios:
   - name: preserves SQL NULL through a parquet round-trip
     steps:
       - run:
-          command: sqly --parquet --output n.parquet --sql "SELECT CAST(NULL AS TEXT) AS id, 'A' AS name UNION ALL SELECT '1' AS id, 'B' AS name"
+          command: sqly --output-format parquet --output n.parquet --sql "SELECT CAST(NULL AS TEXT) AS id, 'A' AS name UNION ALL SELECT '1' AS id, 'B' AS name"
       - run:
-          command: sqly --json --sql "SELECT * FROM n" n.parquet
+          command: sqly --output-format json --sql "SELECT * FROM n" n.parquet
       - assert:
           exit_code: 0
           stdout:
@@ -90,7 +90,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --parquet --output empty.parquet --sql "SELECT user_name FROM user WHERE 1=0" user.csv
+          command: sqly --output-format parquet --output empty.parquet --sql "SELECT user_name FROM user WHERE 1=0" user.csv
       - assert:
           exit_code: 1
           stderr:

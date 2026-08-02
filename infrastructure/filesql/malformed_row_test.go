@@ -120,6 +120,34 @@ func TestFileSQLAdapter_ImportMode_PadRejectsLongRow(t *testing.T) {
 	}
 }
 
+func TestFileSQLAdapter_ImportMode_PadPreflightsBeforeEmptyJSONTable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	emptyJSON := filepath.Join(dir, "empty.json")
+	if err := os.WriteFile(emptyJSON, []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	longCSV := filepath.Join(dir, "long.csv")
+	if err := os.WriteFile(longCSV, []byte("id,name\n1,alice,unexpected\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	adapter := NewFileSQLAdapter(db)
+	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+
+	if err := adapter.LoadFiles(context.Background(), emptyJSON, longCSV); err == nil {
+		t.Fatal("expected pad to reject the mixed import")
+	}
+	if _, err := adapter.Query(context.Background(), "SELECT * FROM empty"); err == nil {
+		t.Fatal("expected preflight failure to leave no empty JSON table behind")
+	}
+}
+
 func TestFileSQLAdapter_ImportMode_DefaultIsStop(t *testing.T) {
 	t.Parallel()
 	adapter, path := newMalformedTestAdapter(t)

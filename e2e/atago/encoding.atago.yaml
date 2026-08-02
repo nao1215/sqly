@@ -19,7 +19,7 @@ scenarios:
           file: bom.csv
           base64: "77u/bmFtZSxhZ2UKYWxpY2UsMzAK"
       - run:
-          command: sqly --csv --sql "SELECT name FROM bom WHERE age = 30" bom.csv
+          command: sqly --output-format csv --sql "SELECT name FROM bom WHERE age = 30" bom.csv
       - assert:
           exit_code: 0
           stdout:
@@ -33,7 +33,7 @@ scenarios:
           file: bom.tsv
           base64: "77u/bmFtZQlhZ2UKYWxpY2UJMzAK"
       - run:
-          command: sqly --csv --sql "SELECT name FROM bom WHERE age = 30" bom.tsv
+          command: sqly --output-format csv --sql "SELECT name FROM bom WHERE age = 30" bom.tsv
       - assert:
           exit_code: 0
           stdout:
@@ -47,7 +47,7 @@ scenarios:
           file: bom.ltsv
           base64: "77u/bmFtZTphbGljZQlhZ2U6MzAK"
       - run:
-          command: sqly --csv --sql "SELECT name FROM bom WHERE age = 30" bom.ltsv
+          command: sqly --output-format csv --sql "SELECT name FROM bom WHERE age = 30" bom.ltsv
       - assert:
           exit_code: 0
           stdout:
@@ -61,7 +61,7 @@ scenarios:
           file: bom.json
           base64: "77u/W3sibmFtZSI6ImFsaWNlIiwiYWdlIjozMH1d"
       - run:
-          command: sqly --csv --sql "SELECT json_extract(data, '$.name') AS n FROM bom" bom.json
+          command: sqly --output-format csv --sql "SELECT json_extract(data, '$.name') AS n FROM bom" bom.json
       - assert:
           exit_code: 0
           stdout:
@@ -73,7 +73,7 @@ scenarios:
           file: bom.jsonl
           base64: "77u/eyJuYW1lIjoiYWxpY2UiLCJhZ2UiOjMwfQo="
       - run:
-          command: sqly --csv --sql "SELECT json_extract(data, '$.name') AS n FROM bom" bom.jsonl
+          command: sqly --output-format csv --sql "SELECT json_extract(data, '$.name') AS n FROM bom" bom.jsonl
       - assert:
           exit_code: 0
           stdout:
@@ -85,7 +85,7 @@ scenarios:
           file: utf16.csv
           base64: "//5uAGEAbQBlACwAYQBnAGUACgBhAGwAaQBjAGUALAAzADAACgA="
       - run:
-          command: sqly --csv --sql "SELECT name FROM utf16 WHERE age = 30" utf16.csv
+          command: sqly --output-format csv --sql "SELECT name FROM utf16 WHERE age = 30" utf16.csv
       - assert:
           exit_code: 0
           stdout:
@@ -99,7 +99,7 @@ scenarios:
           file: people.csv
           base64: "aWQsbmFtZQoxLJG+mFkKMiyJ1I5xCg=="
       - run:
-          command: sqly --encoding shift-jis --csv --sql "SELECT name FROM people ORDER BY id LIMIT 1" people.csv
+          command: sqly --encoding shift-jis --output-format csv --sql "SELECT name FROM people ORDER BY id LIMIT 1" people.csv
       - assert:
           exit_code: 0
           stdout:

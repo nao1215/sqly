@@ -85,6 +85,15 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	if f.sharedDB == nil {
 		return errors.New("shared database is not initialized")
 	}
+	// Validate all delimited inputs before creating any empty JSON tables or
+	// loading files. A mixed import must be atomic with respect to this
+	// preflight: rejecting a long row must not leave tables from earlier inputs
+	// behind in the shared session database.
+	if f.malformedRowPolicy == model.MalformedRowPad {
+		if err := rejectLongDelimitedRows(filePaths); err != nil {
+			return err
+		}
+	}
 
 	// Loading an ACH/Fedwire file registers its TableSet in a filesql global
 	// registry keyed by base name. sqly keeps those registrations for the session
@@ -114,11 +123,6 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	// semantics, and avoids the previous temporary-database-plus-row-copy path.
 	// The builder form is used (instead of the package-level filesql.LoadInto) so
 	// the malformed-row policy can be applied to ragged CSV/TSV rows.
-	if f.malformedRowPolicy == model.MalformedRowPad {
-		if err := rejectLongDelimitedRows(toLoad); err != nil {
-			return err
-		}
-	}
 	if len(toLoad) > 0 {
 		builder := filesql.NewBuilder().
 			AddPaths(toLoad...).
