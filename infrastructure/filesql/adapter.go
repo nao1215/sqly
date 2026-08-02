@@ -14,6 +14,7 @@ import (
 
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
+	infra "github.com/nao1215/sqly/infrastructure"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -73,65 +74,111 @@ func filesqlMalformedRowPolicy(policy model.MalformedRowPolicy) filesql.Malforme
 	}
 }
 
-// LoadFiles loads multiple files into the shared database using filesql
-func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) (err error) {
-	if len(filePaths) == 0 {
+// registryPublisher is the deferred half of an import: metadata that names
+// tables which do not exist until the transaction commits. filesql's
+// *PendingRegistries satisfies it; a test double satisfies it to observe whether
+// publication happened at all.
+//
+// PublishRegistries cannot fail — it moves already-built table sets into
+// process maps — so there is no partially published state to reconcile. The
+// integrity rule is therefore the simple one: nothing is published unless the
+// commit succeeded, and once the commit succeeds every staged registry is
+// published.
+type registryPublisher interface {
+	PublishRegistries()
+}
+
+// stageFunc loads one input path into an open transaction and returns the
+// registry entries to publish after that transaction commits.
+type stageFunc[T infra.Tx] func(ctx context.Context, tx T, path string) (registryPublisher, error)
+
+// atomicImport is one ordered multi-file import: where the transaction comes
+// from, and how a single path is staged into it. Splitting these two out of
+// LoadFiles is what makes BeginTx, staging, commit, and rollback failures
+// reproducible from a test without a real database that must be coaxed into
+// failing at the right instant.
+type atomicImport[T infra.Tx] struct {
+	beginner infra.TxBeginner[T]
+	stage    stageFunc[T]
+}
+
+// run stages every path inside one transaction, then publishes the staged
+// registries — and only then.
+//
+// The two phases are deliberately separate. Everything that touches the
+// database happens inside WithTransaction, which owns commit, rollback, and the
+// joining of a cleanup error onto the cause. Everything that makes state visible
+// to the rest of the process happens after it returns, gated on the transaction
+// having actually committed. A failure anywhere in the first phase — a bad
+// input, a failed commit, or a rollback that itself failed — therefore leaves no
+// registry entry behind, so "the database rolled back but the registry kept the
+// entry" is not a state this code can produce.
+//
+// When several inputs register the same base name, the later input wins: staging
+// runs in the order the paths were given and publication replays that same
+// order, so the last file to claim a name is the one write-back resolves to.
+func (a atomicImport[T]) run(ctx context.Context, paths []string) error {
+	var pending []registryPublisher
+	committed, err := infra.WithTransaction(ctx, a.beginner, func(tx T) error {
+		pending = pending[:0]
+		for _, path := range paths {
+			publisher, err := a.stage(ctx, tx, path)
+			if err != nil {
+				return err
+			}
+			pending = append(pending, publisher)
+		}
 		return nil
-	}
-
-	if f.sharedDB == nil {
-		return errors.New("shared database is not initialized")
-	}
-	tx, err := f.sharedDB.BeginTx(ctx, nil)
+	})
 	if err != nil {
-		return fmt.Errorf("begin atomic import transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil && err == nil {
-				err = fmt.Errorf("rollback atomic import transaction: %w", rollbackErr)
-			}
-		}
-	}()
-
-	var pending []*filesql.PendingRegistries
-	for _, path := range filePaths {
-		builder := filesql.NewBuilder().
-			AddPath(path).
-			WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
-		validated, err := builder.Build(ctx)
-		if err != nil {
-			return fmt.Errorf("load file %q: %w", path, err)
-		}
-		registry, err := validated.LoadIntoTxWithPending(ctx, tx)
-		if err != nil {
-			if f.malformedRowPolicy == model.MalformedRowPad && errors.Is(err, filesql.ErrColumnMismatch) {
-				return fmt.Errorf("load file %q: --import-mode pad refuses to truncate a long row: %w", path, err)
-			}
-			return fmt.Errorf("load file %q: %w", path, err)
-		}
-		pending = append(pending, registry)
-	}
-	if err := commitImport(tx.Commit, pending); err != nil {
 		return err
 	}
-	committed = true
+	if !committed {
+		// Unreachable while WithTransaction reports success and commitment
+		// together; kept so a future change to that contract fails loudly here
+		// instead of publishing uncommitted registries.
+		return errors.New("atomic import finished without committing")
+	}
+	for _, publisher := range pending {
+		publisher.PublishRegistries()
+	}
 	return nil
 }
 
-// commitImport publishes financial registries only after the supplied commit
-// operation succeeds. Keeping the commit boundary in one small function makes
-// the ordering explicit and lets tests exercise the commit-failure path without
-// relying on timing-dependent database locks.
-func commitImport(commit func() error, pending []*filesql.PendingRegistries) error {
-	if err := commit(); err != nil {
-		return fmt.Errorf("commit atomic import transaction: %w", err)
+// LoadFiles loads multiple files into the shared database using filesql. Either
+// every input is applied or none is: a failure on the last of ten inputs rolls
+// back the nine before it, leaving tables and views that existed beforehand
+// untouched.
+func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) error {
+	if len(filePaths) == 0 {
+		return nil
 	}
-	for _, registry := range pending {
-		registry.PublishRegistries()
+	if f.sharedDB == nil {
+		return errors.New("shared database is not initialized")
 	}
-	return nil
+	return atomicImport[*sql.Tx]{
+		beginner: infra.SQLTxBeginner{DB: f.sharedDB},
+		stage:    f.stageFile,
+	}.run(ctx, filePaths)
+}
+
+// stageFile parses one input and applies it to the open import transaction.
+func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string) (registryPublisher, error) {
+	builder := filesql.NewBuilder().
+		AddPath(path).
+		WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
+	validated, err := builder.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load file %q: %w", path, err)
+	}
+	registry, err := validated.LoadIntoTxWithPending(ctx, tx)
+	if err != nil {
+		if f.malformedRowPolicy == model.MalformedRowPad && errors.Is(err, filesql.ErrColumnMismatch) {
+			return nil, fmt.Errorf("load file %q: --import-mode pad refuses to truncate a long row: %w", path, err)
+		}
+		return nil, fmt.Errorf("load file %q: %w", path, err)
+	}
+	return registry, nil
 }
 
 // LoadFile loads a single file into the database
