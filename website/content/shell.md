@@ -38,7 +38,7 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.help` | show the command list |
-| `.mode MODE` | change the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `ndjson`, `json-typed`, `ndjson-typed`, `markdown`, `excel`, `parquet` |
+| `.mode MODE` | change the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `ndjson`, `markdown`, `excel`, `parquet` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
 | `.clear` | clear the screen |
 | `.exit` | quit (so does `Ctrl-D`) |
@@ -65,7 +65,7 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.import PATH...` | load files, directories, or `http(s)` URLs into the session |
-| `.import-mode POLICY` | how to handle a ragged CSV/TSV row: `stop`, `skip`, `fill` |
+| `.import-mode POLICY` | how to handle a ragged CSV/TSV row: `stop`, `skip`, `pad` (short rows only) |
 | `.dump TABLE FILE` | export one table; the format follows `.mode`, or the file extension when the mode is `table` |
 | `.save DIR` | write every changed table into `DIR`, leaving the sources alone |
 | `.save --force` | overwrite each table's source file in place |

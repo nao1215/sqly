@@ -15,10 +15,8 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | `-c`, `--csv` | CSV |
 | `-t`, `--tsv` | TSV |
 | `-l`, `--ltsv` | LTSV |
-| `-j`, `--json` | JSON array, every value a string |
-| `-n`, `--ndjson` | newline-delimited JSON, every value a string |
-| `--json-typed` | JSON with native numbers, booleans, and nulls |
-| `--ndjson-typed` | NDJSON with native numbers, booleans, and nulls |
+| `-j`, `--json` | JSON array with native numbers, booleans, and nulls where unambiguous |
+| `-n`, `--ndjson` | newline-delimited JSON with native numbers, booleans, and nulls where unambiguous |
 | `-m`, `--markdown` | Markdown table |
 | `-e`, `--excel` | Excel workbook (needs `--output` or `.dump`) |
 | `-p`, `--parquet` | Parquet (needs `--output` or `.dump`) |
@@ -39,12 +37,11 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | `-S`, `--sheet NAME` | import one Excel sheet by its original name |
 | `--stdin FORMAT` | treat stdin as a dataset: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
 | `--stdin-name NAME` | table name for `--stdin` (default `stdin`) |
-| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (default), `skip`, `fill` |
+| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (default), `skip`, `pad` (short rows only) |
 | `--encoding NAME` | text encoding for BOM-less input (default `utf-8`) |
-| `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged |
-| `--cache-clear` | delete the cache first, forcing a cold rebuild |
+| `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged (content-hash keyed) |
 
-## Report modes
+## Inspection
 
 Each of these prints a report and exits, instead of running a query.
 
@@ -52,12 +49,6 @@ Each of these prints a report and exits, instead of running a query.
 |:--|:--|
 | `-i`, `--inspect` | schema, row counts, and sample rows as JSON |
 | `--inspect-sample N` | rows per table in `--inspect` (default 5; `0` for schema only) |
-| `--profile` | data-quality report: nulls, blanks, distinct counts, warnings |
-| `--profile-format` | `json` (default), or `text`, which leads with the columns that have warnings, then lists every column (`no warnings` when there are none) |
-| `--compare` | compare two tables: schema, row count, keyed rows |
-| `--compare-key COL` | key column for the keyed row comparison |
-| `--compare-tables "l,r"` | which two tables to compare |
-| `--compare-format` | `json` (default), or `text`, which lists the keys added (`+`), removed (`-`), and modified (`~`), and under each modified key only the columns whose value changed |
 
 ## Write-back
 

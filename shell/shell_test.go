@@ -2409,91 +2409,6 @@ func TestShellExec_NDJSONModeSwitch(t *testing.T) {
 	}
 }
 
-func TestShellRun_TypedJSONOutputFromCLI(t *testing.T) {
-	// --json-typed renders numeric, boolean, and null values as native JSON
-	// scalars while keeping non-numeric strings as strings, and a large integer
-	// stays lossless (no scientific notation).
-	shell, cleanup, err := newShell(t, []string{
-		"sqly", "--json-typed",
-		"--sql", "SELECT 42 AS i, -1.5 AS f, 'hello' AS s, NULL AS n, '007' AS lead, 9223372036854775807 AS big",
-		filepath.Join("testdata", "actor.csv"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	got := getStdoutForRunFunc(t, shell.Run)
-	want := "[\n  {\"i\":42,\"f\":-1.5,\"s\":\"hello\",\"n\":null,\"lead\":\"007\",\"big\":9223372036854775807}\n]\n"
-	if string(got) != want {
-		t.Fatalf("typed json output mismatch:\n got: %s\nwant: %s", got, want)
-	}
-}
-
-func TestShellExec_TypedJSONModeSwitch(t *testing.T) {
-	// .mode json-typed switches interactive query output into the typed contract.
-	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := getExecStdOutput(t, shell.exec, ".mode json-typed"); err != nil {
-		t.Fatalf(".mode json-typed failed: %v", err)
-	}
-
-	out, err := getExecStdOutput(t, shell.exec, "SELECT 7 AS n, 'x' AS s")
-	if err != nil {
-		t.Fatalf("query failed: %v", err)
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(out, &rows); err != nil {
-		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, out)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("got %d rows, want 1: %s", len(rows), out)
-	}
-	if n, ok := rows[0]["n"].(float64); !ok || n != 7 {
-		t.Fatalf("expected numeric n=7, got %#v", rows[0]["n"])
-	}
-	if s, ok := rows[0]["s"].(string); !ok || s != "x" {
-		t.Fatalf("expected string s=x, got %#v", rows[0]["s"])
-	}
-}
-
-func TestShell_promptPrefixReflectsTypedJSONMode(t *testing.T) {
-	// The prompt label must distinguish the typed JSON variants from the plain
-	// json/ndjson modes so a typed session is visible at the prompt.
-	tests := []struct {
-		name string
-		mode string
-		want string
-	}{
-		{name: "json-typed mode shows (json-typed) in prompt", mode: "json-typed", want: "(json-typed)"},
-		{name: "ndjson-typed mode shows (ndjson-typed) in prompt", mode: "ndjson-typed", want: "(ndjson-typed)"},
-		{name: "plain json mode still shows (json) in prompt", mode: "json", want: "(json)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			shell, cleanup, err := newShell(t, []string{"sqly"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer cleanup()
-
-			if err := shell.state.mode.changeOutputModeIfNeeded(tt.mode); err != nil {
-				t.Fatalf("changeOutputModeIfNeeded(%q): %v", tt.mode, err)
-			}
-			if prefix := shell.promptPrefix(); !strings.Contains(prefix, tt.want) {
-				t.Errorf("promptPrefix() = %q, want it to contain %q", prefix, tt.want)
-			}
-		})
-	}
-}
-
 func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
 	// Regression for #661: a helper command missing a required argument must
 	// return an error (so batch mode fails fast) instead of printing usage and
@@ -2526,37 +2441,6 @@ func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
 				t.Errorf("error = %q, want it to contain %q", err.Error(), tc.want)
 			}
 		})
-	}
-}
-
-func TestCommandList_modeCommand_listsTypedJSONVariants(t *testing.T) {
-	// `.mode` with no argument is a missing-argument command error so a batch
-	// script fails fast, but the error still carries the current mode and the
-	// selectable mode list (including the typed JSON variants) so an interactive
-	// user can discover and confirm them.
-	shell, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	if err := shell.state.mode.changeOutputModeIfNeeded("json-typed"); err != nil {
-		t.Fatalf("changeOutputModeIfNeeded: %v", err)
-	}
-
-	err = shell.commands.modeCommand(context.Background(), shell, nil)
-	if err == nil {
-		t.Fatal("modeCommand with no argument returned nil, want a missing-argument error")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "current mode=json-typed") {
-		t.Errorf("`.mode` error = %q, want it to contain %q", msg, "current mode=json-typed")
-	}
-	if !strings.Contains(msg, "json-typed") {
-		t.Errorf("`.mode` error = %q, want it to list json-typed", msg)
-	}
-	if !strings.Contains(msg, "ndjson-typed") {
-		t.Errorf("`.mode` error = %q, want it to list ndjson-typed", msg)
 	}
 }
 
@@ -2676,7 +2560,7 @@ func TestShellExec_SchemaAndDescribe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		var cols []map[string]string
+		var cols []map[string]any
 		if err := json.Unmarshal(got, &cols); err != nil {
 			t.Fatalf(".describe json mode output is not a JSON array: %v\n%s", err, got)
 		}

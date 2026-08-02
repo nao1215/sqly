@@ -413,9 +413,9 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 
 	sort.Strings(importedTables)
-	// In report-only modes (--inspect, --compare, --profile) the structured report
-	// is the only intended output, so a successful directory import stays quiet on
-	// stderr. Warnings (e.g. keyword table names) and errors still print.
+	// In inspect mode the structured report is the only intended output, so a
+	// successful directory import stays quiet on stderr. Warnings (e.g. keyword
+	// table names) and errors still print.
 	if !s.reportOnly() {
 		fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(importedTables), displayPath, importedTables)
 	}

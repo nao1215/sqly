@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+* Removed the standalone `--profile` and `--compare` workflows and their format/key/table flags. Use SQL for data-quality checks and table differences.
+* Removed `--json-typed` and `--ndjson-typed`; `--json` and `--ndjson` now emit native JSON numbers, booleans, and nulls where unambiguous. Zero-padded values remain strings.
+* Removed `--cache-clear`; cache invalidation is automatic from input path, size, and SHA-256 content hash.
+* Renamed malformed-row policy `fill` to `pad`. `pad` fills short CSV/TSV rows and rejects long rows instead of truncating them.
+
+### Migration Notes
+* Replace `--profile`/`--compare` invocations with explicit SQL queries.
+* Replace `--json-typed`/`--ndjson-typed` with `--json`/`--ndjson`.
+* Remove `--cache-clear`; edit the source and the content-hash key causes a cold import automatically.
+* Replace `--import-mode fill` and `.import-mode fill` with `pad`. Long rows now fail so their extra fields are not silently lost.
+
+### Maintenance
+* Updated the filesql dependency to v0.30.0 and synchronized the CLI, shell help, E2E specifications, website reference, and cookbook with the reduced surface.
+
 ## [v0.31.0](https://github.com/nao1215/sqly/compare/v0.30.0...v0.31.0) (2026-07-30)
 
 ### New Features

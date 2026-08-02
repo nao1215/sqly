@@ -225,16 +225,6 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
-	// --compare is also self-contained; reject conflicting flags up front.
-	if err := s.validateCompareFlags(); err != nil {
-		return err
-	}
-
-	// --profile is also self-contained; reject conflicting flags up front.
-	if err := s.validateProfileFlags(); err != nil {
-		return err
-	}
-
 	// --output is honored by --sql (a single result) and --sql-file (the script's
 	// one result set). Without either (batch stdin or interactive) the flag was
 	// silently ignored, so reject it instead of looking successful.
@@ -258,8 +248,8 @@ func (s *Shell) Run(ctx context.Context) error {
 	// nothing remains to carry a query. Require an explicit query source;
 	// otherwise the dataset is imported and immediately discarded with a success
 	// exit code.
-	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag && !s.argument.CompareFlag && !s.argument.ProfileFlag {
-		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, --inspect, --compare, or --profile")
+	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
+		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
 	}
 
 	var sqlScript string
@@ -300,18 +290,6 @@ func (s *Shell) Run(ctx context.Context) error {
 	// --sql and the interactive/batch paths.
 	if s.argument.InspectFlag {
 		return s.runInspect(ctx)
-	}
-
-	// --compare is a non-interactive discovery path like --inspect: after import
-	// it prints the comparison report and exits.
-	if s.argument.CompareFlag {
-		return s.runCompare(ctx)
-	}
-
-	// --profile is a non-interactive discovery path: after import it prints the
-	// data-quality report and exits.
-	if s.argument.ProfileFlag {
-		return s.runProfile(ctx)
 	}
 
 	if err := s.validateSaveFlags(); err != nil {
@@ -500,7 +478,7 @@ func (s *Shell) disableHistory(err error) {
 // prompt: a terminal with no non-interactive action requested (--inspect,
 // --sql, --sql-file). Batch mode (non-TTY) and those flags are non-interactive.
 func (s *Shell) startsInteractiveShell() bool {
-	return s.isTTY() && !s.argument.InspectFlag && !s.argument.CompareFlag && !s.argument.ProfileFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
+	return s.isTTY() && !s.argument.InspectFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
 }
 
 // partialImportStartupMessage explains the shell state after a partial startup
@@ -538,12 +516,12 @@ func positionalSubcommandHint(paths []string) (string, bool) {
 	return fmt.Sprintf("sqly is flag-driven and has no subcommands; use %q. Run \"sqly --help\" for usage. Helper commands like .tables and .import run inside the shell or batch stdin.", flag), true
 }
 
-// reportOnly reports whether the run is a non-interactive report mode
-// (--inspect, --compare, --profile) whose only intended output is the structured
-// report. Successful import progress banners are suppressed in these modes so a
-// clean run stays quiet on stderr; warnings and errors still print.
+// reportOnly reports whether the run is an inspect invocation whose only
+// intended output is the structured report. Successful import progress banners
+// are suppressed in this mode so a clean run stays quiet on stderr; warnings and
+// errors still print.
 func (s *Shell) reportOnly() bool {
-	return s.argument.InspectFlag || s.argument.CompareFlag || s.argument.ProfileFlag
+	return s.argument.InspectFlag
 }
 
 // init store CSV data to in-memory DB and create table for sqly history.
@@ -907,8 +885,6 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
 		{Text: "json", Description: "sqly command argument: json output format"},
 		{Text: "ndjson", Description: "sqly command argument: ndjson output format"},
-		{Text: outputModeJSONTyped, Description: "sqly command argument: json output with native scalars"},
-		{Text: outputModeNDJSONTyped, Description: "sqly command argument: ndjson output with native scalars"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
 		{Text: "sqlite", Description: "sqly command argument: SQLite query dialect (default)"},
@@ -1119,11 +1095,6 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		fmt.Fprint(config.Stdout, msg)
 		return nil
 	}
-
-	// Opt JSON/NDJSON output into the typed contract when the session selected a
-	// typed mode (--json-typed/--ndjson-typed or .mode json-typed/ndjson-typed).
-	// The flag is ignored by every non-JSON format.
-	table.SetJSONTyped(s.state.mode.jsonTyped)
 
 	// While collecting a --sql-file script's output, capture each rowset instead
 	// of printing it. The script's single result set is exported after the run.

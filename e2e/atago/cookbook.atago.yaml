@@ -173,44 +173,6 @@ scenarios:
             line: 2
             equals: "Harrison Ford,1"
 
-  - name: reports data quality as text
-    steps:
-      - fixture:
-          file: people.csv
-          content: |
-            id,email
-            1,a@example.com
-            2,
-      - run:
-          command: sqly --profile --profile-format text people.csv
-      - assert:
-          exit_code: 0
-          stdout:
-            contains:
-              - "table people: 2 rows, 2 columns"
-              - "blanks=1"
-
-  - name: diffs two files by key
-    steps:
-      - fixture:
-          file: old.csv
-          content: |
-            id,v
-            1,a
-            2,b
-      - fixture:
-          file: new.csv
-          content: |
-            id,v
-            1,a
-            3,c
-      - run:
-          command: sqly --compare --compare-key id --compare-format text old.csv new.csv
-      - assert:
-          exit_code: 0
-          stdout:
-            contains: "keyed by id: 1 added, 1 removed, 0 modified"
-
   - name: edits a file in place
     steps:
       - fixture: &user

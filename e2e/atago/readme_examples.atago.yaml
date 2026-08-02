@@ -160,7 +160,7 @@ scenarios:
           command: sqly --json --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
       - assert:
           stdout:
-            contains: '{"user_name":"booker12","identifier":"1"}'
+            contains: '{"user_name":"booker12","identifier":1}'
 
   - name: renders NDJSON with --ndjson
     steps:
@@ -170,11 +170,11 @@ scenarios:
       - assert:
           stdout:
             line: 1
-            equals: '{"user_name":"booker12","identifier":"1"}'
+            equals: '{"user_name":"booker12","identifier":1}'
       - assert:
           stdout:
             line: 2
-            equals: '{"user_name":"jenkins46","identifier":"2"}'
+            equals: '{"user_name":"jenkins46","identifier":2}'
 
   - name: renders a markdown table with --markdown
     steps:

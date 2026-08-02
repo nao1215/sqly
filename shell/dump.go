@@ -67,10 +67,6 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	if err != nil {
 		return err
 	}
-	// Carry the typed JSON contract into a JSON/NDJSON dump when the session is in
-	// a typed mode; ignored for every other export format.
-	table.SetJSONTyped(s.state.mode.jsonTyped)
-
 	// The current .mode sets the format unless it is display-only (table,
 	// vertical); otherwise the format (and any compression) is inferred from the
 	// destination path.

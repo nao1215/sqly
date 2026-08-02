@@ -179,13 +179,6 @@ type Table struct {
 	// NULL is emitted as JSON null. nil means "no NULL information"; text formats
 	// ignore it and render every cell as a string.
 	nulls [][]bool
-	// jsonTyped opts JSON/NDJSON output into the typed contract: a cell that is a
-	// canonical JSON number is emitted as a native number, "true"/"false" as a
-	// native boolean, and everything else as a JSON string. It is false by
-	// default so the legacy string contract stays the default; only the explicit
-	// opt-in (--json-typed/--ndjson-typed or .mode json-typed/ndjson-typed) turns
-	// it on. Other output formats ignore it.
-	jsonTyped bool
 }
 
 // NewTable create new Table.
@@ -206,16 +199,6 @@ func NewTable(
 // rather than an empty string. Other output formats ignore it.
 func (t *Table) SetNulls(nulls [][]bool) {
 	t.nulls = nulls
-}
-
-// SetJSONTyped opts JSON and NDJSON output into the typed contract, where a cell
-// that is a canonical JSON number is emitted as a native number (large integers
-// verbatim, so no precision loss or scientific notation), "true"/"false" as a
-// native boolean, a SQL NULL as null, and every other value as a JSON string.
-// It has no effect on non-JSON output formats. The default (false) preserves the
-// legacy contract that emits every non-NULL value as a string.
-func (t *Table) SetJSONTyped(typed bool) {
-	t.jsonTyped = typed
 }
 
 // isNull reports whether the cell at (row, col) is a known SQL NULL.
@@ -629,10 +612,10 @@ func (t *Table) printExcel(out io.Writer) error {
 }
 
 // rowToJSONObject builds a JSON object for one record, preserving the header
-// column order. Why string values: the table model stores every cell as a
-// string, so emitting strings keeps output lossless (e.g. "007" stays "007")
-// and consistent with the other text formats. Why a manual builder: encoding's
-// map marshaling sorts keys alphabetically, which would drop column order.
+// column order. JSON output keeps native numbers, booleans, and nulls while
+// retaining non-canonical values such as "007" as strings. Why a manual builder:
+// encoding's map marshaling sorts keys alphabetically, which would drop column
+// order.
 func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
@@ -658,12 +641,7 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 		if i < len(record) {
 			val = record[i]
 		}
-		var value []byte
-		if t.jsonTyped {
-			value, err = jsonScalarToken(val)
-		} else {
-			value, err = json.Marshal(val)
-		}
+		value, err := jsonScalarToken(val)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode value for column %q: %w", h, err)
 		}
@@ -679,7 +657,7 @@ const (
 	jsonLiteralFalse = "false"
 )
 
-// jsonScalarToken returns the JSON token for a cell value in typed output mode.
+// jsonScalarToken returns the JSON token for a cell value.
 // A value that is a canonical JSON number is emitted verbatim, so a large integer
 // stays lossless and never regresses into scientific notation; the JSON literals
 // "true" and "false" become native booleans; everything else is emitted as a JSON

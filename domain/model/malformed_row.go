@@ -15,9 +15,9 @@ const (
 	MalformedRowStop MalformedRowPolicy = iota
 	// MalformedRowSkip drops ragged rows and imports the well-formed ones.
 	MalformedRowSkip
-	// MalformedRowFill keeps every row, padding a short row with empty strings
-	// and truncating a long row to the header width.
-	MalformedRowFill
+	// MalformedRowPad keeps short rows by padding missing fields with empty
+	// strings. A long row remains an error so no input data is discarded.
+	MalformedRowPad
 )
 
 // Policy names accepted by the --import-mode flag and the .import-mode shell
@@ -25,7 +25,7 @@ const (
 const (
 	malformedRowStopName = "stop"
 	malformedRowSkipName = "skip"
-	malformedRowFillName = "fill"
+	malformedRowPadName  = "pad"
 )
 
 // String returns the lowercase policy name used by the --import-mode flag and
@@ -36,14 +36,14 @@ func (p MalformedRowPolicy) String() string {
 		return malformedRowStopName
 	case MalformedRowSkip:
 		return malformedRowSkipName
-	case MalformedRowFill:
-		return malformedRowFillName
+	case MalformedRowPad:
+		return malformedRowPadName
 	default:
 		return malformedRowStopName
 	}
 }
 
-// ParseMalformedRowPolicy converts a policy name ("stop", "skip", or "fill")
+// ParseMalformedRowPolicy converts a policy name ("stop", "skip", or "pad")
 // into a MalformedRowPolicy. It rejects any other value so a mistyped flag or
 // command argument fails loudly instead of silently defaulting.
 func ParseMalformedRowPolicy(name string) (MalformedRowPolicy, error) {
@@ -52,9 +52,9 @@ func ParseMalformedRowPolicy(name string) (MalformedRowPolicy, error) {
 		return MalformedRowStop, nil
 	case malformedRowSkipName:
 		return MalformedRowSkip, nil
-	case malformedRowFillName:
-		return MalformedRowFill, nil
+	case malformedRowPadName:
+		return MalformedRowPad, nil
 	default:
-		return MalformedRowStop, fmt.Errorf("invalid import mode %q: want stop, skip, or fill", name)
+		return MalformedRowStop, fmt.Errorf("invalid import mode %q: want stop, skip, or pad", name)
 	}
 }

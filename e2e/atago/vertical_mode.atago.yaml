@@ -115,16 +115,6 @@ scenarios:
             path: out.tsv
             equals: "user_name\tidentifier\tfirst_name\nbooker12\t1\tRachel\njenkins46\t2\tMary\n"
 
-  - name: vertical cannot be combined with a report flag, like any output mode
-    steps:
-      - fixture: *user
-      - run:
-          command: sqly --profile --vertical user.csv
-      - assert:
-          exit_code: 1
-          stderr:
-            contains: "--profile cannot be combined with an output mode flag (--vertical)"
-
   - name: vertical conflicts with another output mode flag
     steps:
       - fixture: *user

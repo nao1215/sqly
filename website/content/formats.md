@@ -20,7 +20,7 @@ weight: 50
 
 ## Write
 
-`--csv`, `--tsv`, `--ltsv`, `--json`, `--ndjson`, `--json-typed`, `--ndjson-typed`, `--markdown`, `--excel`, `--parquet`, and the default `table`.
+`--csv`, `--tsv`, `--ltsv`, `--json`, `--ndjson`, `--markdown`, `--excel`, `--parquet`, and the default `table`.
 
 `--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
@@ -70,4 +70,4 @@ When a CSV or TSV row has a different field count from the header:
 |:--|:--|
 | `stop` (default) | fail the import and report the row |
 | `skip` | drop the row, import the rest |
-| `fill` | pad a short row with blanks, truncate a long one |
+| `pad` | pad a short row with blanks; reject a long one |

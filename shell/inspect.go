@@ -35,6 +35,13 @@ type inspectReport struct {
 	Tables []inspectTable `json:"tables"`
 }
 
+func outputModeFlagName(o *config.Output) string {
+	if o == nil {
+		return ""
+	}
+	return o.Mode.String()
+}
+
 // validateInspectFlags rejects --inspect combined with other effectful flags.
 // --inspect is a self-contained discovery path that imports inputs, prints a
 // JSON report, and exits, so flags that ask for a different action (--sql,
@@ -58,25 +65,11 @@ func (s *Shell) validateInspectFlags() error {
 	// An output mode flag (--csv, --tsv, --ltsv, --json, --ndjson, --markdown,
 	// --excel, --parquet) selects a result format, but --inspect always emits its
 	// own JSON report. Reject the conflicting flag instead of silently discarding
-	// it, matching the other --inspect conflict checks. The one exception is
-	// --json-typed, the opt-in that makes the report's sample rows use the typed
-	// contract; it is allowed precisely because it shapes the inspect output.
-	case s.inspectTypedSample():
-		return nil
+	// it, matching the other --inspect conflict checks.
 	case s.argument.Output != nil && s.argument.Output.Mode != model.PrintModeTable:
 		return fmt.Errorf("--inspect cannot be combined with an output mode flag (--%s)", outputModeFlagName(s.argument.Output))
 	}
 	return nil
-}
-
-// inspectTypedSample reports whether --inspect should render its sample rows with
-// the typed JSON contract. It is the --json-typed opt-in: JSON mode plus the
-// typed flag. Plain --json and the NDJSON modes do not apply, since the report is
-// always a single JSON document.
-func (s *Shell) inspectTypedSample() bool {
-	return s.argument.Output != nil &&
-		s.argument.Output.JSONTyped &&
-		s.argument.Output.Mode == model.PrintModeJSON
 }
 
 // runInspect prints a machine-readable JSON report of the imported tables:
@@ -208,10 +201,6 @@ func (s *Shell) inspectSample(ctx context.Context, name string, limit int) (json
 	if err != nil {
 		return nil, fmt.Errorf("failed to sample rows of %s: %w", name, err)
 	}
-
-	// In the --json-typed opt-in, the sample rows use the typed contract so the
-	// schema metadata and the sample payloads agree on numeric/boolean/null types.
-	table.SetJSONTyped(s.inspectTypedSample())
 
 	var buf bytes.Buffer
 	if err := table.Print(&buf, model.PrintModeJSON); err != nil {

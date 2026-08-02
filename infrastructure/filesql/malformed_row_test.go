@@ -75,10 +75,10 @@ func TestFileSQLAdapter_ImportMode_Skip(t *testing.T) {
 	}
 }
 
-func TestFileSQLAdapter_ImportMode_Fill(t *testing.T) {
+func TestFileSQLAdapter_ImportMode_Pad(t *testing.T) {
 	t.Parallel()
 	adapter, path := newMalformedTestAdapter(t)
-	adapter.SetMalformedRowPolicy(model.MalformedRowFill)
+	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
 
 	if err := adapter.LoadFile(context.Background(), path); err != nil {
 		t.Fatalf("LoadFile: %v", err)
@@ -93,6 +93,30 @@ func TestFileSQLAdapter_ImportMode_Fill(t *testing.T) {
 	}
 	if got.Records()[2][0] != "" {
 		t.Fatalf("row 3 zip = %q, want empty string", got.Records()[2][0])
+	}
+}
+
+func TestFileSQLAdapter_ImportMode_PadRejectsLongRow(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "long.csv")
+	if err := os.WriteFile(path, []byte("id,name\n1,alice,unexpected\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	adapter := NewFileSQLAdapter(db)
+	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+
+	if err := adapter.LoadFile(context.Background(), path); err == nil {
+		t.Fatal("expected pad to reject a long row instead of truncating it")
+	}
+	if _, err := adapter.Query(context.Background(), "SELECT * FROM long"); err == nil {
+		t.Fatal("expected no table to be created after a rejected long row")
 	}
 }
 

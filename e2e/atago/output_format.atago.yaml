@@ -34,14 +34,14 @@ scenarios:
           stdout:
             line: 1
             equals: "["
-      # The output should include '{"user_name":"booker12","identifier":"1"}'
+      # The output should include '{"user_name":"booker12","identifier":1}'
       - assert:
           stdout:
-            contains: '{"user_name":"booker12","identifier":"1"}'
-      # The output should include '{"user_name":"jenkins46","identifier":"2"}'
+            contains: '{"user_name":"booker12","identifier":1}'
+      # The output should include '{"user_name":"jenkins46","identifier":2}'
       - assert:
           stdout:
-            contains: '{"user_name":"jenkins46","identifier":"2"}'
+            contains: '{"user_name":"jenkins46","identifier":2}'
 
   - name: "--json prints [] for an empty result"
     steps:
@@ -72,16 +72,16 @@ scenarios:
           command: sqly --ndjson --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
       - assert:
           exit_code: 0
-      # The line 1 should equal '{"user_name":"booker12","identifier":"1"}'
+      # The line 1 should equal '{"user_name":"booker12","identifier":1}'
       - assert:
           stdout:
             line: 1
-            equals: '{"user_name":"booker12","identifier":"1"}'
-      # The line 2 should equal '{"user_name":"jenkins46","identifier":"2"}'
+            equals: '{"user_name":"booker12","identifier":1}'
+      # The line 2 should equal '{"user_name":"jenkins46","identifier":2}'
       - assert:
           stdout:
             line: 2
-            equals: '{"user_name":"jenkins46","identifier":"2"}'
+            equals: '{"user_name":"jenkins46","identifier":2}'
 
   - name: "--ndjson prints nothing for an empty result"
     steps:

@@ -112,12 +112,6 @@ sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn |
 # Rank with a window function
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
 
-# Find nulls, blanks, and duplicates
-sqly --profile --profile-format text user.csv
-
-# Diff two files by key
-sqly --compare --compare-key id before.csv after.csv
-
 # Edit a file in place
 sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save --force user.csv
 

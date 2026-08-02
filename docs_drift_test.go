@@ -106,8 +106,6 @@ var cookbookCoverage = map[string]string{
 	"Load a directory":        "e2e/atago/cookbook.atago.yaml",
 	"Run SQL from a file":     "e2e/atago/sql_file.atago.yaml",
 	"Analytics":               "e2e/atago/cookbook.atago.yaml",
-	"Profile data quality":    "e2e/atago/cookbook.atago.yaml",
-	"Compare two tables":      "e2e/atago/cookbook.atago.yaml",
 	"Write changes back":      "e2e/atago/cookbook.atago.yaml",
 	"Other SQL dialects":      "e2e/atago/cookbook.atago.yaml",
 	"Ragged rows":             "e2e/atago/cookbook.atago.yaml",

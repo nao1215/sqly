@@ -164,23 +164,6 @@ scenarios:
           stderr:
             not_contains: "Successfully imported"
 
-  - name: keeps --profile quiet on stderr after a successful directory import
-    env: *hist
-    steps:
-      - fixture:
-          file: "space dir/d.csv"
-          content: |
-            a
-            1
-      - run:
-          command: sqly --profile "space dir"
-      - assert:
-          exit_code: 0
-          stdout:
-            contains: '"tables"'
-          stderr:
-            not_contains: "Successfully imported"
-
   - name: guides "sqly help" to --help instead of an import error
     env: *hist
     steps:

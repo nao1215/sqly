@@ -24,8 +24,6 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 			"  ltsv\n"+
 			"  json\n"+
 			"  ndjson\n"+
-			"  json-typed ※ json output with native numbers, booleans, and nulls\n"+
-			"  ndjson-typed ※ ndjson output with native numbers, booleans, and nulls\n"+
 			"  excel ※ active only when executing .dump, otherwise same as csv mode\n"+
 			"  parquet ※ active only when executing .dump, otherwise same as csv mode",
 			s.state.mode.displayName())

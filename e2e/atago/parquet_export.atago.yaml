@@ -77,7 +77,7 @@ scenarios:
       - run:
           command: sqly --parquet --output n.parquet --sql "SELECT CAST(NULL AS TEXT) AS id, 'A' AS name UNION ALL SELECT '1' AS id, 'B' AS name"
       - run:
-          command: sqly --json-typed --sql "SELECT * FROM n" n.parquet
+          command: sqly --json --sql "SELECT * FROM n" n.parquet
       - assert:
           exit_code: 0
           stdout:

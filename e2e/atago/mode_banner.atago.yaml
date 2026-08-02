@@ -46,18 +46,18 @@ scenarios:
           stderr:
             contains: "Change output mode from table to ndjson"
 
-  - name: reports the typed mode by name and emits typed output after .mode json-typed
+  - name: emits native JSON output after .mode json
     steps:
       - fixture: *user
       - run:
           command: sqly user.csv
-          stdin: ".mode json-typed\nSELECT 7 AS n, 'x' AS s\n"
+          stdin: ".mode json\nSELECT 7 AS n, 'x' AS s\n"
       - assert:
           exit_code: 0
           stdout:
             not_contains: "Change output mode"
           stderr:
-            contains: "Change output mode from table to json-typed"
+            contains: "Change output mode from table to json"
       - assert:
           stdout:
             contains:

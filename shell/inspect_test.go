@@ -22,7 +22,7 @@ type inspectReportForTest struct {
 			Nullable   bool   `json:"nullable"`
 			PrimaryKey bool   `json:"primary_key"`
 		} `json:"columns"`
-		SampleRows []map[string]string `json:"sample_rows"`
+		SampleRows []map[string]any `json:"sample_rows"`
 	} `json:"tables"`
 }
 
@@ -113,51 +113,12 @@ func TestInspect_SingleFile(t *testing.T) {
 	if len(tbl.SampleRows) != 2 {
 		t.Fatalf("sample_rows = %d, want 2", len(tbl.SampleRows))
 	}
-	if tbl.SampleRows[0]["name"] != "Alice" {
-		t.Errorf("first sample row name = %q, want Alice", tbl.SampleRows[0]["name"])
+	if name, ok := tbl.SampleRows[0]["name"].(string); !ok || name != "Alice" {
+		t.Errorf("first sample row name = %v, want Alice", tbl.SampleRows[0]["name"])
 	}
 }
 
-func TestInspect_TypedJSONSampleRows(t *testing.T) {
-	// --inspect --json-typed renders the report's sample rows with the typed
-	// contract: a numeric column decodes to a native number, not a string.
-	dir := t.TempDir()
-	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\nBob,25\n")
-
-	shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--json-typed", csv})
-	if err != nil {
-		t.Fatalf("newShell: %v", err)
-	}
-	defer cleanup()
-
-	out := captureStdout(t, func() {
-		if err := shell.Run(context.Background()); err != nil {
-			t.Fatalf("Run: %v", err)
-		}
-	})
-
-	// Decode sample rows as any so the value types are observable.
-	var report struct {
-		Tables []struct {
-			SampleRows []map[string]any `json:"sample_rows"`
-		} `json:"tables"`
-	}
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("inspect output is not valid JSON: %v\n%s", err, out)
-	}
-	if len(report.Tables) != 1 || len(report.Tables[0].SampleRows) == 0 {
-		t.Fatalf("expected sample rows, got %s", out)
-	}
-	row := report.Tables[0].SampleRows[0]
-	if _, ok := row["age"].(float64); !ok {
-		t.Errorf("expected numeric age in typed sample, got %#v (%s)", row["age"], out)
-	}
-	if name, ok := row["name"].(string); !ok || name == "" {
-		t.Errorf("expected string name in typed sample, got %#v", row["name"])
-	}
-}
-
-func TestInspect_RejectsPlainJSONButAllowsTyped(t *testing.T) {
+func TestInspect_RejectsPlainJSON(t *testing.T) {
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
 
@@ -171,15 +132,6 @@ func TestInspect_RejectsPlainJSONButAllowsTyped(t *testing.T) {
 		t.Error("expected --inspect --json to be rejected, got nil")
 	}
 
-	// --json-typed is the meaningful opt-in and must be accepted.
-	shellTyped, cleanupTyped, err := newShell(t, []string{"sqly", "--inspect", "--json-typed", csv})
-	if err != nil {
-		t.Fatalf("newShell: %v", err)
-	}
-	defer cleanupTyped()
-	if err := shellTyped.Run(context.Background()); err != nil {
-		t.Errorf("expected --inspect --json-typed to be accepted, got %v", err)
-	}
 }
 
 func TestInspect_SampleRowsAreLimited(t *testing.T) {
@@ -301,8 +253,8 @@ func TestInspect_Directory(t *testing.T) {
 
 func TestReportOnly_DirectoryImportQuietOnStderr(t *testing.T) {
 	// Regression for #662: a successful directory import must not print its
-	// progress banner to stderr in report-only modes (--inspect, --compare,
-	// --profile). The structured report is the only intended output of a clean run.
+	// progress banner to stderr in inspect mode. The structured report is the only
+	// intended output of a clean run.
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "data")
 	if err := os.Mkdir(sub, 0o750); err != nil {
@@ -332,22 +284,6 @@ func TestReportOnly_DirectoryImportQuietOnStderr(t *testing.T) {
 		stderr := runCapturingStderr(t, []string{"sqly", "--inspect", sub})
 		if strings.Contains(stderr, "Successfully imported") {
 			t.Errorf("--inspect directory import should be quiet on stderr, got %q", stderr)
-		}
-	})
-
-	t.Run("--profile stays quiet on a successful directory import", func(t *testing.T) {
-		stderr := runCapturingStderr(t, []string{"sqly", "--profile", sub})
-		if strings.Contains(stderr, "Successfully imported") {
-			t.Errorf("--profile directory import should be quiet on stderr, got %q", stderr)
-		}
-	})
-
-	t.Run("--compare stays quiet on a successful directory import", func(t *testing.T) {
-		// The directory imports exactly two tables, so --compare needs no
-		// --compare-tables to pick a left/right pair.
-		stderr := runCapturingStderr(t, []string{"sqly", "--compare", sub})
-		if strings.Contains(stderr, "Successfully imported") {
-			t.Errorf("--compare directory import should be quiet on stderr, got %q", stderr)
 		}
 	})
 

@@ -119,101 +119,6 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --json-typed option selects json mode with the typed contract", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--json-typed"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.Output.Mode != model.PrintModeJSON {
-			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeJSON)
-		}
-		if !arg.Output.JSONTyped {
-			t.Error("expected Output.JSONTyped to be true for --json-typed")
-		}
-	})
-
-	t.Run("user set --ndjson-typed option selects ndjson mode with the typed contract", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--ndjson-typed"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.Output.Mode != model.PrintModeNDJSON {
-			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeNDJSON)
-		}
-		if !arg.Output.JSONTyped {
-			t.Error("expected Output.JSONTyped to be true for --ndjson-typed")
-		}
-	})
-
-	t.Run("--json and --json-typed together are rejected as conflicting", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--json", "--json-typed"}); err == nil {
-			t.Error("expected conflicting output mode flags error, got nil")
-		}
-	})
-
-	t.Run("--compare sets the flag and accepts its sub-flags", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--compare", "--compare-key", "id", "--compare-tables", "a,b", "--compare-format", "text", "a.csv", "b.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !arg.CompareFlag {
-			t.Error("expected CompareFlag to be true")
-		}
-		if arg.CompareKey != "id" || arg.CompareTables != "a,b" || arg.CompareFormat != "text" {
-			t.Errorf("compare flags = %q/%q/%q, want id/a,b/text", arg.CompareKey, arg.CompareTables, arg.CompareFormat)
-		}
-	})
-
-	t.Run("compare sub-flags without --compare are rejected", func(t *testing.T) {
-		for _, a := range [][]string{
-			{"sqly", "--compare-key", "id"},
-			{"sqly", "--compare-tables", "a,b"},
-			{"sqly", "--compare-format", "text"},
-		} {
-			if _, err := NewArg(a); err == nil {
-				t.Errorf("expected error for %v without --compare", a)
-			}
-		}
-	})
-
-	t.Run("an invalid --compare-format is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--compare", "--compare-format", "yaml"}); err == nil {
-			t.Error("expected an error for an invalid --compare-format")
-		}
-	})
-
-	t.Run("--compare-format defaults to json", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--compare", "a.csv", "b.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.CompareFormat != "json" {
-			t.Errorf("CompareFormat = %q, want json", arg.CompareFormat)
-		}
-	})
-
-	t.Run("--profile sets the flag and defaults the format to json", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--profile", "a.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !arg.ProfileFlag || arg.ProfileFormat != "json" {
-			t.Errorf("ProfileFlag=%v ProfileFormat=%q, want true/json", arg.ProfileFlag, arg.ProfileFormat)
-		}
-	})
-
-	t.Run("--profile-format without --profile is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--profile-format", "text"}); err == nil {
-			t.Error("expected an error for --profile-format without --profile")
-		}
-	})
-
-	t.Run("an invalid --profile-format is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--profile", "--profile-format", "yaml"}); err == nil {
-			t.Error("expected an error for an invalid --profile-format")
-		}
-	})
-
 	t.Run("--cache sets the path", func(t *testing.T) {
 		arg, err := NewArg([]string{"sqly", "--cache", "/tmp/x.cache", "data.csv"})
 		if err != nil {
@@ -227,12 +132,6 @@ func TestNewArg(t *testing.T) {
 	t.Run("an empty --cache value is rejected", func(t *testing.T) {
 		if _, err := NewArg([]string{"sqly", "--cache", ""}); err == nil {
 			t.Error("expected an error for an empty --cache value")
-		}
-	})
-
-	t.Run("--cache-clear without --cache is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--cache-clear", "data.csv"}); err == nil {
-			t.Error("expected an error for --cache-clear without --cache")
 		}
 	})
 
@@ -501,7 +400,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("--import-mode defaults to stop and parses stop/skip/fill", func(t *testing.T) {
+	t.Run("--import-mode defaults to stop and parses stop/skip/pad", func(t *testing.T) {
 		t.Parallel()
 		cases := []struct {
 			args []string
@@ -510,7 +409,7 @@ func TestNewArg(t *testing.T) {
 			{[]string{"sqly"}, model.MalformedRowStop},
 			{[]string{"sqly", "--import-mode", "stop"}, model.MalformedRowStop},
 			{[]string{"sqly", "--import-mode", "skip"}, model.MalformedRowSkip},
-			{[]string{"sqly", "--import-mode", "fill"}, model.MalformedRowFill},
+			{[]string{"sqly", "--import-mode", "pad"}, model.MalformedRowPad},
 		}
 		for _, tc := range cases {
 			arg, err := NewArg(tc.args)

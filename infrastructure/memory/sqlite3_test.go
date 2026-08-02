@@ -313,7 +313,7 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 		r := NewSQLite3Repository(memoryDB)
 
 		// Create "zebra" before "ant" so creation order and alphabetical order
-		// disagree; --compare relies on TablesName preserving creation (import) order.
+		// disagree; TablesName preserves creation (import) order.
 		for _, name := range []string{"zebra", "ant"} {
 			table := model.NewTable(name, model.Header{"id"}, []model.Record{{"1"}})
 			if err := r.CreateTable(context.Background(), table); err != nil {

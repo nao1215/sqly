@@ -134,9 +134,6 @@ func (s *Shell) loadOrImport(ctx context.Context, paths []string) error {
 	}
 
 	cachePath := s.argument.CachePath
-	if s.argument.CacheClear {
-		s.clearCache(cachePath)
-	}
 
 	sigs, sigErr := collectCacheSignatures(paths, s.isCacheArtifact, s.usecases.importer.IsSupportedFile)
 	if sigErr == nil {

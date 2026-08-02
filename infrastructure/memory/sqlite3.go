@@ -45,8 +45,7 @@ func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) err
 // TablesName return all table name in import order.
 // Internal tables (sqlite_* and query_result_*) are excluded from the result.
 // Rows are ordered by sqlite_master.rowid, which is assigned in CREATE order, so
-// the result follows the order the source files were imported. Callers such as
-// --compare rely on this to keep left/right matching the CLI input order.
+// the result follows the order the source files were imported.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

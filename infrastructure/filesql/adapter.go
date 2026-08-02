@@ -69,7 +69,7 @@ func filesqlMalformedRowPolicy(policy model.MalformedRowPolicy) filesql.Malforme
 	switch policy {
 	case model.MalformedRowSkip:
 		return filesql.MalformedRowSkip
-	case model.MalformedRowFill:
+	case model.MalformedRowPad:
 		return filesql.MalformedRowFill
 	default:
 		return filesql.MalformedRowStop
@@ -114,6 +114,11 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	// semantics, and avoids the previous temporary-database-plus-row-copy path.
 	// The builder form is used (instead of the package-level filesql.LoadInto) so
 	// the malformed-row policy can be applied to ragged CSV/TSV rows.
+	if f.malformedRowPolicy == model.MalformedRowPad {
+		if err := rejectLongDelimitedRows(toLoad); err != nil {
+			return err
+		}
+	}
 	if len(toLoad) > 0 {
 		builder := filesql.NewBuilder().
 			AddPaths(toLoad...).

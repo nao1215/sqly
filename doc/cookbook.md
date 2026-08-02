@@ -87,11 +87,12 @@ The other direction is the same command with the input swapped:
 sqly --csv --sql "SELECT * FROM user" --output user.csv user.parquet
 ```
 
-Numbers, booleans, and nulls stay strings in JSON by default. `--json-typed`
-emits them as native JSON scalars:
+Numbers, booleans, and nulls are emitted as native JSON scalars. Values that
+are not unambiguous JSON scalars, such as zero-padded identifiers, remain
+strings:
 
 ```shell
-sqly --json-typed --sql "SELECT identifier, user_name FROM user" user.csv
+sqly --json --sql "SELECT identifier, user_name FROM user" user.csv
 ```
 
 Compression comes from the destination's extension — `.gz`, `.bz2`, `.xz`,
@@ -401,16 +402,6 @@ Cross join to build a matrix:
 sqly --sql "SELECT a.name, b.name FROM team a CROSS JOIN team b WHERE a.name < b.name" team.csv
 ```
 
-## Profile data quality
-
-A per-column report — row and column counts, nulls, blanks, distinct values, and
-warnings:
-
-```shell
-sqly --profile user.csv
-sqly --profile --profile-format text user.csv
-```
-
 Find duplicates by hand:
 
 ```shell
@@ -421,21 +412,6 @@ Find rows with a missing field:
 
 ```shell
 sqly --sql "SELECT * FROM users WHERE TRIM(email) = ''" users.csv
-```
-
-## Compare two tables
-
-Schema, row count, and keyed row differences between two files:
-
-```shell
-sqly --compare --compare-key id before.csv after.csv
-sqly --compare --compare-key id --compare-format text before.csv after.csv
-```
-
-Name the pair explicitly when more than two tables are loaded:
-
-```shell
-sqly --compare --compare-tables "before,after" --compare-key id ./data
 ```
 
 ## Write changes back
@@ -505,7 +481,7 @@ default. `--import-mode` chooses otherwise:
 ```shell
 sqly --import-mode stop --sql "SELECT * FROM data" data.csv   # default: fail
 sqly --import-mode skip --sql "SELECT * FROM data" data.csv   # drop the row
-sqly --import-mode fill --sql "SELECT * FROM data" data.csv   # pad/truncate to the header
+sqly --import-mode pad --sql "SELECT * FROM data" data.csv    # pad short rows; reject long rows
 ```
 
 ## Text encodings
@@ -529,11 +505,10 @@ snapshot and reuses it while the inputs are unchanged:
 ```shell
 sqly --cache ./big.cache --sql "SELECT COUNT(*) FROM big" big.csv
 sqly --cache ./big.cache --sql "SELECT * FROM big LIMIT 10" big.csv   # reused
-sqly --cache ./big.cache --cache-clear --sql "SELECT 1" big.csv       # force a rebuild
 ```
 
-The cache is keyed by each input's path, size, and mtime, so editing the source
-rebuilds it automatically.
+The cache is keyed by each input's path, size, and content hash, so editing the
+source rebuilds it automatically. There is no manual clear operation.
 
 ## Financial formats
 

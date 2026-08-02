@@ -1,6 +1,6 @@
 # End-to-end coverage for --import-mode / .import-mode, which chooses how a
 # ragged CSV/TSV row (one whose field count differs from the header) is imported:
-# stop (default), skip, or fill. Regression for nao1215/sqly#731, where a ragged
+# stop (default), skip, or pad. Regression for nao1215/sqly#731, where a ragged
 # row silently produced an empty table. make test-e2e
 version: "1"
 
@@ -43,11 +43,11 @@ scenarios:
           stdout:
             not_contains: caro
 
-  - name: --import-mode fill keeps every row and blanks the missing field
+  - name: --import-mode pad keeps every row and blanks the missing field
     steps:
       - fixture: *ragged
       - run:
-          command: sqly --import-mode fill --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+          command: sqly --import-mode pad --csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
       - assert:
           exit_code: 0
           stdout:
@@ -55,6 +55,22 @@ scenarios:
               - alice
               - bob
               - caro
+
+  - name: --import-mode pad rejects a long row instead of truncating it
+    steps:
+      - fixture:
+          file: too_many_fields.csv
+          content: |
+            id,name
+            1,alice,unexpected
+      - run:
+          command: sqly --import-mode pad --sql "SELECT * FROM too_many_fields" too_many_fields.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: "--import-mode pad refuses to truncate"
 
   - name: an invalid --import-mode value is rejected
     steps:
@@ -70,7 +86,7 @@ scenarios:
       - fixture: *ragged
       - run:
           command: sqly
-          stdin: ".import-mode fill\n.import ragged.csv\nSELECT name FROM ragged ORDER BY id;\n"
+          stdin: ".import-mode pad\n.import ragged.csv\nSELECT name FROM ragged ORDER BY id;\n"
       - assert:
           exit_code: 0
           stdout:
@@ -78,7 +94,7 @@ scenarios:
               - alice
               - caro
           stderr:
-            contains: "Change import mode from stop to fill"
+            contains: "Change import mode from stop to pad"
 
   - name: .import-mode with no argument reports usage and fails the batch
     steps:
@@ -94,7 +110,7 @@ scenarios:
 
   # The policy only applies to delimited text (CSV/TSV). The scenarios below pin
   # down that it is a no-op for every other format: LTSV, JSON, JSONL, Parquet,
-  # and Excel import their data unchanged under stop, skip, and fill, so a user
+  # and Excel import their data unchanged under stop, skip, and pad, so a user
   # who sets the flag on a non-delimited input sees no surprising behavior.
 
   - name: LTSV imports a sparse record unchanged under every policy
@@ -129,7 +145,7 @@ scenarios:
               {"name": "Bob", "age": 25}
             ]
       - run:
-          command: sqly --import-mode fill --csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
+          command: sqly --import-mode pad --csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
       - assert:
           exit_code: 0
           stdout:
@@ -157,7 +173,7 @@ scenarios:
           file: products.parquet
           from: testdata/products.parquet
       - run:
-          command: sqly --import-mode fill --csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
+          command: sqly --import-mode pad --csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
       - assert:
           exit_code: 0
           stdout:

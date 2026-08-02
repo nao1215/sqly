@@ -98,7 +98,7 @@ func TestSQLite3InteractorMalformedRowPolicy(t *testing.T) {
 	policies := []model.MalformedRowPolicy{
 		model.MalformedRowStop,
 		model.MalformedRowSkip,
-		model.MalformedRowFill,
+		model.MalformedRowPad,
 	}
 	for _, want := range policies {
 		si.SetMalformedRowPolicy(want)
