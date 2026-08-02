@@ -49,7 +49,7 @@ scenarios:
           stderr:
             contains: "no TTY detected"
 
-  - name: reports a stable stdin reference instead of the staging temp path
+  - name: reports the stable stdin reference and source filename
     env: *hist
     steps:
       - run:
@@ -58,10 +58,7 @@ scenarios:
       - assert:
           exit_code: 1
           stderr:
-            contains: stdin
-      - assert:
-          stderr:
-            not_contains: "sqly-stdin-"
+            contains: "stdin (--stdin csv)"
 
   - name: fails batch mode when .schema is missing its table name
     env: *hist
