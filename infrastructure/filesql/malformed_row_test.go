@@ -267,7 +267,7 @@ func TestFileSQLAdapter_ImportMode_PadPreflightsBeforeEmptyJSONTable(t *testing.
 		t.Fatal("expected pad to reject the mixed import")
 	}
 	if _, err := adapter.Query(context.Background(), "SELECT * FROM empty"); err == nil {
-		t.Fatal("expected preflight failure to leave no empty JSON table behind")
+		t.Fatal("expected pad validation failure to leave no empty JSON table behind")
 	}
 }
 
@@ -376,6 +376,99 @@ func TestFileSQLAdapter_LoadFilesPreservesInputOrderForLastWins(t *testing.T) {
 	}
 	if count, value, _ := load(t, firstCSV, secondCSV); count != 1 || value != "second" {
 		t.Fatalf("same-format last-wins = count %d, value %q; want second row", count, value)
+	}
+}
+
+func TestFileSQLAdapter_LoadFilesRollsBackWhenLaterApplyFails(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	paths := map[string]string{
+		"first.csv":   "id\n1\n",
+		"same.csv":    "id\n2\n",
+		"blocked.csv": "id\n3\n",
+	}
+	for name, content := range paths {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE same (id INTEGER);
+		INSERT INTO same VALUES (999);
+		CREATE VIEW blocked AS SELECT 999 AS id;
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := NewFileSQLAdapter(db)
+	err = adapter.LoadFiles(ctx,
+		filepath.Join(dir, "first.csv"),
+		filepath.Join(dir, "same.csv"),
+		filepath.Join(dir, "blocked.csv"),
+	)
+	if err == nil {
+		t.Fatal("LoadFiles returned nil, want view collision error")
+	}
+
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='first'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("first table count = %d, want 0 after rollback", count)
+	}
+	var sameID int
+	if err := db.QueryRowContext(ctx, `SELECT id FROM same`).Scan(&sameID); err != nil {
+		t.Fatalf("same table was not restored: %v", err)
+	}
+	if sameID != 999 {
+		t.Fatalf("same.id = %d, want original 999", sameID)
+	}
+	var blockedID int
+	if err := db.QueryRowContext(ctx, `SELECT id FROM blocked`).Scan(&blockedID); err != nil {
+		t.Fatalf("blocked view was not preserved: %v", err)
+	}
+	if blockedID != 999 {
+		t.Fatalf("blocked.id = %d, want 999", blockedID)
+	}
+}
+
+func TestFileSQLAdapter_LoadFilesEmptyJSONViewCollision(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	emptyJSON := filepath.Join(dir, "blocked.json")
+	if err := os.WriteFile(emptyJSON, []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, `CREATE VIEW blocked AS SELECT 999 AS id`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := NewFileSQLAdapter(db).LoadFiles(ctx, emptyJSON); err == nil {
+		t.Fatal("LoadFiles returned nil, want empty-table/view collision error")
+	}
+	var id int
+	if err := db.QueryRowContext(ctx, `SELECT id FROM blocked`).Scan(&id); err != nil {
+		t.Fatalf("view was not preserved: %v", err)
+	}
+	if id != 999 {
+		t.Fatalf("blocked.id = %d, want 999", id)
 	}
 }
 

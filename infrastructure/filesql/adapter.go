@@ -2,6 +2,7 @@
 package filesql
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -85,48 +86,31 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	if f.sharedDB == nil {
 		return errors.New("shared database is not initialized")
 	}
-	// Validate all delimited inputs before creating any empty JSON tables or
-	// loading files. A mixed import must be atomic with respect to this
-	// preflight: rejecting a long row must not leave tables from earlier inputs
-	// behind in the shared session database.
+	// The pad policy needs a streaming field-count check before filesql consumes
+	// the input. It is validation only; the actual database mutation below is
+	// performed once, inside the transaction for this LoadFiles call.
 	if f.malformedRowPolicy == model.MalformedRowPad {
 		if err := rejectLongDelimitedRows(filePaths); err != nil {
 			return err
 		}
 	}
 
-	// Parse and load the complete ordered input list into a disposable database
-	// before touching the session database. This makes failures from any
-	// supported format atomic, including a valid empty JSON file followed by a
-	// malformed JSON/CSV file. The same ordered operation is then applied to the
-	// session database, so later inputs replace earlier same-named tables.
-	if err := f.preflightFiles(ctx, filePaths); err != nil {
-		return err
-	}
-	return f.loadFilesInto(ctx, f.sharedDB, filePaths)
-}
-
-// preflightFiles validates every input in order against a disposable SQLite
-// database. No user/session table is changed when parsing or importing fails.
-func (f *FileSQLAdapter) preflightFiles(ctx context.Context, filePaths []string) error {
-	db, err := sql.Open("sqlite", ":memory:")
+	tx, err := f.sharedDB.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("open import preflight database: %w", err)
+		return fmt.Errorf("begin atomic import transaction: %w", err)
 	}
-	db.SetMaxOpenConns(1)
-	defer func() { _ = db.Close() }()
-	return f.loadFilesInto(ctx, db, filePaths)
-}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
-// loadFilesInto applies inputs in the exact CLI order to db. Keeping empty JSON
-// in this same loop is intentional: an empty last input must still win over an
-// earlier non-empty file with the same table name.
-func (f *FileSQLAdapter) loadFilesInto(ctx context.Context, db *sql.DB, filePaths []string) error {
 	for _, path := range filePaths {
 		name, isEmpty := emptyJSONLikeTable(path)
 		if isEmpty {
-			if err := createEmptyJSONTable(ctx, db, name); err != nil {
-				return err
+			if err := createEmptyJSONTable(ctx, tx, name); err != nil {
+				return fmt.Errorf("load file %q: %w", path, err)
 			}
 			continue
 		}
@@ -136,12 +120,16 @@ func (f *FileSQLAdapter) loadFilesInto(ctx context.Context, db *sql.DB, filePath
 			WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
 		validated, err := builder.Build(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("load file %q: %w", path, err)
 		}
-		if err := validated.LoadInto(ctx, db); err != nil {
-			return err
+		if err := validated.LoadIntoTx(ctx, tx); err != nil {
+			return fmt.Errorf("load file %q: %w", path, err)
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit atomic import transaction: %w", err)
+	}
+	committed = true
 	return nil
 }
 
@@ -159,30 +147,65 @@ const jsonDataColumn = "data"
 func emptyJSONLikeTable(path string) (string, bool) {
 	switch strings.ToLower(filepath.Ext(stripCompressionExt(path))) {
 	case model.ExtJSON:
-		data, err := readDecompressed(path)
+		r, cleanup, err := NewDecompressingReaderForFile(path)
 		if err != nil {
 			return "", false
 		}
-		trimmed := strings.TrimSpace(string(data))
-		if trimmed == "" {
-			return GetTableNameFromFilePath(path), true
+		defer func() { _ = cleanup() }()
+		br := bufio.NewReader(r)
+		for {
+			b, err := br.ReadByte()
+			if err != nil {
+				if err == io.EOF {
+					return GetTableNameFromFilePath(path), true
+				}
+				return "", false
+			}
+			if strings.ContainsRune(" \t\r\n", rune(b)) {
+				continue
+			}
+			if err := br.UnreadByte(); err != nil || b != '[' {
+				return "", false
+			}
+			dec := json.NewDecoder(br)
+			if _, err := dec.Token(); err != nil {
+				return "", false
+			}
+			if !dec.More() {
+				// Consume the closing delimiter and verify that the decoder reaches
+				// EOF. This keeps malformed input such as "[] trailing" on the
+				// normal filesql path instead of mistaking it for an empty table.
+				closing, err := dec.Token()
+				if err != nil || closing != json.Delim(']') {
+					return "", false
+				}
+				var trailing any
+				if err := dec.Decode(&trailing); err != io.EOF {
+					return "", false
+				}
+				return GetTableNameFromFilePath(path), true
+			}
+			return "", false
 		}
-		var arr []json.RawMessage
-		if err := json.Unmarshal([]byte(trimmed), &arr); err == nil && len(arr) == 0 {
-			return GetTableNameFromFilePath(path), true
-		}
-		return "", false
 	case model.ExtJSONL:
-		data, err := readDecompressed(path)
+		r, cleanup, err := NewDecompressingReaderForFile(path)
 		if err != nil {
 			return "", false
 		}
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.TrimSpace(line) != "" {
+		defer func() { _ = cleanup() }()
+		br := bufio.NewReader(r)
+		for {
+			b, err := br.ReadByte()
+			if err != nil {
+				if err == io.EOF {
+					return GetTableNameFromFilePath(path), true
+				}
+				return "", false
+			}
+			if !strings.ContainsRune(" \t\r\n", rune(b)) {
 				return "", false
 			}
 		}
-		return GetTableNameFromFilePath(path), true
 	default:
 		return "", false
 	}
@@ -200,22 +223,10 @@ func stripCompressionExt(path string) string {
 	return path
 }
 
-// readDecompressed reads the full content of path, transparently decompressing it
-// when its extension names a known codec. It backs the empty JSON/JSONL detection
-// for both plain and compressed inputs.
-func readDecompressed(path string) ([]byte, error) {
-	r, cleanup, err := NewDecompressingReaderForFile(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = cleanup() }()
-	return io.ReadAll(r)
-}
-
 // createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON
 // "data" column, so an empty JSON/JSONL input imports as an empty table instead
 // of failing.
-func createEmptyJSONTable(ctx context.Context, db *sql.DB, name string) error {
+func createEmptyJSONTable(ctx context.Context, db filesql.DBTX, name string) error {
 	quoted := QuoteIdentifier(name)
 	if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
 		return fmt.Errorf("failed to reset empty JSON table %q: %w", name, err)

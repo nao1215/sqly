@@ -17,6 +17,7 @@
 * Replace `--import-mode fill` and `.import-mode fill` with `pad`. Long rows now fail so their extra fields are not silently lost.
 
 ### Maintenance
+* Multi-file imports now run as one SQLite transaction. If a later input fails, tables created or replaced by earlier inputs are rolled back while existing tables and views remain unchanged. The filesql dependency includes the caller-transaction loading API required to keep all supported formats in that transaction.
 * Updated the filesql dependency to v0.30.0 and synchronized the CLI, shell help, E2E specifications, website reference, and cookbook with the reduced surface.
 
 ## [v0.31.0](https://github.com/nao1215/sqly/compare/v0.30.0...v0.31.0) (2026-07-30)

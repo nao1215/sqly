@@ -423,29 +423,6 @@ func TestSheetNames_NotExcel(t *testing.T) {
 	}
 }
 
-// TestReadDecompressed_Plain reads an uncompressed file verbatim.
-func TestReadDecompressed_Plain(t *testing.T) {
-	t.Parallel()
-
-	path := covFsqlWriteCSV(t, "plain.json", "[]")
-	data, err := readDecompressed(path)
-	if err != nil {
-		t.Fatalf("readDecompressed: %v", err)
-	}
-	if string(data) != "[]" {
-		t.Errorf("content = %q, want %q", string(data), "[]")
-	}
-}
-
-// TestReadDecompressed_Missing checks the error path when the file is absent.
-func TestReadDecompressed_Missing(t *testing.T) {
-	t.Parallel()
-
-	if _, err := readDecompressed(filepath.Join(t.TempDir(), "nope.json")); err == nil {
-		t.Fatal("readDecompressed on missing file = nil error, want error")
-	}
-}
-
 // TestEmptyJSONLikeTable_ReadError checks that a JSON/JSONL path that cannot be
 // read is reported as not-empty (so the caller lets filesql surface the real
 // error) rather than being misdetected as an empty table.
@@ -476,6 +453,70 @@ func TestEmptyJSONLikeTable_NonEmpty(t *testing.T) {
 	// A non-JSON extension is never an empty-JSON table.
 	if _, isEmpty := emptyJSONLikeTable(covFsqlWriteCSV(t, "data.csv", "id\n1\n")); isEmpty {
 		t.Error("csv detected as empty JSON table")
+	}
+}
+
+func TestEmptyJSONLikeTable_RejectsTrailingJSON(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cases := map[string]string{
+		"trailing.json": "[] trailing",
+		"broken.json":   "[",
+	}
+	for name, content := range cases {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, isEmpty := emptyJSONLikeTable(path); isEmpty {
+			t.Errorf("emptyJSONLikeTable(%q) = empty, want non-empty", name)
+		}
+	}
+}
+
+func TestEmptyJSONLikeTable_DecompressionReadError(t *testing.T) {
+	t.Parallel()
+
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := writer.Write([]byte("[")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	truncated := compressed.Bytes()[:compressed.Len()-4]
+	path := filepath.Join(t.TempDir(), "broken.json.gz")
+	if err := os.WriteFile(path, truncated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, isEmpty := emptyJSONLikeTable(path); isEmpty {
+		t.Fatal("truncated gzip JSON detected as empty")
+	}
+
+	compressed.Reset()
+	writer = gzip.NewWriter(&compressed)
+	if _, err := writer.Write([]byte(" ")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path = filepath.Join(t.TempDir(), "broken.jsonl.gz")
+	if err := os.WriteFile(path, compressed.Bytes()[:compressed.Len()-4], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, isEmpty := emptyJSONLikeTable(path); isEmpty {
+		t.Fatal("truncated gzip JSONL detected as empty")
+	}
+
+	path = filepath.Join(t.TempDir(), "broken-whitespace.json.gz")
+	if err := os.WriteFile(path, compressed.Bytes()[:compressed.Len()-4], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, isEmpty := emptyJSONLikeTable(path); isEmpty {
+		t.Fatal("truncated gzip whitespace JSON detected as empty")
 	}
 }
 
