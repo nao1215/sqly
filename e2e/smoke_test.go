@@ -57,9 +57,16 @@ func repoRoot() string {
 // per-test temp directory so the smoke run never touches real config state.
 func run(t *testing.T, stdin string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
+	return runIn(t, repoRoot(), stdin, args...)
+}
+
+// runIn is run with an explicit working directory, so a test can observe what
+// sqly leaves behind in a directory it owns (temporary files, stray databases).
+func runIn(t *testing.T, dir, stdin string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
 	home := t.TempDir()
 	cmd := exec.Command(sqlyBin, args...)
-	cmd.Dir = repoRoot()
+	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(stdin)
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
