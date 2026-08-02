@@ -5,7 +5,7 @@
 ### Breaking Changes
 * Removed the standalone `--profile` and `--compare` workflows and their format/key/table flags. Use SQL for data-quality checks and table differences.
 * Removed the legacy output flags `--csv`/`-c`, `--tsv`/`-t`, `--ltsv`/`-l`, `--json`/`-j`, `--ndjson`/`-n`, `--excel`/`-e`, `--markdown`/`-m`, `--parquet`/`-p`, and `--vertical`. Use the single `--output-format FORMAT` option instead.
-* Removed `--json-typed` and `--ndjson-typed`; `--output-format json` and `--output-format ndjson` preserve SQLite's native INTEGER/REAL/TEXT/NULL values. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are emitted as integer JSON numbers `1`/`0`, while TEXT values such as `"true"` remain strings. Zero-padded values remain strings.
+* Removed `--json-typed` and `--ndjson-typed`, and the `.mode json-typed` / `.mode ndjson-typed` shell modes that went with them; `--output-format json` and `--output-format ndjson` preserve SQLite's native INTEGER/REAL/TEXT/NULL values. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are emitted as integer JSON numbers `1`/`0`, while TEXT values such as `"true"` remain strings. Zero-padded values remain strings.
 * Removed `--cache-clear`; cache invalidation is automatic from input path, size, and SHA-256 content hash.
 * Renamed malformed-row policy `fill` to `pad`. `pad` fills short CSV/TSV rows and rejects long rows instead of truncating them.
 
@@ -16,9 +16,34 @@
 * Remove `--cache-clear`; edit the source and the content-hash key causes a cold import automatically.
 * Replace `--import-mode fill` and `.import-mode fill` with `pad`. Long rows now fail so their extra fields are not silently lost.
 
+### v1.0.0 CLI Surface
+The command surface below is what v1.0.0 commits to. Anything not listed is not part of the guarantee.
+
+* One option selects the output format: `--output-format table|csv|tsv|ltsv|excel|markdown|json|ndjson|parquet|vertical`.
+* Input: positional paths, `--stdin FORMAT`, `--stdin-name NAME`, `--sheet/-S`, `--encoding`, `--import-mode stop|skip|pad`, `--cache PATH`.
+* Query: `--sql/-s`, `--sql-file/-f`, `--dialect sqlite|mysql|postgresql|googlesql`, `--output/-o`.
+* Reports and write-back: `--inspect/-i`, `--inspect-sample`, `--save`, `--save-dir`, `--force`.
+* Meta: `--help/-h`, `--version/-v`.
+* Shell commands: `.cd`, `.clear`, `.describe`, `.dialect`, `.dump`, `.exit`, `.header`, `.help`, `.import`, `.import-mode`, `.ls`, `.mode`, `.pwd`, `.save`, `.schema`, `.tables`.
+* `sqly` has no subcommands. A positional `help` or `version` is rejected with a pointer to `--help` / `--version`.
+
+### Data Contract
+* JSON and NDJSON output preserves the value's SQLite type: INTEGER and REAL are JSON numbers, TEXT is a JSON string, and SQL NULL is JSON `null`, distinct from the empty string `""`. Text that looks like a number or a boolean stays text, so `"123"`, `"true"`, and `"00123"` are emitted as strings with their leading zeros intact. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are INTEGER `1`/`0`.
+* A cell's string form and its JSON form are derived from one stored value, so table, CSV, TSV, LTSV, Markdown, JSON, NDJSON, and Parquet output of the same result can no longer disagree with each other.
+
 ### Maintenance
 * Multi-file imports now run as one SQLite transaction. If a later input fails, tables created or replaced by earlier inputs are rolled back while existing tables and views remain unchanged. The filesql dependency includes the caller-transaction loading API required to keep all supported formats in that transaction.
-* Updated the filesql dependency to v0.30.1 and synchronized the CLI, shell help, E2E specifications, website reference, and cookbook with the reduced surface.
+* ACH and Fedwire write-back registries are published only after that transaction commits. A failed import — a bad input, a failed commit, or a rollback that itself failed — leaves no registry entry, so `.dump` can no longer be offered a file it would reconstruct from tables that were rolled away. When several inputs claim the same base name, publication follows input order, so the last one wins.
+* A transaction that fails to roll back now reports that failure alongside the error that caused the rollback, instead of discarding it. Both are reachable with `errors.Is` and `errors.As`. Commit, rollback, and their error handling live in one helper shared by the import path and the session query repository, so no call site carries its own cleanup rule.
+* Updated the filesql dependency to v0.30.2, which stages ACH/Fedwire registry entries for publication after commit, rejects long rows under the `pad` policy instead of truncating them, and handles empty JSON/JSONL in the same streaming pass.
+* Synchronized the CLI, shell help, E2E specifications, website reference, and cookbook with the reduced surface.
+
+### Public API
+`domain/model` is importable, so these changes affect anyone using it as a library:
+* Added `model.Cell` (with `NewCell`, `NewTextCell`, `NullCell`, `IsNull`, `Value`, `String`), `model.NewTableFromCells`, and `model.ErrCellShapeMismatch`. A query result is now one value per cell rather than a display string plus parallel side-tables.
+* Removed `Table.SetNulls` and `Table.SetJSONValues`. They injected two more two-dimensional slices after construction, with no check that their shape matched the records, so a mismatch surfaced part-way through an already-written output stream. `NewTableFromCells` rejects a shape mismatch up front and copies what it is given, so a caller cannot mutate a Table after building it.
+* Removed `Table.SetJSONTyped` along with the typed-JSON flags.
+* `Table.Records()` is documented as read-only; `Table.WithName` clones the row slices so two tables never share one backing array.
 
 ## [v0.31.0](https://github.com/nao1215/sqly/compare/v0.30.0...v0.31.0) (2026-07-30)
 
