@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/nao1215/filesql"
@@ -270,10 +269,12 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 	}
 
 	header := model.NewHeader(columns)
-	var records []model.Record
-	var jsonValues [][]any
+	var cells [][]model.Cell
 
-	// Scan all rows
+	// Scan all rows, keeping the driver's native value per cell. model.Cell
+	// derives the display string from it, so this path preserves SQLite's
+	// INTEGER/REAL/TEXT types and its NULLs the same way the memory repository
+	// does instead of flattening every value to a string here.
 	for rows.Next() {
 		values := make([]any, len(columns))
 		valuePtrs := make([]any, len(columns))
@@ -285,36 +286,11 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 			return nil, &FileSQLError{Op: "scan", Err: err.Error()}
 		}
 
-		// Keep the original driver values for JSON, while converting a separate
-		// copy to strings for the existing Table record contract.
-		record := make([]string, len(columns))
-		jsonRow := make([]any, len(columns))
+		row := make([]model.Cell, len(columns))
 		for i, val := range values {
-			if val == nil {
-				record[i] = ""
-			} else {
-				if raw, ok := val.([]byte); ok {
-					jsonRow[i] = append([]byte(nil), raw...)
-				} else {
-					jsonRow[i] = val
-				}
-				// Handle different types that can be returned from SQL
-				switch v := val.(type) {
-				case []byte:
-					record[i] = string(v)
-				case string:
-					record[i] = v
-				case int64:
-					record[i] = strconv.FormatInt(v, 10)
-				case float64:
-					record[i] = fmt.Sprintf("%g", v)
-				default:
-					record[i] = fmt.Sprintf("%v", v)
-				}
-			}
+			row[i] = model.NewCell(val)
 		}
-		records = append(records, model.NewRecord(record))
-		jsonValues = append(jsonValues, jsonRow)
+		cells = append(cells, row)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -324,8 +300,10 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 	// Generate unique table name for query results to avoid conflicts
 	tableName := "query_result_" + generateRandomName()
 
-	table := model.NewTable(tableName, header, records)
-	table.SetJSONValues(jsonValues)
+	table, err := model.NewTableFromCells(tableName, header, cells)
+	if err != nil {
+		return nil, &FileSQLError{Op: opQuery, Err: err.Error()}
+	}
 	return table, nil
 }
 

@@ -76,8 +76,10 @@ func TestPrintUnknownModeFallsBackToTable(t *testing.T) {
 
 func TestPrintJSONRejectsUnsupportedNativeValue(t *testing.T) {
 	t.Parallel()
-	table := NewTable("t", NewHeader([]string{"value"}), []Record{NewRecord([]string{"value"})})
-	table.SetJSONValues([][]any{{make(chan int)}})
+	table, err := NewTableFromCells("t", NewHeader([]string{"value"}), [][]Cell{{NewCell(make(chan int))}})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
 	for _, mode := range []PrintMode{PrintModeJSON, PrintModeNDJSON} {
 		var buf bytes.Buffer
 		if err := table.Print(&buf, mode); err == nil {

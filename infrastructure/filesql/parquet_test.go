@@ -175,16 +175,14 @@ func reimportColumn(t *testing.T, parquetPath, tableName, column string) []sql.N
 func TestDumpTableToParquet_PreservesNull(t *testing.T) {
 	t.Parallel()
 
-	table := model.NewTable("nulls", model.Header{"id", "name"}, []model.Record{
-		{"", "A"}, // id is SQL NULL
-		{"", "B"}, // id is an empty string
-		{"1", "C"},
+	table, err := model.NewTableFromCells("nulls", model.Header{"id", "name"}, [][]model.Cell{
+		{model.NullCell(), model.NewTextCell("A")},      // id is SQL NULL
+		{model.NewTextCell(""), model.NewTextCell("B")}, // id is an empty string
+		{model.NewCell(int64(1)), model.NewTextCell("C")},
 	})
-	table.SetNulls([][]bool{
-		{true, false},
-		{false, false},
-		{false, false},
-	})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
 	out := filepath.Join(t.TempDir(), "nulls.parquet")
 
 	if err := DumpTableToParquet(out, table); err != nil {

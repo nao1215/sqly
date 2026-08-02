@@ -167,22 +167,29 @@ type Table struct {
 	name string
 	// Header is table header.
 	header Header
-	// Records is table records.
+	// Records is table records: the display string of every cell, which is what
+	// the table, CSV, TSV, LTSV, and Markdown formats write.
 	records []Record
-	// nulls optionally marks which cells are SQL NULL (as opposed to an empty
-	// string), indexed as nulls[row][col]. It is set only for query results,
-	// where the distinction is known, and is consulted by JSON/NDJSON output so a
-	// NULL is emitted as JSON null. nil means "no NULL information"; text formats
-	// ignore it and render every cell as a string.
-	nulls [][]bool
-	// jsonValues optionally preserves the database driver's original scalar
-	// types for query results. When absent, records are treated as strings;
-	// their lexical contents must never be reinterpreted as JSON numbers or
-	// booleans.
-	jsonValues [][]any
+	// cells optionally holds the driver's native value for every cell of a query
+	// result, stored row-major in a single allocation of columns per row rather
+	// than one slice per row.
+	// It is the source the records above were derived from, so a cell's string
+	// form and its JSON form always describe the same value. It is nil for a
+	// Table built from strings (an imported file, a synthesized report), where
+	// there is no type or NULL information to preserve and every cell is TEXT.
+	cells []Cell
+	// columns is the row width of cells. It is header's length; it is stored so
+	// indexing does not depend on the header slice a caller may have replaced.
+	columns int
 }
 
-// NewTable create new Table.
+// NewTable create new Table from string records. Use it for tables that have no
+// database types to preserve — an imported file, a synthesized report — where
+// every cell is TEXT and no cell is SQL NULL. Query results should be built with
+// NewTableFromCells so their INTEGER/REAL/TEXT/NULL distinctions survive to the
+// JSON and Parquet writers.
+//
+// The caller passes ownership of records; Table does not copy them.
 func NewTable(
 	name string,
 	header Header,
@@ -195,30 +202,58 @@ func NewTable(
 	}
 }
 
-// SetNulls records which cells are SQL NULL, indexed as nulls[row][col]. It is
-// used by query results so JSON/NDJSON output can emit a NULL as JSON null
-// rather than an empty string. Other output formats ignore it.
-func (t *Table) SetNulls(nulls [][]bool) {
-	t.nulls = nulls
+// NewTableFromCells builds a query-result table from the driver's native cell
+// values. Each row must hold exactly one cell per header column; a row of any
+// other width returns ErrCellShapeMismatch rather than being carried into a
+// formatter, where the mismatch would surface only after part of the output had
+// already been written.
+//
+// The cells are copied into storage the Table owns, so mutating rows afterwards
+// cannot change the Table, and Records() is derived from them once here, so the
+// displayed string and the JSON scalar of a cell can never disagree.
+func NewTableFromCells(name string, header Header, rows [][]Cell) (*Table, error) {
+	columns := len(header)
+	flat := make([]Cell, 0, len(rows)*columns)
+	records := make([]Record, 0, len(rows))
+	for i, row := range rows {
+		if len(row) != columns {
+			return nil, fmt.Errorf("%w: row %d has %d cells, header has %d columns", ErrCellShapeMismatch, i, len(row), columns)
+		}
+		record := make(Record, columns)
+		for j, cell := range row {
+			record[j] = cell.String()
+		}
+		flat = append(flat, row...)
+		records = append(records, record)
+	}
+	return &Table{
+		name:    name,
+		header:  header,
+		records: records,
+		cells:   flat,
+		columns: columns,
+	}, nil
 }
 
-// SetJSONValues preserves the database driver's original values for JSON and
-// NDJSON output. The shape should match Records; []byte values are normalized
-// to strings by the query repository because database/sql reuses their memory.
-func (t *Table) SetJSONValues(values [][]any) {
-	t.jsonValues = values
-}
-
-// isNull reports whether the cell at (row, col) is a known SQL NULL.
-func (t *Table) isNull(row, col int) bool {
-	return row < len(t.nulls) && col < len(t.nulls[row]) && t.nulls[row][col]
+// cell returns the native cell at (row, col) and whether the table carries
+// native values at all.
+func (t *Table) cell(row, col int) (Cell, bool) {
+	if t.cells == nil || t.columns == 0 || col < 0 || col >= t.columns || row < 0 {
+		return Cell{}, false
+	}
+	idx := row*t.columns + col
+	if idx >= len(t.cells) {
+		return Cell{}, false
+	}
+	return t.cells[idx], true
 }
 
 // IsNull reports whether the cell at (row, col) is a known SQL NULL, as opposed
-// to an empty string. It returns false when no NULL information was recorded
+// to an empty string. It returns false when no NULL information is available
 // (the table did not come from a query).
 func (t *Table) IsNull(row, col int) bool {
-	return t.isNull(row, col)
+	c, ok := t.cell(row, col)
+	return ok && c.IsNull()
 }
 
 // Name return table name.
@@ -226,13 +261,29 @@ func (t *Table) Name() string {
 	return t.name
 }
 
-// WithName returns a shallow copy with a different table name. Keeping the
-// complete Table value is important for query results: JSON/NDJSON metadata
-// such as native values and SQL NULL markers must survive name-only wrapping.
+// WithName returns a copy with a different table name, preserving the native
+// cell values so a rename does not downgrade a query result to strings — .dump
+// and the describe path both re-wrap a result under the user's table name, and
+// JSON output of the renamed table has to keep emitting numbers and nulls.
+//
+// The record and cell slices are cloned rather than aliased, so appending to
+// one table cannot write into the other's backing array — the failure a
+// struct-value copy allowed, where both tables shared one slice header and one
+// array beyond its length. The cloned rows themselves are shared, which is safe
+// because Records() is read-only by contract.
 func (t *Table) WithName(name string) *Table {
-	cloned := *t
-	cloned.name = name
-	return &cloned
+	cloned := &Table{
+		name:    name,
+		header:  t.header,
+		columns: t.columns,
+	}
+	if t.records != nil {
+		cloned.records = append(make([]Record, 0, len(t.records)), t.records...)
+	}
+	if t.cells != nil {
+		cloned.cells = append(make([]Cell, 0, len(t.cells)), t.cells...)
+	}
+	return cloned
 }
 
 // Header return table header.
@@ -240,7 +291,13 @@ func (t *Table) Header() Header {
 	return t.header
 }
 
-// Records return table records.
+// Records return table records: the display string of every cell.
+//
+// The returned slice is the Table's own storage, so a caller must treat it as
+// read-only. Writing through it would desynchronize a query result's strings
+// from the native cells the JSON and Parquet writers read, which is exactly the
+// drift the Cell representation exists to prevent. Nothing in sqly writes to it;
+// build a new Table instead of editing one in place.
 func (t *Table) Records() []Record {
 	return t.records
 }
@@ -628,8 +685,10 @@ func (t *Table) printExcel(out io.Writer) error {
 }
 
 // rowToJSONObject builds a JSON object for one record, preserving the header
-// column order. It uses the original database scalar type when the Table came
-// from a query; manually constructed tables retain string values as strings.
+// column order. Each value is taken from the row's native cell when the Table
+// came from a query, so an INTEGER or REAL column is a JSON number and a NULL is
+// JSON null; a table built from strings emits every value as a JSON string, so a
+// TEXT "123", "true", or "00123" is never reinterpreted as a number or boolean.
 // Why a manual builder: encoding's map marshaling sorts keys alphabetically,
 // which would drop column order.
 func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
@@ -646,19 +705,11 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 		b.Write(key)
 		b.WriteByte(':')
 
-		// Emit a SQL NULL as JSON null so it is distinguishable from an empty
-		// string in machine-readable output.
-		if t.isNull(row, i) {
-			b.WriteString("null")
-			continue
-		}
-
 		var val any
-		if i < len(record) {
+		if cell, ok := t.cell(row, i); ok {
+			val = cell.Value()
+		} else if i < len(record) {
 			val = record[i]
-		}
-		if row < len(t.jsonValues) && i < len(t.jsonValues[row]) {
-			val = t.jsonValues[row][i]
 		}
 		value, err := jsonScalarToken(val)
 		if err != nil {
@@ -672,7 +723,9 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 
 // jsonScalarToken serializes a value using its original Go/database type.
 // In particular, a database string containing "123" or "true" remains a JSON
-// string; only a database numeric or boolean value becomes a JSON scalar.
+// string; only a database numeric or boolean value becomes a JSON scalar. A nil
+// is SQL NULL and becomes JSON null, which is what distinguishes it from the
+// empty string.
 func jsonScalarToken(value any) ([]byte, error) {
 	if value == nil {
 		return []byte("null"), nil

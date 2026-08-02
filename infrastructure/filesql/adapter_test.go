@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -642,16 +641,6 @@ func TestFileSQLAdapter_LoadFilesNilDB(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "shared database is not initialized") {
 		t.Errorf("Expected 'shared database is not initialized' error, got: %v", err)
-	}
-}
-
-func TestCommitImportCommitFailureDoesNotPublish(t *testing.T) {
-	t.Parallel()
-
-	want := errors.New("commit failed")
-	got := commitImport(func() error { return want }, []*libfilesql.PendingRegistries{{}})
-	if !errors.Is(got, want) {
-		t.Fatalf("commitImport error = %v, want %v", got, want)
 	}
 }
 

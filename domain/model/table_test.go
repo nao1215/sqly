@@ -456,10 +456,15 @@ aaa:777	bbb:888	ccc:999
 func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 	t.Parallel()
 	// Regression test: a SQL NULL must render as JSON null, distinct
-	// from an empty string. The null mask marks column 0 (n) as NULL; column 1
-	// (e) is a real empty string.
-	tbl := NewTable("t", Header{"n", "e", "x"}, []Record{{"", "", "1"}})
-	tbl.SetNulls([][]bool{{true, false, false}})
+	// from an empty string. Column 0 (n) is a NULL cell; column 1 (e) is a real
+	// empty string. Both render as "" in text output, so JSON is the only place
+	// the difference is observable.
+	tbl, err := NewTableFromCells("t", Header{"n", "e", "x"}, [][]Cell{
+		{NullCell(), NewTextCell(""), NewTextCell("1")},
+	})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
 
 	t.Run("json emits null for a NULL cell", func(t *testing.T) {
 		t.Parallel()
@@ -489,14 +494,19 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 func TestTablePrintJSONScalars(t *testing.T) {
 	t.Parallel()
 
-	// NewTable only has string records, so string-looking numbers and booleans
-	// remain strings. Query repositories attach the original SQL values with
-	// SetJSONValues, which is covered by the repository-level tests.
+	// Every non-NULL cell here is TEXT, so string-looking numbers and booleans
+	// must stay JSON strings. Only a cell the database reported as a native
+	// number becomes a JSON number, which the repository-level tests cover.
 	header := Header{"i", "f", "b", "n", "empty", "big", "lead", "text"}
-	rec := Record{"42", "-1.5", "true", "", "", "123456789012345678901234567890", "007", "hello"}
-	tbl := NewTable("t", header, []Record{rec})
 	// Column 3 (n) is a SQL NULL; column 4 (empty) is a real empty string.
-	tbl.SetNulls([][]bool{{false, false, false, true, false, false, false, false}})
+	tbl, err := NewTableFromCells("t", header, [][]Cell{{
+		NewTextCell("42"), NewTextCell("-1.5"), NewTextCell("true"), NullCell(),
+		NewTextCell(""), NewTextCell("123456789012345678901234567890"),
+		NewTextCell("007"), NewTextCell("hello"),
+	}})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
 
 	t.Run("json keeps string records as strings", func(t *testing.T) {
 		t.Parallel()
@@ -526,11 +536,15 @@ func TestTablePrintJSONScalars(t *testing.T) {
 func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 	t.Parallel()
 
-	tbl := NewTable("query", Header{"integer", "real", "text_number", "text_bool", "padded", "null", "empty"}, []Record{{
-		"42", "1.5", "123", "true", "00123", "", "",
-	}})
-	tbl.SetNulls([][]bool{{false, false, false, false, false, true, false}})
-	tbl.SetJSONValues([][]any{{int64(42), float64(1.5), "123", "true", "00123", nil, ""}})
+	tbl, err := NewTableFromCells("query",
+		Header{"integer", "real", "text_number", "text_bool", "padded", "null", "empty"},
+		[][]Cell{{
+			NewCell(int64(42)), NewCell(float64(1.5)), NewTextCell("123"),
+			NewTextCell("true"), NewTextCell("00123"), NullCell(), NewTextCell(""),
+		}})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
 
 	assertRow := func(t *testing.T, row map[string]any) {
 		t.Helper()
@@ -583,9 +597,12 @@ func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 
 func TestTableWithNamePreservesJSONMetadata(t *testing.T) {
 	t.Parallel()
-	table := NewTable("query_result", Header{"n", "text", "null"}, []Record{{"42", "123", ""}})
-	table.SetJSONValues([][]any{{int64(42), "123", nil}})
-	table.SetNulls([][]bool{{false, false, true}})
+	table, err := NewTableFromCells("query_result", Header{"n", "text", "null"}, [][]Cell{
+		{NewCell(int64(42)), NewTextCell("123"), NullCell()},
+	})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
 
 	renamed := table.WithName("typed_values")
 	if renamed.Name() != "typed_values" {
