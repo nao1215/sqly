@@ -75,7 +75,7 @@ func filesqlMalformedRowPolicy(policy model.MalformedRowPolicy) filesql.Malforme
 }
 
 // LoadFiles loads multiple files into the shared database using filesql
-func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) error {
+func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) (err error) {
 	if len(filePaths) == 0 {
 		return nil
 	}
@@ -90,7 +90,9 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && err == nil {
+				err = fmt.Errorf("rollback atomic import transaction: %w", rollbackErr)
+			}
 		}
 	}()
 
