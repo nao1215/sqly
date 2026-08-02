@@ -2,15 +2,12 @@
 package filesql
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -86,15 +83,6 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 	if f.sharedDB == nil {
 		return errors.New("shared database is not initialized")
 	}
-	// The pad policy needs a streaming field-count check before filesql consumes
-	// the input. It is validation only; the actual database mutation below is
-	// performed once, inside the transaction for this LoadFiles call.
-	if f.malformedRowPolicy == model.MalformedRowPad {
-		if err := rejectLongDelimitedRows(filePaths); err != nil {
-			return err
-		}
-	}
-
 	tx, err := f.sharedDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin atomic import transaction: %w", err)
@@ -106,15 +94,8 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}()
 
+	var pending []*filesql.PendingRegistries
 	for _, path := range filePaths {
-		name, isEmpty := emptyJSONLikeTable(path)
-		if isEmpty {
-			if err := createEmptyJSONTable(ctx, tx, name); err != nil {
-				return fmt.Errorf("load file %q: %w", path, err)
-			}
-			continue
-		}
-
 		builder := filesql.NewBuilder().
 			AddPath(path).
 			WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
@@ -122,125 +103,34 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		if err != nil {
 			return fmt.Errorf("load file %q: %w", path, err)
 		}
-		if err := validated.LoadIntoTx(ctx, tx); err != nil {
+		registry, err := validated.LoadIntoTxWithPending(ctx, tx)
+		if err != nil {
+			if f.malformedRowPolicy == model.MalformedRowPad && errors.Is(err, filesql.ErrColumnMismatch) {
+				return fmt.Errorf("load file %q: --import-mode pad refuses to truncate a long row: %w", path, err)
+			}
 			return fmt.Errorf("load file %q: %w", path, err)
 		}
+		pending = append(pending, registry)
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit atomic import transaction: %w", err)
+	if err := commitImport(tx.Commit, pending); err != nil {
+		return err
 	}
 	committed = true
 	return nil
 }
 
-// jsonDataColumn is the single column filesql uses to store raw JSON/JSONL
-// values; sqly creates the same schema for an empty JSON input so queries with
-// json_extract() behave the same on a zero-row table.
-const jsonDataColumn = "data"
-
-// emptyJSONLikeTable reports whether a .json or .jsonl file (uncompressed or
-// compressed, e.g. .json.gz) holds no rows (an empty JSON array, whitespace-only
-// JSON, or an empty/blank-only JSONL file), returning the table name to create for
-// it. The format is decided by the base extension after any compression suffix is
-// stripped, and the content is read through filesql's decompressor so a compressed
-// empty input is detected the same as an uncompressed one.,
-func emptyJSONLikeTable(path string) (string, bool) {
-	switch strings.ToLower(filepath.Ext(stripCompressionExt(path))) {
-	case model.ExtJSON:
-		r, cleanup, err := NewDecompressingReaderForFile(path)
-		if err != nil {
-			return "", false
-		}
-		defer func() { _ = cleanup() }()
-		br := bufio.NewReader(r)
-		for {
-			b, err := br.ReadByte()
-			if err != nil {
-				if err == io.EOF {
-					return GetTableNameFromFilePath(path), true
-				}
-				return "", false
-			}
-			if strings.ContainsRune(" \t\r\n", rune(b)) {
-				continue
-			}
-			if err := br.UnreadByte(); err != nil || b != '[' {
-				return "", false
-			}
-			dec := json.NewDecoder(br)
-			if _, err := dec.Token(); err != nil {
-				return "", false
-			}
-			if !dec.More() {
-				// Consume the closing delimiter and verify that the decoder reaches
-				// EOF. This keeps malformed input such as "[] trailing" on the
-				// normal filesql path instead of mistaking it for an empty table.
-				closing, err := dec.Token()
-				if err != nil || closing != json.Delim(']') {
-					return "", false
-				}
-				var trailing any
-				if err := dec.Decode(&trailing); err != io.EOF {
-					return "", false
-				}
-				return GetTableNameFromFilePath(path), true
-			}
-			return "", false
-		}
-	case model.ExtJSONL:
-		r, cleanup, err := NewDecompressingReaderForFile(path)
-		if err != nil {
-			return "", false
-		}
-		defer func() { _ = cleanup() }()
-		br := bufio.NewReader(r)
-		for {
-			b, err := br.ReadByte()
-			if err != nil {
-				if err == io.EOF {
-					return GetTableNameFromFilePath(path), true
-				}
-				return "", false
-			}
-			if !strings.ContainsRune(" \t\r\n", rune(b)) {
-				return "", false
-			}
-		}
-	default:
-		return "", false
+// commitImport publishes financial registries only after the supplied commit
+// operation succeeds. Keeping the commit boundary in one small function makes
+// the ordering explicit and lets tests exercise the commit-failure path without
+// relying on timing-dependent database locks.
+func commitImport(commit func() error, pending []*filesql.PendingRegistries) error {
+	if err := commit(); err != nil {
+		return fmt.Errorf("commit atomic import transaction: %w", err)
 	}
-}
-
-// stripCompressionExt removes a single trailing compression extension from path
-// (case-insensitive), so the base format of "data.json.gz" is read from ".json".
-func stripCompressionExt(path string) string {
-	lower := strings.ToLower(path)
-	for _, ext := range compressionExts {
-		if strings.HasSuffix(lower, ext) {
-			return path[:len(path)-len(ext)]
-		}
-	}
-	return path
-}
-
-// createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON
-// "data" column, so an empty JSON/JSONL input imports as an empty table instead
-// of failing.
-func createEmptyJSONTable(ctx context.Context, db filesql.DBTX, name string) error {
-	quoted := QuoteIdentifier(name)
-	if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
-		return fmt.Errorf("failed to reset empty JSON table %q: %w", name, err)
-	}
-	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s (%s TEXT)", quoted, jsonDataColumn)); err != nil {
-		return fmt.Errorf("failed to create empty JSON table %q: %w", name, err)
+	for _, registry := range pending {
+		registry.PublishRegistries()
 	}
 	return nil
-}
-
-// createEmptyJSONTable is retained as an adapter helper for package-local
-// callers and error-path tests.
-func (f *FileSQLAdapter) createEmptyJSONTable(ctx context.Context, name string) error {
-	return createEmptyJSONTable(ctx, f.sharedDB, name)
 }
 
 // LoadFile loads a single file into the database

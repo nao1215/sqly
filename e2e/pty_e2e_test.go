@@ -17,6 +17,7 @@
 package e2e
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -62,11 +63,15 @@ type ptySession struct {
 // state. It begins draining output immediately and returns once the process is
 // running.
 func startPTYSession(t *testing.T, args ...string) *ptySession {
+	return startPTYSessionInDir(t, repoRoot(), args...)
+}
+
+func startPTYSessionInDir(t *testing.T, dir string, args ...string) *ptySession {
 	t.Helper()
 
 	home := t.TempDir()
 	cmd := exec.Command(sqlyBin, args...)
-	cmd.Dir = repoRoot()
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"USERPROFILE="+home,
@@ -352,5 +357,158 @@ func TestInteractivePTY_RapidConsecutiveLinesNotLost(t *testing.T) {
 	// Per-line re-acquisition is the toggling that opens the input-loss window.
 	if got := s.rawCount(bracketedPasteEnable); got != 1 {
 		t.Fatalf("interactive shell: raw mode entered %d times across the session, want 1 (persistent raw mode)", got)
+	}
+}
+
+// TestInteractivePTY_FinancialImportRollback drives the built sqly binary
+// through the real shell so the process-global ACH/Fedwire metadata is present
+// before a later multi-file import fails. It verifies both the SQLite tables and
+// the subsequent native .save output, which cannot be covered by an in-process
+// adapter test alone.
+func TestInteractivePTY_FinancialImportRollback(t *testing.T) {
+	dir := t.TempDir()
+	ach := filepath.Join(dir, "original.ach")
+	fed := filepath.Join(dir, "original.fed")
+	bad := filepath.Join(dir, "broken.json")
+	copySmokeFixture(t, filepath.Join(repoRoot(), "testdata", "ppd-debit.ach"), ach)
+	copySmokeFixture(t, filepath.Join(repoRoot(), "testdata", "customer-transfer.fed"), fed)
+	if err := os.WriteFile(bad, []byte("["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	verifyFinancialRollback(t, ach, bad, "original_entries", "ACH")
+	verifyFinancialRollback(t, fed, bad, "original_message", "Fedwire")
+}
+
+// TestInteractivePTY_FinancialImportRollbackWithoutExistingState proves that a
+// failed import does not leave a financial registry behind when its SQLite
+// transaction created no durable tables at all. The final .save is important:
+// a stale registry would make the command try to reconstruct a file whose
+// tables were rolled back.
+func TestInteractivePTY_FinancialImportRollbackWithoutExistingState(t *testing.T) {
+	dir := t.TempDir()
+	bad := filepath.Join(dir, "broken.json")
+	if err := os.WriteFile(bad, []byte("["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		file  string
+		table string
+		label string
+	}{
+		{name: "ACH", file: "ppd-debit.ach", table: "original_entries", label: "ACH_EMPTY"},
+		{name: "Fedwire", file: "customer-transfer.fed", table: "original_message", label: "FEDWIRE_EMPTY"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			valid := filepath.Join(dir, tc.file)
+			copySmokeFixture(t, filepath.Join(repoRoot(), "testdata", tc.file), valid)
+			s := startPTYSessionInDir(t, dir)
+			t.Cleanup(s.close)
+			s.waitReady(startupTimeout)
+			s.write(strings.Join([]string{
+				".import " + tc.file + " " + filepath.Base(bad),
+				"SELECT '" + tc.label + "' AS state, COUNT(*) AS rows FROM " + tc.table + ";",
+				".save --force",
+			}, "\r") + "\r\x04")
+			s.waitFor("failed", ioTimeout)
+			s.waitFor(tc.label, ioTimeout)
+			if code := s.waitExit(exitTimeout); code != 0 {
+				t.Fatalf("%s empty-state rollback session exit code = %d; output=%s", tc.name, code, s.output())
+			}
+			output := s.output()
+			if !strings.Contains(output, "no such table") {
+				t.Fatalf("%s rollback unexpectedly left a table; output=%s", tc.name, output)
+			}
+			if strings.Contains(output, "no "+tc.name+" TableSet found") {
+				t.Fatalf("%s registry was published before the failed transaction; output=%s", tc.name, output)
+			}
+		})
+	}
+}
+
+// TestInteractivePTY_PadRollbackKeepsExistingTable verifies the import mode
+// through the real shell after a prior table already exists. The failed
+// multi-file import must not replace or remove that table.
+func TestInteractivePTY_PadRollbackKeepsExistingTable(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing.csv")
+	valid := filepath.Join(dir, "valid.csv")
+	long := filepath.Join(dir, "long.csv")
+	for path, data := range map[string]string{
+		existing: "id,name\n7,original\n",
+		valid:    "id,name\n1,new\n",
+		long:     "id,name\n1,new,discard-me\n",
+	} {
+		if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := startPTYSessionInDir(t, dir, filepath.Base(existing))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+	s.write(strings.Join([]string{
+		".import-mode pad",
+		".import " + filepath.Base(valid) + " " + filepath.Base(long),
+		"SELECT 'PAD_EXISTING' AS state, COUNT(*) AS rows FROM existing;",
+	}, "\r") + "\r\x04")
+	s.waitFor("refuses to truncate", ioTimeout)
+	s.waitFor("PAD_EXISTING", ioTimeout)
+	s.waitFor("|    1 |", ioTimeout)
+	if code := s.waitExit(exitTimeout); code == 0 {
+		// Batch command errors are surfaced as a non-zero process status; the
+		// interactive shell may still terminate cleanly after the query, so the
+		// assertion below is intentionally about the preserved row and not this
+		// shell-specific exit convention.
+		t.Logf("interactive pad rollback ended cleanly after reporting the import error")
+	}
+}
+
+func verifyFinancialRollback(t *testing.T, source, bad, table, label string) {
+	t.Helper()
+	before, err := os.ReadFile(source) //nolint:gosec // test fixture created in TempDir
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := startPTYSessionInDir(t, filepath.Dir(source), filepath.Base(source))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+	// Send the whole scenario as one burst. This mirrors a user pasting a
+	// script into the interactive terminal and, importantly, lets the shell's
+	// persistent raw-mode reader consume the next line only after the previous
+	// command has completed. Waiting a guessed amount of time after .save is
+	// inherently racy: a slow filesystem can still lose the next keystrokes.
+	s.write(strings.Join([]string{
+		"SELECT '" + label + "_BEFORE' AS state, COUNT(*) AS rows FROM " + table + ";",
+		".save --force",
+		"SELECT '" + label + "_FIRST_SAVE_DONE';",
+		".import " + filepath.Base(source) + " " + filepath.Base(bad),
+		"SELECT '" + label + "_AFTER' AS state, COUNT(*) AS rows FROM " + table + ";",
+		".save --force",
+		"SELECT '" + label + "_SAVE_DONE';",
+	}, "\r") + "\r\x04")
+	s.waitFor(label+"_BEFORE", ioTimeout)
+	s.waitFor(label+"_FIRST_SAVE_DONE", ioTimeout)
+	s.waitFor("failed", ioTimeout)
+	s.waitFor(label+"_AFTER", ioTimeout)
+	s.waitFor(label+"_SAVE_DONE", ioTimeout)
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("%s rollback session exit code = %d; output=%s", label, code, s.output())
+	}
+	if got, err := os.ReadFile(source); err != nil || !bytes.Equal(got, before) {
+		t.Fatalf("%s after rollback/save changed: err=%v equal=%v", label, err, err == nil && bytes.Equal(got, before))
+	}
+	if output := s.output(); strings.Contains(output, "no "+label+" TableSet found") {
+		t.Fatalf("rollback removed the existing %s registry: %s", label, output)
+	}
+}
+
+func copySmokeFixture(t *testing.T, source, destination string) {
+	t.Helper()
+	data, err := os.ReadFile(source) //nolint:gosec // source is a repository test fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

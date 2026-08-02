@@ -10,6 +10,7 @@ package e2e
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"os"
@@ -227,6 +228,26 @@ func TestSmoke_DumpJSONAndNDJSONPreserveSQLiteTypes(t *testing.T) {
 	}
 }
 
+func writeSmokeGzip(t *testing.T, path, content string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // test path is temporary
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := gzip.NewWriter(f)
+	if _, err := writer.Write([]byte(content)); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSmoke_StdinDataset(t *testing.T) {
 	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin", "csv", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
 	if code != 0 {
@@ -288,5 +309,139 @@ func TestSmoke_CdAndImportWithSpacePath(t *testing.T) {
 	}
 	if !strings.Contains(out, "1") {
 		t.Errorf("stdout = %q, want the imported row count", out)
+	}
+}
+
+// TestSmoke_AtomicPadAndEmptyJSON exercises the user-facing binary for the
+// import cases that must be handled in the same streaming load. The output
+// file is also checked: a failed multi-file import must not expose a partial
+// query result or a partially loaded SQLite session.
+func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
+	dir := t.TempDir()
+	shortCSV := filepath.Join(dir, "short.csv")
+	longCSV := filepath.Join(dir, "long.csv")
+	shortTSV := filepath.Join(dir, "short.tsv")
+	longTSV := filepath.Join(dir, "long.tsv")
+	for path, content := range map[string]string{
+		shortCSV: "id,name\n1,alice\n2\n",
+		longCSV:  "id,name\n1,alice,unexpected\n",
+		shortTSV: "id\tname\n1\talice\n2\n",
+		longTSV:  "id\tname\n1\talice\textra\n",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "csv", path: shortCSV, want: "alice"},
+		{name: "tsv", path: shortTSV, want: "alice"},
+	} {
+		t.Run(tc.name+" short rows are padded", func(t *testing.T) {
+			out, stderr, code := run(t, "", "--import-mode", "pad", "--output-format", "csv", "--sql", "SELECT name FROM short ORDER BY id", tc.path)
+			if code != 0 || !strings.Contains(out, tc.want) {
+				t.Fatalf("short %s import: code=%d stdout=%q stderr=%q", tc.name, code, out, stderr)
+			}
+		})
+	}
+
+	compressedShort := filepath.Join(dir, "compressed.csv.gz")
+	compressedLong := filepath.Join(dir, "compressed-long.csv.gz")
+	writeSmokeGzip(t, compressedShort, "id,name\n1,alice\n2\n")
+	writeSmokeGzip(t, compressedLong, "id,name\n1,alice,unexpected\n")
+	out, stderr, code := run(t, "", "--import-mode", "pad", "--output-format", "csv", "--sql", "SELECT name FROM compressed ORDER BY id", compressedShort)
+	if code != 0 || !strings.Contains(out, "alice") {
+		t.Fatalf("gzip short rows: code=%d stdout=%q stderr=%q", code, out, stderr)
+	}
+	_, stderr, code = run(t, "", "--import-mode", "pad", "--output-format", "csv", "--sql", "SELECT 1", compressedLong)
+	if code == 0 || !strings.Contains(stderr, "refuses to truncate") {
+		t.Fatalf("gzip long row: code=%d stderr=%q", code, stderr)
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{name: "csv", path: longCSV},
+		{name: "tsv", path: longTSV},
+	} {
+		t.Run(tc.name+" long rows rollback", func(t *testing.T) {
+			result := filepath.Join(dir, tc.name+"-result.csv")
+			_, stderr, code := run(t, "", "--import-mode", "pad", "--output", result, "--output-format", "csv", "--sql", "SELECT 1", tc.path)
+			if code == 0 || !strings.Contains(stderr, "refuses to truncate") {
+				t.Fatalf("long %s import: code=%d stderr=%q", tc.name, code, stderr)
+			}
+			if _, err := os.Stat(result); !os.IsNotExist(err) {
+				t.Fatalf("long %s import created output %s, stat err=%v", tc.name, result, err)
+			}
+		})
+	}
+
+	// A valid file must not survive beside a long-row file in the same atomic
+	// import, and an already-existing table must keep its original rows.
+	validCSV := filepath.Join(dir, "valid.csv")
+	if err := os.WriteFile(validCSV, []byte("id,name\n1,alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mixedResult := filepath.Join(dir, "mixed-result.csv")
+	_, stderr, code = run(t, "", "--import-mode", "pad", "--output", mixedResult, "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM valid", validCSV, longCSV)
+	if code == 0 || !strings.Contains(stderr, "refuses to truncate") {
+		t.Fatalf("valid + long CSV import: code=%d stderr=%q", code, stderr)
+	}
+	if _, err := os.Stat(mixedResult); !os.IsNotExist(err) {
+		t.Fatalf("valid + long CSV import created output, stat err=%v", err)
+	}
+	emptyJSON := filepath.Join(dir, "empty.json")
+	badJSON := filepath.Join(dir, "broken.json")
+	if err := os.WriteFile(emptyJSON, []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(badJSON, []byte("["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, code = run(t, "", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM empty", emptyJSON)
+	if code != 0 || !strings.Contains(out, "c") || !strings.Contains(out, "0") {
+		t.Fatalf("empty JSON import: code=%d stdout=%q stderr=%q", code, out, stderr)
+	}
+	result := filepath.Join(dir, "empty-result.csv")
+	_, stderr, code = run(t, "", "--output", result, "--output-format", "csv", "--sql", "SELECT 1", emptyJSON, badJSON)
+	if code == 0 || !strings.Contains(stderr, "failed") {
+		t.Fatalf("empty JSON rollback: code=%d stderr=%q", code, stderr)
+	}
+	if _, err := os.Stat(result); !os.IsNotExist(err) {
+		t.Fatalf("empty JSON rollback created output, stat err=%v", err)
+	}
+
+	datasetDir := filepath.Join(dir, "dataset")
+	if err := os.Mkdir(datasetDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{
+		"valid.csv":    "id\n1\n",
+		"long.csv":     "id\n1\n2\n",
+		"valid.json":   `[{"id":1}]`,
+		"invalid.json": "[",
+	} {
+		path := filepath.Join(datasetDir, name)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The CSV long-row file is intentionally made longer than its header after
+	// creation, so the directory contains both valid and invalid data sources.
+	if err := os.WriteFile(filepath.Join(datasetDir, "long.csv"), []byte("id\n1,extra\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dirResult := filepath.Join(dir, "directory-result.csv")
+	_, stderr, code = run(t, "", "--import-mode", "pad", "--output", dirResult, "--output-format", "csv", "--sql", "SELECT 1", datasetDir)
+	if code == 0 || !strings.Contains(stderr, "failed") {
+		t.Fatalf("directory import: code=%d stderr=%q", code, stderr)
+	}
+	if _, err := os.Stat(dirResult); !os.IsNotExist(err) {
+		t.Fatalf("directory rollback created output, stat err=%v", err)
 	}
 }
