@@ -35,7 +35,7 @@ func TestParseMalformedRowPolicy(t *testing.T) {
 		{name: "stop parses to MalformedRowStop", input: "stop", want: MalformedRowStop},
 		{name: "skip parses to MalformedRowSkip", input: "skip", want: MalformedRowSkip},
 		{name: "pad parses to MalformedRowPad", input: "pad", want: MalformedRowPad},
-		{name: "fill is rejected", input: "fill", wantErr: true},
+		{name: "legacy policy name is rejected", input: "fill", wantErr: true},
 		{name: "empty string is rejected", input: "", wantErr: true},
 		{name: "unknown value is rejected", input: "keep", wantErr: true},
 		{name: "uppercase is rejected", input: "STOP", wantErr: true},

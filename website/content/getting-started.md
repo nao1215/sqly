@@ -123,4 +123,4 @@ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
 
 ## Next
 
-The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, profiling data, diffing two files, and writing MySQL or BigQuery syntax.
+The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, inspecting data, and writing MySQL or BigQuery syntax.

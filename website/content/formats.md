@@ -70,4 +70,4 @@ When a CSV or TSV row has a different field count from the header:
 |:--|:--|
 | `stop` (default) | fail the import and report the row |
 | `skip` | drop the row, import the rest |
-| `pad` | pad a short row with blanks; reject a long one |
+| `pad` | pad a short row with empty values; reject a long one without truncating it |

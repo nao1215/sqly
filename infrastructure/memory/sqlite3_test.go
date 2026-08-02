@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -10,6 +12,102 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 )
+
+func TestSQLite3RepositoryQueryPreservesSQLTypesForJSON(t *testing.T) {
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	repo := NewSQLite3Repository(memoryDB)
+	table, err := repo.Query(context.Background(), `SELECT 42 AS integer_value, 1.5 AS real_value, '123' AS text_number, 'true' AS text_bool, '00123' AS padded, NULL AS null_value, '' AS empty_value`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertJSONRow := func(t *testing.T, row map[string]any) {
+		t.Helper()
+		if got, ok := row["integer_value"].(float64); !ok || got != 42 {
+			t.Errorf("integer_value = %#v (%T), want JSON number 42", row["integer_value"], row["integer_value"])
+		}
+		if got, ok := row["real_value"].(float64); !ok || got != 1.5 {
+			t.Errorf("real_value = %#v (%T), want JSON number 1.5", row["real_value"], row["real_value"])
+		}
+		for _, name := range []string{"text_number", "text_bool", "padded", "empty_value"} {
+			if _, ok := row[name].(string); !ok {
+				t.Errorf("%s = %#v (%T), want JSON string", name, row[name], row[name])
+			}
+		}
+		if row["text_number"] != "123" || row["text_bool"] != "true" || row["padded"] != "00123" {
+			t.Errorf("text values changed: %#v", row)
+		}
+		if row["null_value"] != nil {
+			t.Errorf("null_value = %#v, want nil", row["null_value"])
+		}
+	}
+
+	t.Run("json", func(t *testing.T) {
+		var out bytes.Buffer
+		if err := table.Print(&out, model.PrintModeJSON); err != nil {
+			t.Fatal(err)
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("decoded %d rows, want 1", len(rows))
+		}
+		assertJSONRow(t, rows[0])
+	})
+
+	t.Run("ndjson", func(t *testing.T) {
+		var out bytes.Buffer
+		if err := table.Print(&out, model.PrintModeNDJSON); err != nil {
+			t.Fatal(err)
+		}
+		var row map[string]any
+		if err := json.Unmarshal(out.Bytes(), &row); err != nil {
+			t.Fatal(err)
+		}
+		assertJSONRow(t, row)
+	})
+}
+
+func TestSQLValueHelpers(t *testing.T) {
+	t.Parallel()
+	if got := sqlValueString(nil); got != "" {
+		t.Errorf("sqlValueString(nil) = %q, want empty", got)
+	}
+	for _, test := range []struct {
+		value any
+		want  string
+	}{
+		{value: []byte("bytes"), want: "bytes"},
+		{value: "text", want: "text"},
+		{value: int64(42), want: "42"},
+		{value: float64(1.5), want: "1.5"},
+		{value: true, want: "true"},
+	} {
+		value, want := test.value, test.want
+		if got := sqlValueString(value); got != want {
+			t.Errorf("sqlValueString(%#v) = %q, want %q", value, got, want)
+		}
+	}
+	raw := []byte("stable")
+	clone, ok := cloneSQLValue(raw).([]byte)
+	if !ok || string(clone) != string(raw) {
+		t.Fatalf("cloneSQLValue(%q) = %#v, want a copied []byte", raw, clone)
+	}
+	clone[0] = 'X'
+	if string(raw) != "stable" {
+		t.Errorf("cloneSQLValue reused source byte slice: %q", raw)
+	}
+	if cloneSQLValue("text") != "text" {
+		t.Errorf("cloneSQLValue(string) changed value")
+	}
+}
 
 func TestSqlite3RepositoryCreateTable(t *testing.T) {
 	t.Run("Create table", func(t *testing.T) {

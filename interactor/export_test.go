@@ -223,8 +223,8 @@ func TestExportInteractor_DumpTable_JSON(t *testing.T) {
 		t.Fatalf("dumped file is not valid JSON: %v\n%s", err, content)
 	}
 	want := []map[string]any{
-		{"name": "John", "age": float64(25)},
-		{"name": "Jane", "age": float64(30)},
+		{"name": "John", "age": "25"},
+		{"name": "Jane", "age": "30"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("JSON round-trip mismatch:\n got=%v\nwant=%v", got, want)
@@ -294,7 +294,7 @@ func TestExportInteractor_DumpTable_NDJSON_Gzip(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
 		t.Fatalf("NDJSON gzip line invalid: %v", err)
 	}
-	if !reflect.DeepEqual(got, map[string]any{"name": "John", "age": float64(25)}) {
+	if !reflect.DeepEqual(got, map[string]any{"name": "John", "age": "25"}) {
 		t.Errorf("NDJSON gzip round-trip mismatch: %v", got)
 	}
 }
@@ -323,8 +323,8 @@ func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 		t.Fatalf("expected 2 NDJSON lines, got %d: %s", len(lines), content)
 	}
 	want := []map[string]any{
-		{"name": "John", "age": float64(25)},
-		{"name": "Jane", "age": float64(30)},
+		{"name": "John", "age": "25"},
+		{"name": "Jane", "age": "30"},
 	}
 	for i, line := range lines {
 		var got map[string]any

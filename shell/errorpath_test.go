@@ -176,3 +176,54 @@ func TestShell_runInspect_rejectsNegativeSample(t *testing.T) {
 		t.Fatal("want error for a negative --inspect-sample, got nil")
 	}
 }
+
+func TestShellInspectRowCountBoundaries(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		result   *model.Table
+		queryErr error
+		wantErr  bool
+	}{
+		{name: "empty result", result: covErrEmptyTable()},
+		{name: "invalid count", result: covErrTableWithValue("not-a-number"), wantErr: true},
+		{name: "query error", queryErr: errors.New("query failed"), wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			query := mock.NewMockQueryUsecase(ctrl)
+			importer := mock.NewMockImportUsecase(ctrl)
+			importer.EXPECT().QuoteIdentifier("t").Return("t")
+			query.EXPECT().Query(gomock.Any(), "SELECT COUNT(*) FROM t").Return(test.result, test.queryErr)
+			s := newBoundaryTestShell(t, Usecases{query: query, importer: importer})
+			count, err := s.inspectRowCount(context.Background(), "t")
+			if test.wantErr != (err != nil) {
+				t.Fatalf("inspectRowCount() error = %v, wantErr=%v", err, test.wantErr)
+			}
+			if !test.wantErr && count != 0 {
+				t.Errorf("empty result count = %d, want 0", count)
+			}
+		})
+	}
+}
+
+func TestShellInspectSampleBoundaries(t *testing.T) {
+	s := newBoundaryTestShell(t, Usecases{})
+	sample, err := s.inspectSample(context.Background(), "t", 0)
+	if err != nil || string(sample) != "[]" {
+		t.Fatalf("inspectSample(limit=0) = %s, %v, want []", sample, err)
+	}
+
+	ctrl := gomock.NewController(t)
+	query := mock.NewMockQueryUsecase(ctrl)
+	importer := mock.NewMockImportUsecase(ctrl)
+	importer.EXPECT().QuoteIdentifier("t").Return("t").AnyTimes()
+	query.EXPECT().Query(gomock.Any(), "SELECT * FROM t LIMIT 2").Return(nil, errors.New("sample failed"))
+	s = newBoundaryTestShell(t, Usecases{query: query, importer: importer})
+	if _, err := s.inspectSample(context.Background(), "t", 2); err == nil {
+		t.Fatal("inspectSample query failure returned nil error")
+	}
+}
+
+func covErrTableWithValue(value string) *model.Table {
+	return model.NewTable("t", model.NewHeader([]string{"count"}), []model.Record{model.NewRecord([]string{value})})
+}

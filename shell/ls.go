@@ -25,7 +25,7 @@ func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error
 		return errors.New("too many arguments")
 	}
 	path := "."
-	if len(argv) == 1 {
+	if len(argv) > 0 {
 		expanded, err := expandTilde(argv[0])
 		if err != nil {
 			return err

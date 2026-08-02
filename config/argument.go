@@ -148,7 +148,7 @@ func newArg(args []string) (*Arg, error) {
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
 	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format ("+outputFormatCSV+"|"+outputFormatTSV+"|"+outputFormatLTSV+"|"+outputFormatJSON+"|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
-	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop|skip|pad")
+	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop (abort)|skip (drop)|pad (pad short rows with empty fields; reject long rows)")
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "text input encoding for CSV/TSV/LTSV/JSON/JSONL import: "+model.TextEncodingHelp())
 	sqlDialect := flag.String("dialect", string(dialect.SQLite), "SQL dialect for queries (loading always uses sqlite): sqlite|mysql|postgresql|googlesql")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")

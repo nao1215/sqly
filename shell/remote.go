@@ -13,7 +13,12 @@ import (
 	"strings"
 )
 
-const remoteSupportedFormatsHelp = "csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed"
+const (
+	remoteSupportedFormatsHelp = "csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed"
+	remoteCSVFilename          = "download.csv"
+	remoteJSONContentType      = "application/json"
+	remoteJSONFilename         = "download.json"
+)
 
 // isRemoteURL reports whether raw is an absolute HTTP/HTTPS URL sqly can
 // download as an input dataset.
@@ -207,13 +212,13 @@ func filenameFromContentType(header string) string {
 	}
 	switch strings.ToLower(mediaType) {
 	case "text/csv", "application/csv":
-		return "download.csv"
+		return remoteCSVFilename
 	case "text/tab-separated-values":
 		return "download.tsv"
 	case "text/ltsv", "application/ltsv":
 		return "download.ltsv"
-	case "application/json", "text/json":
-		return "download.json"
+	case remoteJSONContentType, "text/json":
+		return remoteJSONFilename
 	case "application/x-ndjson", "application/ndjson", "application/jsonl":
 		return "download.jsonl"
 	case "application/parquet", "application/vnd.apache.parquet":

@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
 )
 
 // inspectReportForTest mirrors the JSON contract produced by --inspect so tests
@@ -24,6 +27,15 @@ type inspectReportForTest struct {
 		} `json:"columns"`
 		SampleRows []map[string]any `json:"sample_rows"`
 	} `json:"tables"`
+}
+
+func TestOutputModeFlagName(t *testing.T) {
+	if got := outputModeFlagName(nil); got != "" {
+		t.Errorf("outputModeFlagName(nil) = %q, want empty", got)
+	}
+	if got := outputModeFlagName(&config.Output{Mode: model.PrintModeJSON}); got != "json" {
+		t.Errorf("outputModeFlagName(json) = %q, want json", got)
+	}
 }
 
 // runInspectJSON builds a shell from args, runs it, and decodes the inspect JSON.
@@ -131,7 +143,6 @@ func TestInspect_RejectsPlainJSON(t *testing.T) {
 	if err := shellPlain.Run(context.Background()); err == nil {
 		t.Error("expected --inspect --output-format json to be rejected, got nil")
 	}
-
 }
 
 func TestInspect_SampleRowsAreLimited(t *testing.T) {

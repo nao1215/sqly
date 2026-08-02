@@ -237,32 +237,35 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	}
 
 	scanDest := make([]any, len(header))
-	rawResult := make([][]byte, len(header))
+	values := make([]any, len(header))
 	for i := range header {
-		scanDest[i] = &rawResult[i]
+		scanDest[i] = &values[i]
 	}
 
 	records := []model.Record{}
-	// nulls tracks which cells were SQL NULL. With a *[]byte scan target a NULL
-	// yields a nil slice, while an empty string yields a non-nil empty slice, so
-	// the two are distinguishable here even though both render as "".
+	jsonValues := [][]any{}
+	// nulls tracks which cells were SQL NULL. The original values are kept
+	// separately so JSON output can distinguish SQL INTEGER/REAL/TEXT types.
 	nulls := [][]bool{}
 	for rows.Next() {
 		result := make([]string, len(header))
+		jsonRow := make([]any, len(header))
 		rowNulls := make([]bool, len(header))
 		err := rows.Scan(scanDest...)
 		if err != nil {
 			return nil, err
 		}
 
-		for i, raw := range rawResult {
-			if raw == nil {
+		for i, value := range values {
+			if value == nil {
 				rowNulls[i] = true
 				continue
 			}
-			result[i] = string(raw)
+			jsonRow[i] = cloneSQLValue(value)
+			result[i] = sqlValueString(value)
 		}
 		records = append(records, result)
+		jsonValues = append(jsonValues, jsonRow)
 		nulls = append(nulls, rowNulls)
 	}
 	if err = rows.Err(); err != nil {
@@ -273,13 +276,14 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	}
 	table := model.NewTable(extractTableName(query), header, records)
 	table.SetNulls(nulls)
+	table.SetJSONValues(jsonValues)
 	return table, nil
 }
 
 // QueryStream executes a read query and invokes fn once per result row, scanning
 // rows one at a time so a caller can aggregate without holding the whole result
 // set in memory. Each call gets the row's cell strings and a per-cell SQL NULL
-// flag (distinguished the same way Query does, via a *[]byte scan target).
+// flag (distinguished the same way Query does, via the driver's native value).
 func (r *sqlite3Repository) QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -302,9 +306,9 @@ func (r *sqlite3Repository) QueryStream(ctx context.Context, query string, fn fu
 	}
 
 	scanDest := make([]any, len(header))
-	rawResult := make([][]byte, len(header))
+	values := make([]any, len(header))
 	for i := range header {
-		scanDest[i] = &rawResult[i]
+		scanDest[i] = &values[i]
 	}
 
 	for rows.Next() {
@@ -313,12 +317,12 @@ func (r *sqlite3Repository) QueryStream(ctx context.Context, query string, fn fu
 		}
 		record := make([]string, len(header))
 		nulls := make([]bool, len(header))
-		for i, raw := range rawResult {
-			if raw == nil {
+		for i, value := range values {
+			if value == nil {
 				nulls[i] = true
 				continue
 			}
-			record[i] = string(raw)
+			record[i] = sqlValueString(value)
 		}
 		if err := fn(record, nulls); err != nil {
 			return err
@@ -328,6 +332,26 @@ func (r *sqlite3Repository) QueryStream(ctx context.Context, query string, fn fu
 		return err
 	}
 	return tx.Commit()
+}
+
+func sqlValueString(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case []byte:
+		return string(v)
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func cloneSQLValue(value any) any {
+	if raw, ok := value.([]byte); ok {
+		return append([]byte(nil), raw...)
+	}
+	return value
 }
 
 // extractTableName extract table name from query.

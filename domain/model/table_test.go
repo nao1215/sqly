@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -357,8 +358,8 @@ aaa:777	bbb:888	ccc:999
 			},
 			args: args{PrintModeJSON},
 			wantOut: `[
-  {"aaa":111,"bbb":222,"ccc":333},
-  {"aaa":444,"bbb":555,"ccc":666}
+  {"aaa":"111","bbb":"222","ccc":"333"},
+  {"aaa":"444","bbb":"555","ccc":"666"}
 ]
 `,
 		},
@@ -383,8 +384,8 @@ aaa:777	bbb:888	ccc:999
 				},
 			},
 			args: args{PrintModeNDJSON},
-			wantOut: `{"aaa":111,"bbb":222,"ccc":333}
-{"aaa":444,"bbb":555,"ccc":666}
+			wantOut: `{"aaa":"111","bbb":"222","ccc":"333"}
+{"aaa":"444","bbb":"555","ccc":"666"}
 `,
 		},
 		{
@@ -466,7 +467,7 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 		if err := tbl.Print(out, PrintModeJSON); err != nil {
 			t.Fatal(err)
 		}
-		want := "[\n  {\"n\":null,\"e\":\"\",\"x\":1}\n]\n"
+		want := "[\n  {\"n\":null,\"e\":\"\",\"x\":\"1\"}\n]\n"
 		if diff := cmp.Diff(out.String(), want); diff != "" {
 			t.Errorf("value is mismatch (-got +want):\n%s", diff)
 		}
@@ -478,7 +479,7 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 		if err := tbl.Print(out, PrintModeNDJSON); err != nil {
 			t.Fatal(err)
 		}
-		want := "{\"n\":null,\"e\":\"\",\"x\":1}\n"
+		want := "{\"n\":null,\"e\":\"\",\"x\":\"1\"}\n"
 		if diff := cmp.Diff(out.String(), want); diff != "" {
 			t.Errorf("value is mismatch (-got +want):\n%s", diff)
 		}
@@ -488,81 +489,126 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 func TestTablePrintJSONScalars(t *testing.T) {
 	t.Parallel()
 
-	// A cell that is a canonical JSON number is emitted as a native
-	// number (large integers verbatim, so no precision loss or scientific
-	// notation), "true"/"false" become native booleans, a SQL NULL becomes null,
-	// and everything else stays a JSON string.
+	// NewTable only has string records, so string-looking numbers and booleans
+	// remain strings. Query repositories attach the original SQL values with
+	// SetJSONValues, which is covered by the repository-level tests.
 	header := Header{"i", "f", "b", "n", "empty", "big", "lead", "text"}
 	rec := Record{"42", "-1.5", "true", "", "", "123456789012345678901234567890", "007", "hello"}
 	tbl := NewTable("t", header, []Record{rec})
 	// Column 3 (n) is a SQL NULL; column 4 (empty) is a real empty string.
 	tbl.SetNulls([][]bool{{false, false, false, true, false, false, false, false}})
 
-	t.Run("json emits native scalars and keeps non-numbers as strings", func(t *testing.T) {
+	t.Run("json keeps string records as strings", func(t *testing.T) {
 		t.Parallel()
 		out := &bytes.Buffer{}
 		if err := tbl.Print(out, PrintModeJSON); err != nil {
 			t.Fatal(err)
 		}
-		want := "[\n  {\"i\":42,\"f\":-1.5,\"b\":true,\"n\":null,\"empty\":\"\",\"big\":123456789012345678901234567890,\"lead\":\"007\",\"text\":\"hello\"}\n]\n"
+		want := "[\n  {\"i\":\"42\",\"f\":\"-1.5\",\"b\":\"true\",\"n\":null,\"empty\":\"\",\"big\":\"123456789012345678901234567890\",\"lead\":\"007\",\"text\":\"hello\"}\n]\n"
 		if diff := cmp.Diff(out.String(), want); diff != "" {
 			t.Errorf("value is mismatch (-got +want):\n%s", diff)
 		}
 	})
 
-	t.Run("ndjson emits native scalars", func(t *testing.T) {
+	t.Run("ndjson keeps string records as strings", func(t *testing.T) {
 		t.Parallel()
 		out := &bytes.Buffer{}
 		if err := tbl.Print(out, PrintModeNDJSON); err != nil {
 			t.Fatal(err)
 		}
-		want := "{\"i\":42,\"f\":-1.5,\"b\":true,\"n\":null,\"empty\":\"\",\"big\":123456789012345678901234567890,\"lead\":\"007\",\"text\":\"hello\"}\n"
+		want := "{\"i\":\"42\",\"f\":\"-1.5\",\"b\":\"true\",\"n\":null,\"empty\":\"\",\"big\":\"123456789012345678901234567890\",\"lead\":\"007\",\"text\":\"hello\"}\n"
 		if diff := cmp.Diff(out.String(), want); diff != "" {
 			t.Errorf("value is mismatch (-got +want):\n%s", diff)
 		}
 	})
-
 }
 
-func TestIsCanonicalJSONNumber(t *testing.T) {
+func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		in   string
-		want bool
-	}{
-		{"0", true},
-		{"-0", true},
-		{"42", true},
-		{"-42", true},
-		{"3.14", true},
-		{"-3.14", true},
-		{"1e10", true},
-		{"1E10", true},
-		{"1.5e-3", true},
-		{"-2.0E+8", true},
-		{"123456789012345678901234567890", true},
-		{"", false},
-		{"007", false},
-		{"+1", false},
-		{"1.", false},
-		{".5", false},
-		{"1e", false},
-		{"1.2.3", false},
-		{"0x10", false},
-		{" 1", false},
-		{"1 ", false},
-		{"NaN", false},
-		{"Infinity", false},
-		{"-", false},
-		{"abc", false},
+
+	tbl := NewTable("query", Header{"integer", "real", "text_number", "text_bool", "padded", "null", "empty"}, []Record{{
+		"42", "1.5", "123", "true", "00123", "", "",
+	}})
+	tbl.SetNulls([][]bool{{false, false, false, false, false, true, false}})
+	tbl.SetJSONValues([][]any{{int64(42), float64(1.5), "123", "true", "00123", nil, ""}})
+
+	assertRow := func(t *testing.T, row map[string]any) {
+		t.Helper()
+		if got, ok := row["integer"].(float64); !ok || got != 42 {
+			t.Errorf("integer = %#v (%T), want JSON number 42", row["integer"], row["integer"])
+		}
+		if got, ok := row["real"].(float64); !ok || got != 1.5 {
+			t.Errorf("real = %#v (%T), want JSON number 1.5", row["real"], row["real"])
+		}
+		for _, name := range []string{"text_number", "text_bool", "padded", "empty"} {
+			if _, ok := row[name].(string); !ok {
+				t.Errorf("%s = %#v (%T), want JSON string", name, row[name], row[name])
+			}
+		}
+		if row["text_number"] != "123" || row["text_bool"] != "true" || row["padded"] != "00123" {
+			t.Errorf("string values changed: %#v", row)
+		}
+		if row["null"] != nil {
+			t.Errorf("null = %#v, want nil", row["null"])
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			t.Parallel()
-			if got := isCanonicalJSONNumber(tt.in); got != tt.want {
-				t.Errorf("isCanonicalJSONNumber(%q) = %v, want %v", tt.in, got, tt.want)
+
+	t.Run("json", func(t *testing.T) {
+		var rows []map[string]any
+		var out bytes.Buffer
+		if err := tbl.Print(&out, PrintModeJSON); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("decoded %d rows, want 1", len(rows))
+		}
+		assertRow(t, rows[0])
+	})
+
+	t.Run("ndjson", func(t *testing.T) {
+		var row map[string]any
+		var out bytes.Buffer
+		if err := tbl.Print(&out, PrintModeNDJSON); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(out.Bytes(), &row); err != nil {
+			t.Fatal(err)
+		}
+		assertRow(t, row)
+	})
+}
+
+func TestJSONScalarTokenUsesOriginalType(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"integer", int64(42), "42"},
+		{"real", float64(1.5), "1.5"},
+		{"string number", "123", `"123"`},
+		{"string boolean", "true", `"true"`},
+		{"bytes", []byte("00123"), `"00123"`},
+		{"nil", nil, "null"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := jsonScalarToken(tc.value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("jsonScalarToken(%#v) = %s, want %s", tc.value, got, tc.want)
 			}
 		})
+	}
+
+	if _, err := jsonScalarToken(make(chan int)); err == nil {
+		t.Fatal("jsonScalarToken(chan int) returned nil error")
 	}
 }
 

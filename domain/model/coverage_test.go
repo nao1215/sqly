@@ -15,6 +15,77 @@ func (covMdlFailingWriter) Write(_ []byte) (int, error) {
 	return 0, errors.New("covMdl: forced write failure")
 }
 
+type covMdlFailAfterWriter struct {
+	remaining int
+}
+
+func (w *covMdlFailAfterWriter) Write(p []byte) (int, error) {
+	if w.remaining == 0 {
+		return 0, errors.New("covMdl: forced delayed write failure")
+	}
+	w.remaining--
+	return len(p), nil
+}
+
+func TestPrintMarkdownWriteErrors(t *testing.T) {
+	t.Parallel()
+	table := NewTable("t", NewHeader([]string{"name", "note"}), []Record{
+		NewRecord([]string{"Alice", "line 1\nline 2"}),
+	})
+	// Each markdown write is deliberately allowed to fail at a different point,
+	// covering error propagation for the header, separator, row, and newlines.
+	for failAfter := range 12 {
+		writer := &covMdlFailAfterWriter{remaining: failAfter}
+		if err := table.Print(writer, PrintModeMarkdownTable); err == nil {
+			t.Errorf("failAfter=%d: Print(Markdown) returned nil error", failAfter)
+		}
+	}
+}
+
+func TestPrintDisplayModesWriteErrors(t *testing.T) {
+	t.Parallel()
+	table := NewTable("t", NewHeader([]string{"a"}), []Record{NewRecord([]string{"1"})})
+	if err := table.Print(covMdlFailingWriter{}, PrintModeVertical); err == nil {
+		t.Error("Print(vertical) to failing writer returned nil error")
+	}
+}
+
+func TestPrintParquetModeUsesCSVDisplay(t *testing.T) {
+	t.Parallel()
+	table := NewTable("t", NewHeader([]string{"id"}), []Record{NewRecord([]string{"1"})})
+	var buf bytes.Buffer
+	if err := table.Print(&buf, PrintModeParquet); err != nil {
+		t.Fatalf("Print(parquet) = %v", err)
+	}
+	if got := buf.String(); got != "id\n1\n" {
+		t.Errorf("Print(parquet) = %q, want CSV display", got)
+	}
+}
+
+func TestPrintUnknownModeFallsBackToTable(t *testing.T) {
+	t.Parallel()
+	table := NewTable("t", NewHeader([]string{"id"}), []Record{NewRecord([]string{"1"})})
+	var buf bytes.Buffer
+	if err := table.Print(&buf, PrintMode(99)); err != nil {
+		t.Fatalf("Print(unknown) = %v", err)
+	}
+	if !strings.Contains(buf.String(), "id") {
+		t.Errorf("Print(unknown) = %q, want table output", buf.String())
+	}
+}
+
+func TestPrintJSONRejectsUnsupportedNativeValue(t *testing.T) {
+	t.Parallel()
+	table := NewTable("t", NewHeader([]string{"value"}), []Record{NewRecord([]string{"value"})})
+	table.SetJSONValues([][]any{{make(chan int)}})
+	for _, mode := range []PrintMode{PrintModeJSON, PrintModeNDJSON} {
+		var buf bytes.Buffer
+		if err := table.Print(&buf, mode); err == nil {
+			t.Errorf("Print(%s) with unsupported native value returned nil error", mode)
+		}
+	}
+}
+
 // TestWriteDelimitedThroughPrint covers writeDelimited via printCSV/printTSV for
 // values that require quoting (delimiter, quote, newline) and for an empty result
 // set, verifying the output round-trips as delimited data.

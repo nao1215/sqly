@@ -97,3 +97,41 @@ func TestNewHistoryDB(t *testing.T) {
 		t.Errorf("Expected 'SELECT * FROM test', got %s", command)
 	}
 }
+
+func TestNewInMemHistoryDB(t *testing.T) {
+	t.Parallel()
+
+	db, cleanup, err := NewInMemHistoryDB()
+	if err != nil {
+		t.Fatalf("NewInMemHistoryDB failed: %v", err)
+	}
+	defer cleanup()
+	if db == nil {
+		t.Fatal("expected in-memory history database, got nil")
+	}
+	if _, err := (*sql.DB)(db).ExecContext(context.Background(), "CREATE TABLE history_test (id INTEGER)"); err != nil {
+		t.Fatalf("in-memory history database is not usable: %v", err)
+	}
+}
+
+func TestSQLite3DriverEnablesForeignKeysAndBusyTimeout(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var foreignKeys, busyTimeout int
+	if err := db.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		t.Fatalf("read foreign_keys pragma: %v", err)
+	}
+	if err := db.QueryRowContext(context.Background(), "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatalf("read busy_timeout pragma: %v", err)
+	}
+	if foreignKeys != 1 {
+		t.Errorf("foreign_keys = %d, want 1", foreignKeys)
+	}
+	if busyTimeout != 5000 {
+		t.Errorf("busy_timeout = %d, want 5000", busyTimeout)
+	}
+}

@@ -42,7 +42,7 @@ scenarios:
   - name: expands a bare ~ in .cd to the home directory
     env: &home
       # os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows, so both are
-      # set; overriding only HOME let the Windows run reach the real profile.
+      # set; overriding only HOME let the Windows run reach the real user configuration.
       HOME: "${workdir}/home"
       USERPROFILE: "${workdir}/home"
     steps:

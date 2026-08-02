@@ -33,11 +33,8 @@ func getColumnData(records []Record, columnIndex int) []string {
 // ParseFloat also accepts but data rarely means as numbers: hexadecimal floats
 // ("0x1p4"), underscore digit separators ("1_000"), and the Infinity/NaN words.
 //
-// This is the single numeric contract shared by data profiling and table-mode
-// right alignment, so the same cell is classified the same way in both. Why
-// expose it from the model layer: presentation and profiling both depend on the
-// model, so a model-level predicate keeps the two surfaces in agreement without
-// duplicating the rules.
+// This is the numeric contract used by table-mode right alignment. Keeping the
+// predicate in the model layer avoids duplicating display rules elsewhere.
 func IsNumericValue(s string) bool {
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, ",", "")
@@ -52,8 +49,7 @@ func IsNumericValue(s string) bool {
 }
 
 // isAllNumeric checks if all values in a column look like numbers, skipping
-// blank cells. It uses IsNumericValue so column alignment follows the same
-// numeric contract as data profiling.
+// blank cells. It uses IsNumericValue so column alignment follows one contract.
 func isAllNumeric(values []string) bool {
 	if len(values) == 0 {
 		return false
@@ -179,6 +175,11 @@ type Table struct {
 	// NULL is emitted as JSON null. nil means "no NULL information"; text formats
 	// ignore it and render every cell as a string.
 	nulls [][]bool
+	// jsonValues optionally preserves the database driver's original scalar
+	// types for query results. When absent, records are treated as strings;
+	// their lexical contents must never be reinterpreted as JSON numbers or
+	// booleans.
+	jsonValues [][]any
 }
 
 // NewTable create new Table.
@@ -201,6 +202,13 @@ func (t *Table) SetNulls(nulls [][]bool) {
 	t.nulls = nulls
 }
 
+// SetJSONValues preserves the database driver's original values for JSON and
+// NDJSON output. The shape should match Records; []byte values are normalized
+// to strings by the query repository because database/sql reuses their memory.
+func (t *Table) SetJSONValues(values [][]any) {
+	t.jsonValues = values
+}
+
 // isNull reports whether the cell at (row, col) is a known SQL NULL.
 func (t *Table) isNull(row, col int) bool {
 	return row < len(t.nulls) && col < len(t.nulls[row]) && t.nulls[row][col]
@@ -208,8 +216,7 @@ func (t *Table) isNull(row, col int) bool {
 
 // IsNull reports whether the cell at (row, col) is a known SQL NULL, as opposed
 // to an empty string. It returns false when no NULL information was recorded
-// (the table did not come from a query). It lets callers such as the profile
-// workflow distinguish a NULL from a blank value.
+// (the table did not come from a query).
 func (t *Table) IsNull(row, col int) bool {
 	return t.isNull(row, col)
 }
@@ -612,10 +619,10 @@ func (t *Table) printExcel(out io.Writer) error {
 }
 
 // rowToJSONObject builds a JSON object for one record, preserving the header
-// column order. JSON output keeps native numbers, booleans, and nulls while
-// retaining non-canonical values such as "007" as strings. Why a manual builder:
-// encoding's map marshaling sorts keys alphabetically, which would drop column
-// order.
+// column order. It uses the original database scalar type when the Table came
+// from a query; manually constructed tables retain string values as strings.
+// Why a manual builder: encoding's map marshaling sorts keys alphabetically,
+// which would drop column order.
 func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
@@ -637,9 +644,12 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 			continue
 		}
 
-		var val string
+		var val any
 		if i < len(record) {
 			val = record[i]
+		}
+		if row < len(t.jsonValues) && i < len(t.jsonValues[row]) {
+			val = t.jsonValues[row][i]
 		}
 		value, err := jsonScalarToken(val)
 		if err != nil {
@@ -651,81 +661,17 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// JSON boolean literals recognized by the typed output contract.
-const (
-	jsonLiteralTrue  = "true"
-	jsonLiteralFalse = "false"
-)
-
-// jsonScalarToken returns the JSON token for a cell value.
-// A value that is a canonical JSON number is emitted verbatim, so a large integer
-// stays lossless and never regresses into scientific notation; the JSON literals
-// "true" and "false" become native booleans; everything else is emitted as a JSON
-// string. A SQL NULL is handled by the caller before this is reached.
-func jsonScalarToken(s string) ([]byte, error) {
-	if s == jsonLiteralTrue || s == jsonLiteralFalse {
-		return []byte(s), nil
+// jsonScalarToken serializes a value using its original Go/database type.
+// In particular, a database string containing "123" or "true" remains a JSON
+// string; only a database numeric or boolean value becomes a JSON scalar.
+func jsonScalarToken(value any) ([]byte, error) {
+	if value == nil {
+		return []byte("null"), nil
 	}
-	if isCanonicalJSONNumber(s) {
-		return []byte(s), nil
+	if raw, ok := value.([]byte); ok {
+		return json.Marshal(string(raw))
 	}
-	return json.Marshal(s)
-}
-
-// isCanonicalJSONNumber reports whether s is a number in the exact JSON grammar
-// (RFC 8259): an optional leading minus, an integer part with no redundant
-// leading zero, an optional fraction, and an optional exponent. Emitting only
-// such strings verbatim as JSON numbers keeps the output valid while preserving
-// the original digits, so "007" stays a string and a 30-digit integer is not
-// rounded. Values like "+1", "1.", ".5", "1e", "NaN", or surrounding spaces are
-// rejected and fall back to a JSON string.
-func isCanonicalJSONNumber(s string) bool {
-	if s == "" {
-		return false
-	}
-	i, n := 0, len(s)
-	if s[i] == '-' {
-		i++
-		if i == n {
-			return false
-		}
-	}
-	// Integer part: a single "0", or a non-zero digit followed by more digits.
-	switch {
-	case s[i] == '0':
-		i++
-	case s[i] >= '1' && s[i] <= '9':
-		i++
-		for i < n && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-	default:
-		return false
-	}
-	// Optional fraction.
-	if i < n && s[i] == '.' {
-		i++
-		if i >= n || s[i] < '0' || s[i] > '9' {
-			return false
-		}
-		for i < n && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-	}
-	// Optional exponent.
-	if i < n && (s[i] == 'e' || s[i] == 'E') {
-		i++
-		if i < n && (s[i] == '+' || s[i] == '-') {
-			i++
-		}
-		if i >= n || s[i] < '0' || s[i] > '9' {
-			return false
-		}
-		for i < n && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-	}
-	return i == n
+	return json.Marshal(value)
 }
 
 // duplicateColumnName returns the first column name that appears more than once

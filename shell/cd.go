@@ -16,7 +16,7 @@ func (c CommandList) cdCommand(_ context.Context, s *Shell, argv []string) error
 	}
 
 	var target string
-	if len(argv) == 1 {
+	if len(argv) > 0 {
 		expanded, err := expandTilde(argv[0])
 		if err != nil {
 			return err

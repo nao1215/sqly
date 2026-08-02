@@ -94,7 +94,7 @@ func reimportStringColumn(t *testing.T, parquetPath, tableName, column string) [
 		t.Fatalf("reimport parquet: %v", err)
 	}
 	defer func() { _ = db.Close() }()
-	rows, err := db.QueryContext(context.Background(), "SELECT "+column+" FROM "+tableName)
+	rows, err := db.QueryContext(context.Background(), "SELECT "+column+" FROM "+tableName) //nolint:gosec // test uses fixed fixture identifiers
 	if err != nil {
 		t.Fatalf("select %s: %v", column, err)
 	}
@@ -150,7 +150,7 @@ func reimportColumn(t *testing.T, parquetPath, tableName, column string) []sql.N
 		t.Fatalf("reimport parquet: %v", err)
 	}
 	defer func() { _ = db.Close() }()
-	rows, err := db.QueryContext(context.Background(), "SELECT "+column+" FROM "+tableName)
+	rows, err := db.QueryContext(context.Background(), "SELECT "+column+" FROM "+tableName) //nolint:gosec // test uses fixed fixture identifiers
 	if err != nil {
 		t.Fatalf("select %s: %v", column, err)
 	}

@@ -10,6 +10,7 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -143,6 +144,35 @@ func TestSmoke_DirectSQLOutputFormats(t *testing.T) {
 	}
 	if !strings.Contains(out, "first_name") || !strings.Contains(out, "[") {
 		t.Errorf("--output-format json stdout = %q, want a JSON array", out)
+	}
+
+	resultPath := filepath.Join(t.TempDir(), "typed.json")
+	_, _, code = run(t, "", "--output-format", "json", "--output", resultPath, "--sql", "SELECT 42 AS integer_value, 1.5 AS real_value, '123' AS text_number, 'true' AS text_bool, '00123' AS padded, NULL AS null_value", csv)
+	if code != 0 {
+		t.Fatalf("JSON --output exit code = %d, want 0", code)
+	}
+	data, err := os.ReadFile(resultPath) //nolint:gosec // test reads a path it just wrote
+	if err != nil {
+		t.Fatalf("read JSON output file: %v", err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(data, &rows); err != nil {
+		t.Fatalf("decode JSON output file: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("decoded %d JSON rows, want 1", len(rows))
+	}
+	row := rows[0]
+	if row["integer_value"] != float64(42) || row["real_value"] != 1.5 {
+		t.Errorf("numeric JSON values = %#v, want native numbers", row)
+	}
+	for _, name := range []string{"text_number", "text_bool", "padded"} {
+		if _, ok := row[name].(string); !ok {
+			t.Errorf("%s = %#v (%T), want string", name, row[name], row[name])
+		}
+	}
+	if row["text_number"] != "123" || row["text_bool"] != "true" || row["padded"] != "00123" || row["null_value"] != nil {
+		t.Errorf("typed JSON boundary values changed: %#v", row)
 	}
 }
 

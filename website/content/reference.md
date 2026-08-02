@@ -15,8 +15,8 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | `--output-format csv` | CSV |
 | `--output-format tsv` | TSV |
 | `--output-format ltsv` | LTSV |
-| `--output-format json` | JSON array with native numbers, booleans, and nulls where unambiguous |
-| `--output-format ndjson` | newline-delimited JSON with native numbers, booleans, and nulls where unambiguous |
+| `--output-format json` | JSON array preserving SQLite numeric, text, and NULL types |
+| `--output-format ndjson` | newline-delimited JSON preserving SQLite numeric, text, and NULL types |
 | `--output-format markdown` | Markdown table |
 | `--output-format excel` | Excel workbook (needs `--output` or `.dump`) |
 | `--output-format parquet` | Parquet (needs `--output` or `.dump`) |
@@ -37,7 +37,7 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | `-S`, `--sheet NAME` | import one Excel sheet by its original name |
 | `--stdin FORMAT` | treat stdin as a dataset: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
 | `--stdin-name NAME` | table name for `--stdin` (default `stdin`) |
-| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (default), `skip`, `pad` (short rows only) |
+| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (abort), `skip` (drop), `pad` (pad short rows with empty values; reject long rows without truncating) |
 | `--encoding NAME` | text encoding for BOM-less input (default `utf-8`) |
 | `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged (content-hash keyed) |
 

@@ -1,7 +1,6 @@
 package filesql
 
 import (
-	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -12,7 +11,7 @@ import (
 )
 
 // rejectLongDelimitedRows checks the one malformed-row case that filesql's
-// Fill policy cannot distinguish: a long row. Pad may add missing trailing
+// Pad policy cannot accommodate a long row. Pad may add missing trailing
 // fields, but it must never discard fields that were present in the source.
 func rejectLongDelimitedRows(paths []string) error {
 	files, err := delimitedInputFiles(paths)
@@ -20,37 +19,53 @@ func rejectLongDelimitedRows(paths []string) error {
 		return err
 	}
 	for _, path := range files {
-		data, err := readDecompressed(path)
-		if err != nil {
-			return fmt.Errorf("read %s for --import-mode pad: %w", path, err)
-		}
-		reader := csv.NewReader(bytes.NewReader(data))
-		reader.FieldsPerRecord = -1
-		if strings.EqualFold(filepath.Ext(stripCompressionExt(path)), ".tsv") {
-			reader.Comma = '\t'
-		}
-
-		header, err := reader.Read()
-		if errors.Is(err, io.EOF) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("read header of %s for --import-mode pad: %w", path, err)
-		}
-		for row := 2; ; row++ {
-			record, err := reader.Read()
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			if err != nil {
-				return fmt.Errorf("read row %d of %s for --import-mode pad: %w", row, path, err)
-			}
-			if len(record) > len(header) {
-				return fmt.Errorf("--import-mode pad refuses to truncate row %d of %s: got %d fields, header has %d", row, path, len(record), len(header))
-			}
+		if err := rejectLongDelimitedFile(path); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// rejectLongDelimitedFile streams one decompressed input directly into
+// encoding/csv. It deliberately does not buffer the expanded file: pad mode is
+// used specifically for large inputs, where an io.ReadAll preflight could
+// duplicate the import memory footprint or cause an OOM.
+func rejectLongDelimitedFile(path string) (err error) {
+	input, cleanup, err := NewDecompressingReaderForFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s for --import-mode pad: %w", path, err)
+	}
+	defer func() {
+		if cleanupErr := cleanup(); err == nil && cleanupErr != nil {
+			err = fmt.Errorf("close %s for --import-mode pad: %w", path, cleanupErr)
+		}
+	}()
+
+	reader := csv.NewReader(input)
+	reader.FieldsPerRecord = -1
+	if strings.EqualFold(filepath.Ext(stripCompressionExt(path)), ".tsv") {
+		reader.Comma = '\t'
+	}
+
+	header, err := reader.Read()
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read header of %s for --import-mode pad: %w", path, err)
+	}
+	for row := 2; ; row++ {
+		record, readErr := reader.Read()
+		if errors.Is(readErr, io.EOF) {
+			return nil
+		}
+		if readErr != nil {
+			return fmt.Errorf("read row %d of %s for --import-mode pad: %w", row, path, readErr)
+		}
+		if len(record) > len(header) {
+			return fmt.Errorf("--import-mode pad refuses to truncate row %d of %s: got %d fields, header has %d", row, path, len(record), len(header))
+		}
+	}
 }
 
 func delimitedInputFiles(paths []string) ([]string, error) {

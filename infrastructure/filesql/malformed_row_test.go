@@ -1,6 +1,7 @@
 package filesql
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"os"
@@ -10,6 +11,26 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	_ "modernc.org/sqlite"
 )
+
+func writeGzipFile(t *testing.T, path, content string) {
+	t.Helper()
+	f, err := os.Create(path) //nolint:gosec // test writes a temporary fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(f)
+	if _, err := gz.Write([]byte(content)); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // The malformed CSV used across the policy tests: row 3 is missing the zip field.
 const raggedCSV = "id,name,zip\n1,alice,01234\n2,bob,00123\n3,caro\n4,dave,99999\n"
@@ -117,6 +138,108 @@ func TestFileSQLAdapter_ImportMode_PadRejectsLongRow(t *testing.T) {
 	}
 	if _, err := adapter.Query(context.Background(), "SELECT * FROM long"); err == nil {
 		t.Fatal("expected no table to be created after a rejected long row")
+	}
+}
+
+func TestFileSQLAdapter_ImportMode_PadStreamsGzipCSV(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "quoted.csv.gz")
+	writeGzipFile(t, path, "id,name,note\n1,alice,\"line one\nline two\"\n2,bob\n3,carol,ok\n")
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	adapter := NewFileSQLAdapter(db)
+	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+
+	if err := adapter.LoadFile(context.Background(), path); err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	got, err := adapter.Query(context.Background(), "SELECT id, name, note FROM quoted ORDER BY id")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	want := [][]string{{"1", "alice", "line one\nline two"}, {"2", "bob", ""}, {"3", "carol", "ok"}}
+	if len(got.Records()) != len(want) {
+		t.Fatalf("records = %#v, want %#v", got.Records(), want)
+	}
+	for i := range want {
+		if got.Records()[i].Equal(model.Record(want[i])) == false {
+			t.Errorf("record %d = %#v, want %#v", i, got.Records()[i], want[i])
+		}
+	}
+
+	longPath := filepath.Join(dir, "long.csv.gz")
+	writeGzipFile(t, longPath, "id,name\n1,alice,unexpected\n")
+	if err := adapter.LoadFile(context.Background(), longPath); err == nil {
+		t.Fatal("expected gzip pad preflight to reject a long row")
+	}
+}
+
+func TestRejectLongDelimitedRowsHandlesDirectoriesAndCSVErrors(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	nested := filepath.Join(dir, "nested")
+	if err := os.Mkdir(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a dataset"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "ok.csv"), []byte("id,name\n1,alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := rejectLongDelimitedRows([]string{dir}); err != nil {
+		t.Fatalf("directory preflight: %v", err)
+	}
+
+	empty := filepath.Join(dir, "empty.csv")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := rejectLongDelimitedRows([]string{empty}); err != nil {
+		t.Fatalf("empty CSV preflight: %v", err)
+	}
+
+	badHeader := filepath.Join(dir, "bad-header.csv")
+	if err := os.WriteFile(badHeader, []byte("\"unterminated\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := rejectLongDelimitedRows([]string{badHeader}); err == nil {
+		t.Fatal("malformed CSV header returned nil error")
+	}
+
+	badRow := filepath.Join(dir, "bad-row.csv")
+	if err := os.WriteFile(badRow, []byte("id,name\n1,\"unterminated\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := rejectLongDelimitedRows([]string{badRow}); err == nil {
+		t.Fatal("malformed CSV row returned nil error")
+	}
+	missing := filepath.Join(dir, "missing.csv")
+	if _, err := delimitedInputFiles([]string{missing}); err == nil {
+		t.Fatal("missing CSV returned nil error")
+	}
+	if err := rejectLongDelimitedRows([]string{missing}); err == nil {
+		t.Fatal("rejectLongDelimitedRows missing CSV returned nil error")
+	}
+	if err := rejectLongDelimitedFile(missing); err == nil {
+		t.Fatal("rejectLongDelimitedFile missing CSV returned nil error")
+	}
+}
+
+func TestRejectLongDelimitedRowsHandlesTSV(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "short.tsv")
+	if err := os.WriteFile(path, []byte("id\tname\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := rejectLongDelimitedFile(path); err != nil {
+		t.Fatalf("TSV preflight: %v", err)
 	}
 }
 

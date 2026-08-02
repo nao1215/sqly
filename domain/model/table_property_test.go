@@ -92,10 +92,9 @@ func stringifyJSONValue(v any) (string, bool) {
 	}
 }
 
-// FuzzJSONScalarToken asserts the JSON scalar tokenizer never emits a
-// byte sequence that is not valid JSON, for any input string. A value that is
-// not a canonical number or boolean must come back as a JSON string equal to the
-// input, and a canonical number/bool must decode back to the same text.
+// FuzzJSONScalarToken asserts that a Go string is always emitted as a JSON
+// string, even when its contents resemble a number or boolean. Numeric and
+// boolean output is supplied by the query repository as a typed value.
 func FuzzJSONScalarToken(f *testing.F) {
 	for _, s := range []string{"", "0", "-1.5", "1e10", "007", "true", "false", "hello", "\"q\"", "\n\t", "日本語", "1.2.3", "+1"} {
 		f.Add(s)
@@ -109,21 +108,9 @@ func FuzzJSONScalarToken(f *testing.F) {
 		if !json.Valid(tok) {
 			t.Fatalf("jsonScalarToken(%q) produced invalid JSON: %q", s, tok)
 		}
-		// Invariant 2: the token matches the exact typed contract. Canonical
-		// numbers and the JSON booleans are emitted verbatim (lossless); every
-		// other value falls back to json.Marshal, identical to the legacy string
-		// contract (which is lossy for invalid UTF-8 the same way encoding/json is).
-		var want []byte
-		switch {
-		case s == "true" || s == "false":
-			want = []byte(s)
-		case isCanonicalJSONNumber(s):
-			want = []byte(s)
-		default:
-			want, err = json.Marshal(s)
-			if err != nil {
-				t.Fatalf("json.Marshal(%q) returned error: %v", s, err)
-			}
+		want, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q) returned error: %v", s, err)
 		}
 		if !bytes.Equal(tok, want) {
 			t.Fatalf("jsonScalarToken(%q) = %q, want %q", s, tok, want)

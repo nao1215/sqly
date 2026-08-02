@@ -22,8 +22,6 @@ SQLite can do, sqly can do — the file is just the table.
 | Load a whole directory | [Load a directory](#load-a-directory) |
 | Run a saved `.sql` script | [Run SQL from a file](#run-sql-from-a-file) |
 | Rank, bucket, or window over rows | [Analytics](#analytics) |
-| Find nulls, blanks, and duplicates | [Profile data quality](#profile-data-quality) |
-| Diff two files | [Compare two tables](#compare-two-tables) |
 | Edit a file in place | [Write changes back](#write-changes-back) |
 | Write MySQL / PostgreSQL / BigQuery SQL | [Other SQL dialects](#other-sql-dialects) |
 | Handle rows with the wrong number of fields | [Ragged rows](#ragged-rows) |

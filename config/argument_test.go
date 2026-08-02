@@ -317,9 +317,29 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy individual output flag is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--csv"}); err == nil {
-			t.Fatal("NewArg accepted legacy --csv output flag")
+	t.Run("legacy individual output flags are rejected", func(t *testing.T) {
+		legacyFlags := []string{
+			"--csv", "--tsv", "--ltsv", "--json", "--ndjson", "--excel", "--markdown", "--parquet", "--vertical",
+			"-c", "-t", "-l", "-j", "-n", "-e", "-m", "-p",
+		}
+		for _, legacyFlag := range legacyFlags {
+			t.Run(legacyFlag, func(t *testing.T) {
+				_, err := NewArg([]string{"sqly", legacyFlag})
+				if err == nil {
+					t.Fatalf("NewArg accepted removed output flag %s", legacyFlag)
+				}
+				if !strings.Contains(err.Error(), "unknown") {
+					t.Errorf("error for %s = %v, want unknown flag error", legacyFlag, err)
+				}
+			})
+		}
+
+		arg, err := NewArg([]string{"sqly", "--output-format", "csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(arg.Usage, "--output-format string") {
+			t.Errorf("usage does not explain the replacement --output-format option")
 		}
 	})
 
@@ -488,6 +508,37 @@ func TestNewArg(t *testing.T) {
 			t.Fatalf("error = %v, want it to mention the unknown dialect", err)
 		}
 	})
+}
+
+func TestNewArgOutputFormatChoices(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		mode model.PrintMode
+	}{
+		{"table", model.PrintModeTable},
+		{"csv", model.PrintModeCSV},
+		{"tsv", model.PrintModeTSV},
+		{"ltsv", model.PrintModeLTSV},
+		{"excel", model.PrintModeExcel},
+		{"markdown", model.PrintModeMarkdownTable},
+		{"json", model.PrintModeJSON},
+		{"ndjson", model.PrintModeNDJSON},
+		{"parquet", model.PrintModeParquet},
+		{"vertical", model.PrintModeVertical},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			arg, err := NewArg([]string{"sqly", "--output-format", tc.name})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if arg.Output.Mode != tc.mode {
+				t.Errorf("output mode = %v, want %v", arg.Output.Mode, tc.mode)
+			}
+		})
+	}
 }
 
 func TestUsage(t *testing.T) {

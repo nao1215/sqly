@@ -32,7 +32,7 @@ sqly --sql "SELECT * FROM a JOIN b ON a.id = b.id" a.csv b.parquet      # join a
 sqly staff.csv                                                          # open the shell
 ```
 
-The [cookbook](/cookbook/) has the rest: JSON extraction, Excel sheets, HTTP inputs, data profiling, diffing two files, editing a file in place, and MySQL/PostgreSQL/BigQuery syntax.
+The [cookbook](/cookbook/) has the rest: JSON extraction, Excel sheets, HTTP inputs, inspecting data, editing a file in place, and MySQL/PostgreSQL/BigQuery syntax.
 
 ## It reads and writes a pipe
 

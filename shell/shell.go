@@ -47,6 +47,9 @@ const (
 	describeCommand   = ".describe"
 	saveCommand       = ".save"
 	dialectCommand    = ".dialect"
+	helpFlag          = "--help"
+	versionFlag       = "--version"
+	helpArgument      = "help"
 
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
@@ -503,10 +506,10 @@ func positionalSubcommandHint(paths []string) (string, bool) {
 	first := paths[0]
 	var flag string
 	switch strings.ToLower(first) {
-	case "help":
-		flag = "--help"
+	case helpArgument:
+		flag = helpFlag
 	case "version":
-		flag = "--version"
+		flag = versionFlag
 	default:
 		return "", false
 	}
