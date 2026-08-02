@@ -157,7 +157,7 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 	if err != nil {
 		return nil, err
 	}
-	return model.NewTable(tableName, table.Header(), table.Records()), nil
+	return table.WithName(tableName), nil
 }
 
 // Header get table header name. The result is re-wrapped with the requested table
@@ -172,7 +172,7 @@ func (r *sqlite3Repository) Header(ctx context.Context, tableName string) (*mode
 	if err != nil {
 		return nil, err
 	}
-	return model.NewTable(tableName, table.Header(), table.Records()), nil
+	return table.WithName(tableName), nil
 }
 
 // resolveTableRef returns the quoted SQL reference a helper command should query

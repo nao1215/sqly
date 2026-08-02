@@ -52,5 +52,5 @@ func (s *Shell) tableColumns(ctx context.Context, tableName string) (*model.Tabl
 	}
 	// Re-wrap so the table carries the inspected name rather than the empty
 	// name PRAGMA queries produce.
-	return model.NewTable(tableName, table.Header(), table.Records()), nil
+	return table.WithName(tableName), nil
 }

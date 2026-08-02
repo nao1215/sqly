@@ -271,6 +271,114 @@ func TestFileSQLAdapter_ImportMode_PadPreflightsBeforeEmptyJSONTable(t *testing.
 	}
 }
 
+func TestFileSQLAdapter_LoadFilesIsAtomicAcrossInputFormats(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		badName    string
+		badContent string
+	}{
+		{name: "broken JSON", badName: "broken.json", badContent: `[{"id":`},
+		{name: "invalid CSV", badName: "broken.csv", badContent: "id,name\n1,\"unterminated\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			emptyJSON := filepath.Join(dir, "existing.json")
+			if err := os.WriteFile(emptyJSON, []byte("[]\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			bad := filepath.Join(dir, tc.badName)
+			if err := os.WriteFile(bad, []byte(tc.badContent), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			db, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			db.SetMaxOpenConns(1)
+			t.Cleanup(func() { _ = db.Close() })
+			ctx := context.Background()
+			if _, err := db.ExecContext(ctx, `CREATE TABLE existing (value TEXT); INSERT INTO existing VALUES ('sentinel')`); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := NewFileSQLAdapter(db).LoadFiles(ctx, emptyJSON, bad); err == nil {
+				t.Fatal("mixed import returned nil, want an error")
+			}
+			var value string
+			if err := db.QueryRowContext(ctx, `SELECT value FROM existing`).Scan(&value); err != nil {
+				t.Fatalf("pre-existing table was removed: %v", err)
+			}
+			if value != "sentinel" {
+				t.Fatalf("pre-existing value = %q, want sentinel", value)
+			}
+			if _, err := db.ExecContext(ctx, `SELECT * FROM existing`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.ExecContext(ctx, `SELECT * FROM broken`); err == nil {
+				t.Fatal("broken input created a partial table")
+			}
+		})
+	}
+}
+
+func TestFileSQLAdapter_LoadFilesPreservesInputOrderForLastWins(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	firstCSV := filepath.Join(dir, "first", "same.csv")
+	secondCSV := filepath.Join(dir, "second", "same.csv")
+	emptyJSON := filepath.Join(dir, "same.json")
+	for path, content := range map[string]string{
+		firstCSV:  "id\nfirst\n",
+		secondCSV: "id\nsecond\n",
+		emptyJSON: "[]\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	load := func(t *testing.T, paths ...string) (count int, value string, header string) {
+		t.Helper()
+		db, err := sql.Open("sqlite", ":memory:")
+		if err != nil {
+			t.Fatal(err)
+		}
+		db.SetMaxOpenConns(1)
+		t.Cleanup(func() { _ = db.Close() })
+		ctx := context.Background()
+		if err := NewFileSQLAdapter(db).LoadFiles(ctx, paths...); err != nil {
+			t.Fatalf("LoadFiles: %v", err)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM "same"`).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count > 0 {
+			if err := db.QueryRowContext(ctx, `SELECT id FROM "same"`).Scan(&value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := db.QueryRowContext(ctx, `SELECT name FROM pragma_table_info('same')`).Scan(&header); err != nil {
+			t.Fatal(err)
+		}
+		return count, value, header
+	}
+
+	if count, _, header := load(t, firstCSV, emptyJSON); count != 0 || header != "data" {
+		t.Fatalf("CSV then empty JSON = count %d, header %q; want empty data table", count, header)
+	}
+	if count, value, _ := load(t, emptyJSON, firstCSV); count != 1 || value != "first" {
+		t.Fatalf("empty JSON then CSV = count %d, value %q; want CSV row", count, value)
+	}
+	if count, value, _ := load(t, firstCSV, secondCSV); count != 1 || value != "second" {
+		t.Fatalf("same-format last-wins = count %d, value %q; want second row", count, value)
+	}
+}
+
 func TestFileSQLAdapter_ImportMode_DefaultIsStop(t *testing.T) {
 	t.Parallel()
 	adapter, path := newMalformedTestAdapter(t)

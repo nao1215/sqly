@@ -85,9 +85,11 @@ The other direction is the same command with the input swapped:
 sqly --output-format csv --sql "SELECT * FROM user" --output user.csv user.parquet
 ```
 
-Numbers, booleans, and nulls are emitted as native JSON scalars. Values that
-are not unambiguous JSON scalars, such as zero-padded identifiers, remain
-strings:
+SQLite INTEGER and REAL values are emitted as JSON numbers, TEXT values remain
+JSON strings, and SQL NULL is emitted as JSON null. SQLite has no boolean type,
+so TRUE/FALSE literals and boolean expressions are integer 1/0 in JSON; a TEXT
+value such as `"true"` remains a string. Values such as zero-padded identifiers
+remain strings:
 
 ```shell
 sqly --output-format json --sql "SELECT identifier, user_name FROM user" user.csv

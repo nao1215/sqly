@@ -95,47 +95,53 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 		}
 	}
 
-	// Loading an ACH/Fedwire file registers its TableSet in a filesql global
-	// registry keyed by base name. sqly keeps those registrations for the session
-	// so the whole-set write-back path (DumpACHFile/DumpFedWireFile) can rebuild a
-	// valid .ach/.fed file from the (possibly edited) tables. The registry is keyed
-	// by base name, so re-importing the same source overwrites its entry, and the
-	// process is short-lived, so the retained TableSets are released at exit.
+	// Parse and load the complete ordered input list into a disposable database
+	// before touching the session database. This makes failures from any
+	// supported format atomic, including a valid empty JSON file followed by a
+	// malformed JSON/CSV file. The same ordered operation is then applied to the
+	// session database, so later inputs replace earlier same-named tables.
+	if err := f.preflightFiles(ctx, filePaths); err != nil {
+		return err
+	}
+	return f.loadFilesInto(ctx, f.sharedDB, filePaths)
+}
 
-	// An empty JSON array ("[]") or an empty JSONL file is valid JSON input but
-	// has no rows. filesql rejects it as an empty data source, so handle those
-	// files here as zero-row tables (a single "data" column, matching filesql's
-	// JSON schema) before delegating the rest to filesql.
-	var toLoad []string
+// preflightFiles validates every input in order against a disposable SQLite
+// database. No user/session table is changed when parsing or importing fails.
+func (f *FileSQLAdapter) preflightFiles(ctx context.Context, filePaths []string) error {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return fmt.Errorf("open import preflight database: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	defer func() { _ = db.Close() }()
+	return f.loadFilesInto(ctx, db, filePaths)
+}
+
+// loadFilesInto applies inputs in the exact CLI order to db. Keeping empty JSON
+// in this same loop is intentional: an empty last input must still win over an
+// earlier non-empty file with the same table name.
+func (f *FileSQLAdapter) loadFilesInto(ctx context.Context, db *sql.DB, filePaths []string) error {
 	for _, path := range filePaths {
 		name, isEmpty := emptyJSONLikeTable(path)
-		if !isEmpty {
-			toLoad = append(toLoad, path)
+		if isEmpty {
+			if err := createEmptyJSONTable(ctx, db, name); err != nil {
+				return err
+			}
 			continue
 		}
-		if err := f.createEmptyJSONTable(ctx, name); err != nil {
-			return err
-		}
-	}
 
-	// Stream the files directly into the shared session database. filesql's
-	// LoadInto replaces a same-named table (last-wins), matching sqly's import
-	// semantics, and avoids the previous temporary-database-plus-row-copy path.
-	// The builder form is used (instead of the package-level filesql.LoadInto) so
-	// the malformed-row policy can be applied to ragged CSV/TSV rows.
-	if len(toLoad) > 0 {
 		builder := filesql.NewBuilder().
-			AddPaths(toLoad...).
+			AddPath(path).
 			WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
 		validated, err := builder.Build(ctx)
 		if err != nil {
 			return err
 		}
-		if err := validated.LoadInto(ctx, f.sharedDB); err != nil {
+		if err := validated.LoadInto(ctx, db); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -209,15 +215,21 @@ func readDecompressed(path string) ([]byte, error) {
 // createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON
 // "data" column, so an empty JSON/JSONL input imports as an empty table instead
 // of failing.
-func (f *FileSQLAdapter) createEmptyJSONTable(ctx context.Context, name string) error {
+func createEmptyJSONTable(ctx context.Context, db *sql.DB, name string) error {
 	quoted := QuoteIdentifier(name)
-	if _, err := f.sharedDB.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
+	if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
 		return fmt.Errorf("failed to reset empty JSON table %q: %w", name, err)
 	}
-	if _, err := f.sharedDB.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s (%s TEXT)", quoted, jsonDataColumn)); err != nil {
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s (%s TEXT)", quoted, jsonDataColumn)); err != nil {
 		return fmt.Errorf("failed to create empty JSON table %q: %w", name, err)
 	}
 	return nil
+}
+
+// createEmptyJSONTable is retained as an adapter helper for package-local
+// callers and error-path tests.
+func (f *FileSQLAdapter) createEmptyJSONTable(ctx context.Context, name string) error {
+	return createEmptyJSONTable(ctx, f.sharedDB, name)
 }
 
 // LoadFile loads a single file into the database

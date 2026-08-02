@@ -21,7 +21,7 @@ func TestSQLite3RepositoryQueryPreservesSQLTypesForJSON(t *testing.T) {
 	defer cleanup()
 
 	repo := NewSQLite3Repository(memoryDB)
-	table, err := repo.Query(context.Background(), `SELECT 42 AS integer_value, 1.5 AS real_value, '123' AS text_number, 'true' AS text_bool, '00123' AS padded, NULL AS null_value, '' AS empty_value`)
+	table, err := repo.Query(context.Background(), `SELECT 42 AS integer_value, 1.5 AS real_value, '123' AS text_number, 'true' AS text_bool, 'false' AS text_false, '00123' AS padded, NULL AS null_value, '' AS empty_value, TRUE AS true_literal, FALSE AS false_literal, 1 = 1 AS true_expression, 2 > 3 AS false_expression`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,16 +34,21 @@ func TestSQLite3RepositoryQueryPreservesSQLTypesForJSON(t *testing.T) {
 		if got, ok := row["real_value"].(float64); !ok || got != 1.5 {
 			t.Errorf("real_value = %#v (%T), want JSON number 1.5", row["real_value"], row["real_value"])
 		}
-		for _, name := range []string{"text_number", "text_bool", "padded", "empty_value"} {
+		for _, name := range []string{"text_number", "text_bool", "text_false", "padded", "empty_value"} {
 			if _, ok := row[name].(string); !ok {
 				t.Errorf("%s = %#v (%T), want JSON string", name, row[name], row[name])
 			}
 		}
-		if row["text_number"] != "123" || row["text_bool"] != "true" || row["padded"] != "00123" {
+		if row["text_number"] != "123" || row["text_bool"] != "true" || row["text_false"] != "false" || row["padded"] != "00123" {
 			t.Errorf("text values changed: %#v", row)
 		}
 		if row["null_value"] != nil {
 			t.Errorf("null_value = %#v, want nil", row["null_value"])
+		}
+		for _, name := range []string{"true_literal", "false_literal", "true_expression", "false_expression"} {
+			if _, ok := row[name].(float64); !ok {
+				t.Errorf("%s = %#v (%T), want SQLite integer JSON number", name, row[name], row[name])
+			}
 		}
 	}
 
@@ -73,6 +78,54 @@ func TestSQLite3RepositoryQueryPreservesSQLTypesForJSON(t *testing.T) {
 		}
 		assertJSONRow(t, row)
 	})
+}
+
+func TestSQLite3RepositoryListPreservesQueryMetadata(t *testing.T) {
+	t.Parallel()
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	db := (*sql.DB)(memoryDB)
+	if _, err := db.ExecContext(context.Background(), `CREATE TABLE typed_values (integer_value INTEGER, real_value REAL, text_value TEXT, null_value TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO typed_values VALUES (42, 1.5, '123', NULL)`); err != nil {
+		t.Fatal(err)
+	}
+
+	table, err := NewSQLite3Repository(memoryDB).List(context.Background(), "typed_values")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table.Name() != "typed_values" {
+		t.Fatalf("table name = %q, want typed_values", table.Name())
+	}
+	var rows []map[string]any
+	var out bytes.Buffer
+	if err := table.Print(&out, model.PrintModeJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("decoded %d rows, want 1", len(rows))
+	}
+	if _, ok := rows[0]["integer_value"].(float64); !ok {
+		t.Errorf("integer_value = %#v (%T), want JSON number", rows[0]["integer_value"], rows[0]["integer_value"])
+	}
+	if _, ok := rows[0]["real_value"].(float64); !ok {
+		t.Errorf("real_value = %#v (%T), want JSON number", rows[0]["real_value"], rows[0]["real_value"])
+	}
+	if rows[0]["text_value"] != "123" {
+		t.Errorf("text_value = %#v, want string 123", rows[0]["text_value"])
+	}
+	if rows[0]["null_value"] != nil {
+		t.Errorf("null_value = %#v, want JSON null", rows[0]["null_value"])
+	}
 }
 
 func TestSQLValueHelpers(t *testing.T) {

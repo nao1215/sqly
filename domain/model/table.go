@@ -226,6 +226,15 @@ func (t *Table) Name() string {
 	return t.name
 }
 
+// WithName returns a shallow copy with a different table name. Keeping the
+// complete Table value is important for query results: JSON/NDJSON metadata
+// such as native values and SQL NULL markers must survive name-only wrapping.
+func (t *Table) WithName(name string) *Table {
+	cloned := *t
+	cloned.name = name
+	return &cloned
+}
+
 // Header return table header.
 func (t *Table) Header() Header {
 	return t.header

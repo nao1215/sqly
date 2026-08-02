@@ -581,6 +581,35 @@ func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 	})
 }
 
+func TestTableWithNamePreservesJSONMetadata(t *testing.T) {
+	t.Parallel()
+	table := NewTable("query_result", Header{"n", "text", "null"}, []Record{{"42", "123", ""}})
+	table.SetJSONValues([][]any{{int64(42), "123", nil}})
+	table.SetNulls([][]bool{{false, false, true}})
+
+	renamed := table.WithName("typed_values")
+	if renamed.Name() != "typed_values" {
+		t.Fatalf("name = %q, want typed_values", renamed.Name())
+	}
+	if !renamed.IsNull(0, 2) {
+		t.Fatal("WithName lost SQL NULL metadata")
+	}
+	var rows []map[string]any
+	var out bytes.Buffer
+	if err := renamed.Print(&out, PrintModeJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := rows[0]["n"].(float64); !ok {
+		t.Errorf("n = %#v (%T), want JSON number", rows[0]["n"], rows[0]["n"])
+	}
+	if rows[0]["text"] != "123" || rows[0]["null"] != nil {
+		t.Errorf("metadata after WithName = %#v, want text string and null", rows[0])
+	}
+}
+
 func TestJSONScalarTokenUsesOriginalType(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -176,6 +176,57 @@ func TestSmoke_DirectSQLOutputFormats(t *testing.T) {
 	}
 }
 
+func TestSmoke_DumpJSONAndNDJSONPreserveSQLiteTypes(t *testing.T) {
+	input := "CREATE TABLE typed_values (integer_value INTEGER, real_value REAL, text_value TEXT, null_value TEXT);\n" +
+		"INSERT INTO typed_values VALUES (42, 1.5, '123', NULL);\n"
+	for _, tc := range []struct {
+		name string
+		ext  string
+		mode string
+		nd   bool
+	}{
+		{name: "json", ext: ".json", mode: "json"},
+		{name: "ndjson", ext: ".ndjson", mode: "ndjson", nd: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "typed"+tc.ext)
+			stdin := input + ".mode " + tc.mode + "\n.dump typed_values " + path + "\n"
+			_, stderr, code := run(t, stdin)
+			if code != 0 {
+				t.Fatalf(".dump %s exit code = %d (stderr=%q)", tc.name, code, stderr)
+			}
+			data, err := os.ReadFile(path) //nolint:gosec // test reads a path it just wrote
+			if err != nil {
+				t.Fatal(err)
+			}
+			var row map[string]any
+			if tc.nd {
+				if err := json.Unmarshal(data, &row); err != nil {
+					t.Fatalf("decode NDJSON: %v; data=%q", err, data)
+				}
+			} else {
+				var rows []map[string]any
+				if err := json.Unmarshal(data, &rows); err != nil {
+					t.Fatalf("decode JSON: %v; data=%q", err, data)
+				}
+				if len(rows) != 1 {
+					t.Fatalf("decoded %d rows, want 1", len(rows))
+				}
+				row = rows[0]
+			}
+			if _, ok := row["integer_value"].(float64); !ok {
+				t.Errorf("integer_value = %#v (%T), want JSON number", row["integer_value"], row["integer_value"])
+			}
+			if _, ok := row["real_value"].(float64); !ok {
+				t.Errorf("real_value = %#v (%T), want JSON number", row["real_value"], row["real_value"])
+			}
+			if row["text_value"] != "123" || row["null_value"] != nil {
+				t.Errorf("dump values = %#v, want TEXT string and JSON null", row)
+			}
+		})
+	}
+}
+
 func TestSmoke_StdinDataset(t *testing.T) {
 	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin", "csv", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
 	if code != 0 {

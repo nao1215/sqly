@@ -4,13 +4,15 @@
 
 ### Breaking Changes
 * Removed the standalone `--profile` and `--compare` workflows and their format/key/table flags. Use SQL for data-quality checks and table differences.
-* Removed `--json-typed` and `--ndjson-typed`; `--json` and `--ndjson` now emit native JSON numbers, booleans, and nulls where unambiguous. Zero-padded values remain strings.
+* Removed the legacy output flags `--csv`/`-c`, `--tsv`/`-t`, `--ltsv`/`-l`, `--json`/`-j`, `--ndjson`/`-n`, `--excel`/`-e`, `--markdown`/`-m`, `--parquet`/`-p`, and `--vertical`. Use the single `--output-format FORMAT` option instead.
+* Removed `--json-typed` and `--ndjson-typed`; `--output-format json` and `--output-format ndjson` preserve SQLite's native INTEGER/REAL/TEXT/NULL values. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are emitted as integer JSON numbers `1`/`0`, while TEXT values such as `"true"` remain strings. Zero-padded values remain strings.
 * Removed `--cache-clear`; cache invalidation is automatic from input path, size, and SHA-256 content hash.
 * Renamed malformed-row policy `fill` to `pad`. `pad` fills short CSV/TSV rows and rejects long rows instead of truncating them.
 
 ### Migration Notes
 * Replace `--profile`/`--compare` invocations with explicit SQL queries.
-* Replace `--json-typed`/`--ndjson-typed` with `--json`/`--ndjson`.
+* Replace `--json-typed`/`--ndjson-typed` with `--output-format json`/`--output-format ndjson`.
+* Replace every removed output flag listed above with `--output-format FORMAT` (for example, `--csv` becomes `--output-format csv`).
 * Remove `--cache-clear`; edit the source and the content-hash key causes a cold import automatically.
 * Replace `--import-mode fill` and `.import-mode fill` with `pad`. Long rows now fail so their extra fields are not silently lost.
 
