@@ -49,10 +49,6 @@ bench: ## Start benchmark
 smoke: ## Run Go binary smoke tests (portable; runs on Linux, macOS, Windows)
 	go test -tags smoke ./e2e/...
 
-coverage-tree: test ## Generate coverage tree
-	grep -v 'github.com/nao1215/sqly/interactor/mock' cover.out | grep -v 'github.com/nao1215/sqly/infrastructure/mock' > cover.tmp
-	go-cover-treemap -statements -percent -coverprofile cover.tmp > doc/img/cover-tree.svg
-
 changelog: ## Generate changelog
 	ghch --all --format markdown > CHANGELOG.md
 
@@ -63,7 +59,6 @@ tools: ## Install dependency tools
 	$(GO_INSTALL) github.com/Songmu/ghch/cmd/ghch@latest
 	$(GO_INSTALL) github.com/google/wire/cmd/wire@latest
 	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
-	$(GO_INSTALL) github.com/nikolaydubina/go-cover-treemap@latest
 	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	$(GO_INSTALL) go.uber.org/mock/mockgen@latest
 	$(GO_INSTALL) github.com/fe3dback/go-arch-lint@v1.15.0

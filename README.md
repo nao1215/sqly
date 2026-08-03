@@ -47,7 +47,6 @@ Pick the tool that fits the job:
 | A CSV-native SQL dialect with its own engine and cursors | [csvq](https://github.com/mithrandie/csvq) |
 | SQL over CSV/TSV/JSON with a choice of backend engines | [trdsql](https://github.com/noborus/trdsql) |
 | SQL over CSV with long-standing, mature tooling | [q](https://github.com/harelba/q), [textql](https://github.com/dinedal/textql) |
-| A terminal UI over a DBMS and local files | [sqluv](https://github.com/nao1215/sqluv) |
 | SQL over files, with an interactive shell, cross-format joins, and write-back | sqly |
 
 sqly's emphasis is the session: an interactive shell with completion and history, files of different formats joined as peers, and the ability to write edits back into the source file.
@@ -79,43 +78,173 @@ Prebuilt binaries are on the [release page](https://github.com/nao1215/sqly/rele
 
 ## Recipes
 
-The [cookbook](https://nao1215.github.io/sqly/cookbook/) is the fastest way in. A sample:
+### Look at a file you have never seen
+
+`--inspect` prints the tables a file becomes, their columns, and a few sample rows — as JSON, so `jq` can read it too.
 
 ```shell
-# Look at a file you have never seen
 sqly --inspect user.csv
+```
 
-# Read a row too wide to fit a terminal: one column per line, in a block per record
-sqly --output-format vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
+```json
+{
+  "tables": [
+    {
+      "name": "user",
+      "source": "/home/nao/data/user.csv",
+      "row_count": 3,
+      "columns": [
+        { "name": "user_name",  "type": "TEXT",    "nullable": true, "primary_key": false },
+        { "name": "identifier", "type": "INTEGER", "nullable": true, "primary_key": false }
+      ],
+      "sample_rows": [
+        { "user_name": "booker12", "identifier": 1 }
+      ]
+    }
+  ]
+}
+```
 
-# Convert: the destination's extension picks the format
-sqly --output-format json  --output user.json  --sql "SELECT * FROM user" user.csv
-sqly --output-format excel --output user.xlsx  --sql "SELECT * FROM user" user.csv
+![inspect demo](./doc/img/inspect-demo.gif)
 
-# Join two files, of any format, in one query
+### Join two files, of any format, in one query
+
+The file is the table, whatever the format: a gzipped CSV and a Parquet file join like two tables in one database.
+
+```shell
 sqly --sql "SELECT u.user_name, i.position
             FROM user u JOIN identifier i ON u.identifier = i.id" user.csv.gz identifier.parquet
+```
 
-# Pull fields out of JSONL
-sqly --sql "SELECT json_extract(data, '\$.name') AS name FROM sample" sample.jsonl
+```text
++-----------+-----------+
+| user_name | position  |
++-----------+-----------+
+| booker12  | developrt |
+| jenkins46 | manager   |
+| smith79   | neet      |
++-----------+-----------+
+```
 
-# Load a whole directory, or a URL, or a pipe
+![cross-format join demo](./doc/img/crossjoin-demo.gif)
+
+### Convert between formats
+
+The destination's extension picks the format; `--output-format` names it when the extension cannot.
+
+```shell
+sqly --output user.json --sql "SELECT * FROM user" user.csv
+sqly --output user.xlsx --sql "SELECT * FROM user" user.csv
+```
+
+```text
+Output sql result to user.json (output mode=json)
+```
+
+![convert demo](./doc/img/convert-demo.gif)
+
+### Query JSON and JSONL
+
+A JSON file becomes one table with a `data` column; SQLite's `json_extract()` reaches into it.
+
+```shell
+sqly --sql "SELECT json_extract(data, '$.name') AS name,
+                   json_extract(data, '$.city') AS city FROM sample" sample.jsonl
+```
+
+```text
++---------+--------+
+|  name   |  city  |
++---------+--------+
+| Alice   | Tokyo  |
+| Bob     | Osaka  |
+| Charlie | Nagoya |
++---------+--------+
+```
+
+![json demo](./doc/img/json-demo.gif)
+
+### Read a row too wide for the terminal
+
+`--output-format vertical` prints one column per line, in a block per record.
+
+```shell
+sqly --output-format vertical --sql "SELECT * FROM actor LIMIT 1" actor.csv
+```
+
+```text
+-[ RECORD 1 ]-----------------------------------------------
+actor             | Harrison Ford
+total_gross       | 4871.7
+number_of_movies  | 41
+average_per_movie | 118.8
+best_movie        | Star Wars: The Force Awakens
+gross             | 936.7
+```
+
+### Pipe the result into another tool
+
+`jsonl` for `jq`, `tsv` for `cut`/`awk`/`sort`. Both write nothing but the rows, so a pipeline stays a pipeline.
+
+```shell
+sqly --output-format jsonl --sql "SELECT user_name, identifier FROM user" user.csv | jq -r '.user_name'
+sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+```
+
+```text
+{"user_name":"booker12","identifier":1}
+{"user_name":"jenkins46","identifier":2}
+```
+
+### Load a directory, a URL, or standard input
+
+```shell
 sqly ./data --sql "SELECT * FROM users"
 sqly --sql "SELECT * FROM user" https://example.com/user.csv
 cat user.csv | sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
+```
 
-# Pipe the result on: jsonl for jq, tsv for cut/awk/sort
-sqly --output-format jsonl --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
-sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+![stdin demo](./doc/img/stdin-demo.gif)
 
-# Rank with a window function
+### Rank, window, aggregate
+
+SQLite is the engine, so its whole query language is available — window functions, CTEs, `json_*`, and the rest.
+
+```shell
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
+```
 
-# Write MySQL, PostgreSQL, or BigQuery syntax and have it translated
+```text
++-------------------+------+
+|       actor       | rank |
++-------------------+------+
+| Harrison Ford     |    1 |
+| Samuel L. Jackson |    2 |
+| Morgan Freeman    |    3 |
++-------------------+------+
+```
+
+![analytics demo](./doc/img/analytics-demo.gif)
+
+### Write MySQL, PostgreSQL, or BigQuery syntax
+
+```shell
 sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" user.csv
 ```
 
 `--dialect` is translation, not emulation: constructs with no SQLite equivalent are rejected by name, and SQL that SQLite accepts is passed through, where the answer can differ from the source dialect. The [dialects page](https://nao1215.github.io/sqly/dialects/) lists both, with the divergences sqly knows about.
+
+### Run a script from a file
+
+`--sql-file` runs the statements in a `.sql` file, in order.
+
+```shell
+sqly --sql-file report.sql sales.csv
+```
+
+![sql-file demo](./doc/img/sql-file-demo.gif)
+
+The [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
 
 ## The shell
 
@@ -190,11 +319,7 @@ were measured are on the [about page](https://nao1215.github.io/sqly/about/#benc
 
 Thanks for taking the time to contribute; see [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). Contributions are not only about code: a GitHub Star also motivates development.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=nao1215/sqly&type=Date)](https://star-history.com/#nao1215/sqly&Date)
-
-When adding features or fixing bugs, please write unit tests; sqly aims for unit-test coverage across all packages, as the tree map shows. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`), and their commands are exercised end-to-end by the atago suite in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
-
-![treemap](./doc/img/cover-tree.svg)
+When adding features or fixing bugs, please write unit tests. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`), and their commands are exercised end-to-end by the atago suite in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
 
 Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/issues).
 
