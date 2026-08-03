@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/filesql"
+	"github.com/nao1215/sqly/domain/cleanup"
 	"github.com/nao1215/sqly/domain/model"
 	infra "github.com/nao1215/sqly/infrastructure"
 	"github.com/xuri/excelize/v2"
@@ -238,24 +239,56 @@ func (f *FileSQLAdapter) SnapshotToCache(ctx context.Context, cachePath string) 
 // far faster than re-parsing large source files. The cache is always detached
 // before returning. A failure leaves the caller free to fall back to a cold
 // import.
-func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) (err error) {
+func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) error {
 	if f.sharedDB == nil {
 		return errors.New(errDatabaseNotInit)
 	}
 	if _, statErr := os.Stat(cachePath); statErr != nil {
 		return fmt.Errorf("cache %q is unavailable: %w", cachePath, statErr)
 	}
-	if _, err = f.sharedDB.ExecContext(ctx, "ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS sqly_cache"); err != nil {
+	return f.withAttachedCache(ctx, cachePath, f.copyCachedTables)
+}
+
+// cacheAlias is the schema name the import cache is attached under. It is fixed,
+// so two loads cannot use it at once and a load that fails to detach breaks the
+// next one rather than itself.
+const cacheAlias = "sqly_cache"
+
+// withAttachedCache attaches cachePath under cacheAlias, runs fn, and detaches
+// it — the ATTACH/DETACH counterpart of WithTransaction's BEGIN/COMMIT.
+//
+// The lifecycle lives here rather than inline in each caller for the same
+// reason: the detach has two rules that are easy to get wrong once and then
+// copy. It runs under cleanup.Context, so a cancelled or timed-out operation
+// still releases the alias — reusing the caller's dead context would fail
+// immediately and leave the cache attached, which surfaces later as an
+// unrelated "already in use" failure in the *next* run. And its error is joined
+// onto fn's rather than replacing it, so "the load failed and the cache is
+// still attached" is not reported as though only one of the two happened.
+func (f *FileSQLAdapter) withAttachedCache(
+	ctx context.Context,
+	cachePath string,
+	fn func(ctx context.Context) error,
+) (err error) {
+	if _, err := f.sharedDB.ExecContext(ctx,
+		"ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS "+cacheAlias); err != nil {
 		return fmt.Errorf("attach cache %q: %w", cachePath, err)
 	}
 	defer func() {
-		if _, derr := f.sharedDB.ExecContext(ctx, "DETACH DATABASE sqly_cache"); derr != nil && err == nil {
-			err = fmt.Errorf("detach cache %q: %w", cachePath, derr)
-		}
+		cleanupCtx, cancel := cleanup.Context(ctx)
+		defer cancel()
+		_, derr := f.sharedDB.ExecContext(cleanupCtx, "DETACH DATABASE "+cacheAlias)
+		err = cleanup.Join(err, derr, fmt.Sprintf("detach cache %q", cachePath))
 	}()
 
+	return fn(ctx)
+}
+
+// copyCachedTables recreates every user table held in the attached cache and
+// bulk-copies its rows into the session database.
+func (f *FileSQLAdapter) copyCachedTables(ctx context.Context) error {
 	rows, err := f.sharedDB.QueryContext(ctx,
-		"SELECT name, sql FROM sqly_cache.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+		"SELECT name, sql FROM "+cacheAlias+".sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
 	if err != nil {
 		return fmt.Errorf("read cache schema: %w", err)
 	}
@@ -280,11 +313,11 @@ func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) (e
 
 	for _, t := range tables {
 		quoted := QuoteIdentifier(t.name)
-		if _, err = f.sharedDB.ExecContext(ctx, t.ddl); err != nil {
+		if _, err := f.sharedDB.ExecContext(ctx, t.ddl); err != nil {
 			return fmt.Errorf("recreate cached table %q: %w", t.name, err)
 		}
-		if _, err = f.sharedDB.ExecContext(ctx,
-			fmt.Sprintf("INSERT INTO %s SELECT * FROM sqly_cache.%s", quoted, quoted)); err != nil {
+		if _, err := f.sharedDB.ExecContext(ctx,
+			fmt.Sprintf("INSERT INTO %s SELECT * FROM %s.%s", quoted, cacheAlias, quoted)); err != nil {
 			return fmt.Errorf("copy cached table %q: %w", t.name, err)
 		}
 	}
@@ -607,14 +640,12 @@ func IsExcelFile(filePath string) bool {
 // is read through the adapter's decompressing reader, so compressed variants
 // (.xlsx.gz, .xlsx.zst, ...) are supported the same way as a plain .xlsx.
 func SheetNames(filePath string) (names []string, err error) {
-	r, cleanup, err := NewDecompressingReaderForFile(filePath)
+	r, closeReader, err := NewDecompressingReaderForFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open Excel file %s: %w", filePath, err)
 	}
 	defer func() {
-		if cerr := cleanup(); cerr != nil && err == nil {
-			err = cerr
-		}
+		err = cleanup.Join(err, closeReader(), "close decompressing reader")
 	}()
 
 	f, err := excelize.OpenReader(r)
@@ -622,9 +653,7 @@ func SheetNames(filePath string) (names []string, err error) {
 		return nil, fmt.Errorf("failed to read Excel file %s: %w", filePath, err)
 	}
 	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
+		err = cleanup.Join(err, f.Close(), "close Excel workbook")
 	}()
 
 	return f.GetSheetList(), nil
