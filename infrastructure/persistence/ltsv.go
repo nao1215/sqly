@@ -34,7 +34,7 @@ func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
 		return err
 	}
 	w := bufio.NewWriter(f)
-	for _, v := range table.Records() {
+	for _, v := range table.Rows {
 		for i, data := range v {
 			label := table.Header()[i]
 			if strings.ContainsAny(data, "\t\n\r") {

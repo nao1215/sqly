@@ -1066,7 +1066,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	//,,.
 	if statementModifiesData(req) {
 		if table != nil {
-			if len(table.Records()) > 0 {
+			if table.RowCount() > 0 {
 				s.dataChanged = true
 			}
 		} else if affectedRows > 0 {

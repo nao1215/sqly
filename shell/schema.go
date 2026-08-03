@@ -75,7 +75,7 @@ func (s *Shell) tableCreateStatement(ctx context.Context, tableName string) (str
 	if err != nil {
 		return "", err
 	}
-	if len(cols.Records()) == 0 {
+	if cols.RowCount() == 0 {
 		return "", fmt.Errorf("no such table: %s", tableName)
 	}
 	return s.buildCreateStatement(tableName, cols), nil
@@ -118,8 +118,8 @@ func (s *Shell) storedCreateSQL(ctx context.Context, schema, object string) (sql
 		if err != nil {
 			return "", false, err
 		}
-		if recs := res.Records(); len(recs) > 0 && len(recs[0]) > 0 && recs[0][0] != "" {
-			return recs[0][0], src.temp, nil
+		if rec, ok := res.Row(0); ok && len(rec) > 0 && rec[0] != "" {
+			return rec[0], src.temp, nil
 		}
 	}
 	return "", false, nil
@@ -186,7 +186,7 @@ func (s *Shell) objectExists(ctx context.Context, name string) bool {
 	if err != nil {
 		return false
 	}
-	return len(res.Records()) > 0
+	return res.RowCount() > 0
 }
 
 // isSchemaName reports whether prefix is a SQLite schema name a sqly session can
@@ -214,7 +214,7 @@ func (s *Shell) buildCreateStatement(tableName string, cols *model.Table) string
 	b.WriteString("CREATE TABLE ")
 	b.WriteString(s.usecases.importer.QuoteIdentifier(tableName))
 	b.WriteString(" (")
-	for i, rec := range cols.Records() {
+	for i, rec := range cols.Rows {
 		if i > 0 {
 			b.WriteString(", ")
 		}
@@ -256,7 +256,7 @@ func primaryKeyColumns(cols *model.Table) []string {
 		pos  int
 	}
 	var pks []pkCol
-	for _, rec := range cols.Records() {
+	for _, rec := range cols.Rows {
 		if rec[5] == "0" || rec[5] == "" {
 			continue
 		}

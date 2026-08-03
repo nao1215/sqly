@@ -126,7 +126,7 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 	}
 
 	return r.inTx(ctx, func(tx *sql.Tx) error {
-		for _, v := range t.Records() {
+		for _, v := range t.Rows {
 			if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
 				return err
 			}

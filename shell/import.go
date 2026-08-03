@@ -819,7 +819,7 @@ func (s *Shell) tableContentFingerprint(ctx context.Context, name string) (strin
 	for _, col := range t.Header() {
 		writeField(col)
 	}
-	for _, rec := range t.Records() {
+	for _, rec := range t.Rows {
 		writeField("\x00") // row separator that no column value can forge
 		for _, f := range rec {
 			writeField(f)

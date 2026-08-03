@@ -863,9 +863,10 @@ func TestGetColumnData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := getColumnData(tt.records, tt.columnIndex)
+			tbl := NewTable("t", Header{"a", "b"}, tt.records)
+			got := tbl.columnData(tt.columnIndex)
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("getColumnData() mismatch (-want +got):\n%s", diff)
+				t.Errorf("columnData() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

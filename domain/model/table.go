@@ -16,10 +16,11 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 )
 
-// getColumnData extracts data from a specific column index
-func getColumnData(records []Record, columnIndex int) []string {
+// columnData extracts one column's display strings, reading the table's own
+// storage rather than a copy of every row.
+func (t *Table) columnData(columnIndex int) []string {
 	var columnData []string
-	for _, record := range records {
+	for _, record := range t.Rows {
 		if columnIndex < len(record) {
 			columnData = append(columnData, record[columnIndex])
 		}
@@ -291,15 +292,66 @@ func (t *Table) Header() Header {
 	return t.header
 }
 
-// Records return table records: the display string of every cell.
+// Records returns a copy of the table's records: the display string of every
+// cell, one Record per row.
 //
-// The returned slice is the Table's own storage, so a caller must treat it as
-// read-only. Writing through it would desynchronize a query result's strings
-// from the native cells the JSON and Parquet writers read, which is exactly the
-// drift the Cell representation exists to prevent. Nothing in sqly writes to it;
-// build a new Table instead of editing one in place.
+// The copy is deep, so writing to the result cannot reach the Table:
+//
+//	records := table.Records()
+//	records[0][0] = "corrupted" // affects only the caller's copy
+//
+// This matters beyond ordinary defensiveness. A query result's strings are
+// derived from its native cells, and the JSON and Parquet writers read those
+// cells; a caller able to edit the strings in place could make the same table
+// print "corrupted" as CSV and the original value as JSON. Handing out the
+// internal slice made that a one-line mistake, and no test could have noticed
+// which of the two representations was right afterwards.
+//
+// Copying is the price of a safe public API. Code inside sqly that walks every
+// row — the formatters, the exporters, the INSERT builder — should use Rows or
+// RowCount instead, which read the same storage without copying it.
 func (t *Table) Records() []Record {
-	return t.records
+	if t.records == nil {
+		return nil
+	}
+	records := make([]Record, len(t.records))
+	for i, record := range t.records {
+		records[i] = append(make(Record, 0, len(record)), record...)
+	}
+	return records
+}
+
+// RowCount returns the number of records without materializing them, so a
+// caller asking only "is this empty?" does not pay for a copy of the table.
+func (t *Table) RowCount() int {
+	return len(t.records)
+}
+
+// Rows iterates the table's records in order, as a range-over-func sequence:
+//
+//	for i, record := range table.Rows {
+//	    ...
+//	}
+//
+// The Record yielded is the Table's own storage and is valid only for the
+// duration of the call. Do not write to it or retain it past the iteration;
+// take a copy, or call Records, if either is needed. This is the read path the
+// hot loops use, so walking a million rows costs no allocation.
+func (t *Table) Rows(yield func(int, Record) bool) {
+	for i, record := range t.records {
+		if !yield(i, record) {
+			return
+		}
+	}
+}
+
+// Row returns the record at index i and whether it exists. Like Rows it returns
+// the Table's own storage, so the result is read-only.
+func (t *Table) Row(i int) (Record, bool) {
+	if i < 0 || i >= len(t.records) {
+		return nil, false
+	}
+	return t.records[i], true
 }
 
 // Equal compare Table.
@@ -310,11 +362,12 @@ func (t *Table) Equal(t2 *Table) bool {
 	if !t.header.Equal(t2.header) {
 		return false
 	}
-	if len(t.Records()) != len(t2.Records()) {
+	if t.RowCount() != t2.RowCount() {
 		return false
 	}
-	for i, record := range t.Records() {
-		if !record.Equal(t2.Records()[i]) {
+	for i, record := range t.Rows {
+		other, ok := t2.Row(i)
+		if !ok || !record.Equal(other) {
 			return false
 		}
 	}
@@ -419,7 +472,7 @@ func (t *Table) printTable(out io.Writer) error {
 			strings.Contains(headerName, "age") ||
 			strings.Contains(headerName, "年齢") ||
 			// Check if all data looks numeric (simple heuristic)
-			(len(t.Records()) > 0 && isAllNumeric(getColumnData(t.Records(), i)))
+			(t.RowCount() > 0 && isAllNumeric(t.columnData(i)))
 
 		if isNumeric {
 			alignment[i] = tw.AlignRight
@@ -448,7 +501,7 @@ func (t *Table) printTable(out io.Writer) error {
 	}
 	table.Header(headers...)
 
-	for _, v := range t.Records() {
+	for _, v := range t.Rows {
 		// Convert Record ([]string) to []any for the new API
 		row := make([]any, len(v))
 		for i, cell := range v {
@@ -503,7 +556,7 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 	}
 
 	// Print data rows
-	for rowIdx, record := range t.Records() {
+	for rowIdx, record := range t.Rows {
 		if _, err := fmt.Fprint(out, "|"); err != nil {
 			return fmt.Errorf("failed to write markdown row %d prefix: %w", rowIdx, err)
 		}
@@ -542,7 +595,7 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	if err := w.Write([]string(t.Header())); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
-	for _, v := range t.Records() {
+	for _, v := range t.Rows {
 		if err := w.Write([]string(v)); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}
@@ -560,7 +613,7 @@ func (t *Table) printLTSV(out io.Writer) error {
 	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
 		return err
 	}
-	for _, v := range t.Records() {
+	for _, v := range t.Rows {
 		r := make(Record, 0, len(v))
 		for i, data := range v {
 			if err := ensureLTSVValueRepresentable(t.Header()[i], data); err != nil {
@@ -604,7 +657,7 @@ func (t *Table) printVertical(out io.Writer) error {
 		}
 	}
 
-	for i, record := range t.Records() {
+	for i, record := range t.Rows {
 		rule := fmt.Sprintf("-[ RECORD %d ]", i+1)
 		if pad := verticalRecordRuleWidth - runewidth.StringWidth(rule); pad > 0 {
 			rule += strings.Repeat("-", pad)
@@ -757,20 +810,20 @@ func (t *Table) printJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
 		return fmt.Errorf("json output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
-	if len(t.Records()) == 0 {
+	if t.RowCount() == 0 {
 		_, err := fmt.Fprintln(out, "[]")
 		return err
 	}
 	if _, err := fmt.Fprintln(out, "["); err != nil {
 		return err
 	}
-	for i, record := range t.Records() {
+	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {
 			return err
 		}
 		sep := ""
-		if i < len(t.Records())-1 {
+		if i < t.RowCount()-1 {
 			sep = ","
 		}
 		if _, err := fmt.Fprintf(out, "  %s%s\n", obj, sep); err != nil {
@@ -787,7 +840,7 @@ func (t *Table) printNDJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
 		return fmt.Errorf("ndjson output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
-	for i, record := range t.Records() {
+	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {
 			return err

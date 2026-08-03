@@ -111,11 +111,11 @@ func GenerateCreateTableStatement(t *model.Table) string {
 
 // isNumeric returns true if all records are numeric.
 func isNumeric(t *model.Table, index int) bool {
-	if len(t.Records()) == 0 {
+	if t.RowCount() == 0 {
 		return false
 	}
 
-	for _, record := range t.Records() {
+	for _, record := range t.Rows {
 		_, err := strconv.ParseFloat(record[index], 64)
 		if err != nil {
 			return false

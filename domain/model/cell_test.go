@@ -238,6 +238,88 @@ func TestWithNameDoesNotShareRowStorage(t *testing.T) {
 	}
 }
 
+// TestRecordsCannotCorruptTheTable is the ownership rule for the public
+// accessor. Records() used to hand out the Table's own storage, so one
+// assignment could make the same table print one value as CSV and another as
+// JSON — the two representations would disagree and nothing could say which was
+// right. The copy is deep, so a write reaches only the caller's slice.
+func TestRecordsCannotCorruptTheTable(t *testing.T) {
+	t.Parallel()
+
+	table, err := NewTableFromCells("t", Header{"n", "s"}, [][]Cell{
+		{NewCell(int64(42)), NewTextCell("original")},
+	})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
+
+	records := table.Records()
+	records[0][0] = "corrupted"
+	records[0][1] = "corrupted"
+
+	again := table.Records()
+	if again[0][0] != "42" || again[0][1] != "original" {
+		t.Errorf("Records() = %v after a caller wrote to an earlier result, want [42 original]", again[0])
+	}
+
+	var csv bytes.Buffer
+	if err := table.Print(&csv, PrintModeCSV); err != nil {
+		t.Fatalf("Print(csv): %v", err)
+	}
+	if strings.Contains(csv.String(), "corrupted") {
+		t.Errorf("csv output was corrupted through Records(): %q", csv.String())
+	}
+
+	var nd bytes.Buffer
+	if err := table.Print(&nd, PrintModeNDJSON); err != nil {
+		t.Fatalf("Print(ndjson): %v", err)
+	}
+	if strings.Contains(nd.String(), "corrupted") {
+		t.Errorf("ndjson output was corrupted through Records(): %q", nd.String())
+	}
+	// Text and JSON still agree with each other, which is the property the
+	// corruption would have broken.
+	if !strings.Contains(csv.String(), "42") || !strings.Contains(nd.String(), `"n":42`) {
+		t.Errorf("csv %q and ndjson %q disagree", csv.String(), nd.String())
+	}
+}
+
+// TestRowsAndRowShareStorageForHotPaths documents the other half of the
+// contract: the iteration API used inside sqly does not copy, so a caller that
+// walks a million rows pays nothing, and in exchange must not write to what it
+// is given.
+func TestRowsAndRowShareStorageForHotPaths(t *testing.T) {
+	t.Parallel()
+
+	table := NewTable("t", Header{"a"}, []Record{{"x"}, {"y"}, {"z"}})
+
+	if got := table.RowCount(); got != 3 {
+		t.Errorf("RowCount() = %d, want 3", got)
+	}
+
+	var seen []string
+	for i, record := range table.Rows {
+		if i == 2 {
+			break // the iterator must honor an early exit
+		}
+		seen = append(seen, record[0])
+	}
+	if strings.Join(seen, ",") != "x,y" {
+		t.Errorf("Rows yielded %v, want [x y] before the break", seen)
+	}
+
+	row, ok := table.Row(1)
+	if !ok || row[0] != "y" {
+		t.Errorf("Row(1) = (%v, %v), want ([y], true)", row, ok)
+	}
+	if _, ok := table.Row(3); ok {
+		t.Error("Row(3) reported ok for an out-of-range index")
+	}
+	if _, ok := table.Row(-1); ok {
+		t.Error("Row(-1) reported ok")
+	}
+}
+
 // TestTableWithoutCellsTreatsEveryValueAsText covers the string-built tables
 // (imported files, synthesized reports): they carry no type information, so a
 // numeric-looking value must never be promoted to a JSON number.

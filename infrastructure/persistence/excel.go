@@ -86,7 +86,7 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	}
 
 	const excelRowOffset = 2
-	for i, record := range table.Records() {
+	for i, record := range table.Rows {
 		if err := f.SetSheetRow(sheetName, fmt.Sprintf("A%d", i+excelRowOffset), &record); err != nil {
 			return err
 		}

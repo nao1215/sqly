@@ -38,9 +38,9 @@ func (dr *delimitedRepository) Dump(f io.Writer, table *model.Table) error {
 	w := csv.NewWriter(f)
 	w.Comma = dr.delimiter
 
-	records := make([][]string, 0, 1+len(table.Records()))
+	records := make([][]string, 0, 1+table.RowCount())
 	records = append(records, table.Header())
-	for _, v := range table.Records() {
+	for _, v := range table.Rows {
 		records = append(records, v)
 	}
 

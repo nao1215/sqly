@@ -154,8 +154,8 @@ func (s *Shell) inspectColumns(ctx context.Context, name string) ([]inspectColum
 		colNotNull = 3
 		colPK      = 5
 	)
-	result := make([]inspectColumn, 0, len(cols.Records()))
-	for _, rec := range cols.Records() {
+	result := make([]inspectColumn, 0, cols.RowCount())
+	for _, rec := range cols.Rows {
 		if len(rec) <= colPK {
 			continue
 		}
