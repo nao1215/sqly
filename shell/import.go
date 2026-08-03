@@ -747,7 +747,7 @@ func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup fu
 //   - /proc/<pid|self>/fd/* the Linux fd aliases behind many fd-based workflows ()
 func isAllowedPseudoFile(absPath string) bool {
 	switch absPath {
-	case "/dev/stdin", "/dev/stdout", "/dev/stderr":
+	case devStdinPath, "/dev/stdout", "/dev/stderr":
 		return true
 	}
 	for _, prefix := range []string{"/dev/shm/", "/dev/fd/"} {

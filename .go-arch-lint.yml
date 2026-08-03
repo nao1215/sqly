@@ -26,7 +26,9 @@ vendors:
   gomock: { in: go.uber.org/mock/gomock }
   prompt: { in: github.com/nao1215/prompt }
   term: { in: golang.org/x/term }
-  filesql: { in: github.com/nao1215/filesql }
+  filesql: { in: [github.com/nao1215/filesql, github.com/nao1215/filesql/dialect] }
+  runewidth: { in: github.com/mattn/go-runewidth }
+  text: { in: [golang.org/x/text/encoding/japanese, golang.org/x/text/encoding/unicode, golang.org/x/text/transform] }
   fileparser: { in: github.com/nao1215/fileparser }
 
 components:
@@ -74,6 +76,7 @@ deps:
   config:
     canUse:
       - color
+      - filesql
       - pflag
       - go-colorable
       - xdg
@@ -86,6 +89,7 @@ deps:
       - cmp
   model:
     canUse:
+      - runewidth
       - tablewriter
     mayDependOn:
       - domain
@@ -95,17 +99,23 @@ deps:
       - di
   shell:
     canUse:
+      - filesql
+      - go-colorable
       - prompt
       - tablewriter
-      - go-colorable
+      - text
     mayDependOn:
       - model
       - usecase
   usecase:
+    canUse:
+      - filesql
     mayDependOn:
       - model
       - repository
   interactor:
+    canUse:
+      - filesql
     mayDependOn:
       - model
       - usecase

@@ -88,9 +88,9 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 // save".
 func noTablesToSaveError(interactive bool) error {
 	if interactive {
-		return errors.New("no tables to save: run .import FILE to load a table first")
+		return &writeBackError{Err: errors.New("no tables to save: run .import FILE to load a table first")}
 	}
-	return errors.New("no tables to save: pass input files (e.g. sqly data.csv ...) before saving")
+	return &writeBackError{Err: errors.New("no tables to save: pass input files (e.g. sqly data.csv ...) before saving")}
 }
 
 // preflightSave rejects a script whose statements .save could never persist,
@@ -350,7 +350,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 	}
 
 	if len(problems) > 0 {
-		return nil, fmt.Errorf("cannot save session:\n  - %s", strings.Join(problems, "\n  - "))
+		return nil, &writeBackError{Err: fmt.Errorf("cannot save session:\n  - %s", strings.Join(problems, "\n  - "))}
 	}
 	return targets, nil
 }

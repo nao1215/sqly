@@ -21,6 +21,15 @@ import (
 // each deciding a piece of the same question. That is how a mode gets a
 // half-defined corner, which is where the stdin hang lived.
 
+// The flags a mode is named after. They appear in error messages, in the mode
+// names, and in the help, and one spelling for each keeps those from drifting.
+const (
+	flagSQL      = "--sql"
+	flagSQLFile  = "--sql-file"
+	flagInspect  = "--inspect"
+	devStdinPath = "/dev/stdin"
+)
+
 // runMode is what this invocation of sqly is.
 type runMode int
 
@@ -46,11 +55,11 @@ func (m runMode) String() string {
 	case modeStdinScript:
 		return "stdin script"
 	case modeInlineSQL:
-		return "--sql"
+		return flagSQL
 	case modeSQLFile:
-		return "--sql-file"
+		return flagSQLFile
 	case modeInspect:
-		return "--inspect"
+		return flagInspect
 	default:
 		return "unknown"
 	}
@@ -142,7 +151,7 @@ func (s *Shell) planWithQuerySource(plan runPlan) (runPlan, error) {
 func (s *Shell) stdinNamedAsInput() bool {
 	for _, path := range s.argument.FilePaths {
 		switch filepath.ToSlash(path) {
-		case "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0":
+		case devStdinPath, "/dev/fd/0", "/proc/self/fd/0":
 			return true
 		}
 	}

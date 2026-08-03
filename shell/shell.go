@@ -367,7 +367,7 @@ func (s *Shell) loadScript() ([]scriptElement, error) {
 	)
 	switch s.plan.mode {
 	case modeInlineSQL:
-		script, origin = s.argument.Query, "--sql"
+		script, origin = s.argument.Query, flagSQL
 	case modeSQLFile:
 		loaded, err := readSQLFile(s.argument.SQLFilePath)
 		if err != nil {
@@ -1084,9 +1084,9 @@ func (s *Shell) runScript(ctx context.Context, elements []scriptElement) (bool, 
 		return ranAny, err
 	}
 	if len(s.capturedRowsets) > 1 {
-		return ranAny, fmt.Errorf(
+		return ranAny, &resultCountError{Produced: len(s.capturedRowsets), Err: fmt.Errorf(
 			"--output-format %s carries one result set, but the script produced %d; %s",
-			s.state.mode, len(s.capturedRowsets), multiResultAdvice)
+			s.state.mode, len(s.capturedRowsets), multiResultAdvice)}
 	}
 	for _, table := range s.capturedRowsets {
 		if err := table.Print(config.Stdout, s.state.mode.PrintMode); err != nil {
@@ -1122,14 +1122,16 @@ func (s *Shell) runSQLFileToOutput(ctx context.Context, elements []scriptElement
 
 	switch len(s.capturedRowsets) {
 	case 0:
-		return errors.New("--output requires the --sql-file script to produce one result set, but it produced none; add a statement that returns rows (for example a SELECT)")
+		return &resultCountError{Produced: 0, Err: errors.New(
+			"--output requires the --sql-file script to produce one result set, but it produced none; add a statement that returns rows (for example a SELECT)")}
 	case 1:
 		if err := s.outputToFile(s.capturedRowsets[0]); err != nil {
 			return err
 		}
 		return s.finishNonInteractive(ctx)
 	default:
-		return fmt.Errorf("--output writes one file, but the script produced %d result sets; %s", len(s.capturedRowsets), multiResultAdvice)
+		return &resultCountError{Produced: len(s.capturedRowsets), Err: fmt.Errorf(
+			"--output writes one file, but the script produced %d result sets; %s", len(s.capturedRowsets), multiResultAdvice)}
 	}
 }
 
