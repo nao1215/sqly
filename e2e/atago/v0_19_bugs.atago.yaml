@@ -47,7 +47,7 @@ scenarios:
   - name: rejects duplicate NDJSON keys
     steps:
       - run:
-          command: sqly --output-format ndjson --sql "SELECT 1 AS x, 2 AS x"
+          command: sqly --output-format jsonl --sql "SELECT 1 AS x, 2 AS x"
       - assert:
           exit_code: 1
           stderr:
@@ -134,14 +134,14 @@ scenarios:
           stdout:
             contains: "affected is 1 row"
 
-  - name: rejects --stdin-name without --stdin
+  - name: rejects --stdin-table without --stdin-format
     steps:
       - run:
-          command: sqly --stdin-name weird --output-format csv --sql "SELECT 1 AS x"
+          command: sqly --stdin-table weird --output-format csv --sql "SELECT 1 AS x"
       - assert:
           exit_code: 1
           stderr:
-            contains: "stdin-name"
+            contains: "stdin-table"
 
   - name: rejects --inspect-sample without --inspect
     steps:
@@ -152,14 +152,14 @@ scenarios:
           stderr:
             contains: "inspect-sample"
 
-  - name: rejects --force without --save
+  - name: rejects the two write-back destinations together
     steps:
       - run:
-          command: sqly --force --sql "SELECT 1 AS x"
+          command: sqly --save-in-place --save-tables out --sql "SELECT 1 AS x"
       - assert:
           exit_code: 1
           stderr:
-            contains: force
+            contains: "--save-tables"
 
   - name: rejects --inspect combined with --output-format csv
     steps:
@@ -241,22 +241,22 @@ scenarios:
           stderr:
             not_contains: arguments
 
-  - name: does not write back for an EXPLAIN under --save-dir
+  - name: does not write back for an EXPLAIN under --save-tables
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "EXPLAIN UPDATE user SET first_name='X' WHERE identifier=1" --save-dir out user.csv
+          command: sqly --sql "EXPLAIN UPDATE user SET first_name='X' WHERE identifier=1" --save-tables out user.csv
       - assert:
           exit_code: 0
           file:
             path: out/user.csv
             exists: false
 
-  - name: does not write back for a zero-row DML under --save-dir
+  - name: does not write back for a zero-row DML under --save-tables
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=999999" --save-dir out user.csv
+          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=999999" --save-tables out user.csv
       - assert:
           exit_code: 0
           stdout:
@@ -271,7 +271,7 @@ scenarios:
           file: products.parquet
           from: testdata/products.parquet
       - run:
-          command: sqly --sql "DELETE FROM products" --save --force products.parquet
+          command: sqly --sql "DELETE FROM products" --save-in-place products.parquet
       - assert:
           exit_code: 1
           stdout:

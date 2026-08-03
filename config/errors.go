@@ -35,45 +35,50 @@ var ErrEmptyArg = errors.New("argument is empty")
 // would otherwise be indistinguishable from the flag being absent.
 var errEmptySheet = errors.New("--sheet requires a non-empty sheet name")
 
-// errInvalidStdinName is returned when --stdin-name is not a valid table
+// errInvalidStdinTable is returned when --stdin-table is not a valid table
 // identifier (empty, path-like, or containing characters that filesql would
 // sanitize), which would otherwise stage odd files or leave the advertised
 // table name unqueryable.
-var errInvalidStdinName = errors.New("--stdin-name must be a valid table name: letters, digits, and underscores only, not starting with a digit")
+var errInvalidStdinTable = errors.New("--stdin-table must be a valid table name: letters, digits, and underscores only, not starting with a digit")
 
-// errEmptyOutput, errEmptySQLFile, errEmptySaveDir, and errEmptyStdin are
+// errEmptyOutput, errEmptySQLFile, errEmptySaveTables, and errEmptyStdinFormat are
 // returned when their flag is given an explicit empty value. For each flag the
 // empty string is the "flag absent" sentinel, so accepting an explicit "" would
 // silently behave like the flag was never passed instead of surfacing the
 // malformed value.
 var (
-	errEmptyQuery   = errors.New("--sql requires a non-empty SQL statement")
-	errEmptyOutput  = errors.New("--output requires a non-empty destination path")
-	errEmptySQLFile = errors.New("--sql-file requires a non-empty file path")
-	errEmptySaveDir = errors.New("--save-dir requires a non-empty directory path")
-	errEmptyStdin   = errors.New("--stdin requires a non-empty dataset format (csv|tsv|ltsv|json|jsonl)")
+	errEmptyQuery       = errors.New("--sql requires a non-empty SQL statement")
+	errEmptyOutput      = errors.New("--output requires a non-empty destination path")
+	errEmptySQLFile     = errors.New("--sql-file requires a non-empty file path")
+	errEmptySaveTables  = errors.New("--save-tables requires a non-empty directory path")
+	errEmptyStdinFormat = errors.New("--stdin-format requires a non-empty format: csv, tsv, ltsv, json, or jsonl")
 )
 
-// errStdinNameReserved is returned when --stdin-name is a SQLite keyword. Such a
-// name is a valid identifier shape but is not queryable as a bare table name
+// errStdinTableReserved is returned when --stdin-table is a SQLite keyword. Such
+// a name is a valid identifier shape but is not queryable as a bare table name
 // (e.g. "SELECT * FROM select" is a syntax error), so it is rejected up front
 // instead of advertising an unusable table name.
-var errStdinNameReserved = errors.New("--stdin-name is a SQLite keyword and is not queryable as a bare table name; choose another name")
+var errStdinTableReserved = errors.New("--stdin-table is a SQLite keyword and is not queryable as a bare table name; choose another name")
 
-// errStdinNameWithoutStdin and errInspectSampleWithoutInspect are returned when
+// errStdinTableWithoutFormat and errInspectSampleWithoutInspect are returned when
 // a dependent flag is set without the flag that gives it meaning, so the flag is
 // not silently ignored.
 var (
-	errStdinNameWithoutStdin       = errors.New("--stdin-name has no effect without --stdin FORMAT")
+	errStdinTableWithoutFormat     = errors.New("--stdin-table has no effect without --stdin-format FORMAT")
 	errInspectSampleWithoutInspect = errors.New("--inspect-sample has no effect without --inspect")
 )
 
-// errForceWithoutSave is returned when --force is set without --save or
-// --save-dir. --force only confirms the destructive in-place write-back, so it
-// is meaningless on its own and is rejected instead of silently ignored.
-var errForceWithoutSave = errors.New("--force has no effect without --save or --save-dir")
+// errSaveInPlaceWithSaveTables is returned when both write-back destinations are
+// given. One run cannot both leave the sources untouched and overwrite them, so
+// the pair is rejected before anything is imported or printed.
+var errSaveInPlaceWithSaveTables = errors.New("--save-in-place and --save-tables cannot be used together: choose overwriting the sources, or writing copies into a directory")
 
-// errEmptyCache is returned when --cache is given an explicit empty value.
+// errSaveWithStdinDataset and errSaveWithRemoteInput reject write-back for an
+// input it could never write: a piped dataset has no source file once stdin is
+// consumed, and a remote input is not sqly's to modify. Both are caught while
+// parsing so the run stops before it imports anything or prints a result that
+// would suggest the change was persisted.
 var (
-	errEmptyCache = errors.New("--cache requires a non-empty cache file path")
+	errSaveWithStdinDataset = errors.New("--save-in-place/--save-tables cannot write back a --stdin-format dataset: a piped dataset has no source file. Pass the data as a file argument instead")
+	errSaveWithRemoteInput  = errors.New("--save-in-place/--save-tables cannot write back a remote input; download it first and pass the local file")
 )

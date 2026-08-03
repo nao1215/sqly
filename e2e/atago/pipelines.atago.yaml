@@ -1,6 +1,6 @@
 # sqly as a stage in a shell pipeline.
 #
-# The cookbook documents the input side well — --stdin, an http(s) argument — but
+# The cookbook documents the input side well — --stdin-format, an http(s) argument — but
 # nothing asserted the output side: that sqly's stdout is something the next tool
 # in the pipe can actually consume, and that its exit code can gate a script.
 # These scenarios run real pipelines through the binary.
@@ -35,7 +35,7 @@ scenarios:
             python3 -m http.server 18090 --bind 127.0.0.1 >/dev/null 2>&1 & pid=$!;
             trap "kill $pid" EXIT;
             i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18090)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done;
-            curl -s http://127.0.0.1:18090/sales.csv | sqly --output-format csv --stdin csv --sql "SELECT region, SUM(amount) AS total FROM stdin GROUP BY region ORDER BY region"
+            curl -s http://127.0.0.1:18090/sales.csv | sqly --output-format csv --stdin-format csv --sql "SELECT region, SUM(amount) AS total FROM stdin GROUP BY region ORDER BY region"
       - assert:
           exit_code: 0
           stdout:
@@ -44,7 +44,7 @@ scenarios:
               east,150
               west,250
 
-  - name: ndjson output feeds jq one object per line
+  - name: jsonl output feeds jq one object per line
     # Needs a POSIX shell and jq.
     skip:
       os: windows
@@ -58,7 +58,7 @@ scenarios:
             /c,503
       - run:
           shell: true
-          command: sqly --output-format ndjson --sql "SELECT path, status FROM logs WHERE status >= 500 ORDER BY path" logs.csv | jq -r '.path'
+          command: sqly --output-format jsonl --sql "SELECT path, status FROM logs WHERE status >= 500 ORDER BY path" logs.csv | jq -r '.path'
       - assert:
           exit_code: 0
           stdout:
@@ -79,7 +79,7 @@ scenarios:
             {"id":3,"user":{"name":"carol"},"level":"error"}
       - run:
           shell: true
-          command: sqly --output-format ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error' ORDER BY id" events.jsonl | jq -r '"\(.id):\(.name)"'
+          command: sqly --output-format jsonl --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error' ORDER BY id" events.jsonl | jq -r '"\(.id):\(.name)"'
       - assert:
           exit_code: 0
           stdout:
@@ -159,7 +159,7 @@ scenarios:
       - fixture: *sales
       - run:
           shell: true
-          command: cat sales.csv | sqly --output-format csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75 ORDER BY region" | tail -n +2 | sort -u
+          command: cat sales.csv | sqly --output-format csv --stdin-format csv --stdin-table s --sql "SELECT region FROM s WHERE amount > 75 ORDER BY region" | tail -n +2 | sort -u
       - assert:
           exit_code: 0
           stdout:

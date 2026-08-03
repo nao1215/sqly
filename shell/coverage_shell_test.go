@@ -350,7 +350,7 @@ func TestStageStdinDataset_UnsupportedFormat(t *testing.T) {
 	shell.argument.StdinTableName = "stdin"
 
 	_, _, err = shell.stageStdinDataset()
-	if err == nil || !strings.Contains(err.Error(), "unsupported --stdin format") {
+	if err == nil || !strings.Contains(err.Error(), "unsupported --stdin-format value") {
 		t.Fatalf("stageStdinDataset unsupported format error = %v, want format error", err)
 	}
 }

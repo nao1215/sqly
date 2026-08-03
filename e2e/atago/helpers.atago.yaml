@@ -21,7 +21,7 @@ scenarios:
               - ".import PATH"
               - ".dump TABLE FILE"
               - ".save DIR"
-              - ".save --force"
+              - ".save --in-place"
               - destructive
 
   - name: .cd changes directory with a relative path and reports it
@@ -127,7 +127,7 @@ scenarios:
           stderr:
             contains:
               - json
-              - ndjson
+              - jsonl
 
   - name: .dump infers TSV from the .tsv extension in table mode, not CSV
     steps:

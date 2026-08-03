@@ -162,11 +162,11 @@ scenarios:
           stdout:
             contains: '{"user_name":"booker12","identifier":1}'
 
-  - name: renders NDJSON with --output-format ndjson
+  - name: renders NDJSON with --output-format jsonl
     steps:
       - fixture: *user
       - run:
-          command: sqly --output-format ndjson --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
+          command: sqly --output-format jsonl --sql "SELECT user_name, identifier FROM user LIMIT 2" user.csv
       - assert:
           stdout:
             line: 1
@@ -215,7 +215,7 @@ scenarios:
   - name: queries piped CSV through the default stdin table
     steps:
       - run:
-          command: sqly --stdin csv --sql "SELECT user_name FROM stdin LIMIT 1"
+          command: sqly --stdin-format csv --sql "SELECT user_name FROM stdin LIMIT 1"
           stdin: |
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
@@ -230,7 +230,7 @@ scenarios:
     steps:
       - fixture: *identifier
       - run:
-          command: sqly --stdin csv --output-format csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" identifier.csv
+          command: sqly --stdin-format csv --output-format csv --sql "SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id" identifier.csv
           stdin: |
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
@@ -262,7 +262,7 @@ scenarios:
           file: join.sql
           from: testdata/join.sql
       - run:
-          command: sqly --stdin csv --sql-file join.sql identifier.csv
+          command: sqly --stdin-format csv --sql-file join.sql identifier.csv
           stdin: |
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
@@ -324,11 +324,11 @@ scenarios:
               - user_name
               - INTEGER
 
-  - name: writes the updated table to --save-dir, leaving the source untouched
+  - name: writes the updated table to --save-tables, leaving the source untouched
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir out user.csv
+          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-tables out user.csv
       - assert:
           exit_code: 0
           stdout:
@@ -343,24 +343,22 @@ scenarios:
             path: out/user.csv
             contains: Rachelle
 
-  - name: rejects --save without --force
+  - name: --save-in-place overwrites the source the README points it at
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save user.csv
+          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save-in-place user.csv
       - assert:
-          exit_code: 1
-          stderr:
-            contains: force
+          exit_code: 0
           file:
             path: user.csv
-            not_contains: "101"
+            contains: "101"
 
-  - name: rejects a schema-changing statement under --save-dir before writing anything
+  - name: rejects a schema-changing statement under --save-tables before writing anything
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-dir out user.csv
+          command: sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-tables out user.csv
       - assert:
           exit_code: 1
           stderr:
@@ -369,11 +367,11 @@ scenarios:
             path: out
             exists: false
 
-  - name: overwrites the source in place with --save --force
+  - name: overwrites the source in place with --save-in-place
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save --force user.csv
+          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save-in-place user.csv
       - assert:
           exit_code: 0
           stdout:

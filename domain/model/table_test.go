@@ -109,9 +109,9 @@ func TestPrintModeString(t *testing.T) {
 			want: "json",
 		},
 		{
-			name: "ndjson mode",
-			p:    PrintModeNDJSON,
-			want: "ndjson",
+			name: "jsonl mode",
+			p:    PrintModeJSONL,
+			want: "jsonl",
 		},
 		{
 			name: "parquet mode",
@@ -383,7 +383,7 @@ aaa:777	bbb:888	ccc:999
 					{"444", "555", "666"},
 				},
 			},
-			args: args{PrintModeNDJSON},
+			args: args{PrintModeJSONL},
 			wantOut: `{"aaa":"111","bbb":"222","ccc":"333"}
 {"aaa":"444","bbb":"555","ccc":"666"}
 `,
@@ -395,7 +395,7 @@ aaa:777	bbb:888	ccc:999
 				Header:  Header{"aaa", "bbb"},
 				Records: []Record{},
 			},
-			args:    args{PrintModeNDJSON},
+			args:    args{PrintModeJSONL},
 			wantOut: "",
 		},
 		{
@@ -407,7 +407,7 @@ aaa:777	bbb:888	ccc:999
 					{`a"b`, "c\td"},
 				},
 			},
-			args: args{PrintModeNDJSON},
+			args: args{PrintModeJSONL},
 			wantOut: `{"name":"a\"b","note":"c\td"}
 `,
 		},
@@ -481,7 +481,7 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 	t.Run("ndjson emits null for a NULL cell", func(t *testing.T) {
 		t.Parallel()
 		out := &bytes.Buffer{}
-		if err := tbl.Print(out, PrintModeNDJSON); err != nil {
+		if err := tbl.Print(out, PrintModeJSONL); err != nil {
 			t.Fatal(err)
 		}
 		want := "{\"n\":null,\"e\":\"\",\"x\":\"1\"}\n"
@@ -523,7 +523,7 @@ func TestTablePrintJSONScalars(t *testing.T) {
 	t.Run("ndjson keeps string records as strings", func(t *testing.T) {
 		t.Parallel()
 		out := &bytes.Buffer{}
-		if err := tbl.Print(out, PrintModeNDJSON); err != nil {
+		if err := tbl.Print(out, PrintModeJSONL); err != nil {
 			t.Fatal(err)
 		}
 		want := "{\"i\":\"42\",\"f\":\"-1.5\",\"b\":\"true\",\"n\":null,\"empty\":\"\",\"big\":\"123456789012345678901234567890\",\"lead\":\"007\",\"text\":\"hello\"}\n"
@@ -585,7 +585,7 @@ func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 	t.Run("ndjson", func(t *testing.T) {
 		var row map[string]any
 		var out bytes.Buffer
-		if err := tbl.Print(&out, PrintModeNDJSON); err != nil {
+		if err := tbl.Print(&out, PrintModeJSONL); err != nil {
 			t.Fatal(err)
 		}
 		if err := json.Unmarshal(out.Bytes(), &row); err != nil {
@@ -1037,7 +1037,7 @@ func TestTablePrintEscaping(t *testing.T) {
 		t.Parallel()
 		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})
 		var buf bytes.Buffer
-		if err := tbl.Print(&buf, PrintModeNDJSON); err == nil {
+		if err := tbl.Print(&buf, PrintModeJSONL); err == nil {
 			t.Errorf("want error for duplicate NDJSON keys, got output %q", buf.String())
 		}
 	})
@@ -1160,7 +1160,7 @@ func TestTablePrint_WriteError(t *testing.T) {
 		PrintModeTSV,
 		PrintModeLTSV,
 		PrintModeJSON,
-		PrintModeNDJSON,
+		PrintModeJSONL,
 	}
 
 	for _, mode := range modes {

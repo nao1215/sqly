@@ -78,7 +78,7 @@ const (
 	formatMarkdown = "markdown"
 	formatExcel    = "excel"
 	formatJSON     = "json"
-	formatNDJSON   = "ndjson"
+	formatJSONL    = "jsonl"
 	formatParquet  = "parquet"
 	formatVertical = "vertical"
 )
@@ -111,8 +111,8 @@ const (
 	PrintModeExcel
 	// PrintModeJSON print data as a JSON array of objects
 	PrintModeJSON
-	// PrintModeNDJSON print data as newline-delimited JSON (one object per line)
-	PrintModeNDJSON
+	// PrintModeJSONL print data as newline-delimited JSON (one object per line)
+	PrintModeJSONL
 	// PrintModeParquet is an export-only mode; on screen it renders like CSV and
 	// only writes a Parquet file via .dump or --output (same pattern as Excel).
 	PrintModeParquet
@@ -140,8 +140,8 @@ func (p PrintMode) String() string {
 		return formatExcel
 	case PrintModeJSON:
 		return formatJSON
-	case PrintModeNDJSON:
-		return formatNDJSON
+	case PrintModeJSONL:
+		return formatJSONL
 	case PrintModeParquet:
 		return formatParquet
 	case PrintModeVertical:
@@ -484,7 +484,7 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 		return t.printExcel(out)
 	case PrintModeJSON:
 		return t.printJSON(out)
-	case PrintModeNDJSON:
+	case PrintModeJSONL:
 		return t.printNDJSON(out)
 	case PrintModeParquet:
 		// Export-only: on screen, render like CSV. The Parquet file is written
@@ -885,7 +885,7 @@ func (t *Table) printJSON(out io.Writer) error {
 // result set prints nothing — the empty NDJSON stream.
 func (t *Table) printNDJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
-		return fmt.Errorf("ndjson output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
+		return fmt.Errorf("jsonl output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
 	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)

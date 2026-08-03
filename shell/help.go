@@ -30,7 +30,7 @@ func helpGroups() []helpGroup {
 	return []helpGroup{
 		{"Session", []helpLine{
 			{helpCommand, "show this help"},
-			{modeCommand + " MODE", "change output mode (table, vertical, csv, tsv, ltsv, json, ndjson, markdown, ...)"},
+			{modeCommand + " MODE", "change output mode (table, vertical, csv, tsv, ltsv, json, jsonl, markdown, ...)"},
 			{dialectCommand + " [NAME]", "show or set the query dialect (sqlite, mysql, postgresql, googlesql)"},
 			{clearCommand, "clear the terminal screen"},
 			{exitCommand, "exit sqly"},
@@ -48,10 +48,10 @@ func helpGroups() []helpGroup {
 		}},
 		{"Import / Export", []helpLine{
 			{importCommand + " PATH...", "load files or directories into the session"},
-			{importModeCommand + " POLICY", "set ragged CSV/TSV row handling (stop, skip, pad short rows; reject long rows)"},
+			{rowMismatchCommand + " POLICY", "CSV/TSV row whose field count differs from the header: error, skip, pad"},
 			{dumpCommand + " TABLE FILE", "export a table to a file (format follows .mode; default csv)"},
 			{saveCommand + " DIR", "write changed tables into DIR (sources untouched)"},
-			{saveCommand + " --force", "overwrite each table's source file in place (destructive)"},
+			{saveCommand + " --in-place", "overwrite each table's source file (destructive)"},
 		}},
 	}
 }

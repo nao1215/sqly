@@ -425,7 +425,7 @@ scenarios:
           stderr:
             contains:
               - "unknown SQL dialect"
-              - "supported"
+              - "googlesql"
 
   - name: "dialect names are accepted case-insensitively and by alias"
     description: "postgres/postgresql and bigquery/googlesql/spanner name the same dialect, and the flag must not care about letter case."

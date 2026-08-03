@@ -34,7 +34,7 @@ scenarios:
           stdout:
             contains:
               - "[Usage]"
-              - "--output-format string"
+              - "--output-format FORMAT"
 
   - name: fails on a non-existent file
     steps:

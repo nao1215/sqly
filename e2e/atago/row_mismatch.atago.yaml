@@ -1,11 +1,11 @@
-# End-to-end coverage for --import-mode / .import-mode, which chooses how a
-# ragged CSV/TSV row (one whose field count differs from the header) is imported:
-# stop (default), skip, or pad. Regression for nao1215/sqly#731, where a ragged
-# row silently produced an empty table. make test-e2e
+# End-to-end coverage for --row-mismatch / .row-mismatch, which chooses how a
+# CSV/TSV row whose field count differs from the header is imported: error
+# (default), skip, or pad. Regression for nao1215/sqly#731, where such a row
+# silently produced an empty table. make test-e2e
 version: "1"
 
 suite:
-  name: sqly malformed-row import mode
+  name: sqly row-mismatch handling
 
 scenarios:
   - name: default policy stops the import and reports the column mismatch
@@ -28,11 +28,11 @@ scenarios:
               - "failed to import"
               - "column count mismatch"
 
-  - name: --import-mode skip drops the ragged row and imports the rest
+  - name: --row-mismatch skip drops the ragged row and imports the rest
     steps:
       - fixture: *ragged
       - run:
-          command: sqly --import-mode skip --output-format csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+          command: sqly --row-mismatch skip --output-format csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
       - assert:
           exit_code: 0
           stdout:
@@ -43,11 +43,11 @@ scenarios:
           stdout:
             not_contains: caro
 
-  - name: --import-mode pad keeps every row and blanks the missing field
+  - name: --row-mismatch pad keeps every row and blanks the missing field
     steps:
       - fixture: *ragged
       - run:
-          command: sqly --import-mode pad --output-format csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
+          command: sqly --row-mismatch pad --output-format csv --sql "SELECT name FROM ragged ORDER BY id" ragged.csv
       - assert:
           exit_code: 0
           stdout:
@@ -56,7 +56,7 @@ scenarios:
               - bob
               - caro
 
-  - name: --import-mode pad rejects a long row instead of truncating it
+  - name: --row-mismatch pad rejects a long row instead of truncating it
     steps:
       - fixture:
           file: too_many_fields.csv
@@ -64,29 +64,29 @@ scenarios:
             id,name
             1,alice,unexpected
       - run:
-          command: sqly --import-mode pad --sql "SELECT * FROM too_many_fields" too_many_fields.csv
+          command: sqly --row-mismatch pad --sql "SELECT * FROM too_many_fields" too_many_fields.csv
       - assert:
           exit_code: 1
           stdout:
             empty: true
           stderr:
-            contains: "--import-mode pad refuses to truncate"
+            contains: "--row-mismatch pad refuses to truncate"
 
-  - name: an invalid --import-mode value is rejected
+  - name: an invalid --row-mismatch value is rejected
     steps:
       - run:
-          command: sqly --import-mode keep --sql "SELECT 1"
+          command: sqly --row-mismatch keep --sql "SELECT 1"
       - assert:
           exit_code: 1
           stderr:
-            contains: "invalid import mode"
+            contains: "invalid row-mismatch policy"
 
-  - name: .import-mode changes the policy for a later batch .import
+  - name: .row-mismatch changes the policy for a later batch .import
     steps:
       - fixture: *ragged
       - run:
           command: sqly
-          stdin: ".import-mode pad\n.import ragged.csv\nSELECT name FROM ragged ORDER BY id;\n"
+          stdin: ".row-mismatch pad\n.import ragged.csv\nSELECT name FROM ragged ORDER BY id;\n"
       - assert:
           exit_code: 0
           stdout:
@@ -94,19 +94,19 @@ scenarios:
               - alice
               - caro
           stderr:
-            contains: "Change import mode from stop to pad"
+            contains: "Change row-mismatch policy from error to pad"
 
-  - name: .import-mode with no argument reports usage and fails the batch
+  - name: .row-mismatch with no argument reports usage and fails the batch
     steps:
       - run:
           command: sqly
-          stdin: ".import-mode\n"
+          stdin: ".row-mismatch\n"
       - assert:
           exit_code: 1
           stderr:
             contains:
-              - ".import-mode requires a policy name"
-              - "current mode=stop"
+              - ".row-mismatch requires a policy name"
+              - "current policy=error"
 
   # The policy only applies to delimited text (CSV/TSV). The scenarios below pin
   # down that it is a no-op for every other format: LTSV, JSON, JSONL, Parquet,
@@ -123,13 +123,13 @@ scenarios:
             id:1	name:alice	zip:01234
             id:2	name:bob
       - run:
-          command: sqly --import-mode stop --output-format csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
+          command: sqly --row-mismatch error --output-format csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
       - assert:
           exit_code: 0
           stdout:
             contains: "2"
       - run:
-          command: sqly --import-mode skip --output-format csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
+          command: sqly --row-mismatch skip --output-format csv --sql "SELECT COUNT(*) FROM sparse" sparse.ltsv
       - assert:
           exit_code: 0
           stdout:
@@ -145,7 +145,7 @@ scenarios:
               {"name": "Bob", "age": 25}
             ]
       - run:
-          command: sqly --import-mode pad --output-format csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
+          command: sqly --row-mismatch pad --output-format csv --sql "SELECT json_extract(data, '$.name') FROM people ORDER BY json_extract(data, '$.age')" people.json
       - assert:
           exit_code: 0
           stdout:
@@ -161,7 +161,7 @@ scenarios:
             {"id":1,"name":"alice"}
             {"id":2}
       - run:
-          command: sqly --import-mode stop --output-format csv --sql "SELECT COUNT(*) FROM varying" varying.jsonl
+          command: sqly --row-mismatch error --output-format csv --sql "SELECT COUNT(*) FROM varying" varying.jsonl
       - assert:
           exit_code: 0
           stdout:
@@ -173,7 +173,7 @@ scenarios:
           file: products.parquet
           from: testdata/products.parquet
       - run:
-          command: sqly --import-mode pad --output-format csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
+          command: sqly --row-mismatch pad --output-format csv --sql "SELECT name FROM products ORDER BY id LIMIT 1" products.parquet
       - assert:
           exit_code: 0
           stdout:
@@ -185,7 +185,7 @@ scenarios:
           file: sample.xlsx
           from: testdata/sample.xlsx
       - run:
-          command: sqly --import-mode skip sample.xlsx
+          command: sqly --row-mismatch skip sample.xlsx
           stdin: "SELECT COUNT(*) FROM sample_test_sheet\n"
       - assert:
           exit_code: 0

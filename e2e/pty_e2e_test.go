@@ -408,7 +408,7 @@ func TestInteractivePTY_FinancialImportRollbackWithoutExistingState(t *testing.T
 			s.write(strings.Join([]string{
 				".import " + tc.file + " " + filepath.Base(bad),
 				"SELECT '" + tc.label + "' AS state, COUNT(*) AS rows FROM " + tc.table + ";",
-				".save --force",
+				".save --in-place",
 			}, "\r") + "\r\x04")
 			s.waitFor("failed", ioTimeout)
 			s.waitFor(tc.label, ioTimeout)
@@ -426,7 +426,7 @@ func TestInteractivePTY_FinancialImportRollbackWithoutExistingState(t *testing.T
 	}
 }
 
-// TestInteractivePTY_PadRollbackKeepsExistingTable verifies the import mode
+// TestInteractivePTY_PadRollbackKeepsExistingTable verifies the row-mismatch
 // through the real shell after a prior table already exists. The failed
 // multi-file import must not replace or remove that table.
 func TestInteractivePTY_PadRollbackKeepsExistingTable(t *testing.T) {
@@ -447,7 +447,7 @@ func TestInteractivePTY_PadRollbackKeepsExistingTable(t *testing.T) {
 	t.Cleanup(s.close)
 	s.waitReady(startupTimeout)
 	s.write(strings.Join([]string{
-		".import-mode pad",
+		".row-mismatch pad",
 		".import " + filepath.Base(valid) + " " + filepath.Base(long),
 		"SELECT 'PAD_EXISTING' AS state, COUNT(*) AS rows FROM existing;",
 	}, "\r") + "\r\x04")
@@ -479,11 +479,11 @@ func verifyFinancialRollback(t *testing.T, source, bad, table, label string) {
 	// inherently racy: a slow filesystem can still lose the next keystrokes.
 	s.write(strings.Join([]string{
 		"SELECT '" + label + "_BEFORE' AS state, COUNT(*) AS rows FROM " + table + ";",
-		".save --force",
+		".save --in-place",
 		"SELECT '" + label + "_FIRST_SAVE_DONE';",
 		".import " + filepath.Base(source) + " " + filepath.Base(bad),
 		"SELECT '" + label + "_AFTER' AS state, COUNT(*) AS rows FROM " + table + ";",
-		".save --force",
+		".save --in-place",
 		"SELECT '" + label + "_SAVE_DONE';",
 	}, "\r") + "\r\x04")
 	s.waitFor(label+"_BEFORE", ioTimeout)

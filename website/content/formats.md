@@ -20,11 +20,11 @@ weight: 50
 
 ## Write
 
-`--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format ndjson`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
+`--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format jsonl`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
 
 `--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
-ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `--save`/`--save-dir` do, not `--output`.
+ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `--save-in-place`/`--save-tables` do, not `--output`.
 
 ## Compression
 
@@ -62,15 +62,17 @@ An Excel source cannot be written back in place, because several tables share on
 
 A text input without a Unicode BOM is decoded as UTF-8 unless `--encoding` says otherwise: `utf-8`, `shift-jis` (accepting `cp932`, `ms932`, `windows-31j`, `sjis`), `euc-jp`, `iso-2022-jp`, `utf-16le`, `utf-16be`. A BOM always wins over the flag.
 
-## Malformed rows
+## Row mismatches
 
-When a CSV or TSV row has a different field count from the header:
+When a CSV or TSV row has a different field count from the header. Only CSV and
+TSV can have this problem, so `--row-mismatch` applies to those two formats and
+is ignored for the rest.
 
-| `--import-mode` | Behavior |
+| `--row-mismatch` | Behavior |
 |:--|:--|
-| `stop` (default) | fail the import and report the row |
+| `error` (default) | fail the import and report the row |
 | `skip` | drop the row, import the rest |
-| `pad` | pad a short row with empty values; reject a long one without truncating it |
+| `pad` | pad a short row with empty values; fail on a long one rather than truncating it |
 
 ## Output formats
 
@@ -117,5 +119,5 @@ A NULL comes from SQL: an outer join with no match, an explicit `NULL`, an
 aggregate over no rows. The two print as blank in `table` and `csv` alike, so
 JSON is where they are distinguishable as `""` and `null`.
 
-`tsv`, `ltsv`, `markdown`, `ndjson`, `vertical`, `excel`, and `parquet` are the
+`tsv`, `ltsv`, `markdown`, `jsonl`, `vertical`, `excel`, and `parquet` are the
 remaining formats; see the [reference](/reference/#output-formats).

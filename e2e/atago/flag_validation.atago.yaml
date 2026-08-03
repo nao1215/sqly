@@ -1,0 +1,252 @@
+# The argument checks the v1.0.0 CLI surface makes before it imports anything or
+# prints a row. Each of these combinations used to either be accepted and then
+# silently do something else, or fail only after output had already been written.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly flag validation
+
+scenarios:
+  - name: rejects a binary output format with nowhere to write it
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --output-format parquet --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains:
+              - "--output-format parquet"
+              - "--output"
+
+  - name: rejects an excel result with nowhere to write it
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format excel --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--output"
+
+  - name: writes parquet when the destination is given
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format parquet --output out.parquet --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.parquet
+            exists: true
+
+  - name: rejects both write-back destinations at once, before importing
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --save-in-place --save-tables out --sql "UPDATE user SET user_name = 'x'" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--save-in-place"
+          file:
+            path: out
+            exists: false
+
+  - name: leaves the source untouched when the write-back combination is rejected
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --save-in-place --save-tables out --sql "UPDATE user SET user_name = 'x'" user.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: user.csv
+            contains: booker12
+
+  - name: rejects --stdin-table without --stdin-format
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --stdin-table piped --sql "SELECT 1" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--stdin-format"
+
+  - name: rejects a .save flag the command does not have instead of making a directory
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET user_name = 'changed';
+            .save --force
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--in-place"
+          file:
+            path: "--force"
+            exists: false
+      - assert:
+          file:
+            path: user.csv
+            contains: booker12
+
+  - name: rejects write-back with no input file, before importing anything
+    steps:
+      - run:
+          command: sqly --save-in-place --sql "UPDATE t SET a = 1"
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "no input file or directory was given"
+
+  - name: rejects write-back for a remote input
+    steps:
+      - run:
+          command: sqly --save-in-place --sql "SELECT 1" https://example.com/user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "remote input"
+
+  - name: rejects write-back for a piped dataset
+    steps:
+      - run:
+          command: sqly --stdin-format csv --save-in-place --sql "UPDATE stdin SET a = 1"
+          stdin: |
+            a
+            1
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "stdin"
+
+  - name: rejects write-back for a format it cannot write, naming the input
+    steps:
+      - fixture:
+          file: events.jsonl
+          content: |
+            {"id":1}
+      - run:
+          command: sqly --save-in-place --sql "UPDATE events SET data = '{}'" events.jsonl
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "cannot write back events.jsonl"
+      - assert:
+          file:
+            path: events.jsonl
+            contains: '"id":1'
+
+  - name: rejects write-back for a directory import
+    steps:
+      - fixture:
+          file: data/user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --save-in-place --sql "UPDATE user SET user_name = 'x'" data
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "a directory import"
+      - assert:
+          file:
+            path: data/user.csv
+            contains: booker12
+
+  - name: an in-place save keeps the source file's permissions
+    # A staged file is created 0600; a commit that carried that mode across would
+    # quietly make a world-readable CSV owner-only.
+    skip:
+      os: windows
+    steps:
+      - fixture: &perm_user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sh -c 'chmod 644 user.csv && sqly --sql "UPDATE user SET identifier = 2" --save-in-place user.csv && ls -l user.csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "-rw-r--r--"
+
+  - name: a script with several results prints them all, in order
+    steps:
+      - fixture: *perm_user
+      - fixture:
+          file: two.sql
+          content: |
+            SELECT user_name FROM user;
+            SELECT identifier FROM user;
+      - run:
+          command: sqly --output-format csv --sql-file two.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - user_name
+              - booker12
+              - identifier
+      - assert:
+          stdout:
+            line: 1
+            equals: user_name
+
+  - name: --output rejects a script with several results instead of dropping one
+    steps:
+      - fixture: *perm_user
+      - fixture:
+          file: two.sql
+          content: |
+            SELECT user_name FROM user;
+            SELECT identifier FROM user;
+      - run:
+          command: sqly --output out.csv --sql-file two.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "single result set"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: --output rejects a script that produces no result at all
+    steps:
+      - fixture: *perm_user
+      - fixture:
+          file: none.sql
+          content: |
+            UPDATE user SET identifier = 5;
+      - run:
+          command: sqly --output out.csv --sql-file none.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "one result set"
+          file:
+            path: out.csv
+            exists: false

@@ -63,7 +63,7 @@ func dropStatusLines(out string) string {
 func decodeJSONRow(t *testing.T, format, payload string) map[string]any {
 	t.Helper()
 
-	if format == "ndjson" {
+	if format == "jsonl" {
 		lines := nonEmptyLines(payload)
 		if len(lines) != 1 {
 			t.Fatalf("ndjson produced %d lines, want 1: %q", len(lines), payload)
@@ -99,7 +99,7 @@ func nonEmptyLines(s string) []string {
 // A string comparison would pass for `"int_col":"42"` as readily as for
 // `"int_col":42`, which is the very confusion the contract exists to remove.
 func TestSmoke_JSONTypeContract(t *testing.T) {
-	for _, format := range []string{"json", "ndjson"} {
+	for _, format := range []string{"json", "jsonl"} {
 		t.Run(format, func(t *testing.T) {
 			row := decodeOneJSONRow(t, format, "SELECT * FROM t;")
 
@@ -181,7 +181,7 @@ func TestSmoke_JSONNumbersAreExactWithUseNumber(t *testing.T) {
 	script := "CREATE TABLE big (id INTEGER, ratio REAL);\n" +
 		"INSERT INTO big VALUES (9007199254740993, 0.1);\n" +
 		"SELECT * FROM big;\n"
-	stdout, stderr, code := run(t, script, "--output-format", "ndjson")
+	stdout, stderr, code := run(t, script, "--output-format", "jsonl")
 	if code != 0 {
 		t.Fatalf("exit code = %d (stderr=%q)", code, stderr)
 	}
@@ -215,7 +215,7 @@ func TestSmoke_NDJSONKeepsTypesOnEveryLine(t *testing.T) {
 	script := "CREATE TABLE rows_t (n INTEGER, s TEXT);\n" +
 		"INSERT INTO rows_t VALUES (1, '001'), (2, '002'), (3, NULL);\n" +
 		"SELECT * FROM rows_t ORDER BY n;\n"
-	stdout, stderr, code := run(t, script, "--output-format", "ndjson")
+	stdout, stderr, code := run(t, script, "--output-format", "jsonl")
 	if code != 0 {
 		t.Fatalf("exit code = %d (stderr=%q)", code, stderr)
 	}
@@ -296,11 +296,11 @@ func TestSmoke_TextFormatsUnchanged(t *testing.T) {
 func TestSmoke_StdinImportKeepsTypes(t *testing.T) {
 	stdin := "code,qty,flag\n00123,42,true\n"
 	stdout, stderr, code := run(t, stdin,
-		"--stdin", "csv", "--output-format", "ndjson", "--sql", "SELECT * FROM stdin")
+		"--stdin-format", "csv", "--output-format", "jsonl", "--sql", "SELECT * FROM stdin")
 	if code != 0 {
 		t.Fatalf("exit code = %d (stderr=%q)", code, stderr)
 	}
-	row := decodeJSONRow(t, "ndjson", dropStatusLines(stdout))
+	row := decodeJSONRow(t, "jsonl", dropStatusLines(stdout))
 
 	if row["code"] != "00123" {
 		t.Errorf("code = %#v (%T), want the string \"00123\" with its leading zeros", row["code"], row["code"])
@@ -318,7 +318,7 @@ func TestSmoke_StdinImportKeepsTypes(t *testing.T) {
 // on stdout breaks `sqly ... | jq`.
 func TestSmoke_PipedOutputIsPureData(t *testing.T) {
 	csv := filepath.Join("testdata", "user.csv")
-	stdout, _, code := run(t, ".mode ndjson\nSELECT first_name FROM user ORDER BY first_name LIMIT 2;\n", csv)
+	stdout, _, code := run(t, ".mode jsonl\nSELECT first_name FROM user ORDER BY first_name LIMIT 2;\n", csv)
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -342,12 +342,12 @@ func TestSmoke_UnicodeAndSymbolNames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stdout, stderr, code := run(t, "", "--output-format", "ndjson",
+	stdout, stderr, code := run(t, "", "--output-format", "jsonl",
 		"--sql", `SELECT "商品名", "個数" FROM 売上_データ_2024`, path)
 	if code != 0 {
 		t.Fatalf("exit code = %d (stderr=%q stdout=%q)", code, stderr, stdout)
 	}
-	row := decodeJSONRow(t, "ndjson", dropStatusLines(stdout))
+	row := decodeJSONRow(t, "jsonl", dropStatusLines(stdout))
 	if row["商品名"] != "りんご" {
 		t.Errorf("商品名 = %#v, want りんご", row["商品名"])
 	}

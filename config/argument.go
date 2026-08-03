@@ -26,6 +26,10 @@ var (
 // table unless --inspect-sample overrides it.
 const defaultInspectSample = 5
 
+// defaultStdinTable is the table name a --stdin-format dataset gets when
+// --stdin-table does not name one.
+const defaultStdinTable = "stdin"
+
 // Output is configuration for output data to file.
 type Output struct {
 	// FilePath is output destination path
@@ -47,7 +51,7 @@ type Arg struct {
 	// Query is SQL query (for --sql option)
 	Query string
 	// SQLFilePath is the path to a file containing SQL to execute (for
-	// --sql-file). It lets stdin carry a piped dataset (--stdin) while the query
+	// --sql-file). It lets stdin carry a piped dataset (--stdin-format) while the query
 	// arrives from a file, which a single stdin stream cannot do. It supports
 	// multiline statements with the same splitting rules as batch stdin mode and
 	// cannot be combined with --sql.
@@ -60,33 +64,29 @@ type Arg struct {
 	// 0 means schema-only (no sample rows), which keeps the report small for
 	// wide or multi-table sources.
 	InspectSample int
-	// CachePath, when non-empty, is the location of an opt-in import cache: a
-	// SQLite snapshot of the imported tables. A warm run whose inputs are unchanged
-	// loads from it instead of re-parsing the source files.
-	CachePath string
 	// SaveInPlace, when true, writes each table back over its source file after
-	// the run (for --save). It overwrites source files, so it requires Force.
+	// the run (for --save-in-place). It overwrites the source files, which is why
+	// the flag spells that out instead of being a bare --save.
 	SaveInPlace bool
-	// SaveDir, when non-empty, writes each table into this directory after the
-	// run (for --save-dir), preserving each source's format and compression and
+	// SaveTablesDir, when non-empty, writes each table into this directory after the
+	// run (for --save-tables), preserving each source's format and compression and
 	// leaving the original source files untouched.
-	SaveDir string
-	// Force allows the destructive in-place overwrite of SaveInPlace.
-	Force bool
+	SaveTablesDir string
 	// Usage message
 	Usage string
 	// SheetName is excel sheet name that is imported into the DB.
 	SheetName string
 	// StdinFormat, when non-empty, makes sqly read stdin as an input dataset of
-	// this format (csv|tsv|ltsv|json|jsonl) instead of as SQL/helper commands.
+	// this format (csv, tsv, ltsv, json, jsonl) instead of as SQL/helper commands.
 	StdinFormat string
-	// StdinTableName is the table name for the --stdin dataset (default: stdin).
+	// StdinTableName is the table name for the --stdin-format dataset (default:
+	// stdin).
 	StdinTableName string
-	// ImportMode selects how a ragged CSV/TSV row (one whose field count differs
-	// from the header) is imported: stop (default), skip, or pad. It sets the
-	// initial policy for the session; the .import-mode shell command can change it
-	// at runtime.
-	ImportMode model.MalformedRowPolicy
+	// RowMismatch selects how a CSV/TSV row whose field count differs from the
+	// header is imported: error (default), skip, or pad. It sets the initial
+	// policy for the session; the .row-mismatch shell command can change it at
+	// runtime.
+	RowMismatch model.RowMismatchPolicy
 	// Encoding selects how a text import without a Unicode BOM is decoded before
 	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs.
 	Encoding model.TextEncoding
@@ -100,16 +100,23 @@ type Arg struct {
 
 const (
 	outputFormatTable    = "table"
+	outputFormatVertical = "vertical"
 	outputFormatCSV      = "csv"
 	outputFormatTSV      = "tsv"
 	outputFormatLTSV     = "ltsv"
-	outputFormatExcel    = "excel"
-	outputFormatMarkdown = "markdown"
 	outputFormatJSON     = "json"
-	outputFormatNDJSON   = "ndjson"
+	outputFormatJSONL    = "jsonl"
+	outputFormatMarkdown = "markdown"
+	outputFormatExcel    = "excel"
 	outputFormatParquet  = "parquet"
-	outputFormatVertical = "vertical"
-	outputFormatHelp     = outputFormatTable + "|" + outputFormatCSV + "|" + outputFormatTSV + "|" + outputFormatLTSV + "|" + outputFormatExcel + "|" + outputFormatMarkdown + "|" + outputFormatJSON + "|" + outputFormatNDJSON + "|" + outputFormatParquet + "|" + outputFormatVertical
+	// outputFormatHelp lists the formats in the order --help shows them: the
+	// screen formats first, then the two that only make sense written to a file.
+	// The values are comma-separated so a terminal can wrap the list; a
+	// pipe-separated run of ten names is one unbreakable 58-column token.
+	outputFormatHelp = outputFormatTable + ", " + outputFormatVertical + ", " + outputFormatCSV + ", " + outputFormatTSV + ", " + outputFormatLTSV + ", " + outputFormatJSON + ", " + outputFormatJSONL + ", " + outputFormatMarkdown + ", " + outputFormatExcel + ", " + outputFormatParquet
+	// stdinFormatHelp lists the formats stdin can be read as. A piped dataset has
+	// no file name, so the format cannot be inferred and must be named.
+	stdinFormatHelp = outputFormatCSV + ", " + outputFormatTSV + ", " + outputFormatLTSV + ", " + outputFormatJSON + ", " + outputFormatJSONL
 )
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
@@ -144,24 +151,28 @@ func newArg(args []string) (*Arg, error) {
 	// that fail with "path does not exist". Interspersed parsing instead applies
 	// the flag, and an unknown flag fails fast with a clear parse error.
 	flag.SetInterspersed(true)
-	outputFormat := flag.String("output-format", outputFormatTable, "output format: "+outputFormatHelp)
-	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
-	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format ("+outputFormatCSV+"|"+outputFormatTSV+"|"+outputFormatLTSV+"|"+outputFormatJSON+"|jsonl)")
-	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
-	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop (abort)|skip (drop)|pad (pad short rows with empty fields; reject long rows)")
-	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "text input encoding for CSV/TSV/LTSV/JSON/JSONL import: "+model.TextEncodingHelp())
-	sqlDialect := flag.String("dialect", string(dialect.SQLite), "SQL dialect for queries (loading always uses sqlite): sqlite|mysql|postgresql|googlesql")
-	query := flag.StringP("sql", "s", "", "sql query you want to execute")
-	sqlFile := flag.StringP("sql-file", "f", "", "path to a file with SQL to execute (multiline; cannot be used with --sql)")
-	output := flag.StringP("output", "o", "", "destination path for the result of --sql or a single-result --sql-file script")
-	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
-	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "rows to include per table in --inspect (0 for schema only)")
-	cachePath := flag.String("cache", "", "opt-in import cache: reuse a SQLite snapshot of the imported tables when inputs are unchanged (keyed by path+size+SHA-256 content hash)")
-	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
-	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
-	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
-	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print help message")
-	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print sqly version")
+	// Input.
+	stdinFormat := flag.String("stdin-format", "", "read stdin as a dataset instead of as SQL; one of: "+stdinFormatHelp)
+	stdinTable := flag.String("stdin-table", defaultStdinTable, "table name for the --stdin-format dataset")
+	sheetName := flag.String("sheet", "", "import only this sheet from Excel (.xlsx) inputs")
+	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "decode CSV, TSV, LTSV, JSON, and JSONL inputs that have no BOM as one of: "+strings.ReplaceAll(model.TextEncodingHelp(), "|", ", "))
+	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "CSV/TSV only: handle a row whose field count differs from the header, as one of: error (fail the import), skip (drop the row), pad (pad a short row, fail on a long one)")
+	// Query.
+	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
+	sqlFile := flag.StringP("sql-file", "f", "", "run every statement in this SQL file, printing each result, then exit")
+	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: sqlite, mysql, postgresql, googlesql; sqly translates it to SQLite")
+	// Output.
+	output := flag.StringP("output", "o", "", "write the query result to this file instead of stdout; the run must produce exactly one result")
+	outputFormat := flag.String("output-format", outputFormatTable, "print the query result as one of: "+outputFormatHelp+"; excel and parquet need --output")
+	// Inspection.
+	flag.BoolVar(&arg.InspectFlag, "inspect", false, "print a JSON report of the imported tables (schema, row counts, sample rows) and exit")
+	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "sample rows per table in the --inspect report; 0 for schema only")
+	// Write-back.
+	saveTablesDir := flag.String("save-tables", "", "after the run, write every table the session changed into this directory, in its source format; the sources are untouched")
+	flag.BoolVar(&arg.SaveInPlace, "save-in-place", false, "after the run, overwrite the source file of every table the session changed (destructive)")
+	// General.
+	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print this help and exit")
+	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print the sqly version and exit")
 	if err := flag.Parse(args[1:]); err != nil {
 		return nil, err
 	}
@@ -185,17 +196,17 @@ func newArg(args []string) (*Arg, error) {
 	if flag.Changed("sql-file") && *sqlFile == "" {
 		return nil, errEmptySQLFile
 	}
-	if flag.Changed("save-dir") && *saveDir == "" {
-		return nil, errEmptySaveDir
+	if flag.Changed("save-tables") && *saveTablesDir == "" {
+		return nil, errEmptySaveTables
 	}
-	if flag.Changed("stdin") && *stdinFormat == "" {
-		return nil, errEmptyStdin
+	if flag.Changed("stdin-format") && *stdinFormat == "" {
+		return nil, errEmptyStdinFormat
 	}
 
-	// --stdin-name only names the --stdin dataset, so it has no effect without
-	// --stdin. Reject it when set alone instead of silently ignoring it.
-	if flag.Changed("stdin-name") && *stdinFormat == "" {
-		return nil, errStdinNameWithoutStdin
+	// --stdin-table only names the --stdin-format dataset, so it has no effect
+	// without it. Reject it when set alone instead of silently ignoring it.
+	if flag.Changed("stdin-table") && *stdinFormat == "" {
+		return nil, errStdinTableWithoutFormat
 	}
 
 	// --inspect-sample only caps the rows --inspect samples, so it has no effect
@@ -205,31 +216,41 @@ func newArg(args []string) (*Arg, error) {
 		return nil, errInspectSampleWithoutInspect
 	}
 
-	// --force only confirms the destructive --save write-back, so it has no effect
-	// without --save/--save-dir. Reject it when set alone.
-	if arg.Force && !arg.SaveInPlace && *saveDir == "" {
-		return nil, errForceWithoutSave
+	// The two write-back destinations are mutually exclusive: one run cannot both
+	// leave the sources alone and overwrite them. Reject the pair here, at parse
+	// time, rather than after the query has already produced output.
+	if arg.SaveInPlace && *saveTablesDir != "" {
+		return nil, errSaveInPlaceWithSaveTables
 	}
 
-	// --cache must be non-empty when given (its empty string is the "absent"
-	// sentinel).
-	if flag.Changed("cache") && *cachePath == "" {
-		return nil, errEmptyCache
+	// Write-back rewrites the files the tables were imported from, so it needs
+	// inputs that are files. A piped dataset is consumed and gone, and a remote
+	// input is not sqly's to write. Rejecting both here, before anything is
+	// imported, keeps a run that cannot persist from looking like one that did.
+	if arg.SaveInPlace || *saveTablesDir != "" {
+		if *stdinFormat != "" {
+			return nil, errSaveWithStdinDataset
+		}
+		for _, path := range flag.Args() {
+			if isRemoteInput(path) {
+				return nil, fmt.Errorf("%w: %s", errSaveWithRemoteInput, path)
+			}
+		}
 	}
 
-	// Validate --stdin-name so it cannot be empty or contain path separators.
+	// Validate --stdin-table so it cannot be empty or contain path separators.
 	// The name becomes a staging filename; a value like "" or "../escaped" would
-	// otherwise create odd hidden files or write outside the temp directory. Ref
-	//. Only meaningful with --stdin, so validate only when staging applies.
+	// otherwise create odd hidden files or write outside the temp directory. It is
+	// only meaningful with --stdin-format, so validate only when staging applies.
 	if *stdinFormat != "" {
-		if err := validateStdinName(*stdinName); err != nil {
+		if err := validateStdinTable(*stdinTable); err != nil {
 			return nil, err
 		}
 	}
 
-	// Parse --import-mode into a policy, rejecting any value other than
-	// stop|skip|pad so a typo fails fast instead of silently defaulting.
-	importPolicy, err := model.ParseMalformedRowPolicy(*importMode)
+	// Parse --row-mismatch into a policy, rejecting any value other than
+	// error|skip|pad so a typo fails fast instead of silently defaulting.
+	rowMismatchPolicy, err := model.ParseRowMismatchPolicy(*rowMismatch)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +262,7 @@ func newArg(args []string) (*Arg, error) {
 	// so a typo fails fast with the list of supported dialects.
 	sqlDialectValue, err := dialect.Parse(*sqlDialect)
 	if err != nil {
-		return nil, fmt.Errorf("unknown SQL dialect %q (supported: sqlite, mysql, postgresql, googlesql)", *sqlDialect)
+		return nil, fmt.Errorf("unknown SQL dialect %q: want sqlite, mysql, postgresql, or googlesql", *sqlDialect)
 	}
 	outputMode, err := parseOutputFormat(*outputFormat)
 	if err != nil {
@@ -254,43 +275,51 @@ func newArg(args []string) (*Arg, error) {
 	arg.FilePaths = flag.Args()
 	arg.SheetName = *sheetName
 	arg.StdinFormat = *stdinFormat
-	arg.StdinTableName = *stdinName
-	arg.ImportMode = importPolicy
+	arg.StdinTableName = *stdinTable
+	arg.RowMismatch = rowMismatchPolicy
 	arg.Encoding = importTextEncoding
 	arg.Dialect = sqlDialectValue
 	arg.Query = *query
 	arg.SQLFilePath = *sqlFile
-	arg.SaveDir = *saveDir
+	arg.SaveTablesDir = *saveTablesDir
 	arg.InspectSample = *inspectSample
-	arg.CachePath = *cachePath
 
 	return arg, nil
 }
 
-// validateStdinName rejects a --stdin-name that is empty or path-like. The name
+// isRemoteInput reports whether an input argument names an http(s) URL rather
+// than a local path. Only the scheme is examined, which is all the write-back
+// check needs: the import path does the real URL validation and reports its own
+// errors for a malformed one.
+func isRemoteInput(path string) bool {
+	lower := strings.ToLower(path)
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+}
+
+// validateStdinTable rejects a --stdin-table that is empty or path-like. The name
 // is used as a staging file name, so path separators or "."/".." could escape
 // the temp directory or create surprising files.
-func validateStdinName(name string) error {
+func validateStdinTable(name string) error {
 	if name == "" {
-		return errInvalidStdinName
+		return errInvalidStdinTable
 	}
 	if name == "." || name == ".." {
-		return errInvalidStdinName
+		return errInvalidStdinTable
 	}
 	if strings.ContainsAny(name, `/\`) {
-		return errInvalidStdinName
+		return errInvalidStdinTable
 	}
-	// Require a bare-identifier name so the advertised --stdin-name is the exact
+	// Require a bare-identifier name so the advertised --stdin-table is the exact
 	// queryable table name. Otherwise filesql sanitizes spaces and dashes (e.g.
 	// "my data" -> "my_data"), leaving the name the user gave unusable.
 	if !isValidTableIdentifier(name) {
-		return errInvalidStdinName
+		return errInvalidStdinTable
 	}
 	// A SQLite keyword has a valid identifier shape but is not queryable as a bare
 	// table name (e.g. "SELECT * FROM select" is a syntax error), so reject it
 	// instead of advertising an unusable name.
 	if model.IsReservedSQLiteKeyword(name) {
-		return errStdinNameReserved
+		return errStdinTableReserved
 	}
 	return nil
 }
@@ -330,8 +359,8 @@ func parseOutputFormat(name string) (model.PrintMode, error) {
 		return model.PrintModeMarkdownTable, nil
 	case outputFormatJSON:
 		return model.PrintModeJSON, nil
-	case outputFormatNDJSON:
-		return model.PrintModeNDJSON, nil
+	case outputFormatJSONL:
+		return model.PrintModeJSONL, nil
 	case outputFormatParquet:
 		return model.PrintModeParquet, nil
 	case outputFormatVertical:
@@ -351,48 +380,210 @@ func (a *Arg) NeedsOutputToFile() bool {
 	return a != nil && a.Output != nil && a.Output.FilePath != "" && a.Query != ""
 }
 
+// optionGroup is one titled block of the option list. Options are grouped by the
+// stage of a run they belong to, so a reader looking for "how do I write the
+// result somewhere" reads one short block instead of scanning a flat list of
+// eighteen flags.
+type optionGroup struct {
+	title string
+	// options are long flag names, in the order the group shows them.
+	options []string
+}
+
+// optionGroups is the layout of the [Options] section. Every flag defined in
+// newArg appears in exactly one group; helpUsage fails loudly if that stops
+// being true, so a flag added later cannot silently vanish from --help.
+var optionGroups = []optionGroup{
+	{title: "Input", options: []string{"stdin-format", "stdin-table", "sheet", "encoding", "row-mismatch"}},
+	{title: "Query", options: []string{"sql", "sql-file", "dialect"}},
+	{title: "Output", options: []string{"output", "output-format"}},
+	{title: "Inspection", options: []string{"inspect", "inspect-sample"}},
+	{title: "Write back", options: []string{"save-tables", "save-in-place"}},
+	{title: "General", options: []string{"help", "version"}},
+}
+
+// Placeholder names --help shows after a value-taking flag.
+const (
+	argFile     = "FILE"
+	argName     = "NAME"
+	argFormat   = "FORMAT"
+	argDir      = "DIR"
+	argEncoding = "ENCODING"
+	argPolicy   = "POLICY"
+	argSQL      = "SQL"
+	argCount    = "N"
+)
+
+// optionArgNames gives each value-taking flag the placeholder --help shows after
+// it, so the kind of value a flag wants (a file, a directory, a format name) is
+// visible in the list itself instead of only in the prose.
+var optionArgNames = map[string]string{
+	"stdin-format":   argFormat,
+	"stdin-table":    argName,
+	"sheet":          argName,
+	"encoding":       argEncoding,
+	"row-mismatch":   argPolicy,
+	"sql":            argSQL,
+	"sql-file":       argFile,
+	"dialect":        argName,
+	"output":         argFile,
+	"output-format":  argFormat,
+	"inspect-sample": argCount,
+	"save-tables":    argDir,
+}
+
+// helpWidth is the column the option descriptions wrap at. 80 keeps --help
+// readable in a default terminal without a pager.
+const helpWidth = 80
+
 // usage return usage message.
 func usage(flag pflag.FlagSet) string {
-	s := fmt.Sprintf("%s - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire with shell (%s)\n", color.GreenString("sqly"), GetVersion())
+	s := color.GreenString("sqly") + " - run SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH,\n"
+	s += fmt.Sprintf("and Fedwire files (%s)\n", GetVersion())
 	s += "\n"
 	s += "[Usage]\n"
-	s += fmt.Sprintf("  %s [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]\n", color.GreenString("sqly"))
+	s += fmt.Sprintf("  %s [OPTIONS] [FILE|DIRECTORY|URL ...]\n", color.GreenString("sqly"))
 	s += "\n"
-	s += "  sqly is flag-driven and has no subcommands: use --help and --version,\n"
-	s += "  not \"sqly help\" or \"sqly version\". Helper commands like .tables and\n"
-	s += "  .import run inside the shell or batch stdin mode, not as arguments.\n"
+	s += "  Each input is loaded into an in-memory SQLite database as a table named\n"
+	s += "  after the file. With --sql or --sql-file, sqly runs the query and exits;\n"
+	s += "  with neither, it opens an interactive shell, or runs SQL piped into it.\n"
+	s += "  sqly has no subcommands. Dot-commands are available inside the shell.\n"
 	s += "\n"
-	s += "[Example]\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run sqly shell"))
-	s += "    sqly\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Execute query for csv file"))
-	s += "    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Import directory with all supported files"))
-	s += "    sqly ./path/to/data/directory\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Mix files and directories"))
-	s += "    sqly file1.csv ./data_dir file2.tsv\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Batch mode: pipe SQL/commands via stdin (no TTY)"))
-	s += "    echo 'SELECT * FROM sample' | sqly ./path/to/sample.csv\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("Join a piped dataset (--stdin) with a query loaded from a file"))
-	s += "    cat data.csv | sqly --stdin csv --sql-file query.sql\n"
+	s += "[Examples]\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("open the shell with a file loaded"))
+	s += "    sqly sample.csv\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run one query over a file, a directory, or a URL"))
+	s += "    sqly --sql 'SELECT * FROM sample' sample.csv\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("join files of different formats"))
+	s += "    sqly --sql 'SELECT * FROM a JOIN b USING (id)' a.csv b.parquet\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("write the result somewhere else, in another format"))
+	s += "    sqly --output-format json --output out.json --sql 'SELECT 1' a.csv\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("read the data from a pipe and the query from a file"))
+	s += "    cat data.csv | sqly --stdin-format csv --sql-file query.sql\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("look at a file you have never seen, as JSON"))
+	s += "    sqly --inspect sample.csv\n"
 	s += "\n"
-	s += "[OPTIONS]\n"
-	s += flag.FlagUsages()
+	s += helpOptions(&flag)
 	s += "\n"
-	s += "[LICENSE]\n"
-	s += fmt.Sprintf("  %s - Copyright (c) 2022 CHIKAMATSU Naohiro\n", color.CyanString("MIT LICENSE"))
-	s += "  https://github.com/nao1215/sqly/blob/main/LICENSE\n"
+	s += "Queries are SQLite by default; --dialect translates MySQL, PostgreSQL, or\n"
+	s += "GoogleSQL syntax into it.\n"
 	s += "\n"
-	s += "[CONTACT]\n"
-	s += "  https://github.com/nao1215/sqly/issues\n"
-	s += "\n"
-	s += "Documentation: https://nao1215.github.io/sqly/\n"
+	s += "Documentation:   https://nao1215.github.io/sqly/\n"
+	s += "Report an issue: https://github.com/nao1215/sqly/issues\n"
 	s += "GitHub Sponsors: https://github.com/sponsors/nao1215\n"
-	s += "\n"
-	s += "sqly runs the DB in SQLite3 in-memory mode, so queries use SQLite3 syntax by default.\n"
-	s += "Use --dialect (or .dialect in the shell) to write MySQL, PostgreSQL, or GoogleSQL\n"
-	s += "queries instead; sqly translates them to SQLite3 before running them.\n"
 	return s
+}
+
+// helpOptions renders the option list as titled groups. The flag column is one
+// width across every group, so the descriptions line up down the whole section
+// even though each group is laid out separately.
+func helpOptions(flags *pflag.FlagSet) string {
+	labels := make(map[string]string)
+	width := 0
+	seen := make(map[string]bool)
+	for _, group := range optionGroups {
+		for _, name := range group.options {
+			f := flags.Lookup(name)
+			if f == nil {
+				// A group naming a flag that no longer exists is a bug in this file,
+				// not something a user can cause; say so where it is noticed.
+				return fmt.Sprintf("[Options]\n  (internal error: --%s is grouped but not defined)\n", name)
+			}
+			seen[name] = true
+			label := optionLabel(f)
+			labels[name] = label
+			if len(label) > width {
+				width = len(label)
+			}
+		}
+	}
+	// Any flag missing from optionGroups would be invisible in --help, so list it
+	// under a fallback heading rather than hide it.
+	var ungrouped []string
+	flags.VisitAll(func(f *pflag.Flag) {
+		if !seen[f.Name] {
+			ungrouped = append(ungrouped, f.Name)
+			labels[f.Name] = optionLabel(f)
+			if len(labels[f.Name]) > width {
+				width = len(labels[f.Name])
+			}
+		}
+	})
+
+	groups := optionGroups
+	if len(ungrouped) > 0 {
+		groups = append(append([]optionGroup{}, groups...), optionGroup{title: "Other", options: ungrouped})
+	}
+
+	var b strings.Builder
+	b.WriteString("[Options]\n")
+	for i, group := range groups {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "  %s\n", color.HiYellowString(group.title+":"))
+		for _, name := range group.options {
+			f := flags.Lookup(name)
+			b.WriteString(optionEntry(labels[name], f.Usage+optionDefault(f), width))
+		}
+	}
+	return b.String()
+}
+
+// optionLabel renders a flag's shorthand and long form with the placeholder for
+// its value, e.g. "-o, --output FILE" or "    --inspect".
+func optionLabel(f *pflag.Flag) string {
+	label := "    "
+	if f.Shorthand != "" {
+		label = "-" + f.Shorthand + ", "
+	}
+	label += "--" + f.Name
+	if arg, ok := optionArgNames[f.Name]; ok {
+		label += " " + arg
+	}
+	return label
+}
+
+// optionDefault renders the trailing "(default: x)" note for a flag that has a
+// meaningful one. A boolean's "false" and an empty string are what "not passed"
+// already means, so noting them would only add noise.
+func optionDefault(f *pflag.Flag) string {
+	if f.DefValue == "" || f.DefValue == "false" {
+		return ""
+	}
+	return " (default: " + f.DefValue + ")"
+}
+
+// optionEntry renders one option line, wrapping its description into the column
+// after the flag so a narrow terminal never has to scroll sideways.
+func optionEntry(label, description string, width int) string {
+	indent := "    "
+	gap := strings.Repeat(" ", width-len(label)+2)
+	continuation := indent + strings.Repeat(" ", width+2)
+	limit := helpWidth - len(continuation)
+	if limit < 20 {
+		limit = 20
+	}
+
+	var b strings.Builder
+	line := indent + label + gap
+	column := 0
+	for _, word := range strings.Fields(description) {
+		switch {
+		case column == 0:
+			line += word
+			column = len(word)
+		case column+1+len(word) <= limit:
+			line += " " + word
+			column += 1 + len(word)
+		default:
+			b.WriteString(line + "\n")
+			line = continuation + word
+			column = len(word)
+		}
+	}
+	b.WriteString(line + "\n")
+	return b.String()
 }
 
 // version print version message.

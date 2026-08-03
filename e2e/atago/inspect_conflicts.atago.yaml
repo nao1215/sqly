@@ -34,11 +34,11 @@ scenarios:
             path: out.csv
             exists: false
 
-  - name: rejects --inspect with --save-dir and creates no save dir
+  - name: rejects --inspect with --save-tables and creates no save dir
     steps:
       - fixture: *user
       - run:
-          command: sqly --inspect --save-dir save user.csv
+          command: sqly --inspect --save-tables save user.csv
       - assert:
           exit_code: 1
           stderr:

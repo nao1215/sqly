@@ -39,8 +39,8 @@ The [cookbook](/cookbook/) has the rest: JSON extraction, Excel sheets, HTTP inp
 sqly is a filter, not a destination. It takes standard input, and its non-table output is meant for the next command:
 
 ```shell
-curl -s https://example.com/sales.csv | sqly --stdin csv --sql "SELECT region, SUM(amount) FROM stdin GROUP BY region"
-sqly --output-format ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+curl -s https://example.com/sales.csv | sqly --stdin-format csv --sql "SELECT region, SUM(amount) FROM stdin GROUP BY region"
+sqly --output-format jsonl --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
 sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
 ```
 

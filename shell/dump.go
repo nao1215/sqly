@@ -77,11 +77,11 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	}
 	filePath := model.BuildOutputPath(userPath, exportFmt, compression)
 	// Refuse a destination that aliases an imported source file, including symlink
-	// aliases. A destructive source overwrite must go through .save --force, not
+	// aliases. A destructive source overwrite must go through .save --in-place, not
 	// .dump, so a stray .dump cannot silently rewrite the dataset in another
 	// format.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
-		return fmt.Errorf(".dump destination %s is the source file for table %q; use .save --force to overwrite a source", filePath, name)
+		return fmt.Errorf(".dump destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)
 	}
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err

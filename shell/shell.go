@@ -31,25 +31,25 @@ var (
 )
 
 const (
-	importCommand     = ".import"
-	importModeCommand = ".import-mode"
-	cdCommand         = ".cd"
-	clearCommand      = ".clear"
-	dumpCommand       = ".dump"
-	exitCommand       = ".exit"
-	headerCommand     = ".header"
-	helpCommand       = ".help"
-	lsCommand         = ".ls"
-	modeCommand       = ".mode"
-	tablesCommand     = ".tables"
-	pwdCommand        = ".pwd"
-	schemaCommand     = ".schema"
-	describeCommand   = ".describe"
-	saveCommand       = ".save"
-	dialectCommand    = ".dialect"
-	helpFlag          = "--help"
-	versionFlag       = "--version"
-	helpArgument      = "help"
+	importCommand      = ".import"
+	rowMismatchCommand = ".row-mismatch"
+	cdCommand          = ".cd"
+	clearCommand       = ".clear"
+	dumpCommand        = ".dump"
+	exitCommand        = ".exit"
+	headerCommand      = ".header"
+	helpCommand        = ".help"
+	lsCommand          = ".ls"
+	modeCommand        = ".mode"
+	tablesCommand      = ".tables"
+	pwdCommand         = ".pwd"
+	schemaCommand      = ".schema"
+	describeCommand    = ".describe"
+	saveCommand        = ".save"
+	dialectCommand     = ".dialect"
+	helpFlag           = "--help"
+	versionFlag        = "--version"
+	helpArgument       = "help"
 
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
@@ -81,7 +81,7 @@ type Shell struct {
 	// disabled for the session if the history DB cannot be created or written,
 	// so automation does not fail on a read-only config location.
 	historyEnabled bool
-	// stdinStagedPath is the temporary staging file a --stdin dataset is written
+	// stdinStagedPath is the temporary staging file a --stdin-format dataset is written
 	// to before import. It is recorded so import error reporting can map that
 	// random path (and the temp dir filesql embeds in its own error) back to a
 	// stable "stdin" reference, instead of leaking the implementation detail.
@@ -241,18 +241,27 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Excel and Parquet are binary container formats with no on-screen rendering,
+	// so a query run that selects one without a destination used to print CSV to
+	// stdout instead: the user asked for one format and silently received another.
+	// Ask for the destination rather than guessing. The interactive shell is
+	// unaffected: there the format is a standing choice that .dump acts on.
+	if err := s.validateBinaryOutputFormat(); err != nil {
+		return err
+	}
+
 	// --sql and --sql-file both supply a non-interactive query; accepting both
 	// would be ambiguous. Read and validate the SQL file before importing so a
 	// bad path fails fast without spending time on the import.
 	if s.argument.Query != "" && s.argument.SQLFilePath != "" {
 		return errors.New("--sql and --sql-file cannot be used together")
 	}
-	// --stdin stages piped stdin as a dataset, which consumes stdin entirely, so
+	// --stdin-format stages piped stdin as a dataset, which consumes stdin entirely, so
 	// nothing remains to carry a query. Require an explicit query source;
 	// otherwise the dataset is imported and immediately discarded with a success
 	// exit code.
 	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
-		return errors.New("--stdin provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
+		return errors.New("--stdin-format provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
 	}
 
 	var sqlScript string
@@ -263,13 +272,21 @@ func (s *Shell) Run(ctx context.Context) error {
 		}
 		sqlScript = script
 
-		// --sql-file takes its query from the file, not stdin. Without --stdin to
+		// --sql-file takes its query from the file, not stdin. Without --stdin-format to
 		// route piped stdin to a dataset, non-empty piped stdin would be silently
-		// dropped, so reject it and point the user at --stdin. Empty stdin (e.g.
+		// dropped, so reject it and point the user at --stdin-format. Empty stdin (e.g.
 		// CI redirecting /dev/null) is fine.
 		if s.argument.StdinFormat == "" && !s.isTTY() && s.pipedStdinHasData() {
-			return errors.New("--sql-file does not read SQL from stdin; piped stdin would be ignored. Use --stdin FORMAT to load it as a dataset, or remove the pipe")
+			return errors.New("--sql-file does not read SQL from stdin; piped stdin would be ignored. Use --stdin-format FORMAT to load it as a dataset, or remove the pipe")
 		}
+	}
+
+	// Write-back is validated here, before the import: a run that could never
+	// persist must fail without reading a file, creating a directory, or printing
+	// a row. What it cannot see yet — which tables a script's own .import will
+	// create — is left to preflightSave, which runs before the first statement.
+	if err := s.validateSaveFlags(sqlScript); err != nil {
+		return err
 	}
 
 	if err := s.init(ctx); err != nil {
@@ -293,10 +310,6 @@ func (s *Shell) Run(ctx context.Context) error {
 	// --sql and the interactive/batch paths.
 	if s.argument.InspectFlag {
 		return s.runInspect(ctx)
-	}
-
-	if err := s.validateSaveFlags(); err != nil {
-		return err
 	}
 
 	if s.argument.Query != "" {
@@ -361,7 +374,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		// comment-only stdin, with no --sql/--sql-file) is a silent no-op that
 		// still exits 0, so headless wrappers and CI mistake it for a completed
 		// query. Surface a hint and fail instead. Returning before write-back also
-		// keeps an empty --save/--save-dir batch from rewriting source files.
+		// keeps an empty --save-in-place/--save-tables batch from rewriting source files.
 		if !ranAny {
 			return errNoStatements
 		}
@@ -484,6 +497,28 @@ func (s *Shell) startsInteractiveShell() bool {
 	return s.isTTY() && !s.argument.InspectFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
 }
 
+// validateBinaryOutputFormat rejects an --output-format that writes a binary
+// file when the run has nowhere to write it. Excel and Parquet cannot be
+// rendered to a terminal, so a query run without --output silently fell back to
+// CSV on stdout. It only applies to a run that produces a result on its own
+// (--sql or --sql-file); in the shell the format is a standing choice and .dump
+// supplies the destination.
+func (s *Shell) validateBinaryOutputFormat() error {
+	if s.argument.Output.FilePath != "" {
+		return nil
+	}
+	if s.argument.Query == "" && s.argument.SQLFilePath == "" {
+		return nil
+	}
+	switch s.argument.Output.Mode {
+	case model.PrintModeExcel, model.PrintModeParquet:
+		return fmt.Errorf("--output-format %s writes a binary file and cannot be printed; add --output FILE",
+			s.argument.Output.Mode)
+	default:
+		return nil
+	}
+}
+
 // partialImportStartupMessage explains the shell state after a partial startup
 // import: the shell did start, some inputs loaded and are queryable now, and the
 // failing inputs were already listed above. It replaces the bare "one or more
@@ -529,9 +564,9 @@ func (s *Shell) reportOnly() bool {
 
 // init store CSV data to in-memory DB and create table for sqly history.
 func (s *Shell) init(ctx context.Context) error {
-	// Apply the malformed-row import policy from the --import-mode flag before any
+	// Apply the malformed-row import policy from the --row-mismatch flag before any
 	// file is loaded, so the initial import honors the requested handling.
-	s.usecases.importer.SetMalformedRowPolicy(s.state.importMode)
+	s.usecases.importer.SetRowMismatchPolicy(s.state.rowMismatch)
 
 	// History is best-effort: a read-only or unwritable history DB (CI,
 	// sandboxes, containers) must not block the requested query or command.
@@ -543,13 +578,13 @@ func (s *Shell) init(ctx context.Context) error {
 	paths := s.argument.FilePaths
 	stdinAbsPath := ""
 	stagedStdinPath := ""
-	// When --stdin is set, stage piped stdin as a dataset file and import it
+	// When --stdin-format is set, stage piped stdin as a dataset file and import it
 	// alongside the file/directory arguments so it can be queried and joined.
 	if s.argument.StdinFormat != "" {
 		// stageStdinDataset reads stdin to EOF; on a terminal that would hang
-		// waiting for the user. --stdin is only meaningful with piped input.
+		// waiting for the user. --stdin-format is only meaningful with piped input.
 		if s.isTTY() {
-			return errors.New("--stdin requires piped or redirected stdin")
+			return errors.New("--stdin-format requires piped or redirected stdin")
 		}
 		stdinPath, cleanup, err := s.stageStdinDataset()
 		if err != nil {
@@ -572,7 +607,7 @@ func (s *Shell) init(ctx context.Context) error {
 	// temp dir filesql embeds in its own error) back to a stable "stdin"
 	// reference instead of leaking the implementation-detail path.
 	s.stdinStagedPath = stagedStdinPath
-	importErr := s.loadOrImport(ctx, paths)
+	importErr := s.commands.importCommand(ctx, s, paths)
 	// Re-point any stdin-derived table's source from the ephemeral temp path to
 	// a stable "stdin" marker, so --inspect does not leak the temp path
 	// and write-back can reject stdin-backed tables instead of writing to a
@@ -595,7 +630,7 @@ func (s *Shell) pipedStdinHasData() bool {
 }
 
 // stdinTableSource is the synthetic source recorded for tables imported from a
-// piped --stdin dataset, in place of the ephemeral staging temp path.
+// piped --stdin-format dataset, in place of the ephemeral staging temp path.
 const stdinTableSource = "stdin"
 
 // remapStdinTableSources replaces the recorded source of any table staged from
@@ -608,7 +643,7 @@ func (s *Shell) remapStdinTableSources(stdinAbsPath string) {
 	}
 }
 
-// stdinFormatExtensions maps the --stdin format names to file extensions. The
+// stdinFormatExtensions maps the --stdin-format format names to file extensions. The
 // format-name keys intentionally repeat strings used by unrelated features
 // (completion, mode names), so goconst is suppressed here.
 //
@@ -630,7 +665,7 @@ var stdinFormatExtensions = map[string]string{
 func (s *Shell) stageStdinDataset() (string, func(), error) {
 	ext, ok := stdinFormatExtensions[s.argument.StdinFormat]
 	if !ok {
-		return "", nil, fmt.Errorf("unsupported --stdin format %q (supported: csv, tsv, ltsv, json, jsonl)", s.argument.StdinFormat)
+		return "", nil, fmt.Errorf("unsupported --stdin-format value %q: want csv, tsv, ltsv, json, or jsonl", s.argument.StdinFormat)
 	}
 
 	dir, err := os.MkdirTemp("", "sqly-stdin-")
@@ -887,7 +922,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "tsv", Description: "sqly command argument: tsv output format"},
 		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
 		{Text: "json", Description: "sqly command argument: json output format"},
-		{Text: "ndjson", Description: "sqly command argument: ndjson output format"},
+		{Text: "jsonl", Description: "sqly command argument: jsonl (newline-delimited JSON) output format"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
 		{Text: "sqlite", Description: "sqly command argument: SQLite query dialect (default)"},
@@ -1134,10 +1169,10 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	}
 	filePath := model.BuildOutputPath(s.argument.Output.FilePath, exportFmt, compression)
 	// Refuse an --output destination that aliases an imported source file. A
-	// destructive source write must go through --save --force, not a one-off
+	// destructive source write must go through --save-in-place, not a one-off
 	// export, so a stray --output cannot silently destroy the dataset.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
-		return fmt.Errorf("--output destination %s is the source file for table %q; use --save --force to overwrite a source", filePath, name)
+		return fmt.Errorf("--output destination %s is the source file for table %q; use --save-in-place to overwrite a source", filePath, name)
 	}
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
@@ -1152,7 +1187,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 // outputAliasesImportedSource reports whether path resolves to a file that an
 // imported table was loaded from, returning that table name. It lets --output
 // reject a destination that would overwrite a source dataset. Tables staged from
-// --stdin have no real source file and are skipped.
+// --stdin-format have no real source file and are skipped.
 func (s *Shell) outputAliasesImportedSource(path string) (string, bool) {
 	for table, src := range s.tableSources {
 		if src == stdinTableSource {

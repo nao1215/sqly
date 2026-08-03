@@ -62,6 +62,6 @@ func ParseTextEncoding(name string) (TextEncoding, error) {
 	case string(TextEncodingUTF16BE), "utf16be":
 		return TextEncodingUTF16BE, nil
 	default:
-		return TextEncodingUTF8, fmt.Errorf("invalid text encoding %q: want %s", name, textEncodingHelp)
+		return TextEncodingUTF8, fmt.Errorf("invalid text encoding %q: want %s", name, strings.ReplaceAll(textEncodingHelp, "|", ", "))
 	}
 }

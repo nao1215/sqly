@@ -81,8 +81,8 @@ func TestInspect_RejectsConflictingFlags(t *testing.T) {
 	}{
 		{"with --sql", []string{"sqly", "--inspect", "--sql", "SELECT 1", csv}},
 		{"with --output", []string{"sqly", "--inspect", "--output", filepath.Join(dir, "out.csv"), csv}},
-		{"with --save-dir", []string{"sqly", "--inspect", "--save-dir", dir, csv}},
-		{"with --save --force", []string{"sqly", "--inspect", "--save", "--force", csv}},
+		{"with --save-tables", []string{"sqly", "--inspect", "--save-tables", dir, csv}},
+		{"with --save-in-place", []string{"sqly", "--inspect", "--save-in-place", csv}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

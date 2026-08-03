@@ -102,20 +102,17 @@ sqly --sql "SELECT json_extract(data, '\$.name') AS name FROM sample" sample.jso
 # Load a whole directory, or a URL, or a pipe
 sqly ./data --sql "SELECT * FROM users"
 sqly --sql "SELECT * FROM user" https://example.com/user.csv
-cat user.csv | sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
+cat user.csv | sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
 
-# Pipe the result on: ndjson for jq, tsv for cut/awk/sort
-sqly --output-format ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+# Pipe the result on: jsonl for jq, tsv for cut/awk/sort
+sqly --output-format jsonl --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
 sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
-
-# Reuse a large import: --cache skips re-parsing while the inputs are unchanged
-sqly --cache ./big.cache --sql "SELECT COUNT(*) FROM events" events.csv
 
 # Rank with a window function
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
 
 # Edit a file in place
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save --force user.csv
+sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-in-place user.csv
 
 # Write MySQL, PostgreSQL, or BigQuery syntax and have it translated
 sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" user.csv
@@ -141,16 +138,16 @@ sqly:~/data(json)$ .save ./out
 
 ## Write changes back
 
-A session is in-memory only. `--save-dir DIR` writes each changed table into a directory and leaves the sources alone; `--save` overwrites them and requires `--force`.
+A session is in-memory only. `--save-tables DIR` writes every table the session changed into a directory and leaves the sources alone; `--save-in-place` overwrites the source files. Both write the tables back in their source format — the query result is `--output`'s job.
 
 ![save demo](./doc/img/save-demo.gif)
 
 ```shell
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out user.csv
-sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
+sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-tables ./out user.csv
+sqly --sql "DELETE FROM user WHERE identifier > 100" --save-in-place user.csv
 ```
 
-Format and compression are preserved, a run that changes no row writes no file, and a save covering several files is all-or-nothing. Only row changes are persisted; a schema change is rejected before anything is written.
+Format, compression, and file permissions are preserved. A table the session did not change is not rewritten, and a save covering several files is all-or-nothing. Only row changes are persisted; a schema change is rejected before anything is written. See the [reference](https://nao1215.github.io/sqly/reference/#write-back) for what is rejected up front.
 
 ## Formats
 

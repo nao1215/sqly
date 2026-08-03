@@ -35,7 +35,7 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 // runBatchReader executes SQL statements and helper commands read from r. It is
 // shared by batch stdin mode and --sql-file so both follow identical
 // statement-splitting and error reporting; --sql-file passes a file reader
-// instead of stdin, which frees stdin to carry a piped --stdin dataset.
+// instead of stdin, which frees stdin to carry a piped --stdin-format dataset.
 //
 // Input is parsed into statements, not raw lines, so SQL can span multiple
 // lines (e.g. a formatted CTE). A SQL statement ends at a top-level ";"; helper
@@ -47,7 +47,7 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 // output cannot leak into a pipeline that the process then reports as failed
 // (). A ".exit" command stops early with success, mirroring the
 // interactive shell. ranAny reports whether at least one statement or command
-// was executed, so callers can skip post-run side effects (e.g. --save
+// was executed, so callers can skip post-run side effects (e.g. --save-in-place
 // write-back) for an empty batch ().
 func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, err error) {
 	// Strip a leading UTF-8 BOM so a BOM-prefixed batch stream (common from
@@ -505,7 +505,7 @@ func countSQLStatements(s string) int {
 	return count
 }
 
-// statementSaveCompatible reports whether a non-interactive --save/--save-dir run
+// statementSaveCompatible reports whether a non-interactive write-back run
 // can handle a statement: a read-only query (which skips write-back) or a
 // row-modifying DML on an imported table (which write-back persists). Any other
 // statement — DDL (CREATE/DROP/ALTER/REINDEX and CREATE VIEW/INDEX/TRIGGER),

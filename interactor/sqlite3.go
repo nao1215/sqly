@@ -79,7 +79,7 @@ func NewImportUsecase(i *SQLite3Interactor) usecase.ImportUsecase { return i }
 func NewMetadataUsecase(i *SQLite3Interactor) usecase.MetadataUsecase { return i }
 
 // NewPersistenceUsecase exposes the interactor as the focused PersistenceUsecase
-// (native financial write-back and the import cache).
+// (native financial write-back).
 func NewPersistenceUsecase(i *SQLite3Interactor) usecase.PersistenceUsecase { return i }
 
 // CreateTable create a DB table with columns given as model.Table
@@ -191,15 +191,15 @@ func (si *SQLite3Interactor) LoadFiles(ctx context.Context, filePaths ...string)
 	return si.adapter.LoadFiles(ctx, filePaths...)
 }
 
-// SetMalformedRowPolicy sets how a ragged CSV/TSV row is handled by subsequent
+// SetRowMismatchPolicy sets how a mismatched CSV/TSV row is handled by subsequent
 // imports.
-func (si *SQLite3Interactor) SetMalformedRowPolicy(policy model.MalformedRowPolicy) {
-	si.adapter.SetMalformedRowPolicy(policy)
+func (si *SQLite3Interactor) SetRowMismatchPolicy(policy model.RowMismatchPolicy) {
+	si.adapter.SetRowMismatchPolicy(policy)
 }
 
-// MalformedRowPolicy returns the policy applied to ragged CSV/TSV rows on import.
-func (si *SQLite3Interactor) MalformedRowPolicy() model.MalformedRowPolicy {
-	return si.adapter.MalformedRowPolicy()
+// RowMismatchPolicy returns the policy applied to mismatched CSV/TSV rows on import.
+func (si *SQLite3Interactor) RowMismatchPolicy() model.RowMismatchPolicy {
+	return si.adapter.RowMismatchPolicy()
 }
 
 // GetTableNames returns the list of tables currently available in the database.
@@ -247,16 +247,4 @@ func (si *SQLite3Interactor) DumpACHFile(ctx context.Context, baseName, outputPa
 // message table registered under baseName, reflecting any session UPDATEs.
 func (si *SQLite3Interactor) DumpFedWireFile(ctx context.Context, baseName, outputPath string) error {
 	return si.adapter.DumpFedWireFile(ctx, baseName, outputPath)
-}
-
-// SnapshotToCache writes the current session tables to cachePath as a standalone
-// SQLite database for later reuse.
-func (si *SQLite3Interactor) SnapshotToCache(ctx context.Context, cachePath string) error {
-	return si.adapter.SnapshotToCache(ctx, cachePath)
-}
-
-// LoadFromCache populates the session database from a cache written by
-// SnapshotToCache.
-func (si *SQLite3Interactor) LoadFromCache(ctx context.Context, cachePath string) error {
-	return si.adapter.LoadFromCache(ctx, cachePath)
 }

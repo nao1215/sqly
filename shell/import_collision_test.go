@@ -43,9 +43,9 @@ func TestImportCollisionRegressions(t *testing.T) {
 		}
 		file := writeCSV(t, sub, "user.csv", csv)
 
-		script := ".import " + file + "\n.save --force\n"
+		script := ".import " + file + "\n.save --in-place\n"
 		if err := runBatchShell(t, []string{"sqly", sub}, script); err != nil {
-			t.Errorf(".save --force after re-import failed: %v", err)
+			t.Errorf(".save --in-place after re-import failed: %v", err)
 		}
 	})
 

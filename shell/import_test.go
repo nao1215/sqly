@@ -316,7 +316,7 @@ func TestImportDirectory_RejectsSanitizedCollision(t *testing.T) {
 func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *testing.T) {
 	// A directory import that overwrites a table previously loaded from a file
 	// argument must update the table's source to the directory file and mark it as
-	// a directory import, so later .save --force cannot write the directory rows
+	// a directory import, so later .save --in-place cannot write the directory rows
 	// back into the original file.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
@@ -366,13 +366,13 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	}
 
 	// Change the table so write-back considers it (an unchanged table is skipped),
-	// then .save --force must refuse to write back a directory import, leaving the
+	// then .save --in-place must refuse to write back a directory import, leaving the
 	// original untouched.
 	if err := s.exec(ctx, "INSERT INTO user VALUES ('alt2',2,'ALT','Two')"); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 	if err := s.writeBack(ctx, ""); err == nil {
-		t.Error("expected .save --force to be rejected for a directory-imported table")
+		t.Error("expected .save --in-place to be rejected for a directory-imported table")
 	}
 	after, err := os.ReadFile(orig) //nolint:gosec // test path
 	if err != nil {

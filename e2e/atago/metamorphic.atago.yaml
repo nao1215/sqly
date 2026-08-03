@@ -67,11 +67,11 @@ scenarios:
               - grey07
               - booker12
 
-  - name: csv and ndjson yield the same rows
+  - name: csv and jsonl yield the same rows
     steps:
       - fixture: *user
       - run:
-          command: sqly --output-format ndjson --sql "SELECT user_name FROM user ORDER BY identifier" user.csv
+          command: sqly --output-format jsonl --sql "SELECT user_name FROM user ORDER BY identifier" user.csv
       - assert:
           stdout:
             line: 1

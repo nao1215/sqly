@@ -261,20 +261,20 @@ func TestSmoke_SaveDoesNotPersistUncommittedData(t *testing.T) {
 	dir := t.TempDir()
 	good := writeFixture(t, dir, "good.csv", "id,name\n1,alice\n")
 	broken := writeFixture(t, dir, "broken.csv", "id,name\n1,alice,unexpected\n")
-	saveDir := filepath.Join(dir, "out")
-	if err := os.Mkdir(saveDir, 0o750); err != nil {
+	saveTablesDir := filepath.Join(dir, "out")
+	if err := os.Mkdir(saveTablesDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
 	script := ".import " + broken + "\n" +
-		".save " + saveDir + "\n"
+		".save " + saveTablesDir + "\n"
 	stdout, stderr, code := run(t, script, good)
 	if code == 0 {
 		t.Fatalf("exit code = 0 after a failed .import, want non-zero (stdout=%q stderr=%q)", stdout, stderr)
 	}
 	assertNoPanic(t, stdout, stderr)
 
-	for _, name := range dirEntries(t, saveDir) {
+	for _, name := range dirEntries(t, saveTablesDir) {
 		if strings.HasPrefix(name, "broken") {
 			t.Errorf(".save wrote %q from an import that was rolled back", name)
 		}

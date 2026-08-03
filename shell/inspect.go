@@ -45,7 +45,7 @@ func outputModeFlagName(o *config.Output) string {
 // validateInspectFlags rejects --inspect combined with other effectful flags.
 // --inspect is a self-contained discovery path that imports inputs, prints a
 // JSON report, and exits, so flags that ask for a different action (--sql,
-// --sql-file) or a side effect (--output, --save, --save-dir) would otherwise be
+// --sql-file) or a side effect (--output, --save-in-place, --save-tables) would otherwise be
 // silently discarded. Failing fast keeps the contract explicit for scripts.
 func (s *Shell) validateInspectFlags() error {
 	if !s.argument.InspectFlag {
@@ -59,9 +59,9 @@ func (s *Shell) validateInspectFlags() error {
 	case s.argument.Output.FilePath != "":
 		return errors.New("--inspect cannot be combined with --output")
 	case s.argument.SaveInPlace:
-		return errors.New("--inspect cannot be combined with --save")
-	case s.argument.SaveDir != "":
-		return errors.New("--inspect cannot be combined with --save-dir")
+		return errors.New("--inspect cannot be combined with --save-in-place")
+	case s.argument.SaveTablesDir != "":
+		return errors.New("--inspect cannot be combined with --save-tables")
 	// --output-format selects a result format, but --inspect always emits its
 	// own JSON report. Reject the conflicting flag instead of silently discarding
 	// it, matching the other --inspect conflict checks.

@@ -23,7 +23,7 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 			"  tsv\n"+
 			"  ltsv\n"+
 			"  json\n"+
-			"  ndjson\n"+
+			"  jsonl\n"+
 			"  excel ※ active only when executing .dump, otherwise same as csv mode\n"+
 			"  parquet ※ active only when executing .dump, otherwise same as csv mode",
 			s.state.mode.displayName())

@@ -62,7 +62,7 @@ var errSheetNotExcel = errors.New("--sheet applies only to Excel (.xlsx) inputs,
 
 // validateSheetFlag rejects the CLI --sheet option when no input can be an
 // Excel file. --sheet selects a single Excel sheet and is silently ignored for
-// other formats, so a typo (or pairing it with --stdin) would otherwise pass
+// other formats, so a typo (or pairing it with --stdin-format) would otherwise pass
 // unnoticed. A directory input is allowed because it may contain Excel files,
 // and a path that cannot be stat'd is left for the import step to report.
 func (s *Shell) validateSheetFlag() error {
@@ -446,10 +446,7 @@ func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
-		// Skip sqly's own cache artifacts so a --cache file that lives inside the
-		// imported directory is never loaded as a dataset (for example its manifest
-		// JSON becoming a stray table).
-		if s.usecases.importer.IsSupportedFile(path) && !s.isCacheArtifact(path) {
+		if s.usecases.importer.IsSupportedFile(path) {
 			files = append(files, path)
 		}
 		return nil
@@ -556,9 +553,9 @@ func (s *Shell) markDirImported(name string) {
 }
 
 // importFile loads a single file into the database, applying --sheet filtering for Excel.
-// stdinImportErrorMessage renders an import failure for the staged --stdin
+// stdinImportErrorMessage renders an import failure for the staged --stdin-format
 // dataset with the random temp staging path replaced by a stable
-// "stdin (--stdin FORMAT)" reference. ok is false when displayPath is not the
+// "stdin (--stdin-format FORMAT)" reference. ok is false when displayPath is not the
 // staged stdin file, so a normal file import keeps its real path and error
 // wrapping. The candidate paths (the cleaned path and the path actually handed
 // to filesql, plus their temp directories) are all scrubbed because filesql
@@ -567,7 +564,7 @@ func (s *Shell) stdinImportErrorMessage(displayPath string, err error, candidate
 	if s.stdinStagedPath == "" || displayPath != s.stdinStagedPath {
 		return "", false
 	}
-	label := fmt.Sprintf("stdin (--stdin %s)", s.argument.StdinFormat)
+	label := fmt.Sprintf("stdin (--stdin-format %s)", s.argument.StdinFormat)
 	msg := fmt.Sprintf("failed to import file %s: %v", label, err)
 	for _, p := range append(candidates, displayPath) {
 		if p == "" {
@@ -613,9 +610,9 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath, sheetNam
 	existingTables := tableNameSet(before)
 
 	if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
-		// A failed --stdin import would otherwise leak the random staging temp
+		// A failed --stdin-format import would otherwise leak the random staging temp
 		// path (in both this wrapper and the path filesql embeds in its own
-		// error). Map it back to a stable "stdin (--stdin FORMAT)" reference.
+		// error). Map it back to a stable "stdin (--stdin-format FORMAT)" reference.
 		if msg, ok := s.stdinImportErrorMessage(displayPath, err, cleanPath, loadPath); ok {
 			return errors.New(msg)
 		}
@@ -1014,7 +1011,7 @@ func isBlockedSystemPath(absPath string) bool {
 // returning the temp path, a cleanup, and whether staging applied. filesql types a
 // file by its name, and these pseudo-files carry no format extension, so their
 // content is copied to "<table>.csv" and read as CSV (sqly's default text format);
-// use --stdin FORMAT for a non-CSV stream. Only the allowed pseudo-files are
+// use --stdin-format FORMAT for a non-CSV stream. Only the allowed pseudo-files are
 // staged, so an ordinary unsupported path still fails as before.
 func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup func(), ok bool) {
 	abs := path

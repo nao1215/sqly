@@ -276,18 +276,18 @@ func (c *MockImportUsecaseLoadFilesCall) DoAndReturn(f func(context.Context, ...
 	return c
 }
 
-// MalformedRowPolicy mocks base method.
-func (m *MockImportUsecase) MalformedRowPolicy() model.MalformedRowPolicy {
+// RowMismatchPolicy mocks base method.
+func (m *MockImportUsecase) RowMismatchPolicy() model.RowMismatchPolicy {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MalformedRowPolicy")
-	ret0, _ := ret[0].(model.MalformedRowPolicy)
+	ret := m.ctrl.Call(m, "RowMismatchPolicy")
+	ret0, _ := ret[0].(model.RowMismatchPolicy)
 	return ret0
 }
 
-// MalformedRowPolicy indicates an expected call of MalformedRowPolicy.
-func (mr *MockImportUsecaseMockRecorder) MalformedRowPolicy() *MockImportUsecaseMalformedRowPolicyCall {
+// RowMismatchPolicy indicates an expected call of RowMismatchPolicy.
+func (mr *MockImportUsecaseMockRecorder) RowMismatchPolicy() *MockImportUsecaseMalformedRowPolicyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MalformedRowPolicy", reflect.TypeOf((*MockImportUsecase)(nil).MalformedRowPolicy))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RowMismatchPolicy", reflect.TypeOf((*MockImportUsecase)(nil).RowMismatchPolicy))
 	return &MockImportUsecaseMalformedRowPolicyCall{Call: call}
 }
 
@@ -297,19 +297,19 @@ type MockImportUsecaseMalformedRowPolicyCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockImportUsecaseMalformedRowPolicyCall) Return(arg0 model.MalformedRowPolicy) *MockImportUsecaseMalformedRowPolicyCall {
+func (c *MockImportUsecaseMalformedRowPolicyCall) Return(arg0 model.RowMismatchPolicy) *MockImportUsecaseMalformedRowPolicyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockImportUsecaseMalformedRowPolicyCall) Do(f func() model.MalformedRowPolicy) *MockImportUsecaseMalformedRowPolicyCall {
+func (c *MockImportUsecaseMalformedRowPolicyCall) Do(f func() model.RowMismatchPolicy) *MockImportUsecaseMalformedRowPolicyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockImportUsecaseMalformedRowPolicyCall) DoAndReturn(f func() model.MalformedRowPolicy) *MockImportUsecaseMalformedRowPolicyCall {
+func (c *MockImportUsecaseMalformedRowPolicyCall) DoAndReturn(f func() model.RowMismatchPolicy) *MockImportUsecaseMalformedRowPolicyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -390,38 +390,38 @@ func (c *MockImportUsecaseSanitizeForSQLCall) DoAndReturn(f func(string) string)
 	return c
 }
 
-// SetMalformedRowPolicy mocks base method.
-func (m *MockImportUsecase) SetMalformedRowPolicy(policy model.MalformedRowPolicy) {
+// SetRowMismatchPolicy mocks base method.
+func (m *MockImportUsecase) SetRowMismatchPolicy(policy model.RowMismatchPolicy) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetMalformedRowPolicy", policy)
+	m.ctrl.Call(m, "SetRowMismatchPolicy", policy)
 }
 
-// SetMalformedRowPolicy indicates an expected call of SetMalformedRowPolicy.
-func (mr *MockImportUsecaseMockRecorder) SetMalformedRowPolicy(policy any) *MockImportUsecaseSetMalformedRowPolicyCall {
+// SetRowMismatchPolicy indicates an expected call of SetRowMismatchPolicy.
+func (mr *MockImportUsecaseMockRecorder) SetRowMismatchPolicy(policy any) *MockImportUsecaseSetRowMismatchPolicyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMalformedRowPolicy", reflect.TypeOf((*MockImportUsecase)(nil).SetMalformedRowPolicy), policy)
-	return &MockImportUsecaseSetMalformedRowPolicyCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRowMismatchPolicy", reflect.TypeOf((*MockImportUsecase)(nil).SetRowMismatchPolicy), policy)
+	return &MockImportUsecaseSetRowMismatchPolicyCall{Call: call}
 }
 
-// MockImportUsecaseSetMalformedRowPolicyCall wrap *gomock.Call
-type MockImportUsecaseSetMalformedRowPolicyCall struct {
+// MockImportUsecaseSetRowMismatchPolicyCall wrap *gomock.Call
+type MockImportUsecaseSetRowMismatchPolicyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockImportUsecaseSetMalformedRowPolicyCall) Return() *MockImportUsecaseSetMalformedRowPolicyCall {
+func (c *MockImportUsecaseSetRowMismatchPolicyCall) Return() *MockImportUsecaseSetRowMismatchPolicyCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockImportUsecaseSetMalformedRowPolicyCall) Do(f func(model.MalformedRowPolicy)) *MockImportUsecaseSetMalformedRowPolicyCall {
+func (c *MockImportUsecaseSetRowMismatchPolicyCall) Do(f func(model.RowMismatchPolicy)) *MockImportUsecaseSetRowMismatchPolicyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockImportUsecaseSetMalformedRowPolicyCall) DoAndReturn(f func(model.MalformedRowPolicy)) *MockImportUsecaseSetMalformedRowPolicyCall {
+func (c *MockImportUsecaseSetRowMismatchPolicyCall) DoAndReturn(f func(model.RowMismatchPolicy)) *MockImportUsecaseSetRowMismatchPolicyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

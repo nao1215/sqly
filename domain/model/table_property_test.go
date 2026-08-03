@@ -164,7 +164,7 @@ func TestTable_JSONRoundTripProperty(t *testing.T) {
 func TestTable_NDJSONRoundTripProperty(t *testing.T) {
 	property := func(g genTable) bool {
 		var buf bytes.Buffer
-		if err := g.table.Print(&buf, PrintModeNDJSON); err != nil {
+		if err := g.table.Print(&buf, PrintModeJSONL); err != nil {
 			return false
 		}
 		out := buf.String()

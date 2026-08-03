@@ -24,7 +24,7 @@ scenarios:
             path: result.parquet
             exists: true
 
-  - name: infers ndjson with gzip and writes a compressed file
+  - name: infers jsonl from an .ndjson.gz destination and writes a compressed file
     steps:
       - fixture: *user
       - run:
@@ -32,7 +32,7 @@ scenarios:
       - assert:
           exit_code: 0
           stderr:
-            contains: "output mode=ndjson"
+            contains: "output mode=jsonl"
           file:
             path: result.ndjson.gz
             exists: true

@@ -1,5 +1,5 @@
 # Migrated from sqly's ShellSpec spec/sql_file_spec.sh.
-# --sql-file loads SQL from a file (freeing stdin for a piped --stdin dataset),
+# --sql-file loads SQL from a file (freeing stdin for a piped --stdin-format dataset),
 # supports multiline statements, and reports failing-statement line numbers.
 # The SQL files are atago fixtures. Run with: make test-e2e
 version: "1"
@@ -31,7 +31,7 @@ scenarios:
           stdout:
             contains: "Adam Sandler"
 
-  - name: joins a piped --stdin dataset with a query loaded from a file
+  - name: joins a piped --stdin-format dataset with a query loaded from a file
     steps:
       - fixture:
           file: identifier.csv
@@ -47,7 +47,7 @@ scenarios:
             JOIN identifier i ON s.id = i.id
             ORDER BY s.id;
       - run:
-          command: sqly --stdin csv --output-format csv --sql-file join.sql identifier.csv
+          command: sqly --stdin-format csv --output-format csv --sql-file join.sql identifier.csv
           stdin: |
             id,name
             1,alice

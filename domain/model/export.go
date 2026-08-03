@@ -39,8 +39,8 @@ const (
 	ExportExcel
 	// ExportJSON exports data as a JSON array of objects
 	ExportJSON
-	// ExportNDJSON exports data as newline-delimited JSON
-	ExportNDJSON
+	// ExportJSONL exports data as newline-delimited JSON
+	ExportJSONL
 	// ExportParquet exports data as Apache Parquet
 	ExportParquet
 )
@@ -60,8 +60,8 @@ func (e ExportFormat) String() string {
 		return formatExcel
 	case ExportJSON:
 		return formatJSON
-	case ExportNDJSON:
-		return formatNDJSON
+	case ExportJSONL:
+		return formatJSONL
 	case ExportParquet:
 		return formatParquet
 	}
@@ -83,8 +83,8 @@ func (e ExportFormat) Extension() string {
 		return ExtExcel
 	case ExportJSON:
 		return ExtJSON
-	case ExportNDJSON:
-		return ExtNDJSON
+	case ExportJSONL:
+		return ExtJSONL
 	case ExportParquet:
 		return ExtParquet
 	}
@@ -122,7 +122,7 @@ func ExportFormatFromExtension(ext string) (ExportFormat, bool) {
 	case ExtJSON:
 		return ExportJSON, true
 	case ExtNDJSON, ExtJSONL:
-		return ExportNDJSON, true
+		return ExportJSONL, true
 	case ExtParquet:
 		return ExportParquet, true
 	default:
@@ -289,11 +289,11 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 	// from the chosen format; leave an unknown extension untouched so an
 	// explicitly chosen destination path is honored rather than silently changed.
 	baseExt := filepath.Ext(base)
-	_, knownExt := ExportFormatFromExtension(baseExt)
+	extFormat, knownExt := ExportFormatFromExtension(baseExt)
 	switch {
 	case baseExt == "":
 		base += format.Extension()
-	case knownExt && !strings.EqualFold(baseExt, format.Extension()):
+	case knownExt && extFormat != format:
 		base = strings.TrimSuffix(base, baseExt) + format.Extension()
 	}
 	return base + comp.Extension()
@@ -303,7 +303,7 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 // single-table export path cannot produce: ACH (.ach) and Fedwire (.fed). These
 // are reconstructed from a complete, related table set, not from one table, so
 // `--output` and `.dump` (which write a single table) reject them; the whole-set
-// `--save`/`--save-dir`/`.save` write-back path handles them instead. All
+// `--save-in-place`/`--save-tables`/`.save` write-back path handles them instead. All
 // trailing compression suffixes are stripped first, so a path that hides the
 // extension behind several codecs (".ach.gz.zst", ".fed.gz.zst") is detected too.
 func IsInputOnlyExtension(path string) bool {
@@ -406,8 +406,8 @@ func ExportFormatFromPrintMode(m PrintMode) ExportFormat {
 		return ExportExcel
 	case PrintModeJSON:
 		return ExportJSON
-	case PrintModeNDJSON:
-		return ExportNDJSON
+	case PrintModeJSONL:
+		return ExportJSONL
 	case PrintModeParquet:
 		return ExportParquet
 	default:

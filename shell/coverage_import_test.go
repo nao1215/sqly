@@ -8,15 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )
-
-// covImpArg builds a minimal *Shell whose only wired dependency is argument, for
-// unit tests of methods that read s.argument alone (no usecases, no globals).
-func covImpArg(arg *config.Arg) *Shell {
-	return &Shell{argument: arg}
-}
 
 // TestIsAllDigits_Cov exercises the numeric /proc/<pid> component check.
 func TestIsAllDigits_Cov(t *testing.T) {
@@ -97,239 +90,6 @@ func TestWithMainVerb_Cov(t *testing.T) {
 	}
 }
 
-// TestIsCacheArtifact_Cov verifies the cache database and its manifest sidecar are
-// recognized as sqly's own artifacts, and unrelated inputs are not.
-func TestIsCacheArtifact_Cov(t *testing.T) {
-	t.Parallel()
-	cache := filepath.Join(t.TempDir(), "snap.cache")
-
-	if covImpArg(&config.Arg{}).isCacheArtifact(cache) {
-		t.Error("with no --cache set, no path should be a cache artifact")
-	}
-
-	s := covImpArg(&config.Arg{CachePath: cache})
-	if !s.isCacheArtifact(cache) {
-		t.Error("the cache database path must be a cache artifact")
-	}
-	if !s.isCacheArtifact(cacheManifestPath(cache)) {
-		t.Error("the manifest sidecar path must be a cache artifact")
-	}
-	if s.isCacheArtifact(filepath.Join(filepath.Dir(cache), "data.csv")) {
-		t.Error("an unrelated input must not be a cache artifact")
-	}
-}
-
-// TestCacheEnabled_Cov covers the opt-out conditions for the import cache.
-func TestCacheEnabled_Cov(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	csv := filepath.Join(dir, "data.csv")
-	if err := os.WriteFile(csv, []byte("a\n1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	ach := filepath.Join(dir, "pay.ach")
-	if err := os.WriteFile(ach, []byte("stub"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if covImpArg(&config.Arg{}).cacheEnabled([]string{csv}) {
-		t.Error("cache must be disabled when --cache is unset")
-	}
-	if covImpArg(&config.Arg{CachePath: "c"}).cacheEnabled(nil) {
-		t.Error("cache must be disabled when there are no input paths")
-	}
-	if covImpArg(&config.Arg{CachePath: "c", StdinFormat: "csv"}).cacheEnabled([]string{csv}) {
-		t.Error("cache must be disabled for a --stdin dataset")
-	}
-	if covImpArg(&config.Arg{CachePath: "c"}).cacheEnabled([]string{ach}) {
-		t.Error("cache must be disabled when an input is an ACH/Fedwire file")
-	}
-	if !covImpArg(&config.Arg{CachePath: "c"}).cacheEnabled([]string{csv}) {
-		t.Error("cache must be enabled for a plain file input with --cache set")
-	}
-}
-
-// TestHashFile_Cov checks a stable digest for known content and an error for a
-// missing file.
-func TestHashFile_Cov(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	f := filepath.Join(dir, "x.txt")
-	if err := os.WriteFile(f, []byte("hello"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// SHA-256 of "hello".
-	const want = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-	got, err := hashFile(f)
-	if err != nil {
-		t.Fatalf("hashFile: %v", err)
-	}
-	if got != want {
-		t.Errorf("hashFile = %q, want %q", got, want)
-	}
-	if _, err := hashFile(filepath.Join(dir, "missing.txt")); err == nil {
-		t.Error("hashFile of a missing file should return an error")
-	}
-}
-
-// TestReadWriteCacheManifest_Cov round-trips a manifest and covers the read/write
-// error paths.
-func TestReadWriteCacheManifest_Cov(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "snap.cache.manifest.json")
-	want := cacheManifest{
-		Version:      cacheManifestVersion,
-		Sources:      []cacheSource{{Path: "/a.csv", Size: 3, Hash: "abc"}},
-		TableSources: map[string]string{"a": "/a.csv"},
-		DirImported:  []string{"a"},
-	}
-	if err := writeCacheManifest(path, want); err != nil {
-		t.Fatalf("writeCacheManifest: %v", err)
-	}
-	got, err := readCacheManifest(path)
-	if err != nil {
-		t.Fatalf("readCacheManifest: %v", err)
-	}
-	if got.Version != want.Version || len(got.Sources) != 1 || got.Sources[0] != want.Sources[0] {
-		t.Errorf("round-trip mismatch: got %+v, want %+v", got, want)
-	}
-
-	if _, err := readCacheManifest(filepath.Join(dir, "nope.json")); err == nil {
-		t.Error("readCacheManifest of a missing file should error")
-	}
-	bad := filepath.Join(dir, "bad.json")
-	if err := os.WriteFile(bad, []byte("{not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := readCacheManifest(bad); err == nil {
-		t.Error("readCacheManifest of invalid JSON should error")
-	}
-	// A destination whose parent directory does not exist cannot be written.
-	if err := writeCacheManifest(filepath.Join(dir, "missing-dir", "m.json"), want); err == nil {
-		t.Error("writeCacheManifest into a nonexistent directory should error")
-	}
-}
-
-// TestCollectCacheSignatures_SkipAndDirSupported covers the skip predicate, the
-// dirSupported filter for directory walks, and the missing-path error.
-func TestCollectCacheSignatures_SkipAndDirSupported(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	keep := filepath.Join(dir, "keep.csv")
-	drop := filepath.Join(dir, "drop.csv")
-	note := filepath.Join(dir, "note.txt")
-	for _, p := range []string{keep, drop, note} {
-		if err := os.WriteFile(p, []byte("a\n1\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Directory walk with a dirSupported filter that excludes the .txt sibling.
-	dirSupported := func(path string) bool { return strings.HasSuffix(path, ".csv") }
-	sigs, err := collectCacheSignatures([]string{dir}, nil, dirSupported)
-	if err != nil {
-		t.Fatalf("collectCacheSignatures: %v", err)
-	}
-	if len(sigs) != 2 {
-		t.Fatalf("expected 2 signatures (the two csv files), got %d: %+v", len(sigs), sigs)
-	}
-
-	// Directly named files with a skip predicate that drops one of them.
-	skip := func(path string) bool { return strings.HasSuffix(path, "drop.csv") }
-	sigs, err = collectCacheSignatures([]string{keep, drop}, skip, nil)
-	if err != nil {
-		t.Fatalf("collectCacheSignatures: %v", err)
-	}
-	if len(sigs) != 1 || !strings.HasSuffix(sigs[0].Path, "keep.csv") {
-		t.Fatalf("skip predicate did not drop drop.csv: %+v", sigs)
-	}
-
-	if _, err := collectCacheSignatures([]string{filepath.Join(dir, "missing.csv")}, nil, nil); err == nil {
-		t.Error("collectCacheSignatures of a missing path should error")
-	}
-}
-
-// TestClearCache_Cov removes both the cache database and its manifest, ignoring a
-// missing file.
-func TestClearCache_Cov(t *testing.T) {
-	dir := t.TempDir()
-	cache := filepath.Join(dir, "snap.cache")
-	manifest := cacheManifestPath(cache)
-	for _, p := range []string{cache, manifest} {
-		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// Suppress the (unexpected) stderr path; the happy path prints nothing.
-	_ = captureStderr(t, func() {
-		(&Shell{}).clearCache(cache)
-	})
-	if _, err := os.Stat(cache); !os.IsNotExist(err) {
-		t.Error("clearCache did not remove the cache database")
-	}
-	if _, err := os.Stat(manifest); !os.IsNotExist(err) {
-		t.Error("clearCache did not remove the manifest")
-	}
-	// A second call on already-removed files is a no-op and must not panic.
-	_ = captureStderr(t, func() {
-		(&Shell{}).clearCache(cache)
-	})
-}
-
-// TestWriteCache_MkdirFails covers the branch where the cache directory cannot be
-// created because a parent path component is a regular file.
-func TestWriteCache_MkdirFails(t *testing.T) {
-	dir := t.TempDir()
-	fileAsParent := filepath.Join(dir, "not-a-dir")
-	if err := os.WriteFile(fileAsParent, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// cachePath's parent directory is "<file>/sub", which cannot be created because
-	// "<file>" is a regular file.
-	cachePath := filepath.Join(fileAsParent, "sub", "snap.cache")
-	stderr := captureStderr(t, func() {
-		(&Shell{}).writeCache(context.Background(), cachePath, nil)
-	})
-	if !strings.Contains(stderr, "cannot create cache directory") {
-		t.Errorf("stderr = %q, want a cache-directory creation warning", stderr)
-	}
-}
-
-// TestRestoreFromManifest_Cov rebuilds per-table session state from a manifest,
-// including initializing nil maps.
-func TestRestoreFromManifest_Cov(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	_ = captureStderr(t, func() {
-		if impErr := s.commands.importCommand(context.Background(), s, []string{filepath.Join("testdata", "sample.csv")}); impErr != nil {
-			t.Fatalf("import: %v", impErr)
-		}
-	})
-
-	// Force the nil-map initialization branches.
-	s.tableSources = nil
-	s.dirImported = nil
-
-	manifest := cacheManifest{
-		Version:      cacheManifestVersion,
-		TableSources: map[string]string{"sample": "/some/where/sample.csv"},
-		DirImported:  []string{"sample"},
-	}
-	s.restoreFromManifest(context.Background(), manifest)
-
-	if s.tableSources["sample"] != "/some/where/sample.csv" {
-		t.Errorf("tableSources not restored: %v", s.tableSources)
-	}
-	if !s.dirImported["sample"] {
-		t.Error("dirImported not restored")
-	}
-}
-
 // TestTablesMatchingFile_Cov confirms a single-table format claims only its exact
 // table name, while a multi-table (ACH) format also claims its "<base>_" prefixed
 // tables.
@@ -390,47 +150,6 @@ func TestExcelWorkbooks_Cov(t *testing.T) {
 	}
 	if !sole {
 		t.Errorf("excelWorkbooks did not find the standalone workbook: %v", books)
-	}
-}
-
-// TestSupportedFilesInDir_SkipsCacheArtifacts verifies a --cache manifest that
-// lands inside the imported directory is not returned as a dataset input even
-// though .json is a supported format.
-func TestSupportedFilesInDir_SkipsCacheArtifacts(t *testing.T) {
-	dir := t.TempDir()
-	cache := filepath.Join(dir, "snap.cache")
-	data := filepath.Join(dir, "data.csv")
-	if err := os.WriteFile(data, []byte("a\n1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(cacheManifestPath(cache), []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	s.argument.CachePath = cache
-
-	files, err := s.supportedFilesInDir(dir)
-	if err != nil {
-		t.Fatalf("supportedFilesInDir: %v", err)
-	}
-	for _, f := range files {
-		if strings.Contains(f, "manifest") {
-			t.Errorf("supportedFilesInDir returned a cache manifest as input: %v", files)
-		}
-	}
-	found := false
-	for _, f := range files {
-		if strings.HasSuffix(f, "data.csv") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("supportedFilesInDir did not return data.csv: %v", files)
 	}
 }
 
@@ -602,8 +321,8 @@ func TestSaveFinancialSetFedwireInPlace(t *testing.T) {
 	s.dataChanged = true
 
 	stderr := captureStderr(t, func() {
-		if saveErr := s.commands.saveCommand(context.Background(), s, []string{forceArg}); saveErr != nil {
-			t.Fatalf(".save --force for Fedwire set: %v", saveErr)
+		if saveErr := s.commands.saveCommand(context.Background(), s, []string{inPlaceArg}); saveErr != nil {
+			t.Fatalf(".save --in-place for Fedwire set: %v", saveErr)
 		}
 	})
 	if !strings.Contains(stderr, "Saved FED set") {
@@ -614,7 +333,7 @@ func TestSaveFinancialSetFedwireInPlace(t *testing.T) {
 	}
 }
 
-// TestMaybeSaveInPlace covers the non-interactive --save --force path where a
+// TestMaybeSaveInPlace covers the non-interactive --save-in-place path where a
 // row-modifying query writes a CSV table back over its source file.
 func TestMaybeSaveInPlace(t *testing.T) {
 	dir := t.TempDir()
@@ -623,7 +342,7 @@ func TestMaybeSaveInPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, cleanup, err := newShell(t, []string{"sqly", "--save", "--force", "--sql", "UPDATE t SET name='b' WHERE id=1", src})
+	s, cleanup, err := newShell(t, []string{"sqly", "--save-in-place", "--sql", "UPDATE t SET name='b' WHERE id=1", src})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,7 +352,7 @@ func TestMaybeSaveInPlace(t *testing.T) {
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
 			if runErr := s.Run(context.Background()); runErr != nil {
-				t.Fatalf("Run with --save --force: %v", runErr)
+				t.Fatalf("Run with --save-in-place: %v", runErr)
 			}
 		})
 	})

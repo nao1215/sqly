@@ -80,7 +80,7 @@ func TestPrintJSONRejectsUnsupportedNativeValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
 	}
-	for _, mode := range []PrintMode{PrintModeJSON, PrintModeNDJSON} {
+	for _, mode := range []PrintMode{PrintModeJSON, PrintModeJSONL} {
 		var buf bytes.Buffer
 		if err := table.Print(&buf, mode); err == nil {
 			t.Errorf("Print(%s) with unsupported native value returned nil error", mode)
@@ -210,7 +210,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 		t.Parallel()
 		table := NewTable("t", NewHeader([]string{"a"}), nil)
 		var buf bytes.Buffer
-		if err := table.Print(&buf, PrintModeNDJSON); err != nil {
+		if err := table.Print(&buf, PrintModeJSONL); err != nil {
 			t.Fatalf("Print(NDJSON) error = %v", err)
 		}
 		if buf.Len() != 0 {
@@ -224,7 +224,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 			NewRecord([]string{"1", "2"}),
 		})
 		var buf bytes.Buffer
-		if err := table.Print(&buf, PrintModeNDJSON); err == nil {
+		if err := table.Print(&buf, PrintModeJSONL); err == nil {
 			t.Fatal("Print(NDJSON) = nil error, want error for duplicate columns")
 		}
 	})
@@ -236,7 +236,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 			NewRecord([]string{"2", "y"}),
 		})
 		var buf bytes.Buffer
-		if err := table.Print(&buf, PrintModeNDJSON); err != nil {
+		if err := table.Print(&buf, PrintModeJSONL); err != nil {
 			t.Fatalf("Print(NDJSON) error = %v", err)
 		}
 		lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
@@ -255,7 +255,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 		table := NewTable("t", NewHeader([]string{"a"}), []Record{
 			NewRecord([]string{"1"}),
 		})
-		if err := table.Print(covMdlFailingWriter{}, PrintModeNDJSON); err == nil {
+		if err := table.Print(covMdlFailingWriter{}, PrintModeJSONL); err == nil {
 			t.Fatal("Print(NDJSON) to failing writer = nil error, want error")
 		}
 	})

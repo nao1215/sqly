@@ -59,7 +59,7 @@ scenarios:
           stdout:
             equals: "[]"
 
-  - name: "--output-format ndjson renders one JSON object per line"
+  - name: "--output-format jsonl renders one JSON object per line"
     steps:
       - fixture:
           file: user.csv
@@ -69,7 +69,7 @@ scenarios:
             jenkins46,2
             grey07,3
       - run:
-          command: sqly --output-format ndjson --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
+          command: sqly --output-format jsonl --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
       - assert:
           exit_code: 0
       # The line 1 should equal '{"user_name":"booker12","identifier":1}'
@@ -83,7 +83,7 @@ scenarios:
             line: 2
             equals: '{"user_name":"jenkins46","identifier":2}'
 
-  - name: "--output-format ndjson prints nothing for an empty result"
+  - name: "--output-format jsonl prints nothing for an empty result"
     steps:
       - fixture:
           file: user.csv
@@ -91,7 +91,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --output-format ndjson --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
+          command: sqly --output-format jsonl --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
       - assert:
           exit_code: 0
       # The output should equal ''

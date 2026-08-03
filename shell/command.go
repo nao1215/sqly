@@ -31,15 +31,15 @@ func NewCommands() CommandList {
 	c[headerCommand] = command{execute: c.headerCommand, name: headerCommand, description: "print table header"}
 	c[helpCommand] = command{execute: c.helpCommand, name: helpCommand, description: "print help message"}
 	c[importCommand] = command{execute: c.importCommand, name: importCommand, description: "import file(s) and/or directory(ies)"}
-	c[importModeCommand] = command{execute: c.importModeCommand, name: importModeCommand, description: "set how a ragged CSV/TSV row is imported (stop|skip|pad short rows; reject long rows)"}
+	c[rowMismatchCommand] = command{execute: c.rowMismatchCommand, name: rowMismatchCommand, description: "handle a CSV/TSV row whose field count differs from the header (error|skip|pad)"}
 	c[lsCommand] = command{execute: c.lsCommand, name: lsCommand, description: "print directory contents"}
 	c[modeCommand] = command{execute: c.modeCommand, name: modeCommand, description: "change output mode"}
 	c[tablesCommand] = command{execute: c.tablesCommand, name: tablesCommand, description: "print tables"}
 	c[pwdCommand] = command{execute: c.pwdCommand, name: pwdCommand, description: "print current working directory"}
 	c[schemaCommand] = command{execute: c.schemaCommand, name: schemaCommand, description: "print CREATE TABLE statement of a table"}
 	c[describeCommand] = command{execute: c.describeCommand, name: describeCommand, description: "print column information of a table"}
-	c[saveCommand] = command{execute: c.saveCommand, name: saveCommand, description: "write tables back to files: .save DIR (to a directory) or .save --force (overwrite sources)"}
-	c[dialectCommand] = command{execute: c.dialectCommand, name: dialectCommand, description: "show or set the SQL dialect for queries (sqlite|mysql|postgresql|googlesql)"}
+	c[saveCommand] = command{execute: c.saveCommand, name: saveCommand, description: "write tables back to files: .save DIR (to a directory) or .save --in-place (overwrite sources)"}
+	c[dialectCommand] = command{execute: c.dialectCommand, name: dialectCommand, description: "show or set the SQL dialect for queries (sqlite, mysql, postgresql, googlesql)"}
 	return c
 }
 

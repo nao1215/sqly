@@ -144,7 +144,7 @@ scenarios:
     steps:
       - fixture: *sales
       - run:
-          command: sqly --save --force --sql 'UPDATE "売上" SET amount = 999 WHERE id = 1' 売上.csv
+          command: sqly --save-in-place --sql 'UPDATE "売上" SET amount = 999 WHERE id = 1' 売上.csv
       - assert:
           exit_code: 0
           stderr:

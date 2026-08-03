@@ -3,16 +3,17 @@
 package e2e
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// removedFlag is one CLI option that v1.0.0-rc1 deleted. The table below is the
-// complete list, and it exists so a future change that reintroduces one of these
-// names — by restoring a flag, or by adding a new flag that happens to reuse a
-// freed shorthand — fails here instead of silently resurrecting a surface the
-// release notes say is gone.
+// removedFlag is one CLI option the v1.0.0 surface no longer has, whether it was
+// deleted outright or renamed. The table below is the complete list, and it
+// exists so a future change that reintroduces one of these names — by restoring a
+// flag, or by adding a new flag that happens to reuse a freed shorthand — fails
+// here instead of silently resurrecting a surface the release notes say is gone.
 type removedFlag struct {
 	// category groups the flags by the workflow they belonged to, so a failure
 	// names the feature rather than just a string.
@@ -24,7 +25,7 @@ type removedFlag struct {
 	value string
 }
 
-// removedFlags enumerates every option deleted for v1.0.0-rc1.
+// removedFlags enumerates every option name the v1.0.0 surface dropped.
 func removedFlags() []removedFlag {
 	return []removedFlag{
 		// Profile workflow.
@@ -39,12 +40,9 @@ func removedFlags() []removedFlag {
 		{category: "compare", flag: "--compare-format", value: "json"},
 		{category: "compare", flag: "--compare-format", value: "text"},
 
-		// Typed JSON variants, replaced by type-preserving json/ndjson.
+		// Typed JSON variants, replaced by type-preserving json/jsonl.
 		{category: "typed-json", flag: "--json-typed"},
 		{category: "typed-json", flag: "--ndjson-typed"},
-
-		// Cache invalidation, now automatic from the content hash.
-		{category: "cache-clear", flag: "--cache-clear"},
 
 		// Long-form output aliases, replaced by --output-format.
 		{category: "output-alias-long", flag: "--csv"},
@@ -68,6 +66,125 @@ func removedFlags() []removedFlag {
 		{category: "output-alias-short", flag: "-e"},
 		{category: "output-alias-short", flag: "-m"},
 		{category: "output-alias-short", flag: "-p"},
+
+		// Names replaced for v1.0.0. Each old spelling misread as something else:
+		// --stdin and --save look like booleans, --import-mode and --ragged-rows say
+		// nothing a reader can act on, --stdin-name does not say what it names, and
+		// --save-dir reads like a directory for query output.
+		{category: "renamed-input", flag: "--stdin", value: "csv"},
+		{category: "renamed-input", flag: "--stdin-name", value: "piped"},
+		{category: "renamed-input", flag: "--import-mode", value: "skip"},
+		{category: "renamed-input", flag: "--ragged-rows", value: "skip"},
+		{category: "renamed-writeback", flag: "--save"},
+		{category: "renamed-writeback", flag: "--save-dir", value: "out"},
+
+		// --force confirmed the in-place write that --save-in-place now names on
+		// its own. Left in place it would be a flag that silently does nothing.
+		{category: "removed-force", flag: "--force"},
+
+		// The import cache. It was an opt-in snapshot the user had to name, place,
+		// and delete, and it silently did nothing for several kinds of input.
+		{category: "removed-cache", flag: "--cache", value: "snap.cache"},
+		{category: "removed-cache", flag: "--cache-clear"},
+
+		// Shorthands dropped because their long forms are rare or dangerous to
+		// mistype: -S sat one shift-key away from -s (--sql), so a typo turned a
+		// query into an Excel sheet name, and -i reads as in-place everywhere else
+		// in Unix.
+		{category: "dropped-shorthand", flag: "-S", value: "Sheet1"},
+		{category: "dropped-shorthand", flag: "-i"},
+	}
+}
+
+// removedShellCommands are the dot-commands and dot-command arguments the
+// v1.0.0 shell no longer has. Unlike a removed flag, a stale dot-command is only
+// reachable from a session, so it needs its own run through the batch reader.
+func removedShellCommands() []string {
+	return []string{
+		".import-mode skip",
+		".ragged-rows skip",
+		".compare a b",
+		".profile",
+	}
+}
+
+// TestRemovedSurface_ShellCommandsRejected checks that a dot-command the shell
+// dropped fails the batch instead of being ignored. A batch script stops on a
+// failed statement, so a command that silently did nothing would run the rest of
+// the script under an assumption that never took effect.
+func TestRemovedSurface_ShellCommandsRejected(t *testing.T) {
+	csv := filepath.Join("testdata", "user.csv")
+
+	for _, command := range removedShellCommands() {
+		t.Run(command, func(t *testing.T) {
+			stdout, stderr, code := run(t, command+"\nSELECT 1 AS n;\n", csv)
+			if code == 0 {
+				t.Errorf("exit code = 0 for %q, want non-zero; stdout = %q", command, stdout)
+			}
+			if strings.TrimSpace(stdout) != "" {
+				t.Errorf("stdout should stay empty, got %q", stdout)
+			}
+			if !strings.Contains(stderr, strings.Fields(command)[0]) {
+				t.Errorf("stderr does not name the rejected command: %q", stderr)
+			}
+			if strings.Contains(stderr, "panic") {
+				t.Errorf("sqly panicked: %q", stderr)
+			}
+		})
+	}
+}
+
+// TestRemovedSurface_SaveForceArgumentRejected pins the one removed spelling
+// that was not a flag: `.save --force` used to select the in-place write that is
+// now `.save --in-place`. Taking it as a destination created a directory named
+// "--force" and reported success, so the rejection is asserted together with the
+// absence of that directory.
+func TestRemovedSurface_SaveForceArgumentRejected(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "user.csv")
+	if err := os.WriteFile(source, []byte("user_name,identifier\nbooker12,1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := runIn(t, dir, "UPDATE user SET user_name = 'changed';\n.save --force\n", source)
+	if code == 0 {
+		t.Errorf("exit code = 0, want non-zero; stdout = %q", stdout)
+	}
+	if !strings.Contains(stderr, "--in-place") {
+		t.Errorf("stderr should point at .save --in-place, got %q", stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "--force")); err == nil {
+		t.Error(`.save --force created a directory named "--force"`)
+	}
+}
+
+// TestRemovedSurface_ValueNamesRejected pins the value names that were renamed
+// rather than deleted. sqly calls newline-delimited JSON "jsonl" everywhere now
+// — the file extension, --stdin-format, --output-format, and .mode — and the
+// row-mismatch policy that fails the import is "error", not "stop". A value that
+// half-works is worse than one that fails, so both old spellings must be
+// rejected wherever they were once accepted.
+func TestRemovedSurface_ValueNamesRejected(t *testing.T) {
+	csv := filepath.Join("testdata", "user.csv")
+
+	for _, args := range [][]string{
+		{"--output-format", "ndjson", "--sql", "SELECT 1", csv},
+		{"--stdin-format", "ndjson", "--sql", "SELECT 1"},
+		{"--row-mismatch", "stop", "--sql", "SELECT 1", csv},
+		{"--row-mismatch", "fill", "--sql", "SELECT 1", csv},
+	} {
+		t.Run(strings.Join(args[:2], " "), func(t *testing.T) {
+			stdout, stderr, code := run(t, "", args...)
+			if code == 0 {
+				t.Errorf("exit code = 0, want non-zero; stdout = %q", stdout)
+			}
+			if !strings.Contains(stderr, args[1]) {
+				t.Errorf("stderr does not name the rejected value: %q", stderr)
+			}
+			if strings.TrimSpace(stdout) != "" {
+				t.Errorf("stdout should stay empty, got %q", stdout)
+			}
+		})
 	}
 }
 
@@ -155,7 +272,7 @@ func TestRemovedSurface_RenamedImportModeValue(t *testing.T) {
 	csv := filepath.Join("testdata", "user.csv")
 
 	t.Run("--import-mode fill", func(t *testing.T) {
-		stdout, stderr, code := run(t, "", "--import-mode", "fill", "--sql", "SELECT 1", csv)
+		stdout, stderr, code := run(t, "", "--row-mismatch", "fill", "--sql", "SELECT 1", csv)
 		if code == 0 {
 			t.Fatalf("--import-mode fill exit code = 0, want non-zero (stdout=%q)", stdout)
 		}
@@ -165,16 +282,16 @@ func TestRemovedSurface_RenamedImportModeValue(t *testing.T) {
 		assertNoPanic(t, stdout, stderr)
 	})
 
-	t.Run(".import-mode fill", func(t *testing.T) {
-		stdout, stderr, code := run(t, ".import-mode fill\n", csv)
+	t.Run(".row-mismatch fill", func(t *testing.T) {
+		stdout, stderr, code := run(t, ".row-mismatch fill\n", csv)
 		if code == 0 {
-			t.Fatalf(".import-mode fill exit code = 0, want non-zero (stdout=%q)", stdout)
+			t.Fatalf(".row-mismatch fill exit code = 0, want non-zero (stdout=%q)", stdout)
 		}
 		assertNoPanic(t, stdout, stderr)
 	})
 
 	t.Run("pad is the replacement and works", func(t *testing.T) {
-		_, stderr, code := run(t, "", "--import-mode", "pad", "--sql", "SELECT 1 AS n", "--output-format", "csv", csv)
+		_, stderr, code := run(t, "", "--row-mismatch", "pad", "--sql", "SELECT 1 AS n", "--output-format", "csv", csv)
 		if code != 0 {
 			t.Fatalf("--import-mode pad exit code = %d, want 0 (stderr=%q)", code, stderr)
 		}
@@ -230,7 +347,7 @@ func TestRemovedSurface_NotSuggestedByHelp(t *testing.T) {
 	}
 	// The listing must still be there — an empty one would pass the checks above
 	// for the wrong reason.
-	if !strings.Contains(combined, "ndjson") {
+	if !strings.Contains(combined, "jsonl") {
 		t.Errorf(".mode listing did not print the surviving modes:\n%s", combined)
 	}
 }

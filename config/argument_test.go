@@ -108,30 +108,14 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --output-format ndjson option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--output-format", "ndjson"})
+	t.Run("user set --output-format jsonl option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "jsonl"})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if arg.Output.Mode != model.PrintModeNDJSON {
-			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeNDJSON)
-		}
-	})
-
-	t.Run("--cache sets the path", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--cache", "/tmp/x.cache", "data.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.CachePath != "/tmp/x.cache" {
-			t.Errorf("CachePath = %q, want /tmp/x.cache", arg.CachePath)
-		}
-	})
-
-	t.Run("an empty --cache value is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--cache", ""}); err == nil {
-			t.Error("expected an error for an empty --cache value")
+		if arg.Output.Mode != model.PrintModeJSONL {
+			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeJSONL)
 		}
 	})
 
@@ -146,8 +130,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --stdin and --stdin-name options", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", "piped"})
+	t.Run("user set --stdin-format and --stdin-table options", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", "piped"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,7 +144,7 @@ func TestNewArg(t *testing.T) {
 	})
 
 	t.Run("stdin table name defaults to stdin", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--stdin", "csv"})
+		arg, err := NewArg([]string{"sqly", "--stdin-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -244,7 +228,7 @@ func TestNewArg(t *testing.T) {
 
 	t.Run("invalid --stdin-name values are rejected", func(t *testing.T) {
 		for _, name := range []string{"", ".", "..", "a/b", "../escaped", `a\b`} {
-			if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", name}); err == nil {
+			if _, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", name}); err == nil {
 				t.Errorf("NewArg accepted invalid --stdin-name %q, want error", name)
 			}
 		}
@@ -254,14 +238,14 @@ func TestNewArg(t *testing.T) {
 		// These would be sanitized by filesql, leaving the advertised name
 		// unqueryable, so they are rejected up front.
 		for _, name := range []string{"my data", "2023-data", "a-b", "weird!"} {
-			if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", name}); err == nil {
+			if _, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", name}); err == nil {
 				t.Errorf("NewArg accepted non-identifier --stdin-name %q, want error", name)
 			}
 		}
 	})
 
 	t.Run("a normal --stdin-name is accepted", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--stdin", "csv", "--stdin-name", "people"}); err != nil {
+		if _, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", "people"}); err != nil {
 			t.Errorf("NewArg rejected a valid --stdin-name: %v", err)
 		}
 	})
@@ -297,15 +281,15 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("explicit empty --save-dir is rejected", func(t *testing.T) {
-		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1", "--save-dir", "", "testdata/user.csv"})
+	t.Run("explicit empty --save-tables is rejected", func(t *testing.T) {
+		_, err := NewArg([]string{"sqly", "--sql", "SELECT 1", "--save-tables", "", "testdata/user.csv"})
 		if err == nil {
-			t.Fatal("expected an error for an explicit empty --save-dir, got nil")
+			t.Fatal("expected an error for an explicit empty --save-tables, got nil")
 		}
 	})
 
 	t.Run("explicit empty --stdin is rejected", func(t *testing.T) {
-		_, err := NewArg([]string{"sqly", "--stdin", "", "--sql", "SELECT 1 AS x"})
+		_, err := NewArg([]string{"sqly", "--stdin-format", "", "--sql", "SELECT 1 AS x"})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --stdin, got nil")
 		}
@@ -338,7 +322,7 @@ func TestNewArg(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(arg.Usage, "--output-format string") {
+		if !strings.Contains(arg.Usage, "--output-format FORMAT") {
 			t.Errorf("usage does not explain the replacement --output-format option")
 		}
 	})
@@ -414,31 +398,31 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("--import-mode defaults to stop and parses stop/skip/pad", func(t *testing.T) {
+	t.Run("--row-mismatch defaults to error and parses error/skip/pad", func(t *testing.T) {
 		t.Parallel()
 		cases := []struct {
 			args []string
-			want model.MalformedRowPolicy
+			want model.RowMismatchPolicy
 		}{
-			{[]string{"sqly"}, model.MalformedRowStop},
-			{[]string{"sqly", "--import-mode", "stop"}, model.MalformedRowStop},
-			{[]string{"sqly", "--import-mode", "skip"}, model.MalformedRowSkip},
-			{[]string{"sqly", "--import-mode", "pad"}, model.MalformedRowPad},
+			{[]string{"sqly"}, model.RowMismatchError},
+			{[]string{"sqly", "--row-mismatch", "error"}, model.RowMismatchError},
+			{[]string{"sqly", "--row-mismatch", "skip"}, model.RowMismatchSkip},
+			{[]string{"sqly", "--row-mismatch", "pad"}, model.RowMismatchPad},
 		}
 		for _, tc := range cases {
 			arg, err := NewArg(tc.args)
 			if err != nil {
 				t.Fatalf("NewArg(%v) unexpected error: %v", tc.args, err)
 			}
-			if arg.ImportMode != tc.want {
-				t.Errorf("NewArg(%v).ImportMode = %v, want %v", tc.args, arg.ImportMode, tc.want)
+			if arg.RowMismatch != tc.want {
+				t.Errorf("NewArg(%v).RowMismatch = %v, want %v", tc.args, arg.RowMismatch, tc.want)
 			}
 		}
 	})
 
 	t.Run("an invalid --import-mode is rejected", func(t *testing.T) {
 		t.Parallel()
-		if _, err := NewArg([]string{"sqly", "--import-mode", "keep"}); err == nil {
+		if _, err := NewArg([]string{"sqly", "--row-mismatch", "keep"}); err == nil {
 			t.Fatal("NewArg with --import-mode keep returned nil error, want an error")
 		}
 	})
@@ -523,7 +507,7 @@ func TestNewArgOutputFormatChoices(t *testing.T) {
 		{"excel", model.PrintModeExcel},
 		{"markdown", model.PrintModeMarkdownTable},
 		{"json", model.PrintModeJSON},
-		{"ndjson", model.PrintModeNDJSON},
+		{"jsonl", model.PrintModeJSONL},
 		{"parquet", model.PrintModeParquet},
 		{"vertical", model.PrintModeVertical},
 	}
@@ -607,9 +591,10 @@ func getStdout(t *testing.T, f func()) string {
 	return s[:len(s)-1]
 }
 
-// TestNewArgDependentFlagValidation covers the v0.19.0 flag-dependency bugs:
-// --stdin-name without --stdin, --inspect-sample without --inspect,
-// --force without --save/--save-dir, and a SQLite-keyword --stdin-name
+// TestNewArgDependentFlagValidation covers the flag dependencies the parser
+// enforces: --stdin-table without --stdin-format, --inspect-sample without
+// --inspect, the two write-back destinations together, and a SQLite-keyword
+// --stdin-table.
 func TestNewArgDependentFlagValidation(t *testing.T) {
 	t.Parallel()
 
@@ -619,9 +604,9 @@ func TestNewArgDependentFlagValidation(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "stdin-name without stdin is rejected",
-			args:    []string{"sqly", "--stdin-name", "weird", "--sql", "SELECT 1"},
-			wantErr: errStdinNameWithoutStdin,
+			name:    "stdin-table without stdin-format is rejected",
+			args:    []string{"sqly", "--stdin-table", "weird", "--sql", "SELECT 1"},
+			wantErr: errStdinTableWithoutFormat,
 		},
 		{
 			name:    "inspect-sample without inspect is rejected",
@@ -634,14 +619,14 @@ func TestNewArgDependentFlagValidation(t *testing.T) {
 			wantErr: errInspectSampleWithoutInspect,
 		},
 		{
-			name:    "force without save is rejected",
-			args:    []string{"sqly", "--force", "--sql", "SELECT 1"},
-			wantErr: errForceWithoutSave,
+			name:    "both write-back destinations together are rejected",
+			args:    []string{"sqly", "--save-in-place", "--save-tables", "out", "--sql", "SELECT 1"},
+			wantErr: errSaveInPlaceWithSaveTables,
 		},
 		{
-			name:    "stdin-name that is a SQLite keyword is rejected",
-			args:    []string{"sqly", "--stdin", "csv", "--stdin-name", "select", "--sql", "SELECT 1"},
-			wantErr: errStdinNameReserved,
+			name:    "stdin-table that is a SQLite keyword is rejected",
+			args:    []string{"sqly", "--stdin-format", "csv", "--stdin-table", "select", "--sql", "SELECT 1"},
+			wantErr: errStdinTableReserved,
 		},
 	}
 
@@ -659,9 +644,9 @@ func TestNewArgDependentFlagValidation(t *testing.T) {
 	t.Run("dependent flags accepted with their parent flag", func(t *testing.T) {
 		t.Parallel()
 		ok := [][]string{
-			{"sqly", "--stdin", "csv", "--stdin-name", "data", "--sql", "SELECT 1"},
+			{"sqly", "--stdin-format", "csv", "--stdin-table", "data", "--sql", "SELECT 1"},
 			{"sqly", "--inspect", "--inspect-sample", "0"},
-			{"sqly", "--save", "--force", "--sql", "SELECT 1"},
+			{"sqly", "--save-in-place", "--sql", "SELECT 1"},
 		}
 		for _, args := range ok {
 			if _, err := NewArg(args); err != nil {

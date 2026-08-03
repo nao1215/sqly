@@ -25,7 +25,7 @@ scenarios:
           stderr:
             contains: "--sql-file"
 
-  - name: rejects an empty --save-dir
+  - name: rejects an empty --save-tables
     steps:
       - fixture: &user
           file: user.csv
@@ -33,23 +33,23 @@ scenarios:
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
       - run:
-          command: sqly --sql "SELECT 1" --save-dir "" user.csv
+          command: sqly --sql "SELECT 1" --save-tables "" user.csv
       - assert:
           exit_code: 1
           stderr:
-            contains: "--save-dir"
+            contains: "--save-tables"
 
-  - name: rejects an empty --stdin
+  - name: rejects an empty --stdin-format
     steps:
       - run:
-          command: sqly --stdin "" --sql "SELECT 1 AS x"
+          command: sqly --stdin-format "" --sql "SELECT 1 AS x"
           stdin: |
             id,name
             1,a
       - assert:
           exit_code: 1
           stderr:
-            contains: "--stdin"
+            contains: "--stdin-format"
 
   - name: rejects an invalid output format
     steps:
@@ -156,17 +156,17 @@ scenarios:
           stderr:
             contains: stdin
 
-  - name: fails a --stdin dataset run with no query
+  - name: fails a --stdin-format dataset run with no query
     steps:
       - run:
-          command: sqly --stdin csv
+          command: sqly --stdin-format csv
           stdin: |
             id,name
             1,a
       - assert:
           exit_code: 1
           stderr:
-            contains: "--stdin"
+            contains: "--stdin-format"
 
   - name: reports per-file provenance for a sanitized basename
     steps:
@@ -235,17 +235,17 @@ scenarios:
           stderr:
             contains: "--output"
 
-  - name: rejects --save-dir that resolves to the source directory
+  - name: rejects --save-tables that resolves to the source directory
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET first_name='P' WHERE identifier=1" --save-dir . user.csv
+          command: sqly --sql "UPDATE user SET first_name='P' WHERE identifier=1" --save-tables . user.csv
       - assert:
           exit_code: 1
           stderr:
             contains: source
 
-  - name: rejects a --save-dir destination that already exists
+  - name: rejects a --save-tables destination that already exists
     steps:
       - fixture:
           file: src/user.csv
@@ -258,7 +258,7 @@ scenarios:
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
       - run:
-          command: sqly --sql "UPDATE user SET first_name='Q' WHERE identifier=1" --save-dir out src/user.csv
+          command: sqly --sql "UPDATE user SET first_name='Q' WHERE identifier=1" --save-tables out src/user.csv
       - assert:
           exit_code: 1
           stderr:
@@ -271,19 +271,22 @@ scenarios:
           file: sample.xlsx
           from: testdata/sample.xlsx
       - run:
-          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=1" --save-dir out user.csv sample.xlsx
+          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=1" --save-tables out user.csv sample.xlsx
       - assert:
           exit_code: 1
           stdout:
             not_contains: affected
           stderr:
-            contains: "cannot save"
+            contains: "cannot write back sample.xlsx"
+          file:
+            path: out
+            exists: false
 
-  - name: skips write-back for a read-only query under --save --force
+  - name: skips write-back for a read-only query under --save-in-place
     steps:
       - fixture: *user
       - run:
-          command: sqly --output-format csv --sql "SELECT * FROM user WHERE identifier=1" --save --force user.csv
+          command: sqly --output-format csv --sql "SELECT * FROM user WHERE identifier=1" --save-in-place user.csv
       - assert:
           exit_code: 0
           stdout:

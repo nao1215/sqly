@@ -10,11 +10,11 @@ Hide
 Type "export PATH=$PWD:$PATH PS1='$ '; clear"
 Enter
 Show
-Type "cat testdata/user.csv | sqly --stdin csv --sql 'SELECT user_name FROM stdin LIMIT 1'"
+Type "cat testdata/user.csv | sqly --stdin-format csv --sql 'SELECT user_name FROM stdin LIMIT 1'"
 Sleep 600ms
 Enter
 Sleep 2s
-Type "cat testdata/user.csv | sqly --stdin csv --sql 'SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id' testdata/identifier.csv"
+Type "cat testdata/user.csv | sqly --stdin-format csv --sql 'SELECT s.user_name, i.position FROM stdin s JOIN identifier i ON s.identifier = i.id' testdata/identifier.csv"
 Sleep 600ms
 Enter
 Sleep 3s

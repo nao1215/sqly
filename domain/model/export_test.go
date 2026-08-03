@@ -21,7 +21,7 @@ func TestExportFormat_String(t *testing.T) {
 		{name: "markdown", ef: ExportMarkdown, want: "markdown"},
 		{name: "excel", ef: ExportExcel, want: "excel"},
 		{name: "json", ef: ExportJSON, want: "json"},
-		{name: "ndjson", ef: ExportNDJSON, want: "ndjson"},
+		{name: "jsonl", ef: ExportJSONL, want: "jsonl"},
 		{name: "parquet", ef: ExportParquet, want: "parquet"},
 		{name: "unknown defaults to csv", ef: ExportFormat(99), want: "csv"},
 	}
@@ -49,7 +49,7 @@ func TestExportFormat_Extension(t *testing.T) {
 		{name: "markdown", ef: ExportMarkdown, want: ".md"},
 		{name: "excel", ef: ExportExcel, want: ".xlsx"},
 		{name: "json", ef: ExportJSON, want: ".json"},
-		{name: "ndjson", ef: ExportNDJSON, want: ".ndjson"},
+		{name: "jsonl", ef: ExportJSONL, want: ".jsonl"},
 		{name: "parquet", ef: ExportParquet, want: ".parquet"},
 		{name: "unknown defaults to .csv", ef: ExportFormat(99), want: ".csv"},
 	}
@@ -78,8 +78,8 @@ func TestExportFormatFromExtension(t *testing.T) {
 		{name: ".md maps to markdown", ext: ".md", want: ExportMarkdown, wantOK: true},
 		{name: ".xlsx maps to excel", ext: ".xlsx", want: ExportExcel, wantOK: true},
 		{name: ".json maps to json", ext: ".json", want: ExportJSON, wantOK: true},
-		{name: ".ndjson maps to ndjson", ext: ".ndjson", want: ExportNDJSON, wantOK: true},
-		{name: ".jsonl maps to ndjson", ext: ".jsonl", want: ExportNDJSON, wantOK: true},
+		{name: ".ndjson maps to ndjson", ext: ".ndjson", want: ExportJSONL, wantOK: true},
+		{name: ".jsonl maps to ndjson", ext: ".jsonl", want: ExportJSONL, wantOK: true},
 		{name: ".parquet maps to parquet", ext: ".parquet", want: ExportParquet, wantOK: true},
 		{name: "uppercase .CSV maps to csv", ext: ".CSV", want: ExportCSV, wantOK: true},
 		{name: "unknown extension is not recognized", ext: ".txt", want: ExportCSV, wantOK: false},
@@ -146,7 +146,7 @@ func TestExportFormat_SupportsCompression(t *testing.T) {
 		{name: "tsv supports compression", ef: ExportTSV, want: true},
 		{name: "ltsv supports compression", ef: ExportLTSV, want: true},
 		{name: "json supports compression", ef: ExportJSON, want: true},
-		{name: "ndjson supports compression", ef: ExportNDJSON, want: true},
+		{name: "ndjson supports compression", ef: ExportJSONL, want: true},
 		{name: "markdown supports compression", ef: ExportMarkdown, want: true},
 		{name: "parquet does not support compression", ef: ExportParquet, want: false},
 		{name: "excel does not support compression", ef: ExportExcel, want: false},
@@ -188,7 +188,7 @@ func TestResolveOutputTarget(t *testing.T) {
 		{
 			name:       "no flag infers ndjson with zstd from path",
 			path:       "out.ndjson.zst",
-			wantFormat: ExportNDJSON,
+			wantFormat: ExportJSONL,
 			wantComp:   CompressionZstd,
 		},
 		{
@@ -215,9 +215,9 @@ func TestResolveOutputTarget(t *testing.T) {
 		{
 			name:        "explicit format with no extension is kept",
 			path:        "result",
-			explicit:    ExportNDJSON,
+			explicit:    ExportJSONL,
 			explicitSet: true,
-			wantFormat:  ExportNDJSON,
+			wantFormat:  ExportJSONL,
 			wantComp:    CompressionNone,
 		},
 		{
@@ -345,8 +345,11 @@ func TestBuildOutputPath(t *testing.T) {
 		{name: "adds csv extension when missing", path: "result", format: ExportCSV, comp: CompressionNone, want: "result.csv"},
 		{name: "keeps csv.gz path", path: "result.csv.gz", format: ExportCSV, comp: CompressionGzip, want: "result.csv.gz"},
 		{name: "rebuilds base and appends gzip", path: "result.gz", format: ExportCSV, comp: CompressionGzip, want: "result.csv.gz"},
-		{name: "replaces mismatched extension", path: "data.json", format: ExportNDJSON, comp: CompressionNone, want: "data.ndjson"},
-		{name: "keeps ndjson.zst path", path: "out.ndjson.zst", format: ExportNDJSON, comp: CompressionZstd, want: "out.ndjson.zst"},
+		{name: "replaces mismatched extension", path: "data.json", format: ExportJSONL, comp: CompressionNone, want: "data.jsonl"},
+		// .ndjson names the same format as .jsonl, so a destination spelled that way
+		// is kept as the user wrote it rather than renamed to the canonical spelling.
+		{name: "keeps an ndjson destination", path: "data.ndjson", format: ExportJSONL, comp: CompressionNone, want: "data.ndjson"},
+		{name: "keeps ndjson.zst path", path: "out.ndjson.zst", format: ExportJSONL, comp: CompressionZstd, want: "out.ndjson.zst"},
 		{name: "honors an unknown extension", path: "out.txt", format: ExportCSV, comp: CompressionNone, want: "out.txt"},
 		{name: "honors an unknown extension with compression", path: "out.txt.gz", format: ExportCSV, comp: CompressionGzip, want: "out.txt.gz"},
 	}
@@ -366,7 +369,7 @@ func TestBuildOutputPath(t *testing.T) {
 func TestBuildOutputPath_Property(t *testing.T) {
 	formats := []ExportFormat{
 		ExportCSV, ExportTSV, ExportLTSV, ExportMarkdown,
-		ExportExcel, ExportJSON, ExportNDJSON, ExportParquet,
+		ExportExcel, ExportJSON, ExportJSONL, ExportParquet,
 	}
 	comps := []Compression{
 		CompressionNone, CompressionGzip, CompressionXz, CompressionZstd,
@@ -408,7 +411,7 @@ func TestExportFormatFromPrintMode(t *testing.T) {
 		{name: "markdown", mode: PrintModeMarkdownTable, want: ExportMarkdown},
 		{name: "excel", mode: PrintModeExcel, want: ExportExcel},
 		{name: "json", mode: PrintModeJSON, want: ExportJSON},
-		{name: "ndjson", mode: PrintModeNDJSON, want: ExportNDJSON},
+		{name: "jsonl", mode: PrintModeJSONL, want: ExportJSONL},
 		{name: "parquet", mode: PrintModeParquet, want: ExportParquet},
 	}
 	for _, tt := range tests {

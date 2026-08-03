@@ -25,12 +25,12 @@ scenarios:
           stderr:
             contains: no_such_table
 
-  - name: does not run .save --force after an earlier failure
+  - name: does not run .save --in-place after an earlier failure
     steps:
       - fixture: *u
       - run:
           command: sqly u.csv
-          stdin: "UPDATE u SET first_name = 'BROKEN' WHERE identifier = 1;\nSELECT * FROM no_such_table;\n.save --force\n"
+          stdin: "UPDATE u SET first_name = 'BROKEN' WHERE identifier = 1;\nSELECT * FROM no_such_table;\n.save --in-place\n"
       - assert:
           exit_code: 1
           stdout:
@@ -55,11 +55,11 @@ scenarios:
             path: out.csv
             exists: false
 
-  - name: does not write back for empty stdin with --save --force
+  - name: does not write back for empty stdin with --save-in-place
     steps:
       - fixture: *u
       - run:
-          command: sqly u.csv --save --force
+          command: sqly u.csv --save-in-place
       - assert:
           exit_code: 1
           stderr:

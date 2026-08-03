@@ -14,9 +14,10 @@ import (
 type state struct {
 	cwd  string // cwd is current working directory.
 	mode *mode  // mode is output mode.
-	// importMode is the current malformed-row policy for CSV/TSV imports. It is
-	// seeded from the --import-mode flag and changed by the .import-mode command.
-	importMode model.MalformedRowPolicy
+	// rowMismatch is the current policy for a CSV/TSV row whose field count
+	// differs from the header. It is seeded from the --row-mismatch flag and
+	// changed by the .row-mismatch command.
+	rowMismatch model.RowMismatchPolicy
 	// importEncoding is the current text-import decoding for CSV, TSV, LTSV,
 	// JSON, and JSONL inputs. It is seeded from --encoding.
 	importEncoding model.TextEncoding
@@ -35,7 +36,7 @@ func newState(arg *config.Arg) (*state, error) {
 	return &state{
 		cwd:            dir,
 		mode:           newMode(config.Stdout, arg.Output.Mode),
-		importMode:     arg.ImportMode,
+		rowMismatch:    arg.RowMismatch,
 		importEncoding: importEncoding,
 	}, nil
 }
@@ -97,7 +98,7 @@ func (m *mode) displayName() string {
 // modeName is new output mode (e.g. table).
 //
 // The mode-change banner is written to stderr, not stdout. In batch mode a
-// `.mode json`/`.mode ndjson` switch is followed by machine-readable output on
+// `.mode json`/`.mode jsonl` switch is followed by machine-readable output on
 // stdout, so a banner there would corrupt it; keeping the status message on
 // stderr preserves stdout purity for every mode.
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
@@ -132,8 +133,8 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 		target = model.PrintModeLTSV
 	case model.PrintModeJSON.String():
 		target = model.PrintModeJSON
-	case model.PrintModeNDJSON.String():
-		target = model.PrintModeNDJSON
+	case model.PrintModeJSONL.String():
+		target = model.PrintModeJSONL
 	case model.PrintModeExcel.String():
 		target = model.PrintModeExcel
 		suffix = " (active only when executing .dump, otherwise same as csv mode)"
@@ -143,7 +144,7 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	case model.PrintModeVertical.String():
 		target = model.PrintModeVertical
 	default:
-		return fmt.Errorf("invalid output mode: %s", modeName)
+		return fmt.Errorf("invalid output mode %q: want table, vertical, csv, tsv, ltsv, json, jsonl, markdown, excel, or parquet", modeName)
 	}
 
 	fmt.Fprintf(config.Stderr, "Change output mode from %s to %s%s\n", m.displayName(), modeName, suffix)

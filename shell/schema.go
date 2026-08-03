@@ -44,7 +44,7 @@ func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string)
 
 // isStructuredMode reports whether the output mode is a machine-readable JSON form.
 func isStructuredMode(m model.PrintMode) bool {
-	return m == model.PrintModeJSON || m == model.PrintModeNDJSON
+	return m == model.PrintModeJSON || m == model.PrintModeJSONL
 }
 
 // tableCreateStatement returns the object's stored CREATE statement. It prefers

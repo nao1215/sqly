@@ -1,56 +1,80 @@
-sqly - execute SQL against CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire with shell ((devel))
+sqly - run SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH,
+and Fedwire files ((devel))
 
 [Usage]
-  sqly [OPTIONS] [FILE_PATH(S)|DIRECTORY_PATH(S)]
+  sqly [OPTIONS] [FILE|DIRECTORY|URL ...]
 
-  sqly is flag-driven and has no subcommands: use --help and --version,
-  not "sqly help" or "sqly version". Helper commands like .tables and
-  .import run inside the shell or batch stdin mode, not as arguments.
+  Each input is loaded into an in-memory SQLite database as a table named
+  after the file. With --sql or --sql-file, sqly runs the query and exits;
+  with neither, it opens an interactive shell, or runs SQL piped into it.
+  sqly has no subcommands. Dot-commands are available inside the shell.
 
-[Example]
-  - run sqly shell
-    sqly
-  - Execute query for csv file
-    sqly --sql 'SELECT * FROM sample' ./path/to/sample.csv
-  - Import directory with all supported files
-    sqly ./path/to/data/directory
-  - Mix files and directories
-    sqly file1.csv ./data_dir file2.tsv
-  - Batch mode: pipe SQL/commands via stdin (no TTY)
-    echo 'SELECT * FROM sample' | sqly ./path/to/sample.csv
-  - Join a piped dataset (--stdin) with a query loaded from a file
-    cat data.csv | sqly --stdin csv --sql-file query.sql
+[Examples]
+  - open the shell with a file loaded
+    sqly sample.csv
+  - run one query over a file, a directory, or a URL
+    sqly --sql 'SELECT * FROM sample' sample.csv
+  - join files of different formats
+    sqly --sql 'SELECT * FROM a JOIN b USING (id)' a.csv b.parquet
+  - write the result somewhere else, in another format
+    sqly --output-format json --output out.json --sql 'SELECT 1' a.csv
+  - read the data from a pipe and the query from a file
+    cat data.csv | sqly --stdin-format csv --sql-file query.sql
+  - look at a file you have never seen, as JSON
+    sqly --inspect sample.csv
 
-[OPTIONS]
-      --output-format string   output format: table|csv|tsv|ltsv|excel|markdown|json|ndjson|parquet|vertical (default "table")
-  -S, --sheet string           excel sheet name you want to import
-      --stdin string           treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)
-      --stdin-name string      table name for the --stdin dataset (default "stdin")
-      --import-mode string     how to import a CSV/TSV row whose field count differs from the header: stop (abort)|skip (drop)|pad (pad short rows with empty fields; reject long rows) (default "stop")
-      --encoding string        text input encoding for CSV/TSV/LTSV/JSON/JSONL import: utf-8|shift-jis|euc-jp|iso-2022-jp|utf-16le|utf-16be (default "utf-8")
-      --dialect string         SQL dialect for queries (loading always uses sqlite): sqlite|mysql|postgresql|googlesql (default "sqlite")
-  -s, --sql string             sql query you want to execute
-  -f, --sql-file string        path to a file with SQL to execute (multiline; cannot be used with --sql)
-  -o, --output string          destination path for the result of --sql or a single-result --sql-file script
-  -i, --inspect                print a JSON report of imported tables (schema, row counts, sample rows) and exit
-      --inspect-sample int     rows to include per table in --inspect (0 for schema only) (default 5)
-      --cache string           opt-in import cache: reuse a SQLite snapshot of the imported tables when inputs are unchanged (keyed by path+size+SHA-256 content hash)
-      --save                   after the run, write each table back over its source file (requires --force)
-      --save-dir string        after the run, write each table into this directory (originals untouched)
-      --force                  allow --save to overwrite source files in place
-  -h, --help                   print help message
-  -v, --version                print sqly version
+[Options]
+  Input:
+        --stdin-format FORMAT   read stdin as a dataset instead of as SQL; one
+                                of: csv, tsv, ltsv, json, jsonl
+        --stdin-table NAME      table name for the --stdin-format dataset
+                                (default: stdin)
+        --sheet NAME            import only this sheet from Excel (.xlsx) inputs
+        --encoding ENCODING     decode CSV, TSV, LTSV, JSON, and JSONL inputs
+                                that have no BOM as one of: utf-8, shift-jis,
+                                euc-jp, iso-2022-jp, utf-16le, utf-16be
+                                (default: utf-8)
+        --row-mismatch POLICY   CSV/TSV only: handle a row whose field count
+                                differs from the header, as one of: error (fail
+                                the import), skip (drop the row), pad (pad a
+                                short row, fail on a long one) (default: error)
 
-[LICENSE]
-  MIT LICENSE - Copyright (c) 2022 CHIKAMATSU Naohiro
-  https://github.com/nao1215/sqly/blob/main/LICENSE
+  Query:
+    -s, --sql SQL               run one SQL statement, then exit
+    -f, --sql-file FILE         run every statement in this SQL file, printing
+                                each result, then exit
+        --dialect NAME          write the query in one of: sqlite, mysql,
+                                postgresql, googlesql; sqly translates it to
+                                SQLite (default: sqlite)
 
-[CONTACT]
-  https://github.com/nao1215/sqly/issues
+  Output:
+    -o, --output FILE           write the query result to this file instead of
+                                stdout; the run must produce exactly one result
+        --output-format FORMAT  print the query result as one of: table,
+                                vertical, csv, tsv, ltsv, json, jsonl, markdown,
+                                excel, parquet; excel and parquet need --output
+                                (default: table)
 
-Documentation: https://nao1215.github.io/sqly/
+  Inspection:
+        --inspect               print a JSON report of the imported tables
+                                (schema, row counts, sample rows) and exit
+        --inspect-sample N      sample rows per table in the --inspect report; 0
+                                for schema only (default: 5)
+
+  Write back:
+        --save-tables DIR       after the run, write every table the session
+                                changed into this directory, in its source
+                                format; the sources are untouched
+        --save-in-place         after the run, overwrite the source file of
+                                every table the session changed (destructive)
+
+  General:
+    -h, --help                  print this help and exit
+    -v, --version               print the sqly version and exit
+
+Queries are SQLite by default; --dialect translates MySQL, PostgreSQL, or
+GoogleSQL syntax into it.
+
+Documentation:   https://nao1215.github.io/sqly/
+Report an issue: https://github.com/nao1215/sqly/issues
 GitHub Sponsors: https://github.com/sponsors/nao1215
-
-sqly runs the DB in SQLite3 in-memory mode, so queries use SQLite3 syntax by default.
-Use --dialect (or .dialect in the shell) to write MySQL, PostgreSQL, or GoogleSQL
-queries instead; sqly translates them to SQLite3 before running them.

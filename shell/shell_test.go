@@ -384,7 +384,7 @@ func TestShellExec(t *testing.T) {
 		defer cleanup()
 
 		_, err = getExecStdOutput(t, shell.exec, ".mode not_exist_mode")
-		if !strings.Contains(err.Error(), "invalid output mode: not_exist_mode") {
+		if !strings.Contains(err.Error(), `invalid output mode "not_exist_mode"`) {
 			t.Fatal(err)
 		}
 	})
@@ -447,8 +447,8 @@ func TestShellExec(t *testing.T) {
 			}
 		}
 		// Destructive overwrite is visually distinct and labeled.
-		if !strings.Contains(out, ".save --force") || !strings.Contains(out, "destructive") {
-			t.Errorf(".help output should flag .save --force as destructive:\n%s", out)
+		if !strings.Contains(out, ".save --in-place") || !strings.Contains(out, "destructive") {
+			t.Errorf(".help output should flag .save --in-place as destructive:\n%s", out)
 		}
 		// Every command still appears, so .help stays a complete reference.
 		for _, name := range shell.commands.sortCommandNameKey() {
@@ -2131,7 +2131,7 @@ func TestShellRunBatch_EmptyStdinSkipsSave(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	shell, cleanup, err := newShell(t, []string{"sqly", "--save", "--force", src})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--save-in-place", src})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2374,7 +2374,7 @@ func TestShellRun_JSONOutputFromCLI(t *testing.T) {
 }
 
 func TestShellExec_NDJSONModeSwitch(t *testing.T) {
-	// Regression for: .mode ndjson makes shell query output emit one JSON
+	// Regression for: .mode jsonl makes shell query output emit one JSON
 	// object per line.
 	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
@@ -2385,8 +2385,8 @@ func TestShellExec_NDJSONModeSwitch(t *testing.T) {
 	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := getExecStdOutput(t, shell.exec, ".mode ndjson"); err != nil {
-		t.Fatalf(".mode ndjson failed: %v", err)
+	if _, err := getExecStdOutput(t, shell.exec, ".mode jsonl"); err != nil {
+		t.Fatalf(".mode jsonl failed: %v", err)
 	}
 
 	out, err := getExecStdOutput(t, shell.exec, "SELECT actor FROM actor ORDER BY actor ASC LIMIT 2")
@@ -2647,7 +2647,7 @@ func TestShell_buildCreateStatement(t *testing.T) {
 func TestShellRun_StdinDataset(t *testing.T) {
 	// Regression for: --stdin treats piped stdin as an input dataset.
 	t.Run("queries piped CSV through the default stdin table", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--output-format", "csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--output-format", "csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2662,7 +2662,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 	})
 
 	t.Run("overrides the stdin table name", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--stdin-name", "people", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM people"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--stdin-table", "people", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM people"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2683,7 +2683,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 			t.Fatal(err)
 		}
 		shell, cleanup, err := newShell(t, []string{
-			"sqly", "--stdin", "csv", "--output-format", "csv",
+			"sqly", "--stdin-format", "csv", "--output-format", "csv",
 			"--sql", "SELECT s.name, i.position FROM stdin s JOIN identifier i ON s.id = i.id ORDER BY s.id",
 			idPath,
 		})
@@ -2701,7 +2701,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 	})
 
 	t.Run("inspect reports a stable stdin source, not a temp path", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--stdin", "csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--stdin-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2718,30 +2718,21 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 	})
 
-	t.Run("save is rejected for a stdin-backed table", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sql", "UPDATE stdin SET name = 'x'", "--save", "--force"})
-		if err != nil {
-			t.Fatal(err)
+	t.Run("write-back of a stdin dataset is rejected while parsing", func(t *testing.T) {
+		// A piped dataset has no source file, so the run can never persist it.
+		// The rejection is at parse time, before stdin is read or anything is
+		// imported, so newShell is where it surfaces.
+		_, _, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--sql", "UPDATE stdin SET name = 'x'", "--save-in-place"})
+		if err == nil {
+			t.Fatal("--save-in-place with --stdin-format was accepted, want a rejection")
 		}
-		defer cleanup()
-		shell.isTTY = func() bool { return false }
-		shell.stdin = strings.NewReader("id,name\n1,alice\n")
-
-		backupStderr := config.Stderr
-		defer func() { config.Stderr = backupStderr }()
-		config.Stderr = &bytes.Buffer{}
-
-		runErr := shell.Run(context.Background())
-		if runErr == nil {
-			t.Fatal("save of a stdin-backed table returned nil, want error")
-		}
-		if !strings.Contains(runErr.Error(), "stdin") {
-			t.Fatalf("error = %q, want it to mention stdin", runErr.Error())
+		if !strings.Contains(err.Error(), "stdin") {
+			t.Fatalf("error = %q, want it to mention stdin", err.Error())
 		}
 	})
 
 	t.Run("invalid stdin format returns a clear error", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "xml", "--sql", "SELECT 1"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "xml", "--sql", "SELECT 1"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2759,7 +2750,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 	})
 
 	t.Run("rejects --stdin on an interactive terminal", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sql", "SELECT 1"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--sql", "SELECT 1"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2830,7 +2821,7 @@ func TestShellRun_SQLFile(t *testing.T) {
 		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--output-format", "csv", "--sql-file", sqlPath, idPath})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--output-format", "csv", "--sql-file", sqlPath, idPath})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2930,14 +2921,14 @@ func TestShellRun_SQLFile(t *testing.T) {
 }
 
 func TestValidateSaveFlags_SQLFileAllowedOnTTY(t *testing.T) {
-	// --sql-file is a non-interactive execution path, so --save/--save-dir must be
+	// --sql-file is a non-interactive execution path, so --save/--save-tables must be
 	// allowed with it even when stdin is a TTY.
 	cases := []struct {
 		name string
 		args []string
 	}{
-		{"save-dir with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-dir", "out", "f.csv"}},
-		{"save --force with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save", "--force", "f.csv"}},
+		{"save-tables with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-tables", "out", "f.csv"}},
+		{"save --force with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-in-place", "f.csv"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2948,7 +2939,7 @@ func TestValidateSaveFlags_SQLFileAllowedOnTTY(t *testing.T) {
 			defer cleanup()
 			s.isTTY = func() bool { return true }
 
-			if err := s.validateSaveFlags(); err != nil {
+			if err := s.validateSaveFlags(""); err != nil {
 				t.Errorf("validateSaveFlags() = %v, want nil for the --sql-file path", err)
 			}
 		})
@@ -3056,7 +3047,7 @@ func TestShellStdinImportErrorMessage(t *testing.T) {
 		if strings.Contains(msg, "sqly-stdin-") {
 			t.Errorf("message still leaks the temp path: %q", msg)
 		}
-		if !strings.Contains(msg, "stdin (--stdin csv)") {
+		if !strings.Contains(msg, "stdin (--stdin-format csv)") {
 			t.Errorf("message does not mention stdin: %q", msg)
 		}
 	})
@@ -3193,7 +3184,7 @@ func TestShellRun_SQLFileWithOutput(t *testing.T) {
 func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
 	// Regression for: a --stdin dataset run with no query must fail loudly
 	// instead of importing the data and discarding it.
-	shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv"})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3205,7 +3196,7 @@ func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("Run returned nil for --stdin with no query, want error")
 	}
-	if !strings.Contains(err.Error(), "--stdin") {
+	if !strings.Contains(err.Error(), "--stdin-format") {
 		t.Fatalf("error = %q, want it to mention --stdin", err.Error())
 	}
 }
@@ -3459,7 +3450,7 @@ func TestShellValidateSheetFlag(t *testing.T) {
 	})
 
 	t.Run("rejects --sheet for a stdin dataset", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--sheet", "A test"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--sheet", "A test"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -4011,11 +4002,11 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".header respects .mode ndjson", func(t *testing.T) {
+	t.Run(".header respects .mode jsonl", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
-		if err := shell.exec(context.Background(), ".mode ndjson"); err != nil {
-			t.Fatalf(".mode ndjson error: %v", err)
+		if err := shell.exec(context.Background(), ".mode jsonl"); err != nil {
+			t.Fatalf(".mode jsonl error: %v", err)
 		}
 		got, err := getExecStdOutput(t, shell.exec, ".header user")
 		if err != nil {
