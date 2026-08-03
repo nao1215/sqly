@@ -246,7 +246,7 @@ func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) er
 	if _, statErr := os.Stat(cachePath); statErr != nil {
 		return fmt.Errorf("cache %q is unavailable: %w", cachePath, statErr)
 	}
-	return f.withAttachedCache(ctx, cachePath, f.copyCachedTables)
+	return f.withAttachedCache(ctx, cachePath, f.copyAttachedTables)
 }
 
 // cacheAlias is the schema name the import cache is attached under. It is fixed,
@@ -268,11 +268,10 @@ const cacheAlias = "sqly_cache"
 // fn makes returning to the pool mid-operation impossible rather than merely
 // discouraged.
 //
-// The detach runs under cleanup.Context, so a cancelled or timed-out operation
-// still releases the alias; reusing the caller's dead context would fail
-// immediately and leak the attachment. Its error is joined onto fn's rather
-// than replacing it, so "the load failed and the cache is still attached" is
-// not reported as though only one of the two happened. A failed ATTACH is not
+// The order is reserve, attach, run, detach, release, and it is meant to stay
+// readable in that order. The detach's error is joined onto fn's rather than
+// replacing it, so "the load failed and the cache is still attached" is not
+// reported as though only one of the two happened. A failed ATTACH is not
 // followed by a DETACH, because there is nothing to detach.
 func (f *FileSQLAdapter) withAttachedCache(
 	ctx context.Context,
@@ -287,30 +286,51 @@ func (f *FileSQLAdapter) withAttachedCache(
 		err = cleanup.Join(err, conn.Close(), "release the cache connection")
 	}()
 
-	if _, attachErr := conn.ExecContext(ctx,
-		"ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS "+cacheAlias); attachErr != nil {
-		return fmt.Errorf("attach cache %q: %w", cachePath, attachErr)
+	if attachErr := attachCache(ctx, conn, cachePath); attachErr != nil {
+		return attachErr
 	}
 	defer func() {
-		cleanupCtx, cancel := cleanup.Context(ctx)
-		defer cancel()
-		_, derr := conn.ExecContext(cleanupCtx, "DETACH DATABASE "+cacheAlias)
-		err = cleanup.Join(err, derr, fmt.Sprintf("detach cache %q", cachePath))
+		err = cleanup.Join(err, detachCache(ctx, conn), fmt.Sprintf("detach cache %q", cachePath))
 	}()
 
 	return fn(ctx, conn)
 }
 
-// copyCachedTables recreates every user table held in the attached cache and
+// attachCache attaches the cache file to conn under cacheAlias.
+func attachCache(ctx context.Context, conn *sql.Conn, cachePath string) error {
+	// ATTACH takes a string literal, not a bind parameter, so the path is
+	// single-quote-escaped rather than passed as an argument.
+	if _, err := conn.ExecContext(ctx,
+		"ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS "+cacheAlias); err != nil {
+		return fmt.Errorf("attach cache %q: %w", cachePath, err)
+	}
+	return nil
+}
+
+// detachCache releases the alias from conn.
+//
+// It runs under cleanup.Context rather than the caller's context: once that
+// context is done every statement fails immediately, so reusing it would leave
+// the alias attached for the life of the process, and the next cache load would
+// fail with "already in use" while naming the wrong run.
+func detachCache(ctx context.Context, conn *sql.Conn) error {
+	cleanupCtx, cancel := cleanup.Context(ctx)
+	defer cancel()
+
+	_, err := conn.ExecContext(cleanupCtx, "DETACH DATABASE "+cacheAlias)
+	return err
+}
+
+// copyAttachedTables recreates every user table held in the attached cache and
 // bulk-copies its rows into the session database, as one transaction.
 //
-// The transaction is what makes the fallback safe. Copying table by table
-// outside one left a partial session behind when a later table failed: the
-// caller falls back to a cold import, which then collides with the tables the
-// failed cache load had already created. Either every table arrives or none
+// The transaction is what makes the caller's fallback safe. Copying table by
+// table outside one left a partial session behind when a later table failed:
+// the caller falls back to a cold import, which then collides with the tables
+// the failed restore had already created. Either every table arrives or none
 // does, so the fallback always starts from the state it expects.
-func (f *FileSQLAdapter) copyCachedTables(ctx context.Context, conn *sql.Conn) error {
-	tables, err := readCacheSchema(ctx, conn)
+func (f *FileSQLAdapter) copyAttachedTables(ctx context.Context, conn *sql.Conn) error {
+	tables, err := listAttachedTables(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -319,14 +339,9 @@ func (f *FileSQLAdapter) copyCachedTables(ctx context.Context, conn *sql.Conn) e
 	}
 
 	_, err = infra.WithTransaction(ctx, infra.SQLConnTxBeginner{Conn: conn}, func(tx *sql.Tx) error {
-		for _, t := range tables {
-			quoted := QuoteIdentifier(t.name)
-			if _, err := tx.ExecContext(ctx, t.ddl); err != nil {
-				return fmt.Errorf("recreate cached table %q: %w", t.name, err)
-			}
-			if _, err := tx.ExecContext(ctx,
-				fmt.Sprintf("INSERT INTO %s SELECT * FROM %s.%s", quoted, cacheAlias, quoted)); err != nil {
-				return fmt.Errorf("copy cached table %q: %w", t.name, err)
+		for _, table := range tables {
+			if err := copyAttachedTable(ctx, tx, table); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -334,13 +349,27 @@ func (f *FileSQLAdapter) copyCachedTables(ctx context.Context, conn *sql.Conn) e
 	return err
 }
 
+// copyAttachedTable recreates one cached table and copies its rows, inside the
+// caller's transaction.
+func copyAttachedTable(ctx context.Context, tx *sql.Tx, table cachedTable) error {
+	quoted := QuoteIdentifier(table.name)
+	if _, err := tx.ExecContext(ctx, table.ddl); err != nil {
+		return fmt.Errorf("recreate cached table %q: %w", table.name, err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		fmt.Sprintf("INSERT INTO %s SELECT * FROM %s.%s", quoted, cacheAlias, quoted)); err != nil {
+		return fmt.Errorf("copy cached table %q: %w", table.name, err)
+	}
+	return nil
+}
+
 // cachedTable is one table held in the attached cache: its name and the DDL that
 // recreates it.
 type cachedTable struct{ name, ddl string }
 
-// readCacheSchema lists the user tables in the attached cache. It runs on the
-// connection the cache is attached to, so the read sees the attachment.
-func readCacheSchema(ctx context.Context, conn *sql.Conn) (tables []cachedTable, err error) {
+// listAttachedTables lists the user tables in the attached cache. It runs on
+// the connection the cache is attached to, so the read sees the attachment.
+func listAttachedTables(ctx context.Context, conn *sql.Conn) (tables []cachedTable, err error) {
 	rows, err := conn.QueryContext(ctx,
 		"SELECT name, sql FROM "+cacheAlias+".sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
 	if err != nil {

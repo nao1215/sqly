@@ -51,15 +51,6 @@ func (v RecordView) At(i int) string {
 	return v.record[i]
 }
 
-// All iterates the row's values in column order.
-func (v RecordView) All(yield func(int, string) bool) {
-	for i, value := range v.record {
-		if !yield(i, value) {
-			return
-		}
-	}
-}
-
 // AppendTo appends the row's values to dst and returns the result. It is the
 // bridge to APIs that need a real []string — encoding/csv's Writer, for one —
 // without the view surrendering its own storage. Passing a reused buffer keeps
