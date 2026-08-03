@@ -131,3 +131,19 @@ type SQLTxBeginner struct {
 func (b SQLTxBeginner) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
 	return b.DB.BeginTx(ctx, opts)
 }
+
+// SQLConnTxBeginner adapts a single *sql.Conn to TxBeginner.
+//
+// It exists because some SQLite state is per-connection rather than
+// per-database — an ATTACHed schema, above all. Work that depends on such state
+// must run on the connection that established it, so the transaction has to be
+// begun from the connection rather than from the pool, which would hand out an
+// arbitrary one.
+type SQLConnTxBeginner struct {
+	Conn *sql.Conn
+}
+
+// BeginTx starts a transaction on the wrapped connection.
+func (b SQLConnTxBeginner) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
+	return b.Conn.BeginTx(ctx, opts)
+}
