@@ -1,12 +1,9 @@
 package shell
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -49,119 +46,24 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 // interactive shell. ranAny reports whether at least one statement or command
 // was executed, so callers can skip post-run side effects (e.g. a .save
 // write-back) for an empty batch ().
-func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, err error) {
-	// Strip a leading UTF-8 BOM so a BOM-prefixed batch stream (common from
-	// Windows editors and export tools) parses the same as plain UTF-8.
-	br := bufio.NewReader(r)
-	if prefix, perr := br.Peek(len(utf8BOM)); perr == nil && bytes.Equal(prefix, utf8BOM) {
-		_, _ = br.Discard(len(utf8BOM))
-	}
-	scanner := bufio.NewScanner(br)
-	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxBatchLineBytes)
-
-	stmtNo := 0
-	exited := false
+func (s *Shell) runScriptElements(ctx context.Context, elements []scriptElement) (ranAny bool, err error) {
 	var failErr error
-
-	// run executes one statement/command and returns whether to stop the batch
-	// (on failure or ".exit"). The first failure records failErr for the caller.
-	// startLine and endLine locate the statement in the input so a failure in a
-	// long script is easy to find; a single-line statement passes startLine ==
-	// endLine.
-	run := func(stmt string, startLine, endLine int) (stop bool) {
-		stmtNo++
+	for i, element := range elements {
 		ranAny = true
-		if err := s.exec(ctx, stmt); err != nil {
-			if errors.Is(err, ErrExitSqly) {
-				exited = true
-				return true
+		if runErr := s.exec(ctx, element.text); runErr != nil {
+			if errors.Is(runErr, ErrExitSqly) {
+				break
 			}
-			loc := fmt.Sprintf("line %d", startLine)
-			if endLine > startLine {
-				loc = fmt.Sprintf("lines %d-%d", startLine, endLine)
+			loc := fmt.Sprintf("line %d", element.startLine)
+			if element.endLine > element.startLine {
+				loc = fmt.Sprintf("lines %d-%d", element.startLine, element.endLine)
 			}
 			fmt.Fprintf(config.Stderr, "batch statement %d failed at %s: %q: %v\n",
-				stmtNo, loc, previewStatement(stmt), err)
+				i+1, loc, previewStatement(element.text), runErr)
 			failErr = errors.New("batch stopped: statement failed")
-			return true
-		}
-		return false
-	}
-
-	var pending strings.Builder
-	// lineNo is the 1-based number of the last line read; pendingStart is the line
-	// number of the first line currently buffered in pending, so failing statements
-	// can be reported with their source-line span.
-	lineNo := 0
-	pendingStart := 0
-scan:
-	for scanner.Scan() {
-		lineNo++
-		line := scanner.Text()
-		// A dot-command is a complete single-line statement when no SQL statement
-		// is open. "Open" means the pending buffer holds executable SQL, an
-		// unterminated block comment, not just whitespace, newlines left after a
-		// terminated statement, or a standalone (closed) leading comment. Checking
-		// the boundary (rather than pending.Len() == 0) lets helper commands and SQL
-		// alternate line-by-line after a ";" or a leading comment, while a dot-line
-		// inside an open block comment stays part of the comment.
-		if atStatementBoundary(pending.String()) {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
-				continue
-			}
-			if strings.HasPrefix(trimmed, ".") {
-				// Abandon any buffered leading comments/blank lines before running the
-				// command, so they do not merge into a later statement.
-				pending.Reset()
-				if run(trimmed, lineNo, lineNo) {
-					break scan
-				}
-				continue
-			}
-		}
-
-		if pending.Len() == 0 {
-			pendingStart = lineNo
-		}
-		pending.WriteString(line)
-		pending.WriteString("\n")
-		buf := pending.String()
-		stmts, remainder := splitSQLStatements(buf)
-		// remainder is a suffix of buf, so the consumed prefix is everything before
-		// it; its newline count advances pendingStart to the remainder's first line.
-		remainderStart := len(buf) - len(remainder)
-		// stmtBuf shrinks past each emitted statement so two identical statements in
-		// one flush map to their own lines; stmtStart tracks stmtBuf's first line.
-		stmtBuf, stmtStart := buf, pendingStart
-		for _, stmt := range stmts {
-			sLine, eLine := statementLineSpan(stmtBuf, stmtStart, stmt)
-			if run(stmt, sLine, eLine) {
-				break scan
-			}
-			if idx := strings.Index(stmtBuf, stmt); idx >= 0 {
-				consumed := idx + len(stmt)
-				stmtStart += strings.Count(stmtBuf[:consumed], "\n")
-				stmtBuf = stmtBuf[consumed:]
-			}
-		}
-		pendingStart += strings.Count(buf[:remainderStart], "\n")
-		pending.Reset()
-		pending.WriteString(remainder)
-	}
-
-	// On ".exit" or a failure, stop reading. Otherwise run any trailing
-	// statement that was not terminated by ";".
-	if !exited && failErr == nil {
-		if err := scanner.Err(); err != nil {
-			return ranAny, fmt.Errorf("failed to read batch input: %w", err)
-		}
-		if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
-			sLine, eLine := statementLineSpan(pending.String(), pendingStart, leftover)
-			run(leftover, sLine, eLine)
+			break
 		}
 	}
-
 	return ranAny, failErr
 }
 
@@ -462,80 +364,13 @@ func endsInsideBlockComment(s string) bool {
 // read-only. It lets a non-interactive run skip write-back preflight for a
 // read-only script. Whether write-back actually runs is
 // decided dynamically by the rows a statement changes (see Shell.dataChanged).
-func scriptModifiesData(script string) bool {
-	for _, stmt := range scriptSQLStatements(script) {
+func scriptModifiesData(elements []scriptElement) bool {
+	for _, stmt := range sqlStatements(elements) {
 		if statementModifiesData(stmt) {
 			return true
 		}
 	}
 	return false
-}
-
-// scriptSQLStatements extracts the SQL statements from a batch or --sql-file
-// script, dropping helper command lines (a "." line at a statement boundary) so
-// they are not misclassified as SQL. It is the shared front end for the write-back
-// classifiers below.
-func scriptSQLStatements(script string) []string {
-	_, stmts := walkScript(script)
-	return stmts
-}
-
-// walkScript separates a batch or --sql-file script into the helper commands it
-// runs and the SQL statements it runs, the same way the batch reader does.
-//
-// The buffer has to be drained as statements complete. Accumulating every line
-// and only asking "are we at a statement boundary?" works until the first
-// statement ends: from then on the buffer is never empty again, so every later
-// dot-line looks like it is inside an unterminated statement. That is what made
-// ".save" and ".import" invisible to the classifiers whenever any SQL came
-// first — the exact shape every real script has.
-func walkScript(script string) (helpers []string, stmts []string) {
-	var pending strings.Builder
-	for _, line := range strings.Split(script, "\n") {
-		if atStatementBoundary(pending.String()) && strings.HasPrefix(strings.TrimSpace(line), ".") {
-			helpers = append(helpers, strings.TrimSpace(line))
-			continue
-		}
-		pending.WriteString(line)
-		pending.WriteString("\n")
-
-		complete, remainder := splitSQLStatements(pending.String())
-		if len(complete) == 0 {
-			continue
-		}
-		stmts = append(stmts, complete...)
-		pending.Reset()
-		pending.WriteString(remainder)
-	}
-	if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
-		stmts = append(stmts, leftover)
-	}
-	return helpers, stmts
-}
-
-// scriptRunsHelper reports whether the script issues the named helper command.
-func scriptRunsHelper(script, command string) bool {
-	helpers, _ := walkScript(script)
-	for _, helper := range helpers {
-		if fields := strings.Fields(helper); len(fields) > 0 && fields[0] == command {
-			return true
-		}
-	}
-	return false
-}
-
-// countSQLStatements returns the number of complete SQL statements in s, counting
-// a trailing statement that is not terminated by ";". It is quote-, comment-, and
-// CREATE TRIGGER-aware (via splitSQLStatements), so semicolons inside string
-// literals, identifiers, comments, and trigger bodies do not inflate the count. It
-// backs the direct --sql single-statement guard.
-func countSQLStatements(s string) int {
-	stmts, remainder := splitSQLStatements(s)
-	count := len(stmts)
-	if stripLeadingSQLComments(remainder) != "" {
-		count++
-	}
-	return count
 }
 
 // statementSaveCompatible reports whether a non-interactive write-back run
@@ -581,28 +416,13 @@ func createsTempTable(stmt string) bool {
 // firstSaveIncompatibleStatement returns the first statement a non-interactive
 // save run cannot persist, or "" when every statement is a read-only query or a
 // row-modifying DML.
-func firstSaveIncompatibleStatement(script string) string {
-	for _, stmt := range scriptSQLStatements(script) {
+func firstSaveIncompatibleStatement(elements []scriptElement) string {
+	for _, stmt := range sqlStatements(elements) {
 		if !statementSaveCompatible(stmt) {
 			return stmt
 		}
 	}
 	return ""
-}
-
-// scriptImportsInput reports whether a batch or --sql-file script imports its own
-// input with a ".import" helper command. Such a script creates its tables while it
-// runs, so save preflight cannot list them up front and instead defers write-back
-// validation until after the run.
-func scriptImportsInput(script string) bool {
-	return scriptRunsHelper(script, importCommand)
-}
-
-// scriptSaves reports whether a batch or --sql-file script issues a ".save"
-// helper command. Only such a script can write files back, so it is the one that
-// needs write-back validated before its first statement runs.
-func scriptSaves(script string) bool {
-	return scriptRunsHelper(script, saveCommand)
 }
 
 // statementModifiesData reports whether a single statement changes table data:

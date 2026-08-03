@@ -98,15 +98,15 @@ func noTablesToSaveError(interactive bool) error {
 // can be written is left to .save, which sees the tables the session actually
 // changed and reports them the same way whether it was typed at the prompt or
 // read from a script.
-func (s *Shell) preflightSave(_ context.Context, script string) error {
-	if !scriptSaves(script) {
+func (s *Shell) preflightSave(elements []scriptElement) error {
+	if !runsHelper(elements, saveCommand) {
 		return nil
 	}
 	// Reject a statement whose effect write-back cannot represent (DDL, schema
 	// changes, ANALYZE, maintenance). Only read-only queries and row-modifying DML
 	// on imported tables are persisted, so a schema-only run must fail loudly here
 	// instead of exiting 0 while leaving the source unchanged.,
-	if stmt := firstSaveIncompatibleStatement(script); stmt != "" {
+	if stmt := firstSaveIncompatibleStatement(elements); stmt != "" {
 		return fmt.Errorf(
 			".save cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
 			trimGaps(stmt))

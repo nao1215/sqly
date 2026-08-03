@@ -441,7 +441,7 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		defer cleanup()
 		shell.argument.Output.FilePath = filepath.Join(t.TempDir(), "out.csv")
 
-		err = shell.runSQLFileToOutput(context.Background(), "CREATE TABLE t (a INTEGER);")
+		err = shell.runSQLFileToOutput(context.Background(), mustParse(t, "CREATE TABLE t (a INTEGER);"))
 		if err == nil || !strings.Contains(err.Error(), "produced none") {
 			t.Fatalf("runSQLFileToOutput no-result error = %v, want none-produced error", err)
 		}
@@ -461,7 +461,7 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		defer func() { config.Stderr = backupStderr }()
 		config.Stderr = &strings.Builder{}
 
-		if err := shell.runSQLFileToOutput(context.Background(), "SELECT 1 AS a;"); err != nil {
+		if err := shell.runSQLFileToOutput(context.Background(), mustParse(t, "SELECT 1 AS a;")); err != nil {
 			t.Fatalf("runSQLFileToOutput single-result error: %v", err)
 		}
 		data, err := os.ReadFile(out) //nolint:gosec // out is a test temp path
@@ -481,7 +481,7 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		defer cleanup()
 		shell.argument.Output.FilePath = filepath.Join(t.TempDir(), "out.csv")
 
-		err = shell.runSQLFileToOutput(context.Background(), "SELECT 1 AS a;\nSELECT 2 AS b;")
+		err = shell.runSQLFileToOutput(context.Background(), mustParse(t, "SELECT 1 AS a;\nSELECT 2 AS b;"))
 		if err == nil || !strings.Contains(err.Error(), "result sets") {
 			t.Fatalf("runSQLFileToOutput two-result error = %v, want single-result error", err)
 		}
