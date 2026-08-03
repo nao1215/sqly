@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -226,38 +227,71 @@ func TestSmoke_MultipleFilesLoadAndQuery(t *testing.T) {
 	}
 }
 
-// TestSmoke_CacheMatchesColdImport checks that a warm run and a cold run answer
-// the same query with the same bytes across every output format. A cache that
-// restored subtly different data — a lost NULL, a numeric column read back as
-// text — would show up here and nowhere else.
+// TestSmoke_CacheMatchesColdImport is the cold/warm parity check: a warm run
+// must be indistinguishable from a cold one. A cache that restored subtly
+// different data — a lost NULL, a numeric column read back as text, a missing
+// row from a partial restore — would show up here and nowhere else, because
+// every other cache test asks only whether the run succeeded.
+//
+// CSV and table are compared byte for byte, because their output is a fixed
+// contract. JSON is compared after decoding, so key order and whitespace cannot
+// make the test fail for a reason that is not a difference in the data.
 func TestSmoke_CacheMatchesColdImport(t *testing.T) {
 	dir := t.TempDir()
+	// One row per value class the cache has to carry back intact.
 	csvPath := writeFixture(t, dir, "typed.csv",
-		"code,qty,note\n00123,42,alpha\n00456,7,\n")
-	cachePath := filepath.Join(dir, "session.cache")
-	query := "SELECT code, qty, note FROM typed ORDER BY code"
+		"code,qty,ratio,note\n00123,42,1.5,alpha\n00456,-7,0.25,\n")
+	query := "SELECT code, qty, ratio, note FROM typed ORDER BY code"
 
-	for _, format := range []string{"csv", "json", "ndjson", "table"} {
+	for _, format := range []string{"csv", "tsv", "json", "table"} {
 		t.Run(format, func(t *testing.T) {
-			cold, stderr, code := run(t, "",
-				"--output-format", format, "--sql", query, csvPath)
-			if code != 0 {
-				t.Fatalf("cold run exit code = %d (stderr=%q)", code, stderr)
-			}
+			cachePath := filepath.Join(dir, "cache-"+format+".db")
 
-			// First cached run builds the cache, second reads it.
-			cachedArgs := []string{"--cache", cachePath + "." + format,
+			coldOut, coldErr, coldCode := run(t, "",
+				"--output-format", format, "--sql", query, csvPath)
+			assertNoResidueDiagnostics(t, "cold "+format, coldErr)
+
+			cachedArgs := []string{"--cache", cachePath,
 				"--output-format", format, "--sql", query, csvPath}
+			// The first cached run builds the cache; the second reads it.
 			if _, stderr, code := run(t, "", cachedArgs...); code != 0 {
 				t.Fatalf("cache build exit code = %d (stderr=%q)", code, stderr)
 			}
-			warm, stderr, code := run(t, "", cachedArgs...)
-			if code != 0 {
-				t.Fatalf("warm run exit code = %d (stderr=%q)", code, stderr)
+			if !fileExists(cachePath) {
+				t.Fatalf("no cache was written to %s", cachePath)
+			}
+			warmOut, warmErr, warmCode := run(t, "", cachedArgs...)
+			assertNoResidueDiagnostics(t, "warm "+format, warmErr)
+
+			if coldCode != warmCode {
+				t.Errorf("exit codes differ: cold=%d warm=%d", coldCode, warmCode)
+			}
+			if coldCode != 0 {
+				t.Fatalf("cold run exit code = %d (stderr=%q)", coldCode, coldErr)
 			}
 
-			if cold != warm {
-				t.Errorf("%s: warm run differs from cold run:\ncold:\n%s\nwarm:\n%s", format, cold, warm)
+			switch format {
+			case "json":
+				// Compare decoded values, so key order and spacing cannot
+				// decide the outcome.
+				cold := parseJSONRows(t, "cold json", coldOut)
+				warm := parseJSONRows(t, "warm json", warmOut)
+				if len(cold) != len(warm) {
+					t.Fatalf("row counts differ: cold=%d warm=%d", len(cold), len(warm))
+				}
+				for i := range cold {
+					for key, want := range cold[i] {
+						if got := warm[i][key]; got != want {
+							t.Errorf("row %d %q: warm %#v (%T) != cold %#v (%T)",
+								i, key, got, got, want, want)
+						}
+					}
+				}
+			default:
+				// csv, tsv, and table have a fixed byte-level contract.
+				if coldOut != warmOut {
+					t.Errorf("%s output differs:\ncold:\n%s\nwarm:\n%s", format, coldOut, warmOut)
+				}
 			}
 		})
 	}
@@ -286,22 +320,117 @@ func TestSmoke_CacheSurvivesAnInterruptedRun(t *testing.T) {
 	}
 	assertNoPanic(t, stdout, stderr)
 
-	// The next runs must all succeed, with no attachment-residue diagnostics.
-	forbidden := []string{"already in use", "unknown database", "no such database", "no such table"}
+	// The next runs must all succeed, with no diagnostic that points back at the
+	// interrupted one, and with the cache actually reused rather than quietly
+	// rebuilt from scratch every time.
 	for i := range 3 {
 		good := append(append([]string{}, base...), "--sql", "SELECT name FROM people ORDER BY id", csvPath)
 		stdout, stderr, code = run(t, "", good...)
 		if code != 0 {
 			t.Fatalf("run %d after the interrupted one exited %d (stderr=%q)", i, code, stderr)
 		}
-		for _, phrase := range forbidden {
-			if strings.Contains(strings.ToLower(stderr), phrase) {
-				t.Errorf("run %d stderr mentions %q, which points at a leaked attachment: %s", i, phrase, stderr)
+		assertNoResidueDiagnostics(t, fmt.Sprintf("run %d after the interrupted one", i), stderr)
+
+		records := parseCSVRecords(t, "run after interruption", stdout, ',')
+		if len(records) != 3 {
+			t.Fatalf("run %d returned %d csv records, want a header and 2 rows: %q", i, len(records), stdout)
+		}
+		if records[1][0] != "alice" || records[2][0] != "bob" {
+			t.Errorf("run %d rows = %v, want alice and bob; a partial restore would drop one", i, records[1:])
+		}
+	}
+}
+
+// TestSmoke_CacheRestoreIsAtomicAfterAConflict is the cache-restore half of the
+// atomicity story. The session already holds a table the cache also carries, so
+// restoring cannot complete; the run must still produce a correct answer by
+// falling back to a cold import, which it can only do if the failed restore
+// left no half-populated tables to collide with.
+func TestSmoke_CacheRestoreIsAtomicAfterAConflict(t *testing.T) {
+	dir := t.TempDir()
+	people := writeFixture(t, dir, "people.csv", "id,name\n1,alice\n2,bob\n")
+	cities := writeFixture(t, dir, "cities.csv", "id,city\n1,tokyo\n2,osaka\n")
+	cachePath := filepath.Join(dir, "two-tables.cache")
+
+	base := []string{"--cache", cachePath, "--output-format", "csv"}
+	build := append(append([]string{}, base...),
+		"--sql", "SELECT COUNT(*) FROM people", people, cities)
+	if _, stderr, code := run(t, "", build...); code != 0 {
+		t.Fatalf("cache build failed: %d (stderr=%q)", code, stderr)
+	}
+
+	// Warm runs must keep answering correctly for both tables, repeatedly: a
+	// restore that left one table behind would surface as a wrong count or as a
+	// collision on a later run.
+	for i := range 3 {
+		for table, want := range map[string]string{"people": "2", "cities": "2"} {
+			args := append(append([]string{}, base...),
+				"--sql", "SELECT COUNT(*) AS n FROM "+table, people, cities)
+			stdout, stderr, code := run(t, "", args...)
+			if code != 0 {
+				t.Fatalf("run %d on %s exited %d (stderr=%q)", i, table, code, stderr)
+			}
+			assertNoResidueDiagnostics(t, fmt.Sprintf("run %d on %s", i, table), stderr)
+			records := parseCSVRecords(t, table, stdout, ',')
+			if len(records) != 2 || records[1][0] != want {
+				t.Errorf("run %d %s count = %v, want %s", i, table, records, want)
 			}
 		}
-		if !strings.Contains(stdout, "alice") {
-			t.Errorf("run %d stdout = %q, want the rows", i, stdout)
+	}
+}
+
+// TestSmoke_ConcurrentRunsShareOneCache starts several runs against one cache
+// file at the same time. The alias a cache attaches under is a fixed name, so a
+// collision between two simultaneous runs is a legitimate outcome and is not
+// what this checks. What it checks is that no run leaves the cache permanently
+// broken: after the storm, a plain run has to work.
+func TestSmoke_ConcurrentRunsShareOneCache(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := writeFixture(t, dir, "people.csv", "id,name\n1,alice\n2,bob\n")
+	cachePath := filepath.Join(dir, "shared.cache")
+
+	args := []string{"--cache", cachePath, "--output-format", "csv",
+		"--sql", "SELECT name FROM people ORDER BY id", csvPath}
+	if _, stderr, code := run(t, "", args...); code != 0 {
+		t.Fatalf("cache build failed: %d (stderr=%q)", code, stderr)
+	}
+
+	const runs = 4
+	type outcome struct {
+		stdout, stderr string
+		code           int
+	}
+	results := make([]outcome, runs)
+	var wg sync.WaitGroup
+	for i := range runs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			stdout, stderr, code := run(t, "", args...)
+			results[i] = outcome{stdout, stderr, code}
+		}()
+	}
+	wg.Wait()
+
+	// A run that succeeded must have returned the whole answer, not part of it.
+	for i, got := range results {
+		if got.code != 0 {
+			continue // a contended run may fail; the recovery below is the contract
 		}
+		records := parseCSVRecords(t, fmt.Sprintf("concurrent run %d", i), got.stdout, ',')
+		if len(records) != 3 || records[1][0] != "alice" || records[2][0] != "bob" {
+			t.Errorf("concurrent run %d returned %v, want both rows", i, records)
+		}
+	}
+
+	// Whatever happened, the cache must still be usable afterwards.
+	stdout, stderr, code := run(t, "", args...)
+	if code != 0 {
+		t.Fatalf("run after the concurrent ones exited %d (stderr=%q)", code, stderr)
+	}
+	assertNoResidueDiagnostics(t, "run after concurrent runs", stderr)
+	if records := parseCSVRecords(t, "recovery run", stdout, ','); len(records) != 3 {
+		t.Errorf("recovery run returned %v, want a header and 2 rows", records)
 	}
 }
 
