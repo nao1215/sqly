@@ -16,20 +16,35 @@ import (
 // fakeTx is a two-method stand-in for *sql.Tx that fails commit or rollback on
 // demand. A real database cannot be made to fail a rollback on cue, so the only
 // way to assert what happens when cleanup itself fails is to inject it.
+//
+// It follows *sql.Tx's state machine: the first Commit or Rollback ends the
+// transaction, and any later call answers sql.ErrTxDone whatever the first one
+// returned. Keeping that rule here is what makes this fake able to fail a test
+// that rolls back after a commit — the earlier version returned its configured
+// error forever, so such code looked correct against it.
 type fakeTx struct {
 	commitErr   error
 	rollbackErr error
 	commits     int
 	rollbacks   int
+	done        bool
 }
 
 func (tx *fakeTx) Commit() error {
 	tx.commits++
+	if tx.done {
+		return sql.ErrTxDone
+	}
+	tx.done = true
 	return tx.commitErr
 }
 
 func (tx *fakeTx) Rollback() error {
 	tx.rollbacks++
+	if tx.done {
+		return sql.ErrTxDone
+	}
+	tx.done = true
 	return tx.rollbackErr
 }
 
@@ -84,7 +99,10 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 		commitErr   error
 		rollbackErr error
 		// expectations
-		wantErrs      []error // every error the caller must still be able to see
+		wantErrs []error // every error the caller must still be able to see
+		// wantNotErrs are errors the result must NOT carry, which is how a case
+		// pins the absence of a manufactured cleanup error.
+		wantNotErrs   []error
 		wantPublished bool
 		wantCommits   int
 		wantRollbacks int
@@ -113,11 +131,15 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			wantRollbacks: 1,
 		},
 		{
+			// A commit that failed is still a commit: the transaction is over,
+			// so no rollback is attempted and the caller is told about the
+			// commit and nothing else.
 			name:          "commit failure leaves the registry unpublished",
 			commitErr:     errCommit,
 			wantErrs:      []error{errCommit},
+			wantNotErrs:   []error{infra.ErrRollback, sql.ErrTxDone},
 			wantCommits:   1,
-			wantRollbacks: 1,
+			wantRollbacks: 0,
 		},
 		{
 			name:          "rollback failure alone still surfaces",
@@ -135,12 +157,16 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			wantRollbacks: 1,
 		},
 		{
-			name:          "commit failure and rollback failure are both reported",
+			// The rollback failure is configured but unreachable, because no
+			// rollback follows a commit. The commit failure must not acquire a
+			// second, invented cause.
+			name:          "a rollback failure cannot attach itself to a commit failure",
 			commitErr:     errCommit,
 			rollbackErr:   errRollback,
-			wantErrs:      []error{errCommit, errRollback, infra.ErrRollback},
+			wantErrs:      []error{errCommit},
+			wantNotErrs:   []error{errRollback, infra.ErrRollback, sql.ErrTxDone},
 			wantCommits:   1,
-			wantRollbacks: 1,
+			wantRollbacks: 0,
 		},
 	}
 
@@ -190,6 +216,11 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 					if !errors.Is(err, want) {
 						t.Errorf("errors.Is(err, %v) = false; err = %v", want, err)
 					}
+				}
+			}
+			for _, unwanted := range tt.wantNotErrs {
+				if errors.Is(err, unwanted) {
+					t.Errorf("errors.Is(err, %v) = true, want false; err = %v", unwanted, err)
 				}
 			}
 

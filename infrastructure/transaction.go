@@ -31,15 +31,35 @@ type TxBeginner[T Tx] interface {
 // did not work either.
 var ErrRollback = errors.New("rollback transaction")
 
+// txPhase is how far a transaction got, which is what decides whether a
+// rollback is still meaningful.
+//
+// The distinction that matters is not "did it succeed" but "was Commit called".
+// database/sql ends a transaction the moment Commit is invoked, whatever Commit
+// then returns, so a rollback afterwards can only ever answer sql.ErrTxDone.
+// Treating a failed commit as "not finished, so roll back" therefore does not
+// undo anything — it manufactures a second error describing a transaction that
+// was already over.
+type txPhase int
+
+const (
+	// phaseStaging: the unit of work is running and Commit has not been called,
+	// so a failure still needs a rollback.
+	phaseStaging txPhase = iota
+	// phaseCommitCalled: Commit was invoked. The transaction is terminal
+	// whether it succeeded or failed, and must not be rolled back.
+	phaseCommitCalled
+)
+
 // WithTransaction runs fn inside a transaction begun on db and returns the
 // outcome, with one rule for cleanup errors that every caller shares.
 //
-// The transaction ends exactly once. On success it is committed; on any failure
-// — fn's, or the commit's — it is rolled back, and only then. A commit that
-// succeeded is never followed by a rollback, so sql.ErrTxDone is not something
-// this function has to swallow: if a rollback still reports ErrTxDone, the
-// transaction was ended by something other than this function, which is a real
-// defect and is reported rather than hidden.
+// The transaction ends exactly once. A failure while staging is rolled back. A
+// commit is never followed by a rollback, whether the commit succeeded or
+// failed: database/sql ends the transaction when Commit is called, so a
+// rollback afterwards can only report sql.ErrTxDone, and joining that onto a
+// real commit failure would tell the caller about a second problem that does
+// not exist. A commit failure is returned as a commit failure and nothing else.
 //
 // A rollback failure never displaces the error that caused it. The two are
 // joined, so errors.Is and errors.As reach the original cause (a parse failure,
@@ -47,6 +67,15 @@ var ErrRollback = errors.New("rollback transaction")
 // this code — assigning the rollback error only when the primary error was nil —
 // dropped the rollback failure in precisely the case that produces one, because
 // a rollback happens when something already went wrong.
+//
+// One rollback error is not a defect: when the context is done, database/sql's
+// own watcher has already rolled the transaction back, so the rollback here
+// races with it and loses. That yields sql.ErrTxDone with a cancelled context,
+// which is the documented outcome of cancellation rather than a broken
+// lifecycle, so it is not reported as a rollback failure. The cause of the
+// cancellation is already in err, which fn returned. An ErrTxDone with a live
+// context is a different matter — something outside this function ended the
+// transaction — and is still reported.
 //
 // The returned bool reports whether the transaction committed. Callers use it to
 // gate work that must not become visible before the data is durable, such as
@@ -62,12 +91,16 @@ func WithTransaction[T Tx](
 		return false, fmt.Errorf("begin transaction: %w", err)
 	}
 
+	phase := phaseStaging
 	defer func() {
-		if committed {
+		if phase == phaseCommitCalled {
 			return
 		}
 		rollbackErr := tx.Rollback()
 		if rollbackErr == nil {
+			return
+		}
+		if errors.Is(rollbackErr, sql.ErrTxDone) && ctx.Err() != nil {
 			return
 		}
 		err = errors.Join(err, fmt.Errorf("%w: %w", ErrRollback, rollbackErr))
@@ -76,10 +109,14 @@ func WithTransaction[T Tx](
 	if err := fn(tx); err != nil {
 		return false, err
 	}
+
+	// Enter the terminal phase before calling Commit, not after it succeeds:
+	// the transaction is over either way, and the deferred rollback must not
+	// run on the failure path.
+	phase = phaseCommitCalled
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("commit transaction: %w", err)
 	}
-	committed = true
 	return true, nil
 }
 
