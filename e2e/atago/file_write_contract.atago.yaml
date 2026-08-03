@@ -1,0 +1,223 @@
+# Writing a file is the same problem twice — `--output` writes one query result,
+# `.save` writes the tables a session changed — so both go through the same
+# steps: serialize beside the destination, then move it into place. These
+# scenarios check that from the outside, where the contract is what the user can
+# observe: an existing file is either the old one or the new one, never a
+# truncated one, and its permissions survive.
+#
+# Documented at website/content/reference.md#what---output-guarantees.
+version: "1"
+
+suite:
+  name: sqly file write contract
+
+scenarios:
+  - name: leaves an existing file whole when the format cannot hold a value
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &tabbed
+          file: tabbed.csv
+          content: |
+            a
+            "x	y"
+      - fixture:
+          file: keep.ltsv
+          content: |
+            a:precious
+      - run:
+          command: sqly --output-format ltsv --output keep.ltsv --sql "SELECT a FROM tabbed" tabbed.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: keep.ltsv
+            equals: |
+              a:precious
+
+  - name: names the destination rather than the scratch file when a write fails
+    env: *hist
+    steps:
+      - fixture: *tabbed
+      - fixture:
+          file: keep.ltsv
+          content: |
+            a:precious
+      - run:
+          command: sqly --output-format ltsv --output keep.ltsv --sql "SELECT a FROM tabbed" tabbed.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: '"keep.ltsv"'
+            not_contains: "sqly-out-"
+
+  - name: leaves no scratch file behind after a failed write
+    env: *hist
+    steps:
+      - fixture: *tabbed
+      - fixture:
+          file: keep.ltsv
+          content: |
+            a:precious
+      - run:
+          command: sh -c "sqly --output-format ltsv --output keep.ltsv --sql 'SELECT a FROM tabbed' tabbed.csv; ls -a | grep -c sqly-out || true"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: keeps the destination's permissions when --output overwrites it
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: &rows
+          file: rows.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: out.csv
+          content: |
+            old
+          mode: "0640"
+      - run:
+          command: sh -c "sqly --output-format csv --output out.csv --sql 'SELECT a FROM rows' rows.csv && stat -c %a out.csv"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "640"
+          file:
+            path: out.csv
+            contains: "1"
+
+  - name: keeps the source's permissions when .save --in-place rewrites it
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: perm.csv
+          content: |
+            a
+            1
+          mode: "0640"
+      - run:
+          command: sh -c "printf 'UPDATE perm SET a = 2;\n.save --in-place\n' | sqly perm.csv && stat -c %a perm.csv"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "640"
+          file:
+            path: perm.csv
+            contains: "2"
+
+  - name: writes a workbook that sqly can read back
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format excel --output book.xlsx --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=excel"
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'" book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: writes a parquet file that sqly can read back
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format parquet --output out.parquet --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT a FROM out" out.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: refuses a binary format with nowhere to put it
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format parquet --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output"
+
+  - name: refuses to write to a format sqly can only read
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format csv --output out.ach --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: out.ach
+            exists: false
+
+  - name: refuses to write over a file it is reading
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format csv --output rows.csv --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: rows.csv
+            contains: "a"
+
+  - name: writes nothing when a session changed no row
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly rows.csv
+          stdin: "SELECT a FROM rows;\n.save out\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: out
+            exists: false
+
+  - name: writes every target of a .save DIR run or none of them
+    env: *hist
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: more.csv
+          content: |
+            b
+            2
+      - run:
+          command: sqly rows.csv more.csv
+          stdin: "UPDATE rows SET a = 9;\nUPDATE more SET b = 8;\n.save out\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out/rows.csv
+            contains: "9"
+      - assert:
+          file:
+            path: out/more.csv
+            contains: "8"
+      - assert:
+          file:
+            path: rows.csv
+            contains: "1"

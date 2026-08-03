@@ -229,7 +229,9 @@ scenarios:
           stdout:
             contains: "1"
 
-  - name: refuses to silently ignore a dataset piped in without --stdin-format
+  # A pipe cannot be told apart from an empty one without reading it, and reading
+  # it is what hangs, so the run continues and stderr carries the notice.
+  - name: says on stderr that a dataset piped in without --stdin-format went unread
     env: *hist
     steps:
       - fixture:
@@ -241,9 +243,13 @@ scenarios:
           command: sqly --inspect other.csv
           stdin: "a\n2\n"
       - assert:
-          exit_code: 1
+          exit_code: 0
           stderr:
             contains: "--stdin-format"
+      - assert:
+          stdout:
+            contains: '"name": "other"'
+            not_contains: '"name": "stdin"'
 
   - name: inspects a piped dataset when --stdin-format claims it
     env: *hist

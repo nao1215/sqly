@@ -1,0 +1,345 @@
+# What counts as a helper command, and where one may appear.
+#
+# sqly reads a script in exactly one place — parseScript — and every question it
+# later asks (does this save? does it import? how many statements?) is asked of
+# that one parse. These scenarios are the parse's contract, written against the
+# real binary: the cases that must be a command, the cases that must not be, and
+# the modes that accept commands at all.
+#
+# The misdetections below were all reachable before the parser was unified: a
+# ".save" inside a string literal counted as a save, and a helper command written
+# after any SQL statement counted as nothing at all.
+#
+# Documented at website/content/shell.md#batch-mode and
+# website/content/reference.md#what-a---sql-file-may-contain.
+version: "1"
+
+suite:
+  name: sqly script parsing
+
+scenarios:
+  # --- --sql-file holds SQL, and says so -----------------------------------
+  - name: rejects a .save in a --sql-file by name and line
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - fixture:
+          file: save.sql
+          content: |
+            UPDATE user SET user_name = 'x' WHERE identifier = 1;
+            .save --in-place
+      - run:
+          command: sqly --sql-file save.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "line 2"
+              - ".save"
+              - "runs SQL only"
+          file:
+            path: user.csv
+            contains: booker12
+
+  - name: rejects a .import in a --sql-file
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: imp.sql
+          content: |
+            .import user.csv
+            SELECT * FROM user;
+      - run:
+          command: sqly --sql-file imp.sql
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "line 1"
+              - ".import"
+
+  - name: rejects a .mode in a --sql-file even when SQL comes first
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: mode.sql
+          content: |
+            SELECT user_name FROM user;
+            SELECT identifier FROM user;
+            .mode csv
+      - run:
+          command: sqly --sql-file mode.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "line 3"
+              - ".mode"
+
+  - name: refuses the run before any statement of a rejected script executes
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: mixed.sql
+          content: |
+            CREATE TABLE made (id INTEGER);
+            .save out
+      - run:
+          command: sqly --sql-file mixed.sql user.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: out
+            exists: false
+
+  - name: runs the same script when it is piped instead
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "UPDATE user SET user_name = 'x' WHERE identifier = 1;\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: user.csv
+            contains: "x,1"
+
+  # --- what is not a helper command ----------------------------------------
+  - name: does not treat .save inside a string literal as a command
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: lit.sql
+          content: |
+            SELECT '
+            .save --in-place
+            ' AS s;
+      - run:
+          command: sqly --sql-file lit.sql user.csv
+      - assert:
+          exit_code: 0
+      - assert:
+          file:
+            path: user.csv
+            contains: booker12
+
+  - name: does not treat .save inside a line comment as a command
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: cmt.sql
+          content: |
+            SELECT user_name FROM user; -- .save --in-place
+      - run:
+          command: sqly --sql-file cmt.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: does not treat .save inside a block comment as a command
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: blk.sql
+          content: |
+            /*
+            .save --in-place
+            */
+            SELECT user_name FROM user;
+      - run:
+          command: sqly --sql-file blk.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+
+  - name: does not treat a leading dot inside an unterminated statement as a command
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format csv user.csv
+          stdin: "SELECT\n'.save'\nAS s;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ".save"
+
+  # --- what is a helper command --------------------------------------------
+  - name: recognizes a helper command written after a SQL statement
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 1;\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user
+
+  - name: recognizes an indented helper command
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 1;\n    .tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user
+
+  - name: recognizes a helper command after a leading comment
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "-- a note\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: user
+
+  - name: rejects a helper command that shares a line with a SQL statement
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 1; .tables\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "must start its own line"
+
+  # --- statement boundaries -------------------------------------------------
+  - name: does not split a statement on a semicolon inside a string
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format csv --sql "SELECT 'a;b' AS s" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "a;b"
+
+  - name: runs every statement of a multi-statement piped script in order
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "CREATE TABLE t (v TEXT);\nINSERT INTO t VALUES ('one');\nINSERT INTO t VALUES ('two');\nSELECT v FROM t ORDER BY rowid;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: '(?s)one.*two'
+
+  - name: reports the line of the statement that failed, not the first one
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: "SELECT 1;\nSELECT 2;\nSELECT * FROM nope;\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "line 3"
+
+  # --- stdin modes ----------------------------------------------------------
+  - name: says on stderr that a pipe went unread under --sql
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format csv --sql "SELECT user_name FROM user" user.csv
+          stdin: "a\n1\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: booker12
+          stderr:
+            contains: "standard input was not read"
+
+  - name: stays quiet when standard input is empty
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format csv --sql "SELECT user_name FROM user" user.csv
+          stdin: ""
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "standard input"
+
+  - name: stays quiet when a piped dataset is claimed by --stdin-format
+    env: *hist
+    steps:
+      - run:
+          command: sqly --output-format csv --stdin-format csv --sql "SELECT COUNT(*) AS n FROM stdin"
+          stdin: "a\n1\n2\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+          stderr:
+            not_contains: "standard input was not read"
+
+  - name: stays quiet when standard input is named as an input file
+    only:
+      os: linux
+    env: *hist
+    steps:
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM stdin" /dev/stdin
+          stdin: "a\n1\n2\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"
+          stderr:
+            not_contains: "standard input was not read"
+
+  - name: rejects --stdin-format with no query flag to run
+    env: *hist
+    steps:
+      - run:
+          command: sqly --stdin-format csv
+          stdin: "a\n1\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no script to run"
+
+  - name: rejects --sql and --sql-file together
+    env: *hist
+    steps:
+      - fixture: *user
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT 1;
+      - run:
+          command: sqly --sql "SELECT 1" --sql-file q.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "cannot be used together"
