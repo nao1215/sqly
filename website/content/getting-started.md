@@ -96,6 +96,12 @@ the destination's extension, exactly as they do in table mode.
 | A pipe | `cat user.csv \| sqly --stdin-format csv --sql "SELECT * FROM stdin"` |
 | A script on stdin | `printf '.tables\nSELECT 1;\n' \| sqly user.csv` |
 
+Standard input does one of those jobs, never two. With `--stdin-format` it is the
+data; with none of the query flags it is the script; with `--sql`, `--sql-file`,
+or `--inspect` and no `--stdin-format` it is unused, and sqly says so on stderr
+rather than answering as if nothing had been handed to it. See
+[Reference](/reference/#what-sqly-does-with-standard-input).
+
 ## 5. The interactive shell
 
 `sqly` with no `--sql` opens the shell. It is the same engine with completion, history, and dot-commands:
