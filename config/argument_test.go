@@ -226,27 +226,27 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid --stdin-name values are rejected", func(t *testing.T) {
+	t.Run("invalid --stdin-table values are rejected", func(t *testing.T) {
 		for _, name := range []string{"", ".", "..", "a/b", "../escaped", `a\b`} {
 			if _, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", name}); err == nil {
-				t.Errorf("NewArg accepted invalid --stdin-name %q, want error", name)
+				t.Errorf("NewArg accepted invalid --stdin-table %q, want error", name)
 			}
 		}
 	})
 
-	t.Run("non-identifier --stdin-name values are rejected", func(t *testing.T) {
+	t.Run("non-identifier --stdin-table values are rejected", func(t *testing.T) {
 		// These would be sanitized by filesql, leaving the advertised name
 		// unqueryable, so they are rejected up front.
 		for _, name := range []string{"my data", "2023-data", "a-b", "weird!"} {
 			if _, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", name}); err == nil {
-				t.Errorf("NewArg accepted non-identifier --stdin-name %q, want error", name)
+				t.Errorf("NewArg accepted non-identifier --stdin-table %q, want error", name)
 			}
 		}
 	})
 
-	t.Run("a normal --stdin-name is accepted", func(t *testing.T) {
+	t.Run("a normal --stdin-table is accepted", func(t *testing.T) {
 		if _, err := NewArg([]string{"sqly", "--stdin-format", "csv", "--stdin-table", "people"}); err != nil {
-			t.Errorf("NewArg rejected a valid --stdin-name: %v", err)
+			t.Errorf("NewArg rejected a valid --stdin-table: %v", err)
 		}
 	})
 
@@ -288,7 +288,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("explicit empty --stdin is rejected", func(t *testing.T) {
+	t.Run("explicit empty --stdin-format is rejected", func(t *testing.T) {
 		_, err := NewArg([]string{"sqly", "--stdin-format", "", "--sql", "SELECT 1 AS x"})
 		if err == nil {
 			t.Fatal("expected an error for an explicit empty --stdin, got nil")
@@ -420,10 +420,10 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("an invalid --import-mode is rejected", func(t *testing.T) {
+	t.Run("an invalid --row-mismatch is rejected", func(t *testing.T) {
 		t.Parallel()
 		if _, err := NewArg([]string{"sqly", "--row-mismatch", "keep"}); err == nil {
-			t.Fatal("NewArg with --import-mode keep returned nil error, want an error")
+			t.Fatal("NewArg with --row-mismatch keep returned nil error, want an error")
 		}
 	})
 

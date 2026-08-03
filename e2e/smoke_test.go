@@ -258,10 +258,10 @@ func writeSmokeGzip(t *testing.T, path, content string) {
 func TestSmoke_StdinDataset(t *testing.T) {
 	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin-format", "csv", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
 	if code != 0 {
-		t.Fatalf("--stdin csv exit code = %d, want 0 (stdout=%q)", code, out)
+		t.Fatalf("--stdin-format csv exit code = %d, want 0 (stdout=%q)", code, out)
 	}
 	if !strings.Contains(out, "2") {
-		t.Errorf("--stdin csv stdout = %q, want the piped row count", out)
+		t.Errorf("--stdin-format csv stdout = %q, want the piped row count", out)
 	}
 }
 

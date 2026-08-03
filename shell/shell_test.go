@@ -2645,7 +2645,7 @@ func TestShell_buildCreateStatement(t *testing.T) {
 }
 
 func TestShellRun_StdinDataset(t *testing.T) {
-	// Regression for: --stdin treats piped stdin as an input dataset.
+	// Regression for: --stdin-format treats piped stdin as an input dataset.
 	t.Run("queries piped CSV through the default stdin table", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--output-format", "csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
 		if err != nil {
@@ -2742,14 +2742,14 @@ func TestShellRun_StdinDataset(t *testing.T) {
 
 		err = shell.Run(context.Background())
 		if err == nil {
-			t.Fatal("invalid --stdin format returned nil error, want error")
+			t.Fatal("invalid --stdin-format value returned nil error, want error")
 		}
 		if !strings.Contains(err.Error(), "stdin") {
 			t.Fatalf("error = %q, want it to mention stdin", err.Error())
 		}
 	})
 
-	t.Run("rejects --stdin on an interactive terminal", func(t *testing.T) {
+	t.Run("rejects --stdin-format on an interactive terminal", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv", "--sql", "SELECT 1"})
 		if err != nil {
 			t.Fatal(err)
@@ -2760,7 +2760,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 
 		err = shell.Run(context.Background())
 		if err == nil {
-			t.Fatal("--stdin on a TTY returned nil error, want error")
+			t.Fatal("--stdin-format on a TTY returned nil error, want error")
 		}
 		if !strings.Contains(err.Error(), "piped") {
 			t.Fatalf("error = %q, want it to mention piped stdin", err.Error())
@@ -2810,7 +2810,7 @@ func TestShellRun_SQLFile(t *testing.T) {
 		}
 	})
 
-	t.Run("runs a --stdin csv dataset joined with a SQL file query", func(t *testing.T) {
+	t.Run("runs a --stdin-format csv dataset joined with a SQL file query", func(t *testing.T) {
 		dir := t.TempDir()
 		sqlPath := filepath.Join(dir, "join.sql")
 		idPath := filepath.Join(dir, "identifier.csv")
@@ -2928,7 +2928,7 @@ func TestValidateSaveFlags_SQLFileAllowedOnTTY(t *testing.T) {
 		args []string
 	}{
 		{"save-tables with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-tables", "out", "f.csv"}},
-		{"save --force with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-in-place", "f.csv"}},
+		{"save-in-place with sql-file", []string{"sqly", "--sql-file", "q.sql", "--save-in-place", "f.csv"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3182,7 +3182,7 @@ func TestShellRun_SQLFileWithOutput(t *testing.T) {
 }
 
 func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
-	// Regression for: a --stdin dataset run with no query must fail loudly
+	// Regression for: a --stdin-format dataset run with no query must fail loudly
 	// instead of importing the data and discarding it.
 	shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "csv"})
 	if err != nil {
@@ -3194,7 +3194,7 @@ func TestShellRun_StdinDatasetWithoutQueryFails(t *testing.T) {
 
 	err = shell.Run(context.Background())
 	if err == nil {
-		t.Fatal("Run returned nil for --stdin with no query, want error")
+		t.Fatal("Run returned nil for --stdin-format with no query, want error")
 	}
 	if !strings.Contains(err.Error(), "--stdin-format") {
 		t.Fatalf("error = %q, want it to mention --stdin", err.Error())

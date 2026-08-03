@@ -499,7 +499,7 @@ func TestWriteBack_UnsupportedSourceErrors(t *testing.T) {
 
 func TestWriteBack_SaveTablesDirRejectsSourceParent(t *testing.T) {
 	// --save-tables pointed at the source's own directory resolves the destination to
-	// the source file, which would overwrite it in place without --force. Reject
+	// the source file, which would overwrite it without --save-in-place. Reject
 	// it and leave the source untouched.
 	dir := t.TempDir()
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")

@@ -336,7 +336,7 @@ func TestCommunicate_PromptSessionCreationFails(t *testing.T) {
 }
 
 // TestStageStdinDataset_UnsupportedFormat covers the guard that rejects an
-// unknown --stdin format before touching the filesystem.
+// unknown --stdin-format value before touching the filesystem.
 func TestStageStdinDataset_UnsupportedFormat(t *testing.T) {
 	t.Parallel()
 
