@@ -14,7 +14,7 @@ scenarios:
     description: "MySQL / is float division, so 5/2 is 2.5. SQLite would return 2 because SQLite does integer division on two integers."
     steps:
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT 5/2 AS v"
+          command: sqly --output-format csv --dialect mysql --sql "SELECT 5/2 AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -25,7 +25,7 @@ scenarios:
     description: "BigQuery / always yields FLOAT64, so 5/2 is 2.5. SQLite would return 2. This is the worst kind of divergence: an average or a ratio comes out silently truncated."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT 5/2 AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT 5/2 AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -36,7 +36,7 @@ scenarios:
     description: "PostgreSQL LIKE is case-sensitive and ILIKE is the case-insensitive form. SQLite would report 1 for 'ABC' LIKE 'abc' because SQLite's LIKE folds ASCII case, which also makes ILIKE indistinguishable from LIKE."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT 'ABC' LIKE 'abc' AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT 'ABC' LIKE 'abc' AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -47,7 +47,7 @@ scenarios:
     description: "GoogleSQL LIKE is case-sensitive. SQLite would report 1 for 'ABC' LIKE 'abc', so a filter written against BigQuery silently matches extra rows."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT 'ABC' LIKE 'abc' AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT 'ABC' LIKE 'abc' AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -58,7 +58,7 @@ scenarios:
     description: "MySQL CAST(1.9 AS SIGNED) is 2. SQLite would return 1 because SQLite's CAST truncates toward zero."
     steps:
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT CAST(1.9 AS SIGNED) AS v"
+          command: sqly --output-format csv --dialect mysql --sql "SELECT CAST(1.9 AS SIGNED) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -69,7 +69,7 @@ scenarios:
     description: "PostgreSQL CAST(1.9 AS INTEGER) is 2 (round half to even). SQLite would return 1."
     steps:
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT CAST(1.9 AS INTEGER) AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT CAST(1.9 AS INTEGER) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -80,7 +80,7 @@ scenarios:
     description: "BigQuery CAST(1.9 AS INT64) is 2 (round half away from zero). SQLite would return 1."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT CAST(1.9 AS INT64) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT CAST(1.9 AS INT64) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -91,21 +91,21 @@ scenarios:
     description: "All three dialects have LEAST/GREATEST. SQLite spells the same idea min/max with several arguments, which collides with the aggregate forms, so each needs its own helper."
     steps:
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT LEAST(3, 1, 2) AS v"
+          command: sqly --output-format csv --dialect mysql --sql "SELECT LEAST(3, 1, 2) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "1"
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT GREATEST(3, 1, 2) AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT GREATEST(3, 1, 2) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "3"
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT LEAST(3, 1, 2) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT LEAST(3, 1, 2) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -121,35 +121,35 @@ scenarios:
       genuinely does ignore NULLs, so it keeps SQLite's behavior.
     steps:
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT CONCAT('a', 'b') AS v"
+          command: sqly --output-format csv --dialect mysql --sql "SELECT CONCAT('a', 'b') AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ab
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT CONCAT('a', NULL) AS v"
+          command: sqly --output-format csv --dialect mysql --sql "SELECT CONCAT('a', NULL) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ""
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT CONCAT('a', NULL) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT CONCAT('a', NULL) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ""
       - run:
-          command: sqly --csv --dialect postgres --sql "SELECT CONCAT('a', NULL) AS v"
+          command: sqly --output-format csv --dialect postgres --sql "SELECT CONCAT('a', NULL) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: a
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT CONCAT_WS(',', 'a', NULL, 'b') AS v"
+          command: sqly --output-format csv --dialect mysql --sql "SELECT CONCAT_WS(',', 'a', NULL, 'b') AS v"
       - assert:
           exit_code: 0
           stdout:

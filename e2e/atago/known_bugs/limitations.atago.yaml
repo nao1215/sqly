@@ -14,7 +14,7 @@ scenarios:
     description: "BigQuery CAST(TRUE AS STRING) is 'true'; sqly returns '1'. SQLite has no boolean type, so TRUE is already the integer 1 by the time the cast runs and nothing downstream can tell it from a plain 1. Fixing this needs type inference over the whole expression, not a cast rule."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT CAST(TRUE AS STRING) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT CAST(TRUE AS STRING) AS v"
       - assert:
           exit_code: 0
           stdout:

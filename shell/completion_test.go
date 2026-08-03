@@ -313,12 +313,12 @@ func TestSheetNameCompletion(t *testing.T) {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		data, err := os.ReadFile(spaced)
+		data, err := os.ReadFile(spaced) //nolint:gosec // test reads a generated fixture
 		if err != nil {
 			t.Fatal(err)
 		}
 		book := filepath.Join(dir, "book.xlsx")
-		if err := os.WriteFile(book, data, 0o600); err != nil {
+		if err := os.WriteFile(book, data, 0o600); err != nil { //nolint:gosec // test writes a generated fixture
 			t.Fatal(err)
 		}
 
@@ -335,12 +335,12 @@ func TestSheetNameCompletion(t *testing.T) {
 	})
 
 	t.Run("reads sheet names from a compressed workbook", func(t *testing.T) {
-		data, err := os.ReadFile(simple)
+		data, err := os.ReadFile(simple) //nolint:gosec // test reads a generated fixture
 		if err != nil {
 			t.Fatal(err)
 		}
 		gzPath := filepath.Join(t.TempDir(), "sample.xlsx.gz")
-		f, err := os.Create(gzPath)
+		f, err := os.Create(gzPath) //nolint:gosec // test writes a generated fixture
 		if err != nil {
 			t.Fatal(err)
 		}

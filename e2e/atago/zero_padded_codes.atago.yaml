@@ -17,7 +17,7 @@ scenarios:
             02134
             00501
       - run:
-          command: sqly --csv --sql "SELECT zip FROM zip ORDER BY zip" zip.csv
+          command: sqly --output-format csv --sql "SELECT zip FROM zip ORDER BY zip" zip.csv
       - assert:
           exit_code: 0
           stdout:
@@ -34,7 +34,7 @@ scenarios:
             02134
             00501
       - run:
-          command: sqly --csv --sql "SELECT typeof(zip) AS t FROM zip LIMIT 1" zip.csv
+          command: sqly --output-format csv --sql "SELECT typeof(zip) AS t FROM zip LIMIT 1" zip.csv
       - assert:
           exit_code: 0
           stdout:
@@ -50,7 +50,7 @@ scenarios:
             1
             0
       - run:
-          command: sqly --csv --sql "SELECT typeof(flag) AS t FROM flag LIMIT 1" flag.csv
+          command: sqly --output-format csv --sql "SELECT typeof(flag) AS t FROM flag LIMIT 1" flag.csv
       - assert:
           exit_code: 0
           stdout:
@@ -65,7 +65,7 @@ scenarios:
             02134
             ABCDE
       - run:
-          command: sqly --csv --sql "SELECT code FROM mix ORDER BY code" mix.csv
+          command: sqly --output-format csv --sql "SELECT code FROM mix ORDER BY code" mix.csv
       - assert:
           exit_code: 0
           stdout:

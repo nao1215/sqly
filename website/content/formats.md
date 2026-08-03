@@ -20,7 +20,7 @@ weight: 50
 
 ## Write
 
-`--csv`, `--tsv`, `--ltsv`, `--json`, `--ndjson`, `--json-typed`, `--ndjson-typed`, `--markdown`, `--excel`, `--parquet`, and the default `table`.
+`--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format ndjson`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
 
 `--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
@@ -33,7 +33,7 @@ CSV, TSV, LTSV, JSON, JSONL, Parquet, and Excel are read through `.gz`, `.bz2`, 
 Output compression comes from the destination's extension:
 
 ```shell
-sqly --csv --output out.csv.zst --sql "SELECT * FROM data" data.csv.gz
+sqly --output-format csv --output out.csv.zst --sql "SELECT * FROM data" data.csv.gz
 ```
 
 A write-back preserves each source's own compression.
@@ -56,7 +56,7 @@ Each sheet becomes `file_sheet`. `--sheet NAME` imports one sheet by its origina
 sqly --sheet "Q3 actuals" --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 ```
 
-An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--excel --output`.
+An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.
 
 ## Text encodings
 
@@ -70,4 +70,52 @@ When a CSV or TSV row has a different field count from the header:
 |:--|:--|
 | `stop` (default) | fail the import and report the row |
 | `skip` | drop the row, import the rest |
-| `fill` | pad a short row with blanks, truncate a long one |
+| `pad` | pad a short row with empty values; reject a long one without truncating it |
+
+## Output formats
+
+`--output-format` picks how a result is printed. The same query, three ways:
+
+```shell
+sqly --output-format table --sql "SELECT * FROM t" t.csv
+```
+
+```text
++------+-----+------+
+| code | qty | note |
++------+-----+------+
+|  007 |  42 |      |
++------+-----+------+
+```
+
+```shell
+sqly --output-format csv --sql "SELECT * FROM t" t.csv
+```
+
+```text
+code,qty,note
+007,42,
+```
+
+```shell
+sqly --output-format json --sql "SELECT * FROM t" t.csv
+```
+
+```json
+[
+  {"code":"007","qty":42,"note":""}
+]
+```
+
+The three agree on every value; only JSON can express the types. A column SQLite
+holds as INTEGER or REAL becomes a JSON number, TEXT becomes a JSON string, and
+SQL NULL becomes `null`. Text is never re-read as a number, so `007` keeps its
+leading zeros and `true` stays a string.
+
+An empty field in a CSV is an empty string, not a NULL — above, `note` is `""`.
+A NULL comes from SQL: an outer join with no match, an explicit `NULL`, an
+aggregate over no rows. The two print as blank in `table` and `csv` alike, so
+JSON is where they are distinguishable as `""` and `null`.
+
+`tsv`, `ltsv`, `markdown`, `ndjson`, `vertical`, `excel`, and `parquet` are the
+remaining formats; see the [reference](/reference/#output-formats).

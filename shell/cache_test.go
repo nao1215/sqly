@@ -217,30 +217,6 @@ func TestCache_FailureFallsBackToColdImport(t *testing.T) {
 	}
 }
 
-func TestCache_ClearForcesRebuild(t *testing.T) {
-	dir := t.TempDir()
-	src := filepath.Join(dir, "data.csv")
-	cache := filepath.Join(dir, "snap.cache")
-	if err := os.WriteFile(src, []byte("id\n1\n2\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// Cold run writes the cache.
-	_ = runQuery(t, []string{"sqly", "--cache", cache, "--sql", "SELECT COUNT(*) AS n FROM data", src})
-	manifest := cacheManifestPath(cache)
-	if _, err := os.Stat(manifest); err != nil {
-		t.Fatalf("expected manifest after cold run: %v", err)
-	}
-
-	// --cache-clear deletes the existing cache, then the run rebuilds it.
-	got := runQuery(t, []string{"sqly", "--cache", cache, "--cache-clear", "--sql", "SELECT COUNT(*) AS n FROM data", src})
-	if !strings.Contains(got, "2") {
-		t.Errorf("count = %q, want 2 after --cache-clear", got)
-	}
-	if _, err := os.Stat(manifest); err != nil {
-		t.Errorf("expected the cache to be rebuilt after --cache-clear: %v", err)
-	}
-}
-
 func TestContainsInputOnlyFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

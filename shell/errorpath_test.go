@@ -177,95 +177,53 @@ func TestShell_runInspect_rejectsNegativeSample(t *testing.T) {
 	}
 }
 
-func TestShell_runProfile_propagatesListError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	metadata := mock.NewMockMetadataUsecase(ctrl)
-	metadata.EXPECT().TablesName(gomock.Any()).Return(nil, errors.New("db closed"))
-
-	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
-	err := s.runProfile(context.Background())
-	if err == nil {
-		t.Fatal("want error when metadata.TablesName fails, got nil")
+func TestShellInspectRowCountBoundaries(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		result   *model.Table
+		queryErr error
+		wantErr  bool
+	}{
+		{name: "empty result", result: covErrEmptyTable()},
+		{name: "invalid count", result: covErrTableWithValue("not-a-number"), wantErr: true},
+		{name: "query error", queryErr: errors.New("query failed"), wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			query := mock.NewMockQueryUsecase(ctrl)
+			importer := mock.NewMockImportUsecase(ctrl)
+			importer.EXPECT().QuoteIdentifier("t").Return("t")
+			query.EXPECT().Query(gomock.Any(), "SELECT COUNT(*) FROM t").Return(test.result, test.queryErr)
+			s := newBoundaryTestShell(t, Usecases{query: query, importer: importer})
+			count, err := s.inspectRowCount(context.Background(), "t")
+			if test.wantErr != (err != nil) {
+				t.Fatalf("inspectRowCount() error = %v, wantErr=%v", err, test.wantErr)
+			}
+			if !test.wantErr && count != 0 {
+				t.Errorf("empty result count = %d, want 0", count)
+			}
+		})
 	}
 }
 
-func TestShell_runProfile_reportsNoTables(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	metadata := mock.NewMockMetadataUsecase(ctrl)
-	metadata.EXPECT().TablesName(gomock.Any()).Return([]*model.Table{}, nil)
+func TestShellInspectSampleBoundaries(t *testing.T) {
+	s := newBoundaryTestShell(t, Usecases{})
+	sample, err := s.inspectSample(context.Background(), "t", 0)
+	if err != nil || string(sample) != "[]" {
+		t.Fatalf("inspectSample(limit=0) = %s, %v, want []", sample, err)
+	}
 
-	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
-	err := s.runProfile(context.Background())
-	if err == nil {
-		t.Fatal("want error when there are no tables to profile, got nil")
+	ctrl := gomock.NewController(t)
+	query := mock.NewMockQueryUsecase(ctrl)
+	importer := mock.NewMockImportUsecase(ctrl)
+	importer.EXPECT().QuoteIdentifier("t").Return("t").AnyTimes()
+	query.EXPECT().Query(gomock.Any(), "SELECT * FROM t LIMIT 2").Return(nil, errors.New("sample failed"))
+	s = newBoundaryTestShell(t, Usecases{query: query, importer: importer})
+	if _, err := s.inspectSample(context.Background(), "t", 2); err == nil {
+		t.Fatal("inspectSample query failure returned nil error")
 	}
 }
 
-func TestShell_runCompare_propagatesListError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	metadata := mock.NewMockMetadataUsecase(ctrl)
-	metadata.EXPECT().TablesName(gomock.Any()).Return(nil, errors.New("db closed"))
-
-	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
-	if err := s.runCompare(context.Background()); err == nil {
-		t.Fatal("want error when metadata.TablesName fails, got nil")
-	}
-}
-
-func TestShell_resolveCompareTables(t *testing.T) {
-	newMetaShell := func(t *testing.T, tables []*model.Table, listErr error) *Shell {
-		t.Helper()
-		ctrl := gomock.NewController(t)
-		metadata := mock.NewMockMetadataUsecase(ctrl)
-		metadata.EXPECT().TablesName(gomock.Any()).Return(tables, listErr).AnyTimes()
-		return newBoundaryTestShell(t, Usecases{metadata: metadata})
-	}
-
-	t.Run("rejects an import that produced no tables", func(t *testing.T) {
-		s := newMetaShell(t, []*model.Table{}, nil)
-		if _, _, err := s.resolveCompareTables(context.Background()); err == nil {
-			t.Fatal("want error for zero tables, got nil")
-		}
-	})
-
-	t.Run("rejects an import that produced more than two tables", func(t *testing.T) {
-		three := []*model.Table{
-			model.NewTable("a", model.Header{}, nil),
-			model.NewTable("b", model.Header{}, nil),
-			model.NewTable("c", model.Header{}, nil),
-		}
-		s := newMetaShell(t, three, nil)
-		if _, _, err := s.resolveCompareTables(context.Background()); err == nil {
-			t.Fatal("want error for three tables, got nil")
-		}
-	})
-
-	t.Run("rejects a --compare-tables spec that does not name exactly two tables", func(t *testing.T) {
-		s := newBoundaryTestShell(t, Usecases{})
-		s.argument.CompareTables = "only-one"
-		if _, _, err := s.resolveCompareTables(context.Background()); err == nil {
-			t.Fatal("want error for a one-name spec, got nil")
-		}
-	})
-
-	t.Run("rejects a --compare-tables spec with a blank side", func(t *testing.T) {
-		s := newBoundaryTestShell(t, Usecases{})
-		s.argument.CompareTables = "left,"
-		if _, _, err := s.resolveCompareTables(context.Background()); err == nil {
-			t.Fatal("want error for a blank right side, got nil")
-		}
-	})
-
-	t.Run("reports a --compare-tables name that does not resolve", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		query := mock.NewMockQueryUsecase(ctrl)
-		// resolveTableNameCI queries the master tables; an empty result means the
-		// named table does not exist.
-		query.EXPECT().Query(gomock.Any(), gomock.Any()).Return(covErrEmptyTable(), nil).AnyTimes()
-		s := newBoundaryTestShell(t, Usecases{query: query})
-		s.argument.CompareTables = "left,right"
-		if _, _, err := s.resolveCompareTables(context.Background()); err == nil {
-			t.Fatal("want error for an unresolvable compare table, got nil")
-		}
-	})
+func covErrTableWithValue(value string) *model.Table {
+	return model.NewTable("t", model.NewHeader([]string{"count"}), []model.Record{model.NewRecord([]string{value})})
 }

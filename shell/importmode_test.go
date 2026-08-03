@@ -16,7 +16,7 @@ func TestCommandList_importModeCommand_SetsPolicy(t *testing.T) {
 	importer := mock.NewMockImportUsecase(ctrl)
 	// The command must push the new policy down to the importer so later imports
 	// honor it.
-	importer.EXPECT().SetMalformedRowPolicy(model.MalformedRowFill).Times(1)
+	importer.EXPECT().SetMalformedRowPolicy(model.MalformedRowPad).Times(1)
 
 	shell := newBoundaryTestShell(t, Usecases{importer: importer})
 
@@ -25,13 +25,13 @@ func TestCommandList_importModeCommand_SetsPolicy(t *testing.T) {
 	var buf bytes.Buffer
 	config.Stderr = &buf
 
-	if err := NewCommands().importModeCommand(context.Background(), shell, []string{"fill"}); err != nil {
+	if err := NewCommands().importModeCommand(context.Background(), shell, []string{"pad"}); err != nil {
 		t.Fatalf("importModeCommand returned error: %v", err)
 	}
-	if shell.state.importMode != model.MalformedRowFill {
-		t.Fatalf("state.importMode = %v, want fill", shell.state.importMode)
+	if shell.state.importMode != model.MalformedRowPad {
+		t.Fatalf("state.importMode = %v, want pad", shell.state.importMode)
 	}
-	if !bytes.Contains(buf.Bytes(), []byte("Change import mode from stop to fill")) {
+	if !bytes.Contains(buf.Bytes(), []byte("Change import mode from stop to pad")) {
 		t.Fatalf("banner = %q, want it to report the change", buf.String())
 	}
 }
@@ -43,7 +43,7 @@ func TestCommandList_importModeCommand_Errors(t *testing.T) {
 	}{
 		{name: "no argument reports usage as an error", argv: nil},
 		{name: "unknown policy is rejected", argv: []string{"keep"}},
-		{name: "more than one argument is rejected", argv: []string{"skip", "fill"}},
+		{name: "more than one argument is rejected", argv: []string{"skip", "pad"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -27,7 +27,7 @@ func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []strin
 	if err != nil {
 		return err
 	}
-	if len(cols.Records()) == 0 {
+	if cols.RowCount() == 0 {
 		return fmt.Errorf("no such table: %s", tableName)
 	}
 	return cols.Print(config.Stdout, s.state.mode.PrintMode)
@@ -52,5 +52,5 @@ func (s *Shell) tableColumns(ctx context.Context, tableName string) (*model.Tabl
 	}
 	// Re-wrap so the table carries the inspected name rather than the empty
 	// name PRAGMA queries produce.
-	return model.NewTable(tableName, table.Header(), table.Records()), nil
+	return table.WithName(tableName), nil
 }

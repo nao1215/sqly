@@ -34,7 +34,7 @@ scenarios:
           stdout:
             contains:
               - "[Usage]"
-              - "--json"
+              - "--output-format string"
 
   - name: fails on a non-existent file
     steps:
@@ -68,7 +68,7 @@ scenarios:
           stderr:
             contains: "unknown flag"
 
-  - name: reports conflicting output mode flags as a CLI error
+  - name: reports an invalid output format as a CLI error
     steps:
       - fixture:
           file: user.csv
@@ -76,11 +76,11 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --csv --json --sql "SELECT 1" user.csv
+          command: sqly --output-format unsupported --sql "SELECT 1" user.csv
       - assert:
           exit_code: 1
           stderr:
-            contains: "conflicting output mode flags"
+            contains: "invalid output format"
 
   - name: joins two imported files
     steps:
@@ -97,7 +97,7 @@ scenarios:
             1,developrt
             2,manager
       - run:
-          command: sqly --csv --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" user.csv identifier.csv
+          command: sqly --output-format csv --sql "SELECT user_name, position FROM user INNER JOIN identifier ON user.identifier = identifier.id ORDER BY user.identifier LIMIT 1" user.csv identifier.csv
       - assert:
           exit_code: 0
           stdout:
@@ -115,7 +115,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --json --output result.json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv
+          command: sqly --output-format json --output result.json --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv
       - assert:
           exit_code: 0
           stderr:
@@ -132,7 +132,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --csv
+          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output-format csv
       - assert:
           exit_code: 0
           stdout:

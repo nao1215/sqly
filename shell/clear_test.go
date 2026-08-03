@@ -60,7 +60,7 @@ func Test_clearCommand(t *testing.T) {
 
 	t.Run("emits nothing to stdout in non-TTY batch mode", func(t *testing.T) {
 		// Regression: in batch mode (piped stdin) stdout carries machine-readable
-		// payloads such as --json/--csv, so .clear must not inject ANSI escapes.
+		// payloads such as --output-format json/--output-format csv, so .clear must not inject ANSI escapes.
 		c := NewCommands()
 
 		backup := config.Stdout

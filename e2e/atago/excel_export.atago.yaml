@@ -15,7 +15,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --excel --output out.xlsx --sql "SELECT * FROM user LIMIT 1" user.csv
+          command: sqly --output-format excel --output out.xlsx --sql "SELECT * FROM user LIMIT 1" user.csv
       - assert:
           exit_code: 0
           stderr:

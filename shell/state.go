@@ -34,7 +34,7 @@ func newState(arg *config.Arg) (*state, error) {
 	}
 	return &state{
 		cwd:            dir,
-		mode:           newMode(config.Stdout, arg.Output.Mode, arg.Output.JSONTyped),
+		mode:           newMode(config.Stdout, arg.Output.Mode),
 		importMode:     arg.ImportMode,
 		importEncoding: importEncoding,
 	}, nil
@@ -74,45 +74,22 @@ func abbreviateHome(cwd, home string) string {
 	return cwd
 }
 
-// Typed JSON output mode names accepted by .mode and shown in the prompt. They
-// mirror the --json-typed/--ndjson-typed CLI flags.
-const (
-	outputModeJSONTyped   = "json-typed"
-	outputModeNDJSONTyped = "ndjson-typed"
-)
-
 // mode is output mode.
 type mode struct {
 	w io.Writer
 	model.PrintMode
-	// jsonTyped, when true and PrintMode is JSON or NDJSON, opts query JSON/NDJSON
-	// output into the typed contract (native numbers, booleans, and nulls). It is
-	// ignored for every other PrintMode.
-	jsonTyped bool
 }
 
 // newMode returns mode.
-func newMode(w io.Writer, m model.PrintMode, jsonTyped bool) *mode {
+func newMode(w io.Writer, m model.PrintMode) *mode {
 	return &mode{
 		w:         w,
 		PrintMode: m,
-		jsonTyped: jsonTyped,
 	}
 }
 
-// displayName returns the user-facing name of the current mode, distinguishing
-// the typed JSON variants ("json-typed"/"ndjson-typed") from the default
-// string-valued JSON modes. It backs the prompt label and the .mode banner so a
-// typed session is visible to the user.
+// displayName returns the user-facing name of the current mode.
 func (m *mode) displayName() string {
-	if m.jsonTyped {
-		switch m.PrintMode {
-		case model.PrintModeJSON:
-			return outputModeJSONTyped
-		case model.PrintModeNDJSON:
-			return outputModeNDJSONTyped
-		}
-	}
 	return m.String()
 }
 
@@ -126,7 +103,7 @@ func (m *mode) displayName() string {
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	// Selecting the mode that is already in effect is what the caller asked for,
 	// so it succeeds silently. Reporting it as an error made a batch script fatal
-	// on a line that changed nothing: `sqly --csv data.csv` fed a script opening
+	// on a line that changed nothing: `sqly --output-format csv data.csv` fed a script opening
 	// with `.mode csv` died before running a single query, and so did any script
 	// that set the mode defensively. The banner is skipped because nothing
 	// changed; an unknown name still fails below.
@@ -134,12 +111,11 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 		return nil
 	}
 
-	// Resolve the requested name to a target PrintMode and typed flag before
+	// Resolve the requested name to a target PrintMode before
 	// mutating anything, so an invalid name leaves the current mode untouched. The
 	// banner suffix flags the dump-only formats whose on-screen output is CSV.
 	var (
 		target model.PrintMode
-		typed  bool
 		suffix string
 	)
 	switch modeName {
@@ -158,10 +134,6 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 		target = model.PrintModeJSON
 	case model.PrintModeNDJSON.String():
 		target = model.PrintModeNDJSON
-	case outputModeJSONTyped:
-		target, typed = model.PrintModeJSON, true
-	case outputModeNDJSONTyped:
-		target, typed = model.PrintModeNDJSON, true
 	case model.PrintModeExcel.String():
 		target = model.PrintModeExcel
 		suffix = " (active only when executing .dump, otherwise same as csv mode)"
@@ -176,6 +148,5 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 
 	fmt.Fprintf(config.Stderr, "Change output mode from %s to %s%s\n", m.displayName(), modeName, suffix)
 	m.PrintMode = target
-	m.jsonTyped = typed
 	return nil
 }

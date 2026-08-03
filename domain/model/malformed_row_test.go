@@ -11,7 +11,7 @@ func TestMalformedRowPolicy_String(t *testing.T) {
 	}{
 		{name: "stop policy prints stop", policy: MalformedRowStop, want: "stop"},
 		{name: "skip policy prints skip", policy: MalformedRowSkip, want: "skip"},
-		{name: "fill policy prints fill", policy: MalformedRowFill, want: "fill"},
+		{name: "pad policy prints pad", policy: MalformedRowPad, want: "pad"},
 		{name: "unknown policy falls back to stop", policy: MalformedRowPolicy(99), want: "stop"},
 	}
 	for _, tt := range tests {
@@ -34,7 +34,8 @@ func TestParseMalformedRowPolicy(t *testing.T) {
 	}{
 		{name: "stop parses to MalformedRowStop", input: "stop", want: MalformedRowStop},
 		{name: "skip parses to MalformedRowSkip", input: "skip", want: MalformedRowSkip},
-		{name: "fill parses to MalformedRowFill", input: "fill", want: MalformedRowFill},
+		{name: "pad parses to MalformedRowPad", input: "pad", want: MalformedRowPad},
+		{name: "legacy policy name is rejected", input: "fill", wantErr: true},
 		{name: "empty string is rejected", input: "", wantErr: true},
 		{name: "unknown value is rejected", input: "keep", wantErr: true},
 		{name: "uppercase is rejected", input: "STOP", wantErr: true},
@@ -63,7 +64,7 @@ func TestParseMalformedRowPolicy(t *testing.T) {
 // String() output parses back to the same policy.
 func TestParseMalformedRowPolicy_RoundTrip(t *testing.T) {
 	t.Parallel()
-	for _, policy := range []MalformedRowPolicy{MalformedRowStop, MalformedRowSkip, MalformedRowFill} {
+	for _, policy := range []MalformedRowPolicy{MalformedRowStop, MalformedRowSkip, MalformedRowPad} {
 		got, err := ParseMalformedRowPolicy(policy.String())
 		if err != nil {
 			t.Fatalf("round-trip of %v failed: %v", policy, err)

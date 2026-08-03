@@ -43,7 +43,7 @@ func TestShellRun(t *testing.T) {
 		server := newHTTPImportServer(t)
 		defer server.Close()
 
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT user_name FROM user ORDER BY identifier LIMIT 1", server.URL + "/user.csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT user_name FROM user ORDER BY identifier LIMIT 1", server.URL + "/user.csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +71,7 @@ func TestShellRun(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		shell, cleanup, err := newShell(t, []string{"sqly", "--encoding", "shift-jis", "--csv", "--sql", "SELECT name FROM people ORDER BY id LIMIT 1", path})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--encoding", "shift-jis", "--output-format", "csv", "--sql", "SELECT name FROM people ORDER BY id LIMIT 1", path})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -242,7 +242,7 @@ func TestShellExec(t *testing.T) {
 	})
 
 	t.Run("execute .mode: csv to table", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv"})
 		if err != nil {
 			t.Error(err)
 		}
@@ -579,7 +579,7 @@ func TestShellExec(t *testing.T) {
 	})
 
 	t.Run("execute .dump csv (print csv mode)", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv"})
 		if err != nil {
 			t.Error(err)
 		}
@@ -604,7 +604,7 @@ func TestShellExec(t *testing.T) {
 	})
 
 	t.Run("execute .dump tsv (print tsv mode)", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--tsv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "tsv"})
 		if err != nil {
 			t.Error(err)
 		}
@@ -629,7 +629,7 @@ func TestShellExec(t *testing.T) {
 	})
 
 	t.Run("execute .dump ltsv (print ltsv mode)", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--ltsv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "ltsv"})
 		if err != nil {
 			t.Error(err)
 		}
@@ -654,7 +654,7 @@ func TestShellExec(t *testing.T) {
 	})
 
 	t.Run("execute .dump markdown (print markdown mode)", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--markdown"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "markdown"})
 		if err != nil {
 			t.Error(err)
 		}
@@ -2077,7 +2077,7 @@ func TestShellRunBatch_FailFast(t *testing.T) {
 	// Regression for: the first failed statement stops the batch, so later
 	// statements do not run and cannot leak output into a failed pipeline.
 	t.Run("a SQL failure stops a later statement", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2099,7 +2099,7 @@ func TestShellRunBatch_FailFast(t *testing.T) {
 	})
 
 	t.Run("a helper-command failure stops a later statement", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2161,7 +2161,7 @@ func TestShellRunBatch_MultilineStatements(t *testing.T) {
 	// Regression for: batch mode parses statements, so SQL can span lines.
 	newBatchShell := func(t *testing.T, stdin string) (*Shell, func()) {
 		t.Helper()
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2348,9 +2348,9 @@ func TestShellRunBatch_QuotedSheetArgument(t *testing.T) {
 }
 
 func TestShellRun_JSONOutputFromCLI(t *testing.T) {
-	// Regression for: --json renders query results as a JSON array that
+	// Regression for: --output-format json renders query results as a JSON array that
 	// decodes with the expected column names and values.
-	shell, cleanup, err := newShell(t, []string{"sqly", "--json", "--sql", "SELECT actor FROM actor ORDER BY actor ASC LIMIT 2", filepath.Join("testdata", "actor.csv")})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "json", "--sql", "SELECT actor FROM actor ORDER BY actor ASC LIMIT 2", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2409,91 +2409,6 @@ func TestShellExec_NDJSONModeSwitch(t *testing.T) {
 	}
 }
 
-func TestShellRun_TypedJSONOutputFromCLI(t *testing.T) {
-	// --json-typed renders numeric, boolean, and null values as native JSON
-	// scalars while keeping non-numeric strings as strings, and a large integer
-	// stays lossless (no scientific notation).
-	shell, cleanup, err := newShell(t, []string{
-		"sqly", "--json-typed",
-		"--sql", "SELECT 42 AS i, -1.5 AS f, 'hello' AS s, NULL AS n, '007' AS lead, 9223372036854775807 AS big",
-		filepath.Join("testdata", "actor.csv"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	got := getStdoutForRunFunc(t, shell.Run)
-	want := "[\n  {\"i\":42,\"f\":-1.5,\"s\":\"hello\",\"n\":null,\"lead\":\"007\",\"big\":9223372036854775807}\n]\n"
-	if string(got) != want {
-		t.Fatalf("typed json output mismatch:\n got: %s\nwant: %s", got, want)
-	}
-}
-
-func TestShellExec_TypedJSONModeSwitch(t *testing.T) {
-	// .mode json-typed switches interactive query output into the typed contract.
-	shell, cleanup, err := newShell(t, []string{"sqly", filepath.Join("testdata", "actor.csv")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := getExecStdOutput(t, shell.exec, ".mode json-typed"); err != nil {
-		t.Fatalf(".mode json-typed failed: %v", err)
-	}
-
-	out, err := getExecStdOutput(t, shell.exec, "SELECT 7 AS n, 'x' AS s")
-	if err != nil {
-		t.Fatalf("query failed: %v", err)
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(out, &rows); err != nil {
-		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, out)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("got %d rows, want 1: %s", len(rows), out)
-	}
-	if n, ok := rows[0]["n"].(float64); !ok || n != 7 {
-		t.Fatalf("expected numeric n=7, got %#v", rows[0]["n"])
-	}
-	if s, ok := rows[0]["s"].(string); !ok || s != "x" {
-		t.Fatalf("expected string s=x, got %#v", rows[0]["s"])
-	}
-}
-
-func TestShell_promptPrefixReflectsTypedJSONMode(t *testing.T) {
-	// The prompt label must distinguish the typed JSON variants from the plain
-	// json/ndjson modes so a typed session is visible at the prompt.
-	tests := []struct {
-		name string
-		mode string
-		want string
-	}{
-		{name: "json-typed mode shows (json-typed) in prompt", mode: "json-typed", want: "(json-typed)"},
-		{name: "ndjson-typed mode shows (ndjson-typed) in prompt", mode: "ndjson-typed", want: "(ndjson-typed)"},
-		{name: "plain json mode still shows (json) in prompt", mode: "json", want: "(json)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			shell, cleanup, err := newShell(t, []string{"sqly"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer cleanup()
-
-			if err := shell.state.mode.changeOutputModeIfNeeded(tt.mode); err != nil {
-				t.Fatalf("changeOutputModeIfNeeded(%q): %v", tt.mode, err)
-			}
-			if prefix := shell.promptPrefix(); !strings.Contains(prefix, tt.want) {
-				t.Errorf("promptPrefix() = %q, want it to contain %q", prefix, tt.want)
-			}
-		})
-	}
-}
-
 func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
 	// Regression for #661: a helper command missing a required argument must
 	// return an error (so batch mode fails fast) instead of printing usage and
@@ -2526,37 +2441,6 @@ func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
 				t.Errorf("error = %q, want it to contain %q", err.Error(), tc.want)
 			}
 		})
-	}
-}
-
-func TestCommandList_modeCommand_listsTypedJSONVariants(t *testing.T) {
-	// `.mode` with no argument is a missing-argument command error so a batch
-	// script fails fast, but the error still carries the current mode and the
-	// selectable mode list (including the typed JSON variants) so an interactive
-	// user can discover and confirm them.
-	shell, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	if err := shell.state.mode.changeOutputModeIfNeeded("json-typed"); err != nil {
-		t.Fatalf("changeOutputModeIfNeeded: %v", err)
-	}
-
-	err = shell.commands.modeCommand(context.Background(), shell, nil)
-	if err == nil {
-		t.Fatal("modeCommand with no argument returned nil, want a missing-argument error")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "current mode=json-typed") {
-		t.Errorf("`.mode` error = %q, want it to contain %q", msg, "current mode=json-typed")
-	}
-	if !strings.Contains(msg, "json-typed") {
-		t.Errorf("`.mode` error = %q, want it to list json-typed", msg)
-	}
-	if !strings.Contains(msg, "ndjson-typed") {
-		t.Errorf("`.mode` error = %q, want it to list ndjson-typed", msg)
 	}
 }
 
@@ -2676,7 +2560,7 @@ func TestShellExec_SchemaAndDescribe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		var cols []map[string]string
+		var cols []map[string]any
 		if err := json.Unmarshal(got, &cols); err != nil {
 			t.Fatalf(".describe json mode output is not a JSON array: %v\n%s", err, got)
 		}
@@ -2763,7 +2647,7 @@ func TestShell_buildCreateStatement(t *testing.T) {
 func TestShellRun_StdinDataset(t *testing.T) {
 	// Regression for: --stdin treats piped stdin as an input dataset.
 	t.Run("queries piped CSV through the default stdin table", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--output-format", "csv", "--sql", "SELECT name FROM stdin ORDER BY id"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2778,7 +2662,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 	})
 
 	t.Run("overrides the stdin table name", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--stdin-name", "people", "--csv", "--sql", "SELECT COUNT(*) AS c FROM people"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--stdin-name", "people", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM people"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2799,7 +2683,7 @@ func TestShellRun_StdinDataset(t *testing.T) {
 			t.Fatal(err)
 		}
 		shell, cleanup, err := newShell(t, []string{
-			"sqly", "--stdin", "csv", "--csv",
+			"sqly", "--stdin", "csv", "--output-format", "csv",
 			"--sql", "SELECT s.name, i.position FROM stdin s JOIN identifier i ON s.id = i.id ORDER BY s.id",
 			idPath,
 		})
@@ -2903,7 +2787,7 @@ func TestShellRun_SQLFile(t *testing.T) {
 		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2922,7 +2806,7 @@ func TestShellRun_SQLFile(t *testing.T) {
 		if err := os.WriteFile(sqlPath, []byte("SELECT 'first' AS x;\nSELECT 'second' AS x;\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2946,7 +2830,7 @@ func TestShellRun_SQLFile(t *testing.T) {
 		if err := os.WriteFile(sqlPath, []byte(query), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--csv", "--sql-file", sqlPath, idPath})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin", "csv", "--output-format", "csv", "--sql-file", sqlPath, idPath})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3213,7 +3097,7 @@ func TestShellRun_SQLFileWithEmptyStdinIsAllowed(t *testing.T) {
 	if err := os.WriteFile(sqlPath, []byte("SELECT 1 AS x;\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3334,7 +3218,7 @@ func TestShellRun_BOMStrippedInSQLFile(t *testing.T) {
 	if err := os.WriteFile(sqlPath, []byte("\ufeffSELECT 2 AS y;\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql-file", sqlPath, filepath.Join("testdata", "actor.csv")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3350,7 +3234,7 @@ func TestShellRun_BOMStrippedInSQLFile(t *testing.T) {
 func TestShellRun_BOMStrippedInBatchStdin(t *testing.T) {
 	// Regression for: a UTF-8 BOM at the start of batch stdin must be
 	// stripped so the first statement parses.
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", filepath.Join("testdata", "actor.csv")})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", filepath.Join("testdata", "actor.csv")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3368,7 +3252,7 @@ func TestShellRun_OutputToDirectoryIsRejected(t *testing.T) {
 	// Regression for: --output to an existing directory must be rejected,
 	// not rewritten to a sibling .csv file.
 	dir := t.TempDir()
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", dir, filepath.Join("testdata", "sample.csv")})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", dir, filepath.Join("testdata", "sample.csv")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3422,7 +3306,7 @@ func TestShellRun_OutputExportsReturningRows(t *testing.T) {
 	copyTestFile(t, "user.csv", src)
 	out := filepath.Join(work, "out.csv")
 
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name", "--output", out, src})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name", "--output", out, src})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3502,7 +3386,7 @@ func TestShellRun_OutputRequiresSQL(t *testing.T) {
 
 	t.Run("allows --output with --sql", func(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "o.csv")
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", out, filepath.Join("testdata", "sample.csv")})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT id FROM sample LIMIT 1", "--output", out, filepath.Join("testdata", "sample.csv")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3670,7 +3554,7 @@ func TestShellRun_HistoryUnavailable(t *testing.T) {
 	readonlyErr := errors.New("attempt to write a readonly database")
 
 	t.Run("--sql succeeds when history table cannot be created", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT actor FROM actor ORDER BY actor LIMIT 1", filepath.Join("testdata", "actor.csv")})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT actor FROM actor ORDER BY actor LIMIT 1", filepath.Join("testdata", "actor.csv")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -4312,7 +4196,7 @@ func TestRunDirectSQLOutputRejectsMultipleStatementsBeforeWriting(t *testing.T) 
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.csv")
 
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT 1 AS x; SELECT 2 AS y", "--output", out})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT 1 AS x; SELECT 2 AS y", "--output", out})
 	if err != nil {
 		t.Fatal(err)
 	}

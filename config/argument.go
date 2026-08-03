@@ -26,22 +26,12 @@ var (
 // table unless --inspect-sample overrides it.
 const defaultInspectSample = 5
 
-// Compare output format values accepted by --compare-format.
-const (
-	compareFormatJSON = "json"
-	compareFormatText = "text"
-)
-
 // Output is configuration for output data to file.
 type Output struct {
 	// FilePath is output destination path
 	FilePath string
 	// Mode is enum to specify output method
 	Mode model.PrintMode
-	// JSONTyped opts JSON and NDJSON output into the typed contract (native
-	// numbers, booleans, and nulls instead of strings). It is set only by
-	// --json-typed/--ndjson-typed and is ignored unless Mode is JSON or NDJSON.
-	JSONTyped bool
 }
 
 // Arg is a structure for managing options and arguments
@@ -70,32 +60,10 @@ type Arg struct {
 	// 0 means schema-only (no sample rows), which keeps the report small for
 	// wide or multi-table sources.
 	InspectSample int
-	// CompareFlag, when true, runs the non-interactive compare workflow: it
-	// compares two imported tables (schema, row count, and—when CompareKey is
-	// set—keyed rows) and prints a report, then exits without the shell.
-	CompareFlag bool
-	// CompareKey, when non-empty, is the key column used for keyed row comparison
-	// in compare mode. Empty means schema and row-count comparison only.
-	CompareKey string
-	// CompareTables names the two tables to compare as "left,right". Empty means
-	// compare the two imported tables when exactly two exist.
-	CompareTables string
-	// CompareFormat selects the compare output format: "json" (default, the
-	// automation contract) or "text" (human-readable summary).
-	CompareFormat string
-	// ProfileFlag, when true, runs the non-interactive profile workflow: it prints
-	// a data-quality report (row/column counts, null/blank counts, and value
-	// warnings) for every imported table, then exits without the shell.
-	ProfileFlag bool
-	// ProfileFormat selects the profile output format: "json" (default) or "text".
-	ProfileFormat string
 	// CachePath, when non-empty, is the location of an opt-in import cache: a
 	// SQLite snapshot of the imported tables. A warm run whose inputs are unchanged
 	// loads from it instead of re-parsing the source files.
 	CachePath string
-	// CacheClear, when true, deletes any existing cache for CachePath before the
-	// run, forcing a cold rebuild.
-	CacheClear bool
 	// SaveInPlace, when true, writes each table back over its source file after
 	// the run (for --save). It overwrites source files, so it requires Force.
 	SaveInPlace bool
@@ -115,7 +83,7 @@ type Arg struct {
 	// StdinTableName is the table name for the --stdin dataset (default: stdin).
 	StdinTableName string
 	// ImportMode selects how a ragged CSV/TSV row (one whose field count differs
-	// from the header) is imported: stop (default), skip, or fill. It sets the
+	// from the header) is imported: stop (default), skip, or pad. It sets the
 	// initial policy for the session; the .import-mode shell command can change it
 	// at runtime.
 	ImportMode model.MalformedRowPolicy
@@ -130,68 +98,19 @@ type Arg struct {
 	Version func()
 }
 
-// Output mode flag names, shared by the flag registration and the conflict
-// check so the strings are defined once.
 const (
-	outCSV      = "csv"
-	outTSV      = "tsv"
-	outLTSV     = "ltsv"
-	outExcel    = "excel"
-	outMarkdown = "markdown"
-	outJSON     = "json"
-	outNDJSON   = "ndjson"
-	outParquet  = "parquet"
-	outVertical = "vertical"
-	// Typed JSON variants: same JSON/NDJSON format, but native scalars instead of
-	// strings. They select the JSON/NDJSON mode and set Output.JSONTyped.
-	outJSONTyped   = "json-typed"
-	outNDJSONTyped = "ndjson-typed"
+	outputFormatTable    = "table"
+	outputFormatCSV      = "csv"
+	outputFormatTSV      = "tsv"
+	outputFormatLTSV     = "ltsv"
+	outputFormatExcel    = "excel"
+	outputFormatMarkdown = "markdown"
+	outputFormatJSON     = "json"
+	outputFormatNDJSON   = "ndjson"
+	outputFormatParquet  = "parquet"
+	outputFormatVertical = "vertical"
+	outputFormatHelp     = outputFormatTable + "|" + outputFormatCSV + "|" + outputFormatTSV + "|" + outputFormatLTSV + "|" + outputFormatExcel + "|" + outputFormatMarkdown + "|" + outputFormatJSON + "|" + outputFormatNDJSON + "|" + outputFormatParquet + "|" + outputFormatVertical
 )
-
-// outputFlag is a structure for managing output format options.
-type outputFlag struct {
-	csv      bool
-	tsv      bool
-	ltsv     bool
-	excel    bool
-	markdown bool
-	json     bool
-	ndjson   bool
-	parquet  bool
-	vertical bool
-
-	jsonTyped   bool
-	ndjsonTyped bool
-}
-
-// selectedNames returns the names of the output mode flags that are set. More
-// than one means the user passed conflicting mode flags, which NewArg rejects
-// instead of silently applying a precedence.
-func (of outputFlag) selectedNames() []string {
-	flags := []struct {
-		name string
-		set  bool
-	}{
-		{outCSV, of.csv},
-		{outTSV, of.tsv},
-		{outLTSV, of.ltsv},
-		{outExcel, of.excel},
-		{outMarkdown, of.markdown},
-		{outJSON, of.json},
-		{outNDJSON, of.ndjson},
-		{outParquet, of.parquet},
-		{outVertical, of.vertical},
-		{outJSONTyped, of.jsonTyped},
-		{outNDJSONTyped, of.ndjsonTyped},
-	}
-	var names []string
-	for _, f := range flags {
-		if f.set {
-			names = append(names, "--"+f.name)
-		}
-	}
-	return names
-}
 
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 // NOTE: Adding options directly to the pflag package results in a double
@@ -216,7 +135,6 @@ func newArg(args []string) (*Arg, error) {
 	if len(args) == 0 {
 		return nil, ErrEmptyArg
 	}
-	oFlag := outputFlag{}
 	arg := &Arg{}
 
 	flag := pflag.FlagSet{}
@@ -226,21 +144,11 @@ func newArg(args []string) (*Arg, error) {
 	// that fail with "path does not exist". Interspersed parsing instead applies
 	// the flag, and an unknown flag fails fast with a clear parse error.
 	flag.SetInterspersed(true)
-	flag.BoolVarP(&oFlag.csv, outCSV, "c", false, "change output format to csv (default: table)")
-	flag.BoolVarP(&oFlag.excel, outExcel, "e", false, "change output format to excel (default: table)")
-	flag.BoolVarP(&oFlag.ltsv, outLTSV, "l", false, "change output format to ltsv (default: table)")
-	flag.BoolVarP(&oFlag.markdown, outMarkdown, "m", false, "change output format to markdown table (default: table)")
-	flag.BoolVarP(&oFlag.tsv, outTSV, "t", false, "change output format to tsv (default: table)")
-	flag.BoolVarP(&oFlag.json, outJSON, "j", false, "change output format to json (default: table)")
-	flag.BoolVarP(&oFlag.ndjson, outNDJSON, "n", false, "change output format to ndjson (default: table)")
-	flag.BoolVarP(&oFlag.parquet, outParquet, "p", false, "export results as parquet (export-only; use with --output or .dump)")
-	flag.BoolVar(&oFlag.vertical, outVertical, false, "change output format to one column per line, in a block per record (default: table); for rows too wide to read across")
-	flag.BoolVar(&oFlag.jsonTyped, outJSONTyped, false, "change output format to json with native scalars (numbers, booleans, nulls) instead of strings")
-	flag.BoolVar(&oFlag.ndjsonTyped, outNDJSONTyped, false, "change output format to ndjson with native scalars (numbers, booleans, nulls) instead of strings")
+	outputFormat := flag.String("output-format", outputFormatTable, "output format: "+outputFormatHelp)
 	sheetName := flag.StringP("sheet", "S", "", "excel sheet name you want to import")
-	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format (csv|tsv|ltsv|json|jsonl)")
+	stdinFormat := flag.String("stdin", "", "treat stdin as an input dataset of this format ("+outputFormatCSV+"|"+outputFormatTSV+"|"+outputFormatLTSV+"|"+outputFormatJSON+"|jsonl)")
 	stdinName := flag.String("stdin-name", "stdin", "table name for the --stdin dataset")
-	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop|skip|fill")
+	importMode := flag.String("import-mode", "stop", "how to import a CSV/TSV row whose field count differs from the header: stop (abort)|skip (drop)|pad (pad short rows with empty fields; reject long rows)")
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "text input encoding for CSV/TSV/LTSV/JSON/JSONL import: "+model.TextEncodingHelp())
 	sqlDialect := flag.String("dialect", string(dialect.SQLite), "SQL dialect for queries (loading always uses sqlite): sqlite|mysql|postgresql|googlesql")
 	query := flag.StringP("sql", "s", "", "sql query you want to execute")
@@ -248,14 +156,7 @@ func newArg(args []string) (*Arg, error) {
 	output := flag.StringP("output", "o", "", "destination path for the result of --sql or a single-result --sql-file script")
 	flag.BoolVarP(&arg.InspectFlag, "inspect", "i", false, "print a JSON report of imported tables (schema, row counts, sample rows) and exit")
 	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "rows to include per table in --inspect (0 for schema only)")
-	flag.BoolVar(&arg.CompareFlag, "compare", false, "compare two imported tables (schema, row count, and keyed rows) and print a report, then exit")
-	compareKey := flag.String("compare-key", "", "key column for keyed row comparison in --compare mode")
-	compareTables := flag.String("compare-tables", "", "the two tables to compare as \"left,right\" (default: the two imported tables)")
-	compareFormat := flag.String("compare-format", compareFormatJSON, "compare output format: json (default) or text")
-	flag.BoolVar(&arg.ProfileFlag, "profile", false, "print a data-quality report (row/column counts, null/blank counts, warnings) for each imported table, then exit")
-	profileFormat := flag.String("profile-format", compareFormatJSON, "profile output format: json (default) or text")
-	cachePath := flag.String("cache", "", "opt-in import cache: reuse a SQLite snapshot of the imported tables when inputs are unchanged (keyed by path+size+mtime; use --cache-clear to force a rebuild)")
-	flag.BoolVar(&arg.CacheClear, "cache-clear", false, "delete any existing --cache before the run, forcing a cold rebuild")
+	cachePath := flag.String("cache", "", "opt-in import cache: reuse a SQLite snapshot of the imported tables when inputs are unchanged (keyed by path+size+SHA-256 content hash)")
 	flag.BoolVar(&arg.SaveInPlace, "save", false, "after the run, write each table back over its source file (requires --force)")
 	saveDir := flag.String("save-dir", "", "after the run, write each table into this directory (originals untouched)")
 	flag.BoolVar(&arg.Force, "force", false, "allow --save to overwrite source files in place")
@@ -310,46 +211,10 @@ func newArg(args []string) (*Arg, error) {
 		return nil, errForceWithoutSave
 	}
 
-	// The compare sub-flags only shape --compare output, so they have no effect
-	// without --compare. Reject them when set alone instead of silently ignoring.
-	if !arg.CompareFlag {
-		switch {
-		case flag.Changed("compare-key"):
-			return nil, errCompareKeyWithoutCompare
-		case flag.Changed("compare-tables"):
-			return nil, errCompareTablesWithoutCompare
-		case flag.Changed("compare-format"):
-			return nil, errCompareFormatWithoutCompare
-		}
-	}
-	// Reject an explicit empty value for the compare string flags, matching the
-	// other flags whose empty string is the "flag absent" sentinel.
-	if flag.Changed("compare-key") && *compareKey == "" {
-		return nil, errEmptyCompareKey
-	}
-	if flag.Changed("compare-tables") && *compareTables == "" {
-		return nil, errEmptyCompareTables
-	}
-	// --compare-format accepts only the documented values.
-	if arg.CompareFlag && *compareFormat != compareFormatJSON && *compareFormat != compareFormatText {
-		return nil, fmt.Errorf("--compare-format must be \"json\" or \"text\", got %q", *compareFormat)
-	}
-
-	// --profile-format only shapes --profile output, so it has no effect alone.
-	if flag.Changed("profile-format") && !arg.ProfileFlag {
-		return nil, errProfileFormatWithoutProfile
-	}
-	if arg.ProfileFlag && *profileFormat != compareFormatJSON && *profileFormat != compareFormatText {
-		return nil, fmt.Errorf("--profile-format must be \"json\" or \"text\", got %q", *profileFormat)
-	}
-
 	// --cache must be non-empty when given (its empty string is the "absent"
-	// sentinel), and --cache-clear only makes sense alongside --cache.
+	// sentinel).
 	if flag.Changed("cache") && *cachePath == "" {
 		return nil, errEmptyCache
-	}
-	if arg.CacheClear && *cachePath == "" {
-		return nil, errCacheClearWithoutCache
 	}
 
 	// Validate --stdin-name so it cannot be empty or contain path separators.
@@ -362,15 +227,8 @@ func newArg(args []string) (*Arg, error) {
 		}
 	}
 
-	// Reject conflicting output mode flags (e.g. --csv --json) instead of
-	// silently applying an internal precedence, which would discard the other
-	// flags without warning.
-	if names := oFlag.selectedNames(); len(names) > 1 {
-		return nil, fmt.Errorf("conflicting output mode flags: %s; choose one", strings.Join(names, ", "))
-	}
-
 	// Parse --import-mode into a policy, rejecting any value other than
-	// stop|skip|fill so a typo fails fast instead of silently defaulting.
+	// stop|skip|pad so a typo fails fast instead of silently defaulting.
 	importPolicy, err := model.ParseMalformedRowPolicy(*importMode)
 	if err != nil {
 		return nil, err
@@ -385,10 +243,14 @@ func newArg(args []string) (*Arg, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unknown SQL dialect %q (supported: sqlite, mysql, postgresql, googlesql)", *sqlDialect)
 	}
+	outputMode, err := parseOutputFormat(*outputFormat)
+	if err != nil {
+		return nil, err
+	}
 
 	arg.Usage = usage(flag)
 	arg.Version = version
-	arg.Output = newOutput(*output, oFlag)
+	arg.Output = newOutput(*output, outputMode)
 	arg.FilePaths = flag.Args()
 	arg.SheetName = *sheetName
 	arg.StdinFormat = *stdinFormat
@@ -400,10 +262,6 @@ func newArg(args []string) (*Arg, error) {
 	arg.SQLFilePath = *sqlFile
 	arg.SaveDir = *saveDir
 	arg.InspectSample = *inspectSample
-	arg.CompareKey = *compareKey
-	arg.CompareTables = *compareTables
-	arg.CompareFormat = *compareFormat
-	arg.ProfileFormat = *profileFormat
 	arg.CachePath = *cachePath
 
 	return arg, nil
@@ -456,40 +314,36 @@ func isValidTableIdentifier(name string) bool {
 	return name != ""
 }
 
-// newOutput retur *Output
-func newOutput(filePath string, of outputFlag) *Output {
-	output := &Output{
-		FilePath: filePath,
-	}
-	switch {
-	case of.excel:
-		output.Mode = model.PrintModeExcel
-	case of.csv:
-		output.Mode = model.PrintModeCSV
-	case of.tsv:
-		output.Mode = model.PrintModeTSV
-	case of.ltsv:
-		output.Mode = model.PrintModeLTSV
-	case of.markdown:
-		output.Mode = model.PrintModeMarkdownTable
-	case of.json:
-		output.Mode = model.PrintModeJSON
-	case of.ndjson:
-		output.Mode = model.PrintModeNDJSON
-	case of.jsonTyped:
-		output.Mode = model.PrintModeJSON
-		output.JSONTyped = true
-	case of.ndjsonTyped:
-		output.Mode = model.PrintModeNDJSON
-		output.JSONTyped = true
-	case of.parquet:
-		output.Mode = model.PrintModeParquet
-	case of.vertical:
-		output.Mode = model.PrintModeVertical
+func parseOutputFormat(name string) (model.PrintMode, error) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case outputFormatTable:
+		return model.PrintModeTable, nil
+	case outputFormatCSV:
+		return model.PrintModeCSV, nil
+	case outputFormatTSV:
+		return model.PrintModeTSV, nil
+	case outputFormatLTSV:
+		return model.PrintModeLTSV, nil
+	case outputFormatExcel:
+		return model.PrintModeExcel, nil
+	case outputFormatMarkdown:
+		return model.PrintModeMarkdownTable, nil
+	case outputFormatJSON:
+		return model.PrintModeJSON, nil
+	case outputFormatNDJSON:
+		return model.PrintModeNDJSON, nil
+	case outputFormatParquet:
+		return model.PrintModeParquet, nil
+	case outputFormatVertical:
+		return model.PrintModeVertical, nil
 	default:
-		output.Mode = model.PrintModeTable
+		return model.PrintModeTable, fmt.Errorf("invalid output format %q: want %s", name, outputFormatHelp)
 	}
-	return output
+}
+
+// newOutput returns the output destination and its selected format.
+func newOutput(filePath string, mode model.PrintMode) *Output {
+	return &Output{FilePath: filePath, Mode: mode}
 }
 
 // NeedsOutputToFile whether the data needs to be output to the file

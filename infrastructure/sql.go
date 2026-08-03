@@ -111,12 +111,12 @@ func GenerateCreateTableStatement(t *model.Table) string {
 
 // isNumeric returns true if all records are numeric.
 func isNumeric(t *model.Table, index int) bool {
-	if len(t.Records()) == 0 {
+	if t.RowCount() == 0 {
 		return false
 	}
 
-	for _, record := range t.Records() {
-		_, err := strconv.ParseFloat(record[index], 64)
+	for _, record := range t.Rows {
+		_, err := strconv.ParseFloat(record.At(index), 64)
 		if err != nil {
 			return false
 		}
@@ -126,12 +126,12 @@ func isNumeric(t *model.Table, index int) bool {
 
 // GenerateInsertStatement returns insert statement.
 // e.g. INSERT INTO `table_name` VALUES ('value1', 'value2', ...);
-func GenerateInsertStatement(name string, record model.Record) string {
+func GenerateInsertStatement(name string, record model.RecordView) string {
 	var builder strings.Builder
 	builder.WriteString("INSERT INTO " + Quote(name) + " VALUES (")
-	for i, v := range record {
-		builder.WriteString(SingleQuote(v))
-		if i != len(record)-1 {
+	for i := range record.Len() {
+		builder.WriteString(SingleQuote(record.At(i)))
+		if i != record.Len()-1 {
 			builder.WriteString(", ")
 		} else {
 			builder.WriteString(");")

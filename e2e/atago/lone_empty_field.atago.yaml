@@ -21,14 +21,14 @@ scenarios:
             ,2
             bob,3
       - run:
-          command: sqly --csv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.csv
+          command: sqly --output-format csv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.csv
       - assert:
           exit_code: 0
           file:
             path: out.csv
             equals: "v\nalice\n\"\"\nbob\n"
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
       - assert:
           exit_code: 0
           stdout:
@@ -40,11 +40,11 @@ scenarios:
     steps:
       - fixture: *src
       - run:
-          command: sqly --csv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.csv
+          command: sqly --output-format csv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.csv
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT COALESCE(v,'<null>') AS v FROM out" out.csv
+          command: sqly --output-format csv --sql "SELECT COALESCE(v,'<null>') AS v FROM out" out.csv
       - assert:
           exit_code: 0
           stdout:
@@ -58,14 +58,14 @@ scenarios:
     steps:
       - fixture: *src
       - run:
-          command: sqly --tsv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.tsv
+          command: sqly --output-format tsv --sql "SELECT v FROM src ORDER BY w" src.csv --output out.tsv
       - assert:
           exit_code: 0
           file:
             path: out.tsv
             equals: "v\nalice\n\"\"\nbob\n"
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
       - assert:
           exit_code: 0
           stdout:
@@ -81,14 +81,14 @@ scenarios:
             a,b
             ,
       - run:
-          command: sqly --csv --sql "SELECT a, b FROM two" two.csv --output out.csv
+          command: sqly --output-format csv --sql "SELECT a, b FROM two" two.csv --output out.csv
       - assert:
           exit_code: 0
           file:
             path: out.csv
             equals: "a,b\n,\n"
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
       - assert:
           exit_code: 0
           stdout:

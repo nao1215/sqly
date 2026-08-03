@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	libfilesql "github.com/nao1215/filesql"
+	"github.com/nao1215/sqly/domain/cleanup"
 	"github.com/nao1215/sqly/domain/model"
 	infra "github.com/nao1215/sqly/infrastructure"
 	_ "modernc.org/sqlite" // register the "sqlite" driver used for the staging DB
@@ -27,7 +28,7 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	// filesql's Parquet writer needs at least one row to infer the column
 	// schema and rejects an empty source. Surface that limitation with a clear
 	// message instead of filesql's internal error.
-	if len(table.Records()) == 0 {
+	if table.RowCount() == 0 {
 		return errors.New("cannot export an empty result to parquet: parquet export requires at least one row")
 	}
 
@@ -35,16 +36,19 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	if err != nil {
 		return fmt.Errorf("create temp dir for parquet dump: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer func() {
+		// The staging directory holds the intermediate SQLite database; leaving
+		// it behind is a leak the caller should hear about even when the export
+		// itself failed.
+		err = cleanup.Join(err, os.RemoveAll(tmpDir), "remove parquet staging directory")
+	}()
 
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "stage.db"))
 	if err != nil {
 		return fmt.Errorf("open staging database: %w", err)
 	}
 	defer func() {
-		if cerr := db.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close staging database: %w", cerr)
-		}
+		err = cleanup.Join(err, db.Close(), "close parquet staging database")
 	}()
 
 	ctx := context.Background()
@@ -57,7 +61,7 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	if err != nil {
 		return fmt.Errorf("begin staging transaction: %w", err)
 	}
-	for rowIdx := range table.Records() {
+	for rowIdx := range table.RowCount() {
 		if _, err = tx.ExecContext(ctx, parquetInsertStatement(table, rowIdx)); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("insert into staging table: %w", err)
@@ -113,7 +117,7 @@ func parquetStagingCreateTable(t *model.Table) string {
 // an empty string; consulting table.IsNull here keeps NULL and "" distinct
 // through the parquet round-trip.
 func parquetInsertStatement(t *model.Table, rowIdx int) string {
-	record := t.Records()[rowIdx]
+	record, _ := t.Row(rowIdx)
 	var b strings.Builder
 	b.WriteString("INSERT INTO " + infra.Quote(t.Name()) + " VALUES (")
 	for col := range t.Header() {
@@ -124,11 +128,7 @@ func parquetInsertStatement(t *model.Table, rowIdx int) string {
 			b.WriteString("NULL")
 			continue
 		}
-		var v string
-		if col < len(record) {
-			v = record[col]
-		}
-		b.WriteString(infra.SingleQuote(v))
+		b.WriteString(infra.SingleQuote(record.At(col)))
 	}
 	b.WriteString(");")
 	return b.String()

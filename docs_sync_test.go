@@ -89,7 +89,7 @@ func lineContaining(doc, needle string) string {
 // makefileTargets returns the set of target names declared in the Makefile (a
 // line of the form "name:" at column 0). Pattern rules and variables are ignored.
 func makefileTargets(path string) (map[string]bool, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // test reads repository documentation paths
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ type docMakeRef struct {
 // (`make ...`). Prose mentions of "make" are not command contexts and are
 // skipped, so a sentence like "make things easier" is never treated as a target.
 func docMakeTargets(path string) ([]docMakeRef, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // test reads repository documentation paths
 	if err != nil {
 		return nil, err
 	}

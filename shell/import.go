@@ -413,9 +413,9 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath, she
 	}
 
 	sort.Strings(importedTables)
-	// In report-only modes (--inspect, --compare, --profile) the structured report
-	// is the only intended output, so a successful directory import stays quiet on
-	// stderr. Warnings (e.g. keyword table names) and errors still print.
+	// In inspect mode the structured report is the only intended output, so a
+	// successful directory import stays quiet on stderr. Warnings (e.g. keyword
+	// table names) and errors still print.
 	if !s.reportOnly() {
 		fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(importedTables), displayPath, importedTables)
 	}
@@ -816,13 +816,13 @@ func (s *Shell) tableContentFingerprint(ctx context.Context, name string) (strin
 		_, _ = h.Write(lenBuf[:])
 		_, _ = h.Write([]byte(f))
 	}
-	for _, col := range t.Header() {
+	for _, col := range t.Columns {
 		writeField(col)
 	}
-	for _, rec := range t.Records() {
+	for _, rec := range t.Rows {
 		writeField("\x00") // row separator that no column value can forge
-		for _, f := range rec {
-			writeField(f)
+		for i := range rec.Len() {
+			writeField(rec.At(i))
 		}
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil

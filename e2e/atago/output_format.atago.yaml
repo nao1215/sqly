@@ -15,7 +15,7 @@ suite:
   name: sqly output formats
 
 scenarios:
-  - name: "--json renders results as a JSON array"
+  - name: "--output-format json renders results as a JSON array"
     steps:
       - fixture:
           file: user.csv
@@ -25,7 +25,7 @@ scenarios:
             jenkins46,2
             grey07,3
       - run:
-          command: sqly --json --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
+          command: sqly --output-format json --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
       # The status should be success
       - assert:
           exit_code: 0
@@ -34,16 +34,16 @@ scenarios:
           stdout:
             line: 1
             equals: "["
-      # The output should include '{"user_name":"booker12","identifier":"1"}'
+      # The output should include '{"user_name":"booker12","identifier":1}'
       - assert:
           stdout:
-            contains: '{"user_name":"booker12","identifier":"1"}'
-      # The output should include '{"user_name":"jenkins46","identifier":"2"}'
+            contains: '{"user_name":"booker12","identifier":1}'
+      # The output should include '{"user_name":"jenkins46","identifier":2}'
       - assert:
           stdout:
-            contains: '{"user_name":"jenkins46","identifier":"2"}'
+            contains: '{"user_name":"jenkins46","identifier":2}'
 
-  - name: "--json prints [] for an empty result"
+  - name: "--output-format json prints [] for an empty result"
     steps:
       - fixture:
           file: user.csv
@@ -51,7 +51,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --json --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
+          command: sqly --output-format json --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
       - assert:
           exit_code: 0
       # The output should equal '[]'
@@ -59,7 +59,7 @@ scenarios:
           stdout:
             equals: "[]"
 
-  - name: "--ndjson renders one JSON object per line"
+  - name: "--output-format ndjson renders one JSON object per line"
     steps:
       - fixture:
           file: user.csv
@@ -69,21 +69,21 @@ scenarios:
             jenkins46,2
             grey07,3
       - run:
-          command: sqly --ndjson --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
+          command: sqly --output-format ndjson --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 2" user.csv
       - assert:
           exit_code: 0
-      # The line 1 should equal '{"user_name":"booker12","identifier":"1"}'
+      # The line 1 should equal '{"user_name":"booker12","identifier":1}'
       - assert:
           stdout:
             line: 1
-            equals: '{"user_name":"booker12","identifier":"1"}'
-      # The line 2 should equal '{"user_name":"jenkins46","identifier":"2"}'
+            equals: '{"user_name":"booker12","identifier":1}'
+      # The line 2 should equal '{"user_name":"jenkins46","identifier":2}'
       - assert:
           stdout:
             line: 2
-            equals: '{"user_name":"jenkins46","identifier":"2"}'
+            equals: '{"user_name":"jenkins46","identifier":2}'
 
-  - name: "--ndjson prints nothing for an empty result"
+  - name: "--output-format ndjson prints nothing for an empty result"
     steps:
       - fixture:
           file: user.csv
@@ -91,7 +91,7 @@ scenarios:
             user_name,identifier
             booker12,1
       - run:
-          command: sqly --ndjson --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
+          command: sqly --output-format ndjson --sql "SELECT user_name FROM user WHERE user_name = 'nobody'" user.csv
       - assert:
           exit_code: 0
       # The output should equal ''
@@ -99,7 +99,7 @@ scenarios:
           stdout:
             empty: true
 
-  - name: "--csv renders header and rows as CSV"
+  - name: "--output-format csv renders header and rows as CSV"
     steps:
       - fixture:
           file: user.csv
@@ -108,7 +108,7 @@ scenarios:
             booker12,1
             jenkins46,2
       - run:
-          command: sqly --csv --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 1" user.csv
+          command: sqly --output-format csv --sql "SELECT user_name, identifier FROM user ORDER BY identifier LIMIT 1" user.csv
       - assert:
           exit_code: 0
       # The line 1 should equal 'user_name,identifier'

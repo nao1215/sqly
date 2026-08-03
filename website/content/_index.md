@@ -27,12 +27,12 @@ The file is the table: `staff.csv` became `staff`. Nothing to declare, no schema
 ## Three things to try next
 
 ```shell
-sqly --json --sql "SELECT * FROM staff" --output staff.json staff.csv   # convert
+sqly --output-format json --sql "SELECT * FROM staff" --output staff.json staff.csv   # convert
 sqly --sql "SELECT * FROM a JOIN b ON a.id = b.id" a.csv b.parquet      # join across formats
 sqly staff.csv                                                          # open the shell
 ```
 
-The [cookbook](/cookbook/) has the rest: JSON extraction, Excel sheets, HTTP inputs, data profiling, diffing two files, editing a file in place, and MySQL/PostgreSQL/BigQuery syntax.
+The [cookbook](/cookbook/) has the rest: JSON extraction, Excel sheets, HTTP inputs, inspecting data, editing a file in place, and MySQL/PostgreSQL/BigQuery syntax.
 
 ## It reads and writes a pipe
 
@@ -40,8 +40,8 @@ sqly is a filter, not a destination. It takes standard input, and its non-table 
 
 ```shell
 curl -s https://example.com/sales.csv | sqly --stdin csv --sql "SELECT region, SUM(amount) FROM stdin GROUP BY region"
-sqly --ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
-sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+sqly --output-format ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
 ```
 
 Filter in SQL, shape in `jq`: SQL has the `WHERE`, `GROUP BY`, and `JOIN`, so `jq` only ever sees the rows that matter. For nested JSON, `json_extract` reaches into the document and sqly can stand in for `jq` entirely. A failed query exits non-zero, so `set -e` works. [Pipe data out](/cookbook/#pipe-data-out) has the details.

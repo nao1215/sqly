@@ -39,7 +39,7 @@ scenarios:
     steps:
       - fixture: *rows
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
       - assert:
           exit_code: 0
           stdout:
@@ -54,7 +54,7 @@ scenarios:
     steps:
       - fixture: *rows
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
       - assert:
           exit_code: 0
           stdout:
@@ -69,7 +69,7 @@ scenarios:
     steps:
       - fixture: *rows
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
       - assert:
           exit_code: 0
           stdout:
@@ -84,7 +84,7 @@ scenarios:
     steps:
       - fixture: *rows
       - run:
-          command: sqly --csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
       - assert:
           exit_code: 0
           stdout:
@@ -96,7 +96,7 @@ scenarios:
     steps:
       - fixture: *rows
       - run:
-          command: sqly --csv --dialect mysql --sql "SELECT COUNT(*) AS c FROM t" t.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT COUNT(*) AS c FROM t" t.csv
       - assert:
           exit_code: 0
           stdout:

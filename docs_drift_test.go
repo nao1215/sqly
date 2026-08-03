@@ -106,8 +106,6 @@ var cookbookCoverage = map[string]string{
 	"Load a directory":        "e2e/atago/cookbook.atago.yaml",
 	"Run SQL from a file":     "e2e/atago/sql_file.atago.yaml",
 	"Analytics":               "e2e/atago/cookbook.atago.yaml",
-	"Profile data quality":    "e2e/atago/cookbook.atago.yaml",
-	"Compare two tables":      "e2e/atago/cookbook.atago.yaml",
 	"Write changes back":      "e2e/atago/cookbook.atago.yaml",
 	"Other SQL dialects":      "e2e/atago/cookbook.atago.yaml",
 	"Ragged rows":             "e2e/atago/cookbook.atago.yaml",
@@ -454,10 +452,10 @@ func TestSqlyInvocation(t *testing.T) {
 		want  []string
 		ok    bool
 	}{
-		{"plain", `sqly --csv user.csv`, []string{"--csv", "user.csv"}, true},
-		{"go run form", `go run github.com/nao1215/sqly@latest --json user.csv`, []string{"--json", "user.csv"}, true},
+		{"plain", `sqly --output-format csv user.csv`, []string{"--output-format", "csv", "user.csv"}, true},
+		{"go run form", `go run github.com/nao1215/sqly@latest --output-format json user.csv`, []string{"--output-format", "json", "user.csv"}, true},
 		{"second stage of a pipeline", `cat user.csv | sqly --stdin csv --sql "SELECT 1"`, []string{"--stdin", "csv", "--sql", "SELECT 1"}, true},
-		{"first stage of a pipeline", `sqly --json user.csv | jq .`, []string{"--json", "user.csv"}, true},
+		{"first stage of a pipeline", `sqly --output-format json user.csv | jq .`, []string{"--output-format", "json", "user.csv"}, true},
 		{"a pipe inside quotes is not a stage", `sqly --sql "SELECT 'a|b'"`, []string{"--sql", "SELECT 'a|b'"}, true},
 		{"not sqly", `brew install nao1215/tap/sqly`, nil, false},
 		{"go install is not an invocation", `go install github.com/nao1215/sqly@latest`, nil, false},

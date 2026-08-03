@@ -20,7 +20,7 @@ scenarios:
           file: access.ltsv
           content: "time:12:00:00\thost:192.168.0.1\treq:GET /list\tstatus:200\tsize:5316\n"
       - run: &selectall
-          command: sqly --csv --sql "SELECT * FROM access" access.ltsv
+          command: sqly --output-format csv --sql "SELECT * FROM access" access.ltsv
       - assert: &header
           exit_code: 0
           stdout:
@@ -42,7 +42,7 @@ scenarios:
           file: sparse.ltsv
           content: "id:1\tname:alice\nid:2\tname:bob\tnickname:bo\n"
       - run: &selectsparse
-          command: sqly --csv --sql "SELECT * FROM sparse ORDER BY id" sparse.ltsv
+          command: sqly --output-format csv --sql "SELECT * FROM sparse ORDER BY id" sparse.ltsv
       - assert: &sparseheader
           exit_code: 0
           stdout:
@@ -66,7 +66,7 @@ scenarios:
           file: mixed.ltsv
           content: "id:1\tname:alice\trole:dev\tcity:tokyo\ncity:osaka\trole:ops\tname:bob\tid:2\n"
       - run: &selectmixed
-          command: sqly --csv --sql "SELECT * FROM mixed ORDER BY id" mixed.ltsv
+          command: sqly --output-format csv --sql "SELECT * FROM mixed ORDER BY id" mixed.ltsv
       - assert: &mixedheader
           exit_code: 0
           stdout:
@@ -85,11 +85,11 @@ scenarios:
     steps:
       - fixture: *access
       - run: &export
-          command: sqly --csv --sql "SELECT * FROM access" access.ltsv --output out.csv
+          command: sqly --output-format csv --sql "SELECT * FROM access" access.ltsv --output out.csv
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT * FROM out" out.csv
+          command: sqly --output-format csv --sql "SELECT * FROM out" out.csv
       - assert:
           exit_code: 0
           stdout:
@@ -100,7 +100,7 @@ scenarios:
       - assert:
           exit_code: 0
       - run:
-          command: sqly --csv --sql "SELECT * FROM out" out.csv
+          command: sqly --output-format csv --sql "SELECT * FROM out" out.csv
       - assert:
           exit_code: 0
           stdout:

@@ -35,7 +35,7 @@ scenarios:
             python3 -m http.server 18090 --bind 127.0.0.1 >/dev/null 2>&1 & pid=$!;
             trap "kill $pid" EXIT;
             i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18090)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done;
-            curl -s http://127.0.0.1:18090/sales.csv | sqly --csv --stdin csv --sql "SELECT region, SUM(amount) AS total FROM stdin GROUP BY region ORDER BY region"
+            curl -s http://127.0.0.1:18090/sales.csv | sqly --output-format csv --stdin csv --sql "SELECT region, SUM(amount) AS total FROM stdin GROUP BY region ORDER BY region"
       - assert:
           exit_code: 0
           stdout:
@@ -58,7 +58,7 @@ scenarios:
             /c,503
       - run:
           shell: true
-          command: sqly --ndjson --sql "SELECT path, status FROM logs WHERE status >= 500 ORDER BY path" logs.csv | jq -r '.path'
+          command: sqly --output-format ndjson --sql "SELECT path, status FROM logs WHERE status >= 500 ORDER BY path" logs.csv | jq -r '.path'
       - assert:
           exit_code: 0
           stdout:
@@ -79,7 +79,7 @@ scenarios:
             {"id":3,"user":{"name":"carol"},"level":"error"}
       - run:
           shell: true
-          command: sqly --ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error' ORDER BY id" events.jsonl | jq -r '"\(.id):\(.name)"'
+          command: sqly --output-format ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error' ORDER BY id" events.jsonl | jq -r '"\(.id):\(.name)"'
       - assert:
           exit_code: 0
           stdout:
@@ -92,7 +92,7 @@ scenarios:
       - fixture: *logs
       - run:
           shell: true
-          command: sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | tail -n +2 | cut -f1 | sort -rn | head -n 1
+          command: sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | tail -n +2 | cut -f1 | sort -rn | head -n 1
       - assert:
           exit_code: 0
           stdout:
@@ -113,7 +113,7 @@ scenarios:
       - fixture: *logs
       - run:
           shell: true
-          command: set -e; sqly --csv --sql "SELECT * FROM no_such_table" logs.csv; echo reached
+          command: set -e; sqly --output-format csv --sql "SELECT * FROM no_such_table" logs.csv; echo reached
       - assert:
           exit_code: 1
           stdout:
@@ -127,7 +127,7 @@ scenarios:
       - fixture: *logs
       - run:
           shell: true
-          command: sqly --csv --sql "SELECT * FROM no_such_table" logs.csv | cat; echo "pipeline status $?"
+          command: sqly --output-format csv --sql "SELECT * FROM no_such_table" logs.csv | cat; echo "pipeline status $?"
       - assert:
           exit_code: 0
           stdout:
@@ -147,7 +147,7 @@ scenarios:
       - run:
           shell: true
           command: >-
-            blank=$(sqly --csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1);
+            blank=$(sqly --output-format csv --sql "SELECT COUNT(*) FROM users WHERE email = ''" users.csv | tail -n 1);
             if [ "$blank" != "0" ]; then echo "found $blank rows with no email"; exit 1; fi
       - assert:
           exit_code: 1
@@ -159,7 +159,7 @@ scenarios:
       - fixture: *sales
       - run:
           shell: true
-          command: cat sales.csv | sqly --csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75 ORDER BY region" | tail -n +2 | sort -u
+          command: cat sales.csv | sqly --output-format csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75 ORDER BY region" | tail -n +2 | sort -u
       - assert:
           exit_code: 0
           stdout:
@@ -176,7 +176,7 @@ scenarios:
       - fixture: *sales
       - run:
           shell: true
-          command: gzip -c sales.csv > sales.csv.gz && sqly --csv --sql "SELECT COUNT(*) AS n FROM sales" sales.csv.gz
+          command: gzip -c sales.csv > sales.csv.gz && sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM sales" sales.csv.gz
       - assert:
           exit_code: 0
           stdout:

@@ -6,17 +6,16 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/nao1215/filesql"
+	"github.com/nao1215/sqly/domain/cleanup"
 	"github.com/nao1215/sqly/domain/model"
+	infra "github.com/nao1215/sqly/infrastructure"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -69,146 +68,118 @@ func filesqlMalformedRowPolicy(policy model.MalformedRowPolicy) filesql.Malforme
 	switch policy {
 	case model.MalformedRowSkip:
 		return filesql.MalformedRowSkip
-	case model.MalformedRowFill:
+	case model.MalformedRowPad:
 		return filesql.MalformedRowFill
 	default:
 		return filesql.MalformedRowStop
 	}
 }
 
-// LoadFiles loads multiple files into the shared database using filesql
+// registryPublisher is the deferred half of an import: metadata that names
+// tables which do not exist until the transaction commits. filesql's
+// *PendingRegistries satisfies it; a test double satisfies it to observe whether
+// publication happened at all.
+//
+// PublishRegistries cannot fail — it moves already-built table sets into
+// process maps — so there is no partially published state to reconcile. The
+// integrity rule is therefore the simple one: nothing is published unless the
+// commit succeeded, and once the commit succeeds every staged registry is
+// published.
+type registryPublisher interface {
+	PublishRegistries()
+}
+
+// stageFunc loads one input path into an open transaction and returns the
+// registry entries to publish after that transaction commits.
+type stageFunc[T infra.Tx] func(ctx context.Context, tx T, path string) (registryPublisher, error)
+
+// atomicImport is one ordered multi-file import: where the transaction comes
+// from, and how a single path is staged into it. Splitting these two out of
+// LoadFiles is what makes BeginTx, staging, commit, and rollback failures
+// reproducible from a test without a real database that must be coaxed into
+// failing at the right instant.
+type atomicImport[T infra.Tx] struct {
+	beginner infra.TxBeginner[T]
+	stage    stageFunc[T]
+}
+
+// run stages every path inside one transaction, then publishes the staged
+// registries — and only then.
+//
+// The two phases are deliberately separate. Everything that touches the
+// database happens inside WithTransaction, which owns commit, rollback, and the
+// joining of a cleanup error onto the cause. Everything that makes state visible
+// to the rest of the process happens after it returns, gated on the transaction
+// having actually committed. A failure anywhere in the first phase — a bad
+// input, a failed commit, or a rollback that itself failed — therefore leaves no
+// registry entry behind, so "the database rolled back but the registry kept the
+// entry" is not a state this code can produce.
+//
+// When several inputs register the same base name, the later input wins: staging
+// runs in the order the paths were given and publication replays that same
+// order, so the last file to claim a name is the one write-back resolves to.
+func (a atomicImport[T]) run(ctx context.Context, paths []string) error {
+	var pending []registryPublisher
+	committed, err := infra.WithTransaction(ctx, a.beginner, func(tx T) error {
+		pending = pending[:0]
+		for _, path := range paths {
+			publisher, err := a.stage(ctx, tx, path)
+			if err != nil {
+				return err
+			}
+			pending = append(pending, publisher)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !committed {
+		// Unreachable while WithTransaction reports success and commitment
+		// together; kept so a future change to that contract fails loudly here
+		// instead of publishing uncommitted registries.
+		return errors.New("atomic import finished without committing")
+	}
+	for _, publisher := range pending {
+		publisher.PublishRegistries()
+	}
+	return nil
+}
+
+// LoadFiles loads multiple files into the shared database using filesql. Either
+// every input is applied or none is: a failure on the last of ten inputs rolls
+// back the nine before it, leaving tables and views that existed beforehand
+// untouched.
 func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) error {
 	if len(filePaths) == 0 {
 		return nil
 	}
-
 	if f.sharedDB == nil {
 		return errors.New("shared database is not initialized")
 	}
-
-	// Loading an ACH/Fedwire file registers its TableSet in a filesql global
-	// registry keyed by base name. sqly keeps those registrations for the session
-	// so the whole-set write-back path (DumpACHFile/DumpFedWireFile) can rebuild a
-	// valid .ach/.fed file from the (possibly edited) tables. The registry is keyed
-	// by base name, so re-importing the same source overwrites its entry, and the
-	// process is short-lived, so the retained TableSets are released at exit.
-
-	// An empty JSON array ("[]") or an empty JSONL file is valid JSON input but
-	// has no rows. filesql rejects it as an empty data source, so handle those
-	// files here as zero-row tables (a single "data" column, matching filesql's
-	// JSON schema) before delegating the rest to filesql.
-	var toLoad []string
-	for _, path := range filePaths {
-		name, isEmpty := emptyJSONLikeTable(path)
-		if !isEmpty {
-			toLoad = append(toLoad, path)
-			continue
-		}
-		if err := f.createEmptyJSONTable(ctx, name); err != nil {
-			return err
-		}
-	}
-
-	// Stream the files directly into the shared session database. filesql's
-	// LoadInto replaces a same-named table (last-wins), matching sqly's import
-	// semantics, and avoids the previous temporary-database-plus-row-copy path.
-	// The builder form is used (instead of the package-level filesql.LoadInto) so
-	// the malformed-row policy can be applied to ragged CSV/TSV rows.
-	if len(toLoad) > 0 {
-		builder := filesql.NewBuilder().
-			AddPaths(toLoad...).
-			WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
-		validated, err := builder.Build(ctx)
-		if err != nil {
-			return err
-		}
-		if err := validated.LoadInto(ctx, f.sharedDB); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return atomicImport[*sql.Tx]{
+		beginner: infra.SQLTxBeginner{DB: f.sharedDB},
+		stage:    f.stageFile,
+	}.run(ctx, filePaths)
 }
 
-// jsonDataColumn is the single column filesql uses to store raw JSON/JSONL
-// values; sqly creates the same schema for an empty JSON input so queries with
-// json_extract() behave the same on a zero-row table.
-const jsonDataColumn = "data"
-
-// emptyJSONLikeTable reports whether a .json or .jsonl file (uncompressed or
-// compressed, e.g. .json.gz) holds no rows (an empty JSON array, whitespace-only
-// JSON, or an empty/blank-only JSONL file), returning the table name to create for
-// it. The format is decided by the base extension after any compression suffix is
-// stripped, and the content is read through filesql's decompressor so a compressed
-// empty input is detected the same as an uncompressed one.,
-func emptyJSONLikeTable(path string) (string, bool) {
-	switch strings.ToLower(filepath.Ext(stripCompressionExt(path))) {
-	case model.ExtJSON:
-		data, err := readDecompressed(path)
-		if err != nil {
-			return "", false
-		}
-		trimmed := strings.TrimSpace(string(data))
-		if trimmed == "" {
-			return GetTableNameFromFilePath(path), true
-		}
-		var arr []json.RawMessage
-		if err := json.Unmarshal([]byte(trimmed), &arr); err == nil && len(arr) == 0 {
-			return GetTableNameFromFilePath(path), true
-		}
-		return "", false
-	case model.ExtJSONL:
-		data, err := readDecompressed(path)
-		if err != nil {
-			return "", false
-		}
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.TrimSpace(line) != "" {
-				return "", false
-			}
-		}
-		return GetTableNameFromFilePath(path), true
-	default:
-		return "", false
-	}
-}
-
-// stripCompressionExt removes a single trailing compression extension from path
-// (case-insensitive), so the base format of "data.json.gz" is read from ".json".
-func stripCompressionExt(path string) string {
-	lower := strings.ToLower(path)
-	for _, ext := range compressionExts {
-		if strings.HasSuffix(lower, ext) {
-			return path[:len(path)-len(ext)]
-		}
-	}
-	return path
-}
-
-// readDecompressed reads the full content of path, transparently decompressing it
-// when its extension names a known codec. It backs the empty JSON/JSONL detection
-// for both plain and compressed inputs.
-func readDecompressed(path string) ([]byte, error) {
-	r, cleanup, err := NewDecompressingReaderForFile(path)
+// stageFile parses one input and applies it to the open import transaction.
+func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string) (registryPublisher, error) {
+	builder := filesql.NewBuilder().
+		AddPath(path).
+		WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
+	validated, err := builder.Build(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load file %q: %w", path, err)
 	}
-	defer func() { _ = cleanup() }()
-	return io.ReadAll(r)
-}
-
-// createEmptyJSONTable creates (last-wins) a zero-row table with filesql's JSON
-// "data" column, so an empty JSON/JSONL input imports as an empty table instead
-// of failing.
-func (f *FileSQLAdapter) createEmptyJSONTable(ctx context.Context, name string) error {
-	quoted := QuoteIdentifier(name)
-	if _, err := f.sharedDB.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
-		return fmt.Errorf("failed to reset empty JSON table %q: %w", name, err)
+	registry, err := validated.LoadIntoTxWithPending(ctx, tx)
+	if err != nil {
+		if f.malformedRowPolicy == model.MalformedRowPad && errors.Is(err, filesql.ErrColumnMismatch) {
+			return nil, fmt.Errorf("load file %q: --import-mode pad refuses to truncate a long row: %w", path, err)
+		}
+		return nil, fmt.Errorf("load file %q: %w", path, err)
 	}
-	if _, err := f.sharedDB.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s (%s TEXT)", quoted, jsonDataColumn)); err != nil {
-		return fmt.Errorf("failed to create empty JSON table %q: %w", name, err)
-	}
-	return nil
+	return registry, nil
 }
 
 // LoadFile loads a single file into the database
@@ -268,57 +239,157 @@ func (f *FileSQLAdapter) SnapshotToCache(ctx context.Context, cachePath string) 
 // far faster than re-parsing large source files. The cache is always detached
 // before returning. A failure leaves the caller free to fall back to a cold
 // import.
-func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) (err error) {
+func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) error {
 	if f.sharedDB == nil {
 		return errors.New(errDatabaseNotInit)
 	}
 	if _, statErr := os.Stat(cachePath); statErr != nil {
 		return fmt.Errorf("cache %q is unavailable: %w", cachePath, statErr)
 	}
-	if _, err = f.sharedDB.ExecContext(ctx, "ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS sqly_cache"); err != nil {
-		return fmt.Errorf("attach cache %q: %w", cachePath, err)
+	return f.withAttachedCache(ctx, cachePath, f.copyAttachedTables)
+}
+
+// cacheAlias is the schema name the import cache is attached under. It is fixed,
+// so two loads cannot use it at once and a load that fails to detach breaks the
+// next one rather than itself.
+const cacheAlias = "sqly_cache"
+
+// withAttachedCache attaches cachePath under cacheAlias on one dedicated
+// connection, runs fn on that same connection, and detaches it.
+//
+// The connection is the point. SQLite's ATTACH is per-connection state, not
+// per-database, and *sql.DB is a pool: running the ATTACH, the schema read, the
+// copy, and the DETACH through the pool lets each land on a different
+// connection. The copy would then fail with "no such database: sqly_cache"
+// because it ran somewhere the cache was never attached, and the DETACH would
+// "succeed" against a connection that had nothing attached while the real
+// attachment stayed behind on another — surfacing later as "database sqly_cache
+// is already in use" in an unrelated run. Taking a *sql.Conn and passing it to
+// fn makes returning to the pool mid-operation impossible rather than merely
+// discouraged.
+//
+// The order is reserve, attach, run, detach, release, and it is meant to stay
+// readable in that order. The detach's error is joined onto fn's rather than
+// replacing it, so "the load failed and the cache is still attached" is not
+// reported as though only one of the two happened. A failed ATTACH is not
+// followed by a DETACH, because there is nothing to detach.
+func (f *FileSQLAdapter) withAttachedCache(
+	ctx context.Context,
+	cachePath string,
+	fn func(ctx context.Context, conn *sql.Conn) error,
+) (err error) {
+	conn, connErr := f.sharedDB.Conn(ctx)
+	if connErr != nil {
+		return fmt.Errorf("reserve a connection for cache %q: %w", cachePath, connErr)
 	}
 	defer func() {
-		if _, derr := f.sharedDB.ExecContext(ctx, "DETACH DATABASE sqly_cache"); derr != nil && err == nil {
-			err = fmt.Errorf("detach cache %q: %w", cachePath, derr)
-		}
+		err = cleanup.Join(err, conn.Close(), "release the cache connection")
 	}()
 
-	rows, err := f.sharedDB.QueryContext(ctx,
-		"SELECT name, sql FROM sqly_cache.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+	if attachErr := attachCache(ctx, conn, cachePath); attachErr != nil {
+		return attachErr
+	}
+	defer func() {
+		err = cleanup.Join(err, detachCache(ctx, conn), fmt.Sprintf("detach cache %q", cachePath))
+	}()
+
+	return fn(ctx, conn)
+}
+
+// attachCache attaches the cache file to conn under cacheAlias.
+func attachCache(ctx context.Context, conn *sql.Conn, cachePath string) error {
+	// ATTACH takes a string literal, not a bind parameter, so the path is
+	// single-quote-escaped rather than passed as an argument.
+	if _, err := conn.ExecContext(ctx,
+		"ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS "+cacheAlias); err != nil {
+		return fmt.Errorf("attach cache %q: %w", cachePath, err)
+	}
+	return nil
+}
+
+// detachCache releases the alias from conn.
+//
+// It runs under cleanup.Context rather than the caller's context: once that
+// context is done every statement fails immediately, so reusing it would leave
+// the alias attached for the life of the process, and the next cache load would
+// fail with "already in use" while naming the wrong run.
+func detachCache(ctx context.Context, conn *sql.Conn) error {
+	cleanupCtx, cancel := cleanup.Context(ctx)
+	defer cancel()
+
+	_, err := conn.ExecContext(cleanupCtx, "DETACH DATABASE "+cacheAlias)
+	return err
+}
+
+// copyAttachedTables recreates every user table held in the attached cache and
+// bulk-copies its rows into the session database, as one transaction.
+//
+// The transaction is what makes the caller's fallback safe. Copying table by
+// table outside one left a partial session behind when a later table failed:
+// the caller falls back to a cold import, which then collides with the tables
+// the failed restore had already created. Either every table arrives or none
+// does, so the fallback always starts from the state it expects.
+func (f *FileSQLAdapter) copyAttachedTables(ctx context.Context, conn *sql.Conn) error {
+	tables, err := listAttachedTables(ctx, conn)
 	if err != nil {
-		return fmt.Errorf("read cache schema: %w", err)
+		return err
 	}
-	type cachedTable struct{ name, ddl string }
-	var tables []cachedTable
-	for rows.Next() {
-		var t cachedTable
-		if scanErr := rows.Scan(&t.name, &t.ddl); scanErr != nil {
-			_ = rows.Close()
-			return fmt.Errorf("scan cache schema: %w", scanErr)
-		}
-		tables = append(tables, t)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		_ = rows.Close()
-		return fmt.Errorf("iterate cache schema: %w", rowsErr)
-	}
-	_ = rows.Close()
 	if len(tables) == 0 {
 		return errors.New("cache contains no tables")
 	}
 
-	for _, t := range tables {
-		quoted := QuoteIdentifier(t.name)
-		if _, err = f.sharedDB.ExecContext(ctx, t.ddl); err != nil {
-			return fmt.Errorf("recreate cached table %q: %w", t.name, err)
+	_, err = infra.WithTransaction(ctx, infra.SQLConnTxBeginner{Conn: conn}, func(tx *sql.Tx) error {
+		for _, table := range tables {
+			if err := copyAttachedTable(ctx, tx, table); err != nil {
+				return err
+			}
 		}
-		if _, err = f.sharedDB.ExecContext(ctx,
-			fmt.Sprintf("INSERT INTO %s SELECT * FROM sqly_cache.%s", quoted, quoted)); err != nil {
-			return fmt.Errorf("copy cached table %q: %w", t.name, err)
-		}
+		return nil
+	})
+	return err
+}
+
+// copyAttachedTable recreates one cached table and copies its rows, inside the
+// caller's transaction.
+func copyAttachedTable(ctx context.Context, tx *sql.Tx, table cachedTable) error {
+	quoted := QuoteIdentifier(table.name)
+	if _, err := tx.ExecContext(ctx, table.ddl); err != nil {
+		return fmt.Errorf("recreate cached table %q: %w", table.name, err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		fmt.Sprintf("INSERT INTO %s SELECT * FROM %s.%s", quoted, cacheAlias, quoted)); err != nil {
+		return fmt.Errorf("copy cached table %q: %w", table.name, err)
 	}
 	return nil
+}
+
+// cachedTable is one table held in the attached cache: its name and the DDL that
+// recreates it.
+type cachedTable struct{ name, ddl string }
+
+// listAttachedTables lists the user tables in the attached cache. It runs on
+// the connection the cache is attached to, so the read sees the attachment.
+func listAttachedTables(ctx context.Context, conn *sql.Conn) (tables []cachedTable, err error) {
+	rows, err := conn.QueryContext(ctx,
+		"SELECT name, sql FROM "+cacheAlias+".sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+	if err != nil {
+		return nil, fmt.Errorf("read cache schema: %w", err)
+	}
+	defer func() {
+		err = cleanup.Join(err, rows.Close(), "close the cache schema cursor")
+	}()
+
+	for rows.Next() {
+		var t cachedTable
+		if scanErr := rows.Scan(&t.name, &t.ddl); scanErr != nil {
+			return nil, fmt.Errorf("scan cache schema: %w", scanErr)
+		}
+		tables = append(tables, t)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("iterate cache schema: %w", rowsErr)
+	}
+	return tables, nil
 }
 
 // escapeSQLiteLiteral doubles single quotes so a path can be embedded safely in a
@@ -346,9 +417,12 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 	}
 
 	header := model.NewHeader(columns)
-	var records []model.Record
+	var cells [][]model.Cell
 
-	// Scan all rows
+	// Scan all rows, keeping the driver's native value per cell. model.Cell
+	// derives the display string from it, so this path preserves SQLite's
+	// INTEGER/REAL/TEXT types and its NULLs the same way the memory repository
+	// does instead of flattening every value to a string here.
 	for rows.Next() {
 		values := make([]any, len(columns))
 		valuePtrs := make([]any, len(columns))
@@ -360,28 +434,11 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 			return nil, &FileSQLError{Op: "scan", Err: err.Error()}
 		}
 
-		// Convert to string slice
-		record := make([]string, len(columns))
+		row := make([]model.Cell, len(columns))
 		for i, val := range values {
-			if val == nil {
-				record[i] = ""
-			} else {
-				// Handle different types that can be returned from SQL
-				switch v := val.(type) {
-				case []byte:
-					record[i] = string(v)
-				case string:
-					record[i] = v
-				case int64:
-					record[i] = strconv.FormatInt(v, 10)
-				case float64:
-					record[i] = fmt.Sprintf("%g", v)
-				default:
-					record[i] = fmt.Sprintf("%v", v)
-				}
-			}
+			row[i] = model.NewCell(val)
 		}
-		records = append(records, model.NewRecord(record))
+		cells = append(cells, row)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -391,7 +448,11 @@ func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table,
 	// Generate unique table name for query results to avoid conflicts
 	tableName := "query_result_" + generateRandomName()
 
-	return model.NewTable(tableName, header, records), nil
+	table, err := model.NewTableFromCells(tableName, header, cells)
+	if err != nil {
+		return nil, &FileSQLError{Op: opQuery, Err: err.Error()}
+	}
+	return table, nil
 }
 
 // Exec executes SQL statement (INSERT, UPDATE, DELETE)
@@ -647,14 +708,12 @@ func IsExcelFile(filePath string) bool {
 // is read through the adapter's decompressing reader, so compressed variants
 // (.xlsx.gz, .xlsx.zst, ...) are supported the same way as a plain .xlsx.
 func SheetNames(filePath string) (names []string, err error) {
-	r, cleanup, err := NewDecompressingReaderForFile(filePath)
+	r, closeReader, err := NewDecompressingReaderForFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open Excel file %s: %w", filePath, err)
 	}
 	defer func() {
-		if cerr := cleanup(); cerr != nil && err == nil {
-			err = cerr
-		}
+		err = cleanup.Join(err, closeReader(), "close decompressing reader")
 	}()
 
 	f, err := excelize.OpenReader(r)
@@ -662,9 +721,7 @@ func SheetNames(filePath string) (names []string, err error) {
 		return nil, fmt.Errorf("failed to read Excel file %s: %w", filePath, err)
 	}
 	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
+		err = cleanup.Join(err, f.Close(), "close Excel workbook")
 	}()
 
 	return f.GetSheetList(), nil

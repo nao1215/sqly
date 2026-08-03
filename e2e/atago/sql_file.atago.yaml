@@ -25,7 +25,7 @@ scenarios:
             ORDER BY actor
             LIMIT 1;
       - run:
-          command: sqly --csv --sql-file q.sql actor.csv
+          command: sqly --output-format csv --sql-file q.sql actor.csv
       - assert:
           exit_code: 0
           stdout:
@@ -47,7 +47,7 @@ scenarios:
             JOIN identifier i ON s.id = i.id
             ORDER BY s.id;
       - run:
-          command: sqly --stdin csv --csv --sql-file join.sql identifier.csv
+          command: sqly --stdin csv --output-format csv --sql-file join.sql identifier.csv
           stdin: |
             id,name
             1,alice
@@ -68,7 +68,7 @@ scenarios:
             SELECT 'first' AS x;
             SELECT 'second' AS x;
       - run:
-          command: sqly --csv --sql-file multi.sql actor.csv
+          command: sqly --output-format csv --sql-file multi.sql actor.csv
       - assert:
           exit_code: 0
           stdout:

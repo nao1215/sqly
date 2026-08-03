@@ -28,9 +28,8 @@ func covErrFsqlClosedAdapter(t *testing.T) *FileSQLAdapter {
 	return a
 }
 
-// TestLoadFiles_EmptyJSONClosedDB covers the LoadFiles branch that surfaces a
-// createEmptyJSONTable failure: an empty JSON input is handled by creating a
-// zero-row table, and that CREATE/DROP fails against a closed database.
+// TestLoadFiles_EmptyJSONClosedDB covers the LoadFiles error path for an empty
+// JSON input when the target database is already closed.
 func TestLoadFiles_EmptyJSONClosedDB(t *testing.T) {
 	t.Parallel()
 
@@ -67,6 +66,20 @@ func TestSnapshotToCache_RemoveStaleError(t *testing.T) {
 
 	if err := a.SnapshotToCache(ctx, dir); err == nil {
 		t.Fatal("SnapshotToCache targeting a non-empty directory = nil error, want error")
+	}
+}
+
+func TestSnapshotToCache_WriteError(t *testing.T) {
+	t.Parallel()
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	a := NewFileSQLAdapter(db)
+	_ = db.Close()
+	if err := a.SnapshotToCache(context.Background(), filepath.Join(t.TempDir(), "cache.db")); err == nil {
+		t.Fatal("SnapshotToCache on closed DB = nil error, want error")
 	}
 }
 

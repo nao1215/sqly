@@ -22,7 +22,7 @@ scenarios:
           stderr:
             contains: "Saved d"
       - run:
-          command: sqly --csv --sql "SELECT id, v FROM d ORDER BY id" d.tsv
+          command: sqly --output-format csv --sql "SELECT id, v FROM d ORDER BY id" d.tsv
       - assert:
           exit_code: 0
           stdout:
@@ -43,7 +43,7 @@ scenarios:
           stderr:
             contains: "Saved d"
       - run:
-          command: sqly --csv --sql "SELECT id, v FROM d ORDER BY id" d.ltsv
+          command: sqly --output-format csv --sql "SELECT id, v FROM d ORDER BY id" d.ltsv
       - assert:
           exit_code: 0
           stdout:
@@ -71,7 +71,7 @@ scenarios:
           stderr:
             contains: "Saved d"
       - run:
-          command: sqly --csv --sql "SELECT id, v FROM d ORDER BY id" d.parquet
+          command: sqly --output-format csv --sql "SELECT id, v FROM d ORDER BY id" d.parquet
       - assert:
           exit_code: 0
           stdout:

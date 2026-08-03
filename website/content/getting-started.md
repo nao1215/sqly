@@ -43,15 +43,15 @@ A directory argument loads every supported file inside it.
 The default is an ASCII table for a terminal. One flag switches it:
 
 ```shell
-sqly --csv      --sql "SELECT * FROM user" user.csv
-sqly --json     --sql "SELECT * FROM user" user.csv
-sqly --markdown --sql "SELECT * FROM user" user.csv
+sqly --output-format csv      --sql "SELECT * FROM user" user.csv
+sqly --output-format json     --sql "SELECT * FROM user" user.csv
+sqly --output-format markdown --sql "SELECT * FROM user" user.csv
 ```
 
 `--output PATH` writes to a file instead of stdout, and the extension must agree with the format:
 
 ```shell
-sqly --json --output user.json --sql "SELECT * FROM user" user.csv
+sqly --output-format json --output user.json --sql "SELECT * FROM user" user.csv
 ```
 
 Full list on the [reference page](/reference/#output-formats).
@@ -63,10 +63,10 @@ files sqly was written for. A 300-column row is one 2700-character line as a tab
 as CSV, as TSV, and as LTSV alike — no terminal shows it, and the column holding the
 bad value has no name beside it to search for.
 
-`--vertical` turns the row on its side: one column per line, in a block per record.
+`--output-format vertical` turns the row on its side: one column per line, in a block per record.
 
 ```shell
-sqly --vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
+sqly --output-format vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
 ```
 
 ```text
@@ -80,7 +80,7 @@ Now the name and the value sit on one short line, so the bad column is one `grep
 away:
 
 ```shell
-sqly --vertical --sql "SELECT * FROM wide" wide.csv | grep BAD
+sqly --output-format vertical --sql "SELECT * FROM wide" wide.csv | grep BAD
 ```
 
 In the shell it is `.mode vertical`. Vertical output is for reading, not for
@@ -123,4 +123,4 @@ sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
 
 ## Next
 
-The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, profiling data, diffing two files, and writing MySQL or BigQuery syntax.
+The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, inspecting data, and writing MySQL or BigQuery syntax.

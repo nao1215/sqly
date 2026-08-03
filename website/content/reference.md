@@ -10,18 +10,16 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 
 | Flag | Format |
 |:--|:--|
-| (default) | ASCII table |
-| `--vertical` | one column per line, in a block per record; for rows too wide to read across |
-| `-c`, `--csv` | CSV |
-| `-t`, `--tsv` | TSV |
-| `-l`, `--ltsv` | LTSV |
-| `-j`, `--json` | JSON array, every value a string |
-| `-n`, `--ndjson` | newline-delimited JSON, every value a string |
-| `--json-typed` | JSON with native numbers, booleans, and nulls |
-| `--ndjson-typed` | NDJSON with native numbers, booleans, and nulls |
-| `-m`, `--markdown` | Markdown table |
-| `-e`, `--excel` | Excel workbook (needs `--output` or `.dump`) |
-| `-p`, `--parquet` | Parquet (needs `--output` or `.dump`) |
+| `--output-format table` (default) | ASCII table |
+| `--output-format vertical` | one column per line, in a block per record; for rows too wide to read across |
+| `--output-format csv` | CSV |
+| `--output-format tsv` | TSV |
+| `--output-format ltsv` | LTSV |
+| `--output-format json` | JSON array preserving SQLite numeric, text, and NULL types |
+| `--output-format ndjson` | newline-delimited JSON preserving SQLite numeric, text, and NULL types |
+| `--output-format markdown` | Markdown table |
+| `--output-format excel` | Excel workbook (needs `--output` or `.dump`) |
+| `--output-format parquet` | Parquet (needs `--output` or `.dump`) |
 
 ## Query
 
@@ -39,12 +37,38 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | `-S`, `--sheet NAME` | import one Excel sheet by its original name |
 | `--stdin FORMAT` | treat stdin as a dataset: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
 | `--stdin-name NAME` | table name for `--stdin` (default `stdin`) |
-| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (default), `skip`, `fill` |
+| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (abort), `skip` (drop), `pad` (pad short rows with empty values; reject long rows without truncating) |
 | `--encoding NAME` | text encoding for BOM-less input (default `utf-8`) |
-| `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged |
-| `--cache-clear` | delete the cache first, forcing a cold rebuild |
+| `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged (content-hash keyed) |
 
-## Report modes
+## Cache
+
+`--cache PATH` stores the imported tables as a SQLite snapshot, so a repeated run
+skips re-parsing the source files.
+
+```shell
+sqly --cache ./events.cache --sql "SELECT COUNT(*) FROM events" events.csv
+```
+
+The first run builds the snapshot at `PATH`; later runs read it.
+
+| Question | Answer |
+|:--|:--|
+| When is the cache used? | when `--cache PATH` is given and every input still matches the snapshot |
+| When is it rebuilt? | when an input's path, size, or SHA-256 content hash differs — editing a file is enough |
+| Where is it stored? | at `PATH`; sqly writes nothing outside it |
+| How do I disable it? | omit `--cache` |
+| How do I delete it? | delete the file at `PATH` |
+
+A cached run answers exactly what a cold run answers: the same rows, the same
+types, the same output bytes. If the snapshot cannot be read, the run falls back
+to importing the sources and still succeeds.
+
+A run that fails part-way leaves nothing behind for the next one. Restoring from
+a cache either restores every table or none of them, so a failed run cannot
+leave a half-populated session that a later run trips over.
+
+## Inspection
 
 Each of these prints a report and exits, instead of running a query.
 
@@ -52,12 +76,6 @@ Each of these prints a report and exits, instead of running a query.
 |:--|:--|
 | `-i`, `--inspect` | schema, row counts, and sample rows as JSON |
 | `--inspect-sample N` | rows per table in `--inspect` (default 5; `0` for schema only) |
-| `--profile` | data-quality report: nulls, blanks, distinct counts, warnings |
-| `--profile-format` | `json` (default), or `text`, which leads with the columns that have warnings, then lists every column (`no warnings` when there are none) |
-| `--compare` | compare two tables: schema, row count, keyed rows |
-| `--compare-key COL` | key column for the keyed row comparison |
-| `--compare-tables "l,r"` | which two tables to compare |
-| `--compare-format` | `json` (default), or `text`, which lists the keys added (`+`), removed (`-`), and modified (`~`), and under each modified key only the columns whose value changed |
 
 ## Write-back
 

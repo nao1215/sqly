@@ -34,6 +34,7 @@ components:
   shell: { in: shell }
   domain: { in: domain }
   model: { in: domain/model }
+  cleanup: { in: domain/cleanup }
   repository: { in: domain/repository }
   infrastructure: { in: [infrastructure, infrastructure/mock/**] }
   memory-infra: { in: [infrastructure/memory, infrastructure/filesql] }
@@ -53,6 +54,10 @@ commonVendors:
 commonComponents:
   - model
   - config
+  # cleanup is a dependency-free leaf holding the one rule for cleanup errors.
+  # Every layer has something to release, so the rule has to be reachable from
+  # all of them; that is why it is common rather than a dependency edge.
+  - cleanup
 
 deps:
   di:

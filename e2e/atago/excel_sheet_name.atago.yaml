@@ -17,7 +17,7 @@ scenarios:
             region,amount
             west,100
       - run:
-          command: sqly --excel --output out.xlsx --sql "SELECT * FROM orders_by_region_and_fiscal_quarter_2023" orders_by_region_and_fiscal_quarter_2023.csv
+          command: sqly --output-format excel --output out.xlsx --sql "SELECT * FROM orders_by_region_and_fiscal_quarter_2023" orders_by_region_and_fiscal_quarter_2023.csv
       - assert:
           exit_code: 0
           stderr:
@@ -38,7 +38,7 @@ scenarios:
             region,amount
             west,100
       - run:
-          command: sqly --excel --output out.xlsx --sql "SELECT * FROM orders_by_region_and_fiscal_quarter_2023" orders_by_region_and_fiscal_quarter_2023.csv
+          command: sqly --output-format excel --output out.xlsx --sql "SELECT * FROM orders_by_region_and_fiscal_quarter_2023" orders_by_region_and_fiscal_quarter_2023.csv
       - assert:
           exit_code: 0
       - run:

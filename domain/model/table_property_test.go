@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -73,35 +74,27 @@ func rowMaps(t *Table) []map[string]string {
 	return out
 }
 
-// TestTable_JSONRoundTripProperty asserts that any table rendered as a JSON
-// array decodes back to the same column/value pairs. This metamorphic relation
-// (render -> parse == identity) guards the JSON writer against escaping and
-// ordering regressions.
-func TestTable_JSONRoundTripProperty(t *testing.T) {
-	property := func(g genTable) bool {
-		var buf bytes.Buffer
-		if err := g.table.Print(&buf, PrintModeJSON); err != nil {
-			return false
+func stringifyJSONValue(v any) (string, bool) {
+	switch x := v.(type) {
+	case json.Number:
+		return x.String(), true
+	case float64:
+		return fmt.Sprintf("%g", x), true
+	case bool:
+		if x {
+			return "true", true
 		}
-		var got []map[string]string
-		if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
-			return false
-		}
-		want := rowMaps(g.table)
-		if len(want) == 0 {
-			return len(got) == 0 // empty result decodes as []
-		}
-		return reflect.DeepEqual(got, want)
-	}
-	if err := quick.Check(property, quickConfig()); err != nil {
-		t.Error(err)
+		return "false", true
+	case string:
+		return x, true
+	default:
+		return "", false
 	}
 }
 
-// FuzzJSONScalarToken asserts the typed-mode scalar tokenizer never emits a
-// byte sequence that is not valid JSON, for any input string. A value that is
-// not a canonical number or boolean must come back as a JSON string equal to the
-// input, and a canonical number/bool must decode back to the same text.
+// FuzzJSONScalarToken asserts that a Go string is always emitted as a JSON
+// string, even when its contents resemble a number or boolean. Numeric and
+// boolean output is supplied by the query repository as a typed value.
 func FuzzJSONScalarToken(f *testing.F) {
 	for _, s := range []string{"", "0", "-1.5", "1e10", "007", "true", "false", "hello", "\"q\"", "\n\t", "日本語", "1.2.3", "+1"} {
 		f.Add(s)
@@ -115,21 +108,9 @@ func FuzzJSONScalarToken(f *testing.F) {
 		if !json.Valid(tok) {
 			t.Fatalf("jsonScalarToken(%q) produced invalid JSON: %q", s, tok)
 		}
-		// Invariant 2: the token matches the exact typed contract. Canonical
-		// numbers and the JSON booleans are emitted verbatim (lossless); every
-		// other value falls back to json.Marshal, identical to the legacy string
-		// contract (which is lossy for invalid UTF-8 the same way encoding/json is).
-		var want []byte
-		switch {
-		case s == "true" || s == "false":
-			want = []byte(s)
-		case isCanonicalJSONNumber(s):
-			want = []byte(s)
-		default:
-			want, err = json.Marshal(s)
-			if err != nil {
-				t.Fatalf("json.Marshal(%q) returned error: %v", s, err)
-			}
+		want, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q) returned error: %v", s, err)
 		}
 		if !bytes.Equal(tok, want) {
 			t.Fatalf("jsonScalarToken(%q) = %q, want %q", s, tok, want)
@@ -137,31 +118,15 @@ func FuzzJSONScalarToken(f *testing.F) {
 	})
 }
 
-// TestTable_TypedJSONRoundTripProperty asserts the typed JSON contract never
+// TestTable_JSONRoundTripProperty asserts the JSON contract never
 // corrupts data: for any table, typed output is valid JSON, and every cell
 // decodes back to its original string. A canonical number decodes to a
 // json.Number whose text equals the original (lossless, no scientific notation),
 // "true"/"false" decode to the matching boolean, and any other value stays a
 // string. This is the metamorphic relation render(typed) -> parse -> stringify
 // == identity.
-func TestTable_TypedJSONRoundTripProperty(t *testing.T) {
-	stringify := func(v any) (string, bool) {
-		switch x := v.(type) {
-		case json.Number:
-			return x.String(), true
-		case bool:
-			if x {
-				return "true", true
-			}
-			return "false", true
-		case string:
-			return x, true
-		default:
-			return "", false
-		}
-	}
+func TestTable_JSONRoundTripProperty(t *testing.T) {
 	property := func(g genTable) bool {
-		g.table.SetJSONTyped(true)
 		var buf bytes.Buffer
 		if err := g.table.Print(&buf, PrintModeJSON); err != nil {
 			return false
@@ -181,7 +146,7 @@ func TestTable_TypedJSONRoundTripProperty(t *testing.T) {
 				return false
 			}
 			for k, v := range row {
-				s, ok := stringify(v)
+				s, ok := stringifyJSONValue(v)
 				if !ok || s != want[i][k] {
 					return false
 				}
@@ -212,12 +177,17 @@ func TestTable_NDJSONRoundTripProperty(t *testing.T) {
 		}
 		want := rowMaps(g.table)
 		for i, line := range lines {
-			var got map[string]string
-			if err := json.Unmarshal([]byte(line), &got); err != nil {
+			dec := json.NewDecoder(strings.NewReader(line))
+			dec.UseNumber()
+			var got map[string]any
+			if err := dec.Decode(&got); err != nil {
 				return false
 			}
-			if !reflect.DeepEqual(got, want[i]) {
-				return false
+			for key, value := range got {
+				text, ok := stringifyJSONValue(value)
+				if !ok || text != want[i][key] {
+					return false
+				}
 			}
 		}
 		return true

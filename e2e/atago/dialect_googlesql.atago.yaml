@@ -13,28 +13,28 @@ scenarios:
     description: "SAFE_CAST is defined as 'cast, or NULL when the cast fails'. Rewriting it to a plain CAST would yield SQLite's fallback instead (0 for a numeric target, the original string for a date one), which inverts the whole point of the function: the user chose SAFE_CAST precisely to detect bad rows."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS INT64) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS INT64) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ""
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS FLOAT64) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS FLOAT64) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ""
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('2026-13-40' AS DATE) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('2026-13-40' AS DATE) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ""
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('not-a-timestamp' AS TIMESTAMP) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('not-a-timestamp' AS TIMESTAMP) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -45,7 +45,7 @@ scenarios:
     description: "SAFE_CAST('true' AS BOOL) is true and SAFE_CAST('nope' AS BOOL) is NULL. SQLite's INTEGER affinity would answer 0 for both, leaving a valid true indistinguishable from a parse failure. SQLite has no boolean type, so a true comes back as the integer 1."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_CAST('true' AS BOOL) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('true' AS BOOL) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -56,7 +56,7 @@ scenarios:
     description: "BigQuery DATE_ADD(DATE '2026-01-31', INTERVAL 1 MONTH) clamps to 2026-02-28. SQLite would return 2026-03-03 because SQLite normalizes February 31 forward."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT DATE_ADD(DATE '2026-01-31', INTERVAL 1 MONTH) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT DATE_ADD(DATE '2026-01-31', INTERVAL 1 MONTH) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -66,7 +66,7 @@ scenarios:
     description: "BigQuery DATE_SUB(DATE '2026-03-31', INTERVAL 1 MONTH) clamps to 2026-02-28. SQLite would return 2026-03-03."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT DATE_SUB(DATE '2026-03-31', INTERVAL 1 MONTH) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT DATE_SUB(DATE '2026-03-31', INTERVAL 1 MONTH) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -76,7 +76,7 @@ scenarios:
     description: "BigQuery supports INTERVAL n WEEK for DATE_ADD and DATE_SUB. SQLite's datetime() modifier has no week unit, so it is expressed as 7 days."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT DATE_ADD(DATE '2026-01-01', INTERVAL 1 WEEK) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT DATE_ADD(DATE '2026-01-01', INTERVAL 1 WEEK) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -86,7 +86,7 @@ scenarios:
     description: "BigQuery spells it DATE_TRUNC(date, MONTH) with the part as a bare keyword, the reverse of PostgreSQL's DATE_TRUNC('month', ts). Without the rewrite the bare keyword reaches SQLite as an identifier and the query fails with 'no such column: MONTH'. The PostgreSQL spelling keeps working too."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT DATE_TRUNC(DATE '2026-03-15', MONTH) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT DATE_TRUNC(DATE '2026-03-15', MONTH) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -96,7 +96,7 @@ scenarios:
     description: "TIMESTAMP_TRUNC(ts, HOUR) is the timestamp counterpart of DATE_TRUNC, and DATETIME_TRUNC is the third spelling. SQLite has none of them."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT TIMESTAMP_TRUNC(TIMESTAMP '2026-03-15 10:20:30', HOUR) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT TIMESTAMP_TRUNC(TIMESTAMP '2026-03-15 10:20:30', HOUR) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -106,14 +106,14 @@ scenarios:
     description: "These are the BigQuery equivalents of MySQL DATE_FORMAT and STR_TO_DATE, but they take strftime specifiers rather than the MySQL set, where %M is the minute and not the month name."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT FORMAT_DATE('%Y-%m', DATE '2026-03-15') AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT FORMAT_DATE('%Y-%m', DATE '2026-03-15') AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "2026-03"
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT PARSE_DATE('%Y-%m-%d', '2026-03-15') AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT PARSE_DATE('%Y-%m-%d', '2026-03-15') AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -124,7 +124,7 @@ scenarios:
     description: "BigQuery writes CURRENT_DATE(), CURRENT_TIMESTAMP(), and CURRENT_TIME() with parentheses. SQLite only accepts the bare keyword, so without the rewrite the most basic 'what is today' query fails to parse."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT LENGTH(CAST(CURRENT_DATE() AS STRING)) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT LENGTH(CAST(CURRENT_DATE() AS STRING)) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -135,7 +135,7 @@ scenarios:
     description: "COUNTIF(cond) is a BigQuery staple with no SQLite aggregate. It counts rows, so it is 0 rather than NULL over none."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT COUNTIF(x > 1) AS v FROM (SELECT 1 AS x UNION ALL SELECT 2) t"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT COUNTIF(x > 1) AS v FROM (SELECT 1 AS x UNION ALL SELECT 2) t"
       - assert:
           exit_code: 0
           stdout:
@@ -146,7 +146,7 @@ scenarios:
     description: "These are BigQuery's boolean aggregates, the counterparts of PostgreSQL BOOL_AND and BOOL_OR. Booleans are stored as 0 and 1, so MIN and MAX are the reductions."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT LOGICAL_AND(x) AS a, LOGICAL_OR(x) AS o FROM (SELECT TRUE AS x UNION ALL SELECT FALSE) t"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT LOGICAL_AND(x) AS a, LOGICAL_OR(x) AS o FROM (SELECT TRUE AS x UNION ALL SELECT FALSE) t"
       - assert:
           exit_code: 0
           stdout:
@@ -157,7 +157,7 @@ scenarios:
     description: "UNIX_SECONDS(ts) converts a timestamp to an epoch second count, which SQLite spells strftime('%s', ts)."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT UNIX_SECONDS(TIMESTAMP '2026-01-01 00:00:00') AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT UNIX_SECONDS(TIMESTAMP '2026-01-01 00:00:00') AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -168,21 +168,21 @@ scenarios:
     description: "The SAFE_ arithmetic family (SAFE_ADD, SAFE_SUBTRACT, SAFE_MULTIPLY, SAFE_NEGATE) returns NULL instead of raising. Overflowing INT64 is the case that separates it from plain arithmetic, so it is asserted alongside the ordinary one; SAFE_DIVIDE was the only member of the family that existed."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_ADD(1, 2) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_ADD(1, 2) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "3"
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_ADD(9223372036854775807, 1) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_ADD(9223372036854775807, 1) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: ""
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT SAFE_MULTIPLY(9223372036854775807, 2) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_MULTIPLY(9223372036854775807, 2) AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -193,7 +193,7 @@ scenarios:
     description: "BigQuery allows DATE, TIME, and DATETIME as EXTRACT parts, not just the numeric fields. EXTRACT is rewritten to DATE_PART, so DATE_PART has to understand those parts too."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT EXTRACT(DATE FROM TIMESTAMP '2026-03-15 10:00:00') AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT EXTRACT(DATE FROM TIMESTAMP '2026-03-15 10:00:00') AS v"
       - assert:
           exit_code: 0
           stdout:
@@ -204,14 +204,14 @@ scenarios:
     description: "Two more BigQuery scalars with straightforward SQLite equivalents (hex() and a self-comparison)."
     steps:
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT TO_HEX(b'ab') AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT TO_HEX(b'ab') AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
             equals: "6162"
       - run:
-          command: sqly --csv --dialect bigquery --sql "SELECT IS_NAN(1.0) AS v"
+          command: sqly --output-format csv --dialect bigquery --sql "SELECT IS_NAN(1.0) AS v"
       - assert:
           exit_code: 0
           stdout:

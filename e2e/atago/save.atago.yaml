@@ -63,7 +63,7 @@ scenarios:
       - run:
           command: sqly --sql "DELETE FROM u WHERE identifier > 1" u.csv --save --force
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM u" u.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM u" u.csv
       - assert:
           exit_code: 0
           stdout:
@@ -78,7 +78,7 @@ scenarios:
       - run:
           command: sqly --sql "UPDATE c SET first_name = 'GZ' WHERE identifier = 1" c.csv.gz --save --force
       - run:
-          command: sqly --csv --sql "SELECT first_name FROM c WHERE identifier = 1" c.csv.gz
+          command: sqly --output-format csv --sql "SELECT first_name FROM c WHERE identifier = 1" c.csv.gz
       - assert:
           exit_code: 0
           stdout:

@@ -34,9 +34,10 @@ func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
 		return err
 	}
 	w := bufio.NewWriter(f)
-	for _, v := range table.Records() {
-		for i, data := range v {
-			label := table.Header()[i]
+	for _, v := range table.Rows {
+		for i := range v.Len() {
+			data := v.At(i)
+			label := table.ColumnName(i)
 			if strings.ContainsAny(data, "\t\n\r") {
 				return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
 			}

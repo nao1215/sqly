@@ -313,6 +313,28 @@ func TestLoadFromCache_NoTables(t *testing.T) {
 	}
 }
 
+func TestLoadFromCache_RecreateExistingTableError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	source := covFsqlNewAdapter(t)
+	csv := covFsqlWriteCSV(t, "cache-source.csv", "id\n1\n")
+	if err := source.LoadFile(ctx, csv); err != nil {
+		t.Fatalf("source LoadFile: %v", err)
+	}
+	cachePath := filepath.Join(t.TempDir(), "cache.db")
+	if err := source.SnapshotToCache(ctx, cachePath); err != nil {
+		t.Fatalf("SnapshotToCache: %v", err)
+	}
+	target := covFsqlNewAdapter(t)
+	if err := target.LoadFile(ctx, csv); err != nil {
+		t.Fatalf("target LoadFile: %v", err)
+	}
+	if err := target.LoadFromCache(ctx, cachePath); err == nil || !strings.Contains(err.Error(), "recreate cached table") {
+		t.Fatalf("LoadFromCache error = %v, want recreate error", err)
+	}
+}
+
 // TestDumpACHFile_RoundTrip loads an ACH file and dumps it back out, asserting a
 // non-empty file is produced. It also checks the nil-DB guard.
 //
@@ -420,80 +442,6 @@ func TestSheetNames_NotExcel(t *testing.T) {
 	path := covFsqlWriteCSV(t, "not-excel.xlsx", "id,name\n1,alice\n")
 	if _, err := SheetNames(path); err == nil {
 		t.Fatal("SheetNames on non-Excel content = nil error, want error")
-	}
-}
-
-// TestReadDecompressed_Plain reads an uncompressed file verbatim.
-func TestReadDecompressed_Plain(t *testing.T) {
-	t.Parallel()
-
-	path := covFsqlWriteCSV(t, "plain.json", "[]")
-	data, err := readDecompressed(path)
-	if err != nil {
-		t.Fatalf("readDecompressed: %v", err)
-	}
-	if string(data) != "[]" {
-		t.Errorf("content = %q, want %q", string(data), "[]")
-	}
-}
-
-// TestReadDecompressed_Missing checks the error path when the file is absent.
-func TestReadDecompressed_Missing(t *testing.T) {
-	t.Parallel()
-
-	if _, err := readDecompressed(filepath.Join(t.TempDir(), "nope.json")); err == nil {
-		t.Fatal("readDecompressed on missing file = nil error, want error")
-	}
-}
-
-// TestEmptyJSONLikeTable_ReadError checks that a JSON/JSONL path that cannot be
-// read is reported as not-empty (so the caller lets filesql surface the real
-// error) rather than being misdetected as an empty table.
-func TestEmptyJSONLikeTable_ReadError(t *testing.T) {
-	t.Parallel()
-
-	for _, ext := range []string{".json", ".jsonl"} {
-		name, isEmpty := emptyJSONLikeTable(filepath.Join(t.TempDir(), "missing"+ext))
-		if isEmpty || name != "" {
-			t.Errorf("emptyJSONLikeTable(missing%s) = (%q, %v), want (\"\", false)", ext, name, isEmpty)
-		}
-	}
-}
-
-// TestEmptyJSONLikeTable_NonEmpty checks that a populated JSON array and a
-// populated JSONL file are not treated as empty tables.
-func TestEmptyJSONLikeTable_NonEmpty(t *testing.T) {
-	t.Parallel()
-
-	jsonPath := covFsqlWriteCSV(t, "full.json", `[{"a":1}]`)
-	if _, isEmpty := emptyJSONLikeTable(jsonPath); isEmpty {
-		t.Error("populated JSON array detected as empty")
-	}
-	jsonlPath := covFsqlWriteCSV(t, "full.jsonl", "{\"a\":1}\n")
-	if _, isEmpty := emptyJSONLikeTable(jsonlPath); isEmpty {
-		t.Error("populated JSONL detected as empty")
-	}
-	// A non-JSON extension is never an empty-JSON table.
-	if _, isEmpty := emptyJSONLikeTable(covFsqlWriteCSV(t, "data.csv", "id\n1\n")); isEmpty {
-		t.Error("csv detected as empty JSON table")
-	}
-}
-
-// TestCreateEmptyJSONTable_Error checks the error branch: a closed database makes
-// the CREATE/DROP statements fail.
-func TestCreateEmptyJSONTable_Error(t *testing.T) {
-	t.Parallel()
-
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	a := NewFileSQLAdapter(db)
-	_ = db.Close() // force subsequent statements to fail
-
-	if err := a.createEmptyJSONTable(context.Background(), "t"); err == nil {
-		t.Fatal("createEmptyJSONTable on closed DB = nil error, want error")
 	}
 }
 

@@ -1,6 +1,6 @@
 # Migrated from sqly's ShellSpec spec/cache_spec.sh (issue #284).
 # --cache snapshots imported tables to a SQLite file; a warm run reuses it,
-# changing the source invalidates it, --cache-clear rebuilds, and an unwritable
+# changing the source invalidates it, and an unwritable
 # cache path falls back to a cold import. Cold/warm runs are two run steps
 # sharing the scenario workdir (the cache file persists between them).
 # Run with: make test-e2e
@@ -53,20 +53,6 @@ scenarios:
           exit_code: 0
           stdout:
             contains: "4"
-          stderr:
-            not_contains: "cache: reused"
-
-  - name: rebuilds after --cache-clear
-    steps:
-      - fixture: *data
-      - run:
-          command: sqly --cache snap.cache --sql "SELECT COUNT(*) AS n FROM data" data.csv
-      - run:
-          command: sqly --cache snap.cache --cache-clear --sql "SELECT COUNT(*) AS n FROM data" data.csv
-      - assert:
-          exit_code: 0
-          stdout:
-            contains: "3"
           stderr:
             not_contains: "cache: reused"
 

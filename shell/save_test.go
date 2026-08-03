@@ -487,7 +487,7 @@ func TestWriteBack_OutputRejectsSourceAlias(t *testing.T) {
 	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
 	orig, _ := os.ReadFile(src) //nolint:gosec // test path
 
-	shell, cleanup, err := newShell(t, []string{"sqly", "--csv", "--sql", "SELECT * FROM user WHERE identifier=1", "--output", src, src})
+	shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT * FROM user WHERE identifier=1", "--output", src, src})
 	if err != nil {
 		t.Fatal(err)
 	}

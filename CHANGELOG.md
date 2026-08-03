@@ -2,6 +2,103 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+* Removed the standalone `--profile` and `--compare` workflows and their format/key/table flags. Use SQL for data-quality checks and table differences.
+* Removed the legacy output flags `--csv`/`-c`, `--tsv`/`-t`, `--ltsv`/`-l`, `--json`/`-j`, `--ndjson`/`-n`, `--excel`/`-e`, `--markdown`/`-m`, `--parquet`/`-p`, and `--vertical`. Use the single `--output-format FORMAT` option instead.
+* Removed `--json-typed` and `--ndjson-typed`, and the `.mode json-typed` / `.mode ndjson-typed` shell modes that went with them; `--output-format json` and `--output-format ndjson` preserve SQLite's native INTEGER/REAL/TEXT/NULL values. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are emitted as integer JSON numbers `1`/`0`, while TEXT values such as `"true"` remain strings. Zero-padded values remain strings.
+* Removed `--cache-clear`; cache invalidation is automatic from input path, size, and SHA-256 content hash.
+* Renamed malformed-row policy `fill` to `pad`. `pad` fills short CSV/TSV rows and rejects long rows instead of truncating them.
+
+### Migration Notes
+* Replace `--profile`/`--compare` invocations with explicit SQL queries.
+* Replace `--json-typed`/`--ndjson-typed` with `--output-format json`/`--output-format ndjson`.
+* Replace every removed output flag listed above with `--output-format FORMAT` (for example, `--csv` becomes `--output-format csv`).
+* Remove `--cache-clear`; edit the source and the content-hash key causes a cold import automatically.
+* Replace `--import-mode fill` and `.import-mode fill` with `pad`. Long rows now fail so their extra fields are not silently lost.
+
+### v1.0.0 CLI Surface
+The command surface below is what v1.0.0 commits to. Anything not listed is not part of the guarantee.
+
+* One option selects the output format: `--output-format table|csv|tsv|ltsv|excel|markdown|json|ndjson|parquet|vertical`.
+* Input: positional paths, `--stdin FORMAT`, `--stdin-name NAME`, `--sheet/-S`, `--encoding`, `--import-mode stop|skip|pad`, `--cache PATH`.
+* Query: `--sql/-s`, `--sql-file/-f`, `--dialect sqlite|mysql|postgresql|googlesql`, `--output/-o`.
+* Reports and write-back: `--inspect/-i`, `--inspect-sample`, `--save`, `--save-dir`, `--force`.
+* Meta: `--help/-h`, `--version/-v`.
+* Shell commands: `.cd`, `.clear`, `.describe`, `.dialect`, `.dump`, `.exit`, `.header`, `.help`, `.import`, `.import-mode`, `.ls`, `.mode`, `.pwd`, `.save`, `.schema`, `.tables`.
+* `sqly` has no subcommands. A positional `help` or `version` is rejected with a pointer to `--help` / `--version`.
+
+### Data Contract
+* JSON and NDJSON output preserves the value's SQLite type: INTEGER and REAL are JSON numbers, TEXT is a JSON string, and SQL NULL is JSON `null`, distinct from the empty string `""`. Text that looks like a number or a boolean stays text, so `"123"`, `"true"`, and `"00123"` are emitted as strings with their leading zeros intact. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are INTEGER `1`/`0`.
+* A cell's string form and its JSON form are derived from one stored value, so table, CSV, TSV, LTSV, Markdown, JSON, NDJSON, and Parquet output of the same result can no longer disagree with each other.
+
+### Maintenance
+* Multi-file imports now run as one SQLite transaction. If a later input fails, tables created or replaced by earlier inputs are rolled back while existing tables and views remain unchanged. The filesql dependency includes the caller-transaction loading API required to keep all supported formats in that transaction.
+* ACH and Fedwire write-back registries are published only after that transaction commits. A failed import — a bad input, a failed commit, or a rollback that itself failed — leaves no registry entry, so `.dump` can no longer be offered a file it would reconstruct from tables that were rolled away. When several inputs claim the same base name, publication follows input order, so the last one wins.
+* A transaction that fails to roll back now reports that failure alongside the error that caused the rollback, instead of discarding it. Both are reachable with `errors.Is` and `errors.As`. Commit, rollback, and their error handling live in one helper shared by the import path and the session query repository, so no call site carries its own cleanup rule.
+* A failed commit is reported as a failed commit and nothing else. `database/sql` ends a transaction when `Commit` is called, so the rollback that used to follow could only report `sql.ErrTxDone` — a second failure describing nothing the user could act on. Cancelling a query is likewise no longer reported as a broken transaction.
+* Cleanup failures are no longer lost when the operation they follow also failed. Detaching the import cache, closing a staging file, removing a temporary file, and closing an output file all report their failure alongside the original error, so "the export failed and a temporary file is still on disk" is not reported as though only the first happened. The rule lives in one place (`errors.Is(err, cleanup.ErrCleanup)` identifies it).
+* The import cache is detached even when the run was canceled. Cleanup used to reuse the canceled context, so every statement failed immediately and the cache stayed attached for the life of the process; the next cache load then failed with an "already in use" error that pointed at the wrong run.
+* The import cache is attached, read, copied, and detached on one reserved connection. SQLite's `ATTACH` is per-connection state while the session database is a pool, so the steps could land on different connections: the copy would fail with "no such database", or the detach would release a connection that had nothing attached while the real attachment stayed behind on another.
+* Restoring from the import cache is atomic. A failure part-way through — a name that collides with an existing table, a cancellation, a failed commit — used to leave the tables it had already created behind, and the cold-import fallback then collided with them. Either every table is restored or none is.
+* Updated the filesql dependency to v0.30.4. v0.30.2 stages ACH/Fedwire registry entries for publication after commit, rejects long rows under the `pad` policy instead of truncating them, and handles empty JSON/JSONL in the same streaming pass. v0.30.3 applies the same transaction and cleanup rules inside the loader: a failed rollback is reported rather than discarded, a load's transaction is ended exactly once, and a rollback reporting `sql.ErrTxDone` under a canceled context is treated as cancellation rather than a broken transaction. v0.30.4 extends that to the writers: closing a compressing writer, closing an XLSX load's insert statement, and removing an atomic write's staged file all report their failure instead of dropping it.
+* Synchronized the CLI, shell help, E2E specifications, website reference, and cookbook with the reduced surface.
+
+### Migration (Go API)
+CLI users are unaffected by everything in this section. It applies only to code importing `github.com/nao1215/sqly/domain/model`.
+
+Reading rows — the accessors no longer hand out the table's storage:
+
+```go
+// before
+for _, record := range table.Records() {
+    fmt.Println(record[0])
+}
+
+// after: same, but Records() is now a copy — fine, and safe to modify
+for _, record := range table.Records() {
+    fmt.Println(record[0])
+}
+
+// after: no copy, for walking a large result
+for _, row := range table.Rows {
+    fmt.Println(row.At(0))
+}
+```
+
+Building a query result — the setters are gone:
+
+```go
+// before
+t := model.NewTable("t", header, records)
+t.SetNulls(nulls)
+t.SetJSONValues(values)
+
+// after
+t, err := model.NewTableFromCells("t", header, [][]model.Cell{
+    {model.NewCell(int64(42)), model.NewTextCell("00123"), model.NullCell()},
+})
+```
+
+Inspecting errors — a failure may now carry a cleanup failure alongside its cause, so match on identity rather than on text:
+
+```go
+// before
+if strings.Contains(err.Error(), "rollback") { ... }
+
+// after
+if errors.Is(err, cleanup.ErrCleanup) { ... }
+```
+
+### Public API
+`domain/model` is importable, so these changes affect anyone using it as a library:
+* Added `model.Cell` (with `NewCell`, `NewTextCell`, `NullCell`, `IsNull`, `Value`, `String`), `model.NewTableFromCells`, and `model.ErrCellShapeMismatch`. A query result is now one value per cell rather than a display string plus parallel side-tables.
+* Removed `Table.SetNulls` and `Table.SetJSONValues`. They injected two more two-dimensional slices after construction, with no check that their shape matched the records, so a mismatch surfaced part-way through an already-written output stream. `NewTableFromCells` rejects a shape mismatch up front and copies what it is given, so a caller cannot mutate a Table after building it.
+* Removed `Table.SetJSONTyped` along with the typed-JSON flags.
+* No public accessor hands out storage a caller can write through. `Table.Records()` and `Table.Header()` return copies; `Table.Row` and `Table.Rows` return a `RecordView`, which reads but cannot write, so a large result is still walked without copying it. Previously any of them let one assignment make the same result print one value as CSV and another as JSON.
+* Added `model.RecordView` (`Len`, `At`, `AppendTo`, `Record`), `Table.Rows` (a range-over-func iterator), `Table.Row`, `Table.RowCount`, `Table.ValueAt`, `Table.ColumnCount`, `Table.ColumnName`, and `Table.Columns`. The zero-copy readers exist so making the copying accessors safe costs nothing on the output path.
+* `infrastructure.GenerateInsertStatement` takes a `model.RecordView` instead of a `model.Record`.
+* `Table.WithName` clones the header and the row slices, so renaming a column on one table cannot rename it on the other.
+
 ## [v0.31.0](https://github.com/nao1215/sqly/compare/v0.30.0...v0.31.0) (2026-07-30)
 
 ### New Features

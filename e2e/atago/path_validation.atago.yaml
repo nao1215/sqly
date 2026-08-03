@@ -20,7 +20,7 @@ scenarios:
             jenkins46,2
             grey07,3
       - run:
-          command: sqly --csv --sql "SELECT COUNT(*) AS c FROM user" a/b/c/d/e/f/g/h/i/j/k/user.csv
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM user" a/b/c/d/e/f/g/h/i/j/k/user.csv
       - assert:
           exit_code: 0
           stdout:

@@ -73,24 +73,7 @@ var (
 // is meaningless on its own and is rejected instead of silently ignored.
 var errForceWithoutSave = errors.New("--force has no effect without --save or --save-dir")
 
-// The compare sub-flags only shape --compare output, so each is rejected when set
-// without --compare (so it is not silently ignored) and when given an explicit
-// empty value (the "flag absent" sentinel).
+// errEmptyCache is returned when --cache is given an explicit empty value.
 var (
-	errCompareKeyWithoutCompare    = errors.New("--compare-key has no effect without --compare")
-	errCompareTablesWithoutCompare = errors.New("--compare-tables has no effect without --compare")
-	errCompareFormatWithoutCompare = errors.New("--compare-format has no effect without --compare")
-	errEmptyCompareKey             = errors.New("--compare-key requires a non-empty column name")
-	errEmptyCompareTables          = errors.New(`--compare-tables requires a non-empty "left,right" value`)
-)
-
-// errProfileFormatWithoutProfile is returned when --profile-format is set without
-// --profile, so the dependent flag is not silently ignored.
-var errProfileFormatWithoutProfile = errors.New("--profile-format has no effect without --profile")
-
-// errEmptyCache is returned when --cache is given an explicit empty value, and
-// errCacheClearWithoutCache when --cache-clear is set without --cache.
-var (
-	errEmptyCache             = errors.New("--cache requires a non-empty cache file path")
-	errCacheClearWithoutCache = errors.New("--cache-clear has no effect without --cache")
+	errEmptyCache = errors.New("--cache requires a non-empty cache file path")
 )

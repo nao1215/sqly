@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -10,6 +12,163 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 )
+
+func TestSQLite3RepositoryQueryPreservesSQLTypesForJSON(t *testing.T) {
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	repo := NewSQLite3Repository(memoryDB)
+	table, err := repo.Query(context.Background(), `SELECT 42 AS integer_value, 1.5 AS real_value, '123' AS text_number, 'true' AS text_bool, 'false' AS text_false, '00123' AS padded, NULL AS null_value, '' AS empty_value, TRUE AS true_literal, FALSE AS false_literal, 1 = 1 AS true_expression, 2 > 3 AS false_expression`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertJSONRow := func(t *testing.T, row map[string]any) {
+		t.Helper()
+		if got, ok := row["integer_value"].(float64); !ok || got != 42 {
+			t.Errorf("integer_value = %#v (%T), want JSON number 42", row["integer_value"], row["integer_value"])
+		}
+		if got, ok := row["real_value"].(float64); !ok || got != 1.5 {
+			t.Errorf("real_value = %#v (%T), want JSON number 1.5", row["real_value"], row["real_value"])
+		}
+		for _, name := range []string{"text_number", "text_bool", "text_false", "padded", "empty_value"} {
+			if _, ok := row[name].(string); !ok {
+				t.Errorf("%s = %#v (%T), want JSON string", name, row[name], row[name])
+			}
+		}
+		if row["text_number"] != "123" || row["text_bool"] != "true" || row["text_false"] != "false" || row["padded"] != "00123" {
+			t.Errorf("text values changed: %#v", row)
+		}
+		if row["null_value"] != nil {
+			t.Errorf("null_value = %#v, want nil", row["null_value"])
+		}
+		for _, name := range []string{"true_literal", "false_literal", "true_expression", "false_expression"} {
+			if _, ok := row[name].(float64); !ok {
+				t.Errorf("%s = %#v (%T), want SQLite integer JSON number", name, row[name], row[name])
+			}
+		}
+	}
+
+	t.Run("json", func(t *testing.T) {
+		var out bytes.Buffer
+		if err := table.Print(&out, model.PrintModeJSON); err != nil {
+			t.Fatal(err)
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("decoded %d rows, want 1", len(rows))
+		}
+		assertJSONRow(t, rows[0])
+	})
+
+	t.Run("ndjson", func(t *testing.T) {
+		var out bytes.Buffer
+		if err := table.Print(&out, model.PrintModeNDJSON); err != nil {
+			t.Fatal(err)
+		}
+		var row map[string]any
+		if err := json.Unmarshal(out.Bytes(), &row); err != nil {
+			t.Fatal(err)
+		}
+		assertJSONRow(t, row)
+	})
+}
+
+func TestSQLite3RepositoryListPreservesQueryMetadata(t *testing.T) {
+	t.Parallel()
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	db := (*sql.DB)(memoryDB)
+	if _, err := db.ExecContext(context.Background(), `CREATE TABLE typed_values (integer_value INTEGER, real_value REAL, text_value TEXT, null_value TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO typed_values VALUES (42, 1.5, '123', NULL)`); err != nil {
+		t.Fatal(err)
+	}
+
+	table, err := NewSQLite3Repository(memoryDB).List(context.Background(), "typed_values")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table.Name() != "typed_values" {
+		t.Fatalf("table name = %q, want typed_values", table.Name())
+	}
+	var rows []map[string]any
+	var out bytes.Buffer
+	if err := table.Print(&out, model.PrintModeJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("decoded %d rows, want 1", len(rows))
+	}
+	if _, ok := rows[0]["integer_value"].(float64); !ok {
+		t.Errorf("integer_value = %#v (%T), want JSON number", rows[0]["integer_value"], rows[0]["integer_value"])
+	}
+	if _, ok := rows[0]["real_value"].(float64); !ok {
+		t.Errorf("real_value = %#v (%T), want JSON number", rows[0]["real_value"], rows[0]["real_value"])
+	}
+	if rows[0]["text_value"] != "123" {
+		t.Errorf("text_value = %#v, want string 123", rows[0]["text_value"])
+	}
+	if rows[0]["null_value"] != nil {
+		t.Errorf("null_value = %#v, want JSON null", rows[0]["null_value"])
+	}
+}
+
+// TestQueryStreamCellSemantics pins the contract QueryStream shares with Query:
+// both derive a row's strings and its NULL flags from model.Cell, so a streaming
+// consumer sees exactly the values a materialized *model.Table would show.
+func TestQueryStreamCellSemantics(t *testing.T) {
+	t.Parallel()
+
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	r := NewSQLite3Repository(memoryDB)
+	ctx := t.Context()
+
+	const query = `SELECT CAST(42 AS INTEGER) AS i, CAST(1.5 AS REAL) AS r, '00123' AS t, '' AS empty, NULL AS n`
+	var gotRecord []string
+	var gotNulls []bool
+	if err := r.QueryStream(ctx, query, func(record []string, nulls []bool) error {
+		gotRecord = append([]string(nil), record...)
+		gotNulls = append([]bool(nil), nulls...)
+		return nil
+	}); err != nil {
+		t.Fatalf("QueryStream: %v", err)
+	}
+
+	wantRecord := []string{"42", "1.5", "00123", "", ""}
+	for i, want := range wantRecord {
+		if gotRecord[i] != want {
+			t.Errorf("record[%d] = %q, want %q", i, gotRecord[i], want)
+		}
+	}
+	// The empty-string column and the NULL column render identically, so only the
+	// NULL flag separates them; asserting both together is what catches a
+	// regression that collapses one into the other.
+	wantNulls := []bool{false, false, false, false, true}
+	for i, want := range wantNulls {
+		if gotNulls[i] != want {
+			t.Errorf("nulls[%d] = %v, want %v", i, gotNulls[i], want)
+		}
+	}
+}
 
 func TestSqlite3RepositoryCreateTable(t *testing.T) {
 	t.Run("Create table", func(t *testing.T) {
@@ -313,7 +472,7 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 		r := NewSQLite3Repository(memoryDB)
 
 		// Create "zebra" before "ant" so creation order and alphabetical order
-		// disagree; --compare relies on TablesName preserving creation (import) order.
+		// disagree; TablesName preserves creation (import) order.
 		for _, name := range []string{"zebra", "ant"} {
 			table := model.NewTable(name, model.Header{"id"}, []model.Record{{"1"}})
 			if err := r.CreateTable(context.Background(), table); err != nil {

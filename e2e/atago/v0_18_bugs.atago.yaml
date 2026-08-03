@@ -51,14 +51,14 @@ scenarios:
           stderr:
             contains: "--stdin"
 
-  - name: rejects conflicting output mode flags
+  - name: rejects an invalid output format
     steps:
       - run:
-          command: sqly --csv --json --sql "SELECT 1 AS x"
+          command: sqly --output-format unsupported --sql "SELECT 1 AS x"
       - assert:
           exit_code: 1
           stderr:
-            contains: conflicting
+            contains: "invalid output format"
 
   - name: prints rows for a DML RETURNING statement
     steps:
@@ -68,7 +68,7 @@ scenarios:
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
       - run:
-          command: sqly --csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name" u.csv
+          command: sqly --output-format csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier, first_name" u.csv
       - assert:
           exit_code: 0
           stdout:
@@ -94,7 +94,7 @@ scenarios:
     steps:
       - fixture: *u
       - run:
-          command: sqly --csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier" --output out.csv u.csv
+          command: sqly --output-format csv --sql "UPDATE u SET first_name='X' WHERE identifier=1 RETURNING identifier" --output out.csv u.csv
       - assert:
           exit_code: 0
           file:
@@ -124,7 +124,7 @@ scenarios:
           file: q.sql
           base64: "77u/U0VMRUNUIDIgQVMgeTsK"
       - run:
-          command: sqly --csv --sql-file q.sql user.csv
+          command: sqly --output-format csv --sql-file q.sql user.csv
       - assert:
           exit_code: 0
           stdout:
@@ -134,7 +134,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --csv user.csv
+          command: sqly --output-format csv user.csv
           stdin: "﻿SELECT 7 AS z;\n"
       - assert:
           exit_code: 0
@@ -229,7 +229,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --csv --sql "SELECT * FROM user WHERE identifier=1" --output user.csv user.csv
+          command: sqly --output-format csv --sql "SELECT * FROM user WHERE identifier=1" --output user.csv user.csv
       - assert:
           exit_code: 1
           stderr:
@@ -283,7 +283,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --csv --sql "SELECT * FROM user WHERE identifier=1" --save --force user.csv
+          command: sqly --output-format csv --sql "SELECT * FROM user WHERE identifier=1" --save --force user.csv
       - assert:
           exit_code: 0
           stdout:

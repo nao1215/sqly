@@ -1,5 +1,5 @@
 # Setting a mode to the value it already has is a no-op, not a failure. It used
-# to return an error, which in a script is fatal: `sqly --csv data.csv` fed a
+# to return an error, which in a script is fatal: `sqly --output-format csv data.csv` fed a
 # batch that opens with `.mode csv` died on the first line before running
 # anything, and so did any script that set a mode defensively before using it.
 # Run with: make test-e2e
@@ -47,7 +47,7 @@ scenarios:
     steps:
       - fixture: *rows
       - run:
-          command: sqly --csv t.csv
+          command: sqly --output-format csv t.csv
           stdin: ".mode csv\nSELECT v FROM t;\n"
       - assert:
           exit_code: 0
@@ -77,7 +77,7 @@ scenarios:
             1,a
             2,b,extra
       - run:
-          command: sqly --csv --import-mode skip ragged.csv
+          command: sqly --output-format csv --import-mode skip ragged.csv
           stdin: ".import-mode skip\nSELECT COUNT(*) AS c FROM ragged;\n"
       - assert:
           exit_code: 0

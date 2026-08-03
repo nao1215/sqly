@@ -86,12 +86,11 @@ The [cookbook](https://nao1215.github.io/sqly/cookbook/) is the fastest way in. 
 sqly --inspect user.csv
 
 # Read a row too wide to fit a terminal: one column per line, in a block per record
-sqly --vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
+sqly --output-format vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
 
-# Convert: csv -> json, excel, parquet, markdown, gzipped csv
-sqly --json    --output user.json    --sql "SELECT * FROM user" user.csv
-sqly --excel   --output user.xlsx    --sql "SELECT * FROM user" user.csv
-sqly --parquet --output user.parquet --sql "SELECT * FROM user" user.csv
+# Convert: the destination's extension picks the format
+sqly --output-format json  --output user.json  --sql "SELECT * FROM user" user.csv
+sqly --output-format excel --output user.xlsx  --sql "SELECT * FROM user" user.csv
 
 # Join two files, of any format, in one query
 sqly --sql "SELECT u.user_name, i.position
@@ -106,17 +105,14 @@ sqly --sql "SELECT * FROM user" https://example.com/user.csv
 cat user.csv | sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
 
 # Pipe the result on: ndjson for jq, tsv for cut/awk/sort
-sqly --ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
-sqly --tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+sqly --output-format ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+
+# Reuse a large import: --cache skips re-parsing while the inputs are unchanged
+sqly --cache ./big.cache --sql "SELECT COUNT(*) FROM events" events.csv
 
 # Rank with a window function
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
-
-# Find nulls, blanks, and duplicates
-sqly --profile --profile-format text user.csv
-
-# Diff two files by key
-sqly --compare --compare-key id before.csv after.csv
 
 # Edit a file in place
 sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save --force user.csv
@@ -185,24 +181,9 @@ sqly runs each statement in its own transaction on an in-memory database, so a f
 
 ## Benchmark
 
-`make bench` measures one full run (import the CSV into the in-memory DB, then run the query) over `testdata/benchmark/customers100000.csv` (100,000 rows, 12 columns):
-
-| Records | Columns | Time per op | Memory per op | Allocations per op |
-|--------:|--------:|------------:|--------------:|-------------------:|
-| 100,000 | 12 | 515 ms | 161 MB | 2.82M |
-
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.30.0. The comparison below comes from the same run, so both are refreshed together rather than at each release.
-
-The same query on the same file (top 10 countries by row count), best of 5 end-to-end runs:
-
-| Tool | Time | Reads |
-|:--|--:|:--|
-| [trdsql](https://github.com/noborus/trdsql) | 0.32s | CSV, LTSV, JSON, TBLN |
-| [csvq](https://github.com/mithrandie/csvq) | 0.34s | CSV, TSV, fixed-length, JSON |
-| sqly | 0.49s | CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire (+ compression) |
-| [textql](https://github.com/dinedal/textql) | 0.52s | CSV, TSV |
-
-sqly stays in the same sub-second range as the CSV-focused tools while reading the widest set of formats, shipping an interactive shell, and building as a pure-Go binary with no CGO.
+Importing 100,000 rows and querying them takes about half a second, which is the
+same range as the CSV-focused tools. The numbers, the comparison, and how they
+were measured are on the [about page](https://nao1215.github.io/sqly/about/#benchmark).
 
 ## Contributing
 

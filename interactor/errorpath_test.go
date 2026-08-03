@@ -221,7 +221,7 @@ func TestDumpTable_PreservesExistingFileOnFailure(t *testing.T) {
 
 		// Create an existing file with content
 		originalContent := []byte("original data")
-		if err := os.WriteFile(outPath, originalContent, 0o600); err != nil { //nolint:gosec // test file with controlled path
+		if err := os.WriteFile(outPath, originalContent, 0o600); err != nil {
 			t.Fatalf("failed to write original file: %v", err)
 		}
 
@@ -258,7 +258,7 @@ func TestDumpTable_PreservesFilePermissions(t *testing.T) {
 
 		// Create file with custom permission (0o600)
 		const customPerm = os.FileMode(0o600)
-		if err := os.WriteFile(outPath, []byte("old content"), customPerm); err != nil { //nolint:gosec // test file with controlled path
+		if err := os.WriteFile(outPath, []byte("old content"), customPerm); err != nil {
 			t.Fatalf("failed to write original file: %v", err)
 		}
 

@@ -31,8 +31,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --csv option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--csv"})
+	t.Run("user set --output-format csv option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -42,8 +42,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --excel option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--excel"})
+	t.Run("user set --output-format excel option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "excel"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,8 +53,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --tsv option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--tsv"})
+	t.Run("user set --output-format tsv option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "tsv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -64,8 +64,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --ltsv option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--ltsv"})
+	t.Run("user set --output-format ltsv option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "ltsv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,8 +75,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --markdown option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--markdown"})
+	t.Run("user set --output-format markdown option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "markdown"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,8 +86,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --excel option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--excel"})
+	t.Run("user set --output-format excel option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "excel"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,8 +97,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --json option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--json"})
+	t.Run("user set --output-format json option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "json"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,109 +108,14 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("user set --ndjson option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--ndjson"})
+	t.Run("user set --output-format ndjson option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "ndjson"})
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		if arg.Output.Mode != model.PrintModeNDJSON {
 			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeNDJSON)
-		}
-	})
-
-	t.Run("user set --json-typed option selects json mode with the typed contract", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--json-typed"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.Output.Mode != model.PrintModeJSON {
-			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeJSON)
-		}
-		if !arg.Output.JSONTyped {
-			t.Error("expected Output.JSONTyped to be true for --json-typed")
-		}
-	})
-
-	t.Run("user set --ndjson-typed option selects ndjson mode with the typed contract", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--ndjson-typed"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.Output.Mode != model.PrintModeNDJSON {
-			t.Errorf("mismatch got=%v, want=%v", arg.Output.Mode, model.PrintModeNDJSON)
-		}
-		if !arg.Output.JSONTyped {
-			t.Error("expected Output.JSONTyped to be true for --ndjson-typed")
-		}
-	})
-
-	t.Run("--json and --json-typed together are rejected as conflicting", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--json", "--json-typed"}); err == nil {
-			t.Error("expected conflicting output mode flags error, got nil")
-		}
-	})
-
-	t.Run("--compare sets the flag and accepts its sub-flags", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--compare", "--compare-key", "id", "--compare-tables", "a,b", "--compare-format", "text", "a.csv", "b.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !arg.CompareFlag {
-			t.Error("expected CompareFlag to be true")
-		}
-		if arg.CompareKey != "id" || arg.CompareTables != "a,b" || arg.CompareFormat != "text" {
-			t.Errorf("compare flags = %q/%q/%q, want id/a,b/text", arg.CompareKey, arg.CompareTables, arg.CompareFormat)
-		}
-	})
-
-	t.Run("compare sub-flags without --compare are rejected", func(t *testing.T) {
-		for _, a := range [][]string{
-			{"sqly", "--compare-key", "id"},
-			{"sqly", "--compare-tables", "a,b"},
-			{"sqly", "--compare-format", "text"},
-		} {
-			if _, err := NewArg(a); err == nil {
-				t.Errorf("expected error for %v without --compare", a)
-			}
-		}
-	})
-
-	t.Run("an invalid --compare-format is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--compare", "--compare-format", "yaml"}); err == nil {
-			t.Error("expected an error for an invalid --compare-format")
-		}
-	})
-
-	t.Run("--compare-format defaults to json", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--compare", "a.csv", "b.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if arg.CompareFormat != "json" {
-			t.Errorf("CompareFormat = %q, want json", arg.CompareFormat)
-		}
-	})
-
-	t.Run("--profile sets the flag and defaults the format to json", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--profile", "a.csv"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !arg.ProfileFlag || arg.ProfileFormat != "json" {
-			t.Errorf("ProfileFlag=%v ProfileFormat=%q, want true/json", arg.ProfileFlag, arg.ProfileFormat)
-		}
-	})
-
-	t.Run("--profile-format without --profile is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--profile-format", "text"}); err == nil {
-			t.Error("expected an error for --profile-format without --profile")
-		}
-	})
-
-	t.Run("an invalid --profile-format is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--profile", "--profile-format", "yaml"}); err == nil {
-			t.Error("expected an error for an invalid --profile-format")
 		}
 	})
 
@@ -230,14 +135,8 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("--cache-clear without --cache is rejected", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--cache-clear", "data.csv"}); err == nil {
-			t.Error("expected an error for --cache-clear without --cache")
-		}
-	})
-
-	t.Run("user set --parquet option", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--parquet"})
+	t.Run("user set --output-format parquet option", func(t *testing.T) {
+		arg, err := NewArg([]string{"sqly", "--output-format", "parquet"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -285,7 +184,7 @@ func TestNewArg(t *testing.T) {
 	})
 
 	t.Run("output-mode flag after file path sets mode, not an import path", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM user", "testdata/user.csv", "--csv"})
+		arg, err := NewArg([]string{"sqly", "--sql", "SELECT * FROM user", "testdata/user.csv", "--output-format", "csv"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -298,7 +197,7 @@ func TestNewArg(t *testing.T) {
 	})
 
 	t.Run("flags interspersed among file paths are not imported as paths", func(t *testing.T) {
-		arg, err := NewArg([]string{"sqly", "testdata/user.csv", "--json", "testdata/identifier.csv", "--sql", "SELECT 1"})
+		arg, err := NewArg([]string{"sqly", "testdata/user.csv", "--output-format", "json", "testdata/identifier.csv", "--sql", "SELECT 1"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -412,21 +311,35 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("conflicting output mode flags are rejected", func(t *testing.T) {
-		for _, args := range [][]string{
-			{"sqly", "--csv", "--json", "--sql", "SELECT 1 AS x"},
-			{"sqly", "--tsv", "--json", "--sql", "SELECT 1 AS x"},
-			{"sqly", "--csv", "--tsv", "--ltsv"},
-		} {
-			if _, err := NewArg(args); err == nil {
-				t.Errorf("NewArg(%v) = nil error, want a conflict error", args[1:])
-			}
+	t.Run("invalid output format is rejected", func(t *testing.T) {
+		if _, err := NewArg([]string{"sqly", "--output-format", "yaml"}); err == nil {
+			t.Fatal("NewArg accepted unsupported output format yaml")
 		}
 	})
 
-	t.Run("a single output mode flag is accepted", func(t *testing.T) {
-		if _, err := NewArg([]string{"sqly", "--json", "--sql", "SELECT 1 AS x"}); err != nil {
-			t.Errorf("NewArg with a single output mode flag returned an error: %v", err)
+	t.Run("legacy individual output flags are rejected", func(t *testing.T) {
+		legacyFlags := []string{
+			"--csv", "--tsv", "--ltsv", "--json", "--ndjson", "--excel", "--markdown", "--parquet", "--vertical",
+			"-c", "-t", "-l", "-j", "-n", "-e", "-m", "-p",
+		}
+		for _, legacyFlag := range legacyFlags {
+			t.Run(legacyFlag, func(t *testing.T) {
+				_, err := NewArg([]string{"sqly", legacyFlag})
+				if err == nil {
+					t.Fatalf("NewArg accepted removed output flag %s", legacyFlag)
+				}
+				if !strings.Contains(err.Error(), "unknown") {
+					t.Errorf("error for %s = %v, want unknown flag error", legacyFlag, err)
+				}
+			})
+		}
+
+		arg, err := NewArg([]string{"sqly", "--output-format", "csv"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(arg.Usage, "--output-format string") {
+			t.Errorf("usage does not explain the replacement --output-format option")
 		}
 	})
 
@@ -483,7 +396,7 @@ func TestNewArg(t *testing.T) {
 		}{
 			{"empty argument", []string{}},
 			{"unknown flag", []string{"sqly", "--no-such-flag"}},
-			{"conflicting output modes", []string{"sqly", "--csv", "--json"}},
+			{"invalid output format", []string{"sqly", "--output-format", "yaml"}},
 			{"explicit empty --sheet value", []string{"sqly", "--sheet", ""}},
 		}
 		for _, tc := range cases {
@@ -501,7 +414,7 @@ func TestNewArg(t *testing.T) {
 		}
 	})
 
-	t.Run("--import-mode defaults to stop and parses stop/skip/fill", func(t *testing.T) {
+	t.Run("--import-mode defaults to stop and parses stop/skip/pad", func(t *testing.T) {
 		t.Parallel()
 		cases := []struct {
 			args []string
@@ -510,7 +423,7 @@ func TestNewArg(t *testing.T) {
 			{[]string{"sqly"}, model.MalformedRowStop},
 			{[]string{"sqly", "--import-mode", "stop"}, model.MalformedRowStop},
 			{[]string{"sqly", "--import-mode", "skip"}, model.MalformedRowSkip},
-			{[]string{"sqly", "--import-mode", "fill"}, model.MalformedRowFill},
+			{[]string{"sqly", "--import-mode", "pad"}, model.MalformedRowPad},
 		}
 		for _, tc := range cases {
 			arg, err := NewArg(tc.args)
@@ -595,6 +508,37 @@ func TestNewArg(t *testing.T) {
 			t.Fatalf("error = %v, want it to mention the unknown dialect", err)
 		}
 	})
+}
+
+func TestNewArgOutputFormatChoices(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		mode model.PrintMode
+	}{
+		{"table", model.PrintModeTable},
+		{"csv", model.PrintModeCSV},
+		{"tsv", model.PrintModeTSV},
+		{"ltsv", model.PrintModeLTSV},
+		{"excel", model.PrintModeExcel},
+		{"markdown", model.PrintModeMarkdownTable},
+		{"json", model.PrintModeJSON},
+		{"ndjson", model.PrintModeNDJSON},
+		{"parquet", model.PrintModeParquet},
+		{"vertical", model.PrintModeVertical},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			arg, err := NewArg([]string{"sqly", "--output-format", tc.name})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if arg.Output.Mode != tc.mode {
+				t.Errorf("output mode = %v, want %v", arg.Output.Mode, tc.mode)
+			}
+		})
+	}
 }
 
 func TestUsage(t *testing.T) {

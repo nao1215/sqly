@@ -10,12 +10,18 @@ import (
 type TextEncoding string
 
 const (
-	TextEncodingUTF8      TextEncoding = "utf-8"
-	TextEncodingShiftJIS  TextEncoding = "shift-jis"
-	TextEncodingEUCJP     TextEncoding = "euc-jp"
+	// TextEncodingUTF8 selects UTF-8 input.
+	TextEncodingUTF8 TextEncoding = "utf-8"
+	// TextEncodingShiftJIS selects Shift-JIS input.
+	TextEncodingShiftJIS TextEncoding = "shift-jis"
+	// TextEncodingEUCJP selects EUC-JP input.
+	TextEncodingEUCJP TextEncoding = "euc-jp"
+	// TextEncodingISO2022JP selects ISO-2022-JP input.
 	TextEncodingISO2022JP TextEncoding = "iso-2022-jp"
-	TextEncodingUTF16LE   TextEncoding = "utf-16le"
-	TextEncodingUTF16BE   TextEncoding = "utf-16be"
+	// TextEncodingUTF16LE selects little-endian UTF-16 input.
+	TextEncodingUTF16LE TextEncoding = "utf-16le"
+	// TextEncodingUTF16BE selects big-endian UTF-16 input.
+	TextEncodingUTF16BE TextEncoding = "utf-16be"
 )
 
 const textEncodingHelp = "utf-8|shift-jis|euc-jp|iso-2022-jp|utf-16le|utf-16be"
@@ -43,17 +49,17 @@ func (e TextEncoding) String() string {
 // form. Common aliases are accepted so flags and shell commands stay ergonomic.
 func ParseTextEncoding(name string) (TextEncoding, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "utf-8", "utf8":
+	case string(TextEncodingUTF8), "utf8":
 		return TextEncodingUTF8, nil
-	case "shift-jis", "shift_jis", "shiftjis", "sjis", "cp932", "ms932", "windows-31j", "windows31j":
+	case string(TextEncodingShiftJIS), "shift_jis", "shiftjis", "sjis", "cp932", "ms932", "windows-31j", "windows31j":
 		return TextEncodingShiftJIS, nil
-	case "euc-jp", "eucjp":
+	case string(TextEncodingEUCJP), "eucjp":
 		return TextEncodingEUCJP, nil
-	case "iso-2022-jp", "iso2022jp", "jis":
+	case string(TextEncodingISO2022JP), "iso2022jp", "jis":
 		return TextEncodingISO2022JP, nil
-	case "utf-16le", "utf16le":
+	case string(TextEncodingUTF16LE), "utf16le":
 		return TextEncodingUTF16LE, nil
-	case "utf-16be", "utf16be":
+	case string(TextEncodingUTF16BE), "utf16be":
 		return TextEncodingUTF16BE, nil
 	default:
 		return TextEncodingUTF8, fmt.Errorf("invalid text encoding %q: want %s", name, textEncodingHelp)

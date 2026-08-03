@@ -23,59 +23,55 @@ func NewSQLite3Repository(db config.MemoryDB) repository.SQLite3Repository {
 	return &sqlite3Repository{db: db}
 }
 
+// inTx runs fn inside a transaction on the session database, delegating the
+// commit, the rollback, and the reporting of a cleanup failure to the single
+// implementation in the infrastructure package. Every method here used to spell
+// that out itself as a deferred rollback whose error was discarded, which meant
+// eight places could drift apart and none of them could report a rollback that
+// failed. The success path commits and never rolls back afterwards, so a
+// sql.ErrTxDone from a rollback is a real defect rather than the expected
+// no-op it used to be.
+func (r *sqlite3Repository) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	_, err := infra.WithTransaction(ctx, infra.SQLTxBeginner{DB: r.db}, fn)
+	return err
+}
+
 // CreateTable create a DB table with columns given as model.Table
 func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) error {
 	if err := t.Valid(); err != nil {
 		return err
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
+	return r.inTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
 		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	_, err = tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
+	})
 }
 
 // TablesName return all table name in import order.
 // Internal tables (sqlite_* and query_result_*) are excluded from the result.
 // Rows are ordered by sqlite_master.rowid, which is assigned in CREATE order, so
-// the result follows the order the source files were imported. Callers such as
-// --compare rely on this to keep left/right matching the CLI input order.
+// the result follows the order the source files were imported.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	rows, err := tx.QueryContext(ctx,
-		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' ORDER BY rowid")
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
 	tables := []*model.Table{}
-	var name string
-	for rows.Next() {
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
+	err := r.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx,
+			"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' ORDER BY rowid")
+		if err != nil {
+			return err
 		}
-		tables = append(tables, model.NewTable(name, model.Header{}, []model.Record{}))
-	}
+		defer func() { _ = rows.Close() }()
 
-	err = rows.Err()
+		var name string
+		for rows.Next() {
+			if err := rows.Scan(&name); err != nil {
+				return err
+			}
+			tables = append(tables, model.NewTable(name, model.Header{}, []model.Record{}))
+		}
+		return rows.Err()
+	})
 	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return tables, nil
@@ -93,36 +89,31 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 // main object and a same-named temp object instead of collapsing them. UNION ALL
 // (not UNION) keeps both rows of such a collision.
 func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	const query = "SELECT name, 'main' AS schema_name FROM sqlite_master " +
 		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' " +
 		"UNION ALL " +
 		"SELECT name, 'temp' AS schema_name FROM sqlite_temp_master " +
 		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%' " +
 		"ORDER BY name"
-	rows, err := tx.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
 
 	tables := []*model.Table{}
-	var name, schemaName string
-	for rows.Next() {
-		if err := rows.Scan(&name, &schemaName); err != nil {
-			return nil, err
+	err := r.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, query)
+		if err != nil {
+			return err
 		}
-		tables = append(tables, model.NewTable(name, model.Header{schemaName}, []model.Record{}))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
+		defer func() { _ = rows.Close() }()
+
+		var name, schemaName string
+		for rows.Next() {
+			if err := rows.Scan(&name, &schemaName); err != nil {
+				return err
+			}
+			tables = append(tables, model.NewTable(name, model.Header{schemaName}, []model.Record{}))
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		return nil, err
 	}
 	return tables, nil
@@ -134,18 +125,14 @@ func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
 		return err
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	for _, v := range t.Records() {
-		if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
-			return err
+	return r.inTx(ctx, func(tx *sql.Tx) error {
+		for _, v := range t.Rows {
+			if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
+				return err
+			}
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
 
 // List get records in the specified table
@@ -158,7 +145,7 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 	if err != nil {
 		return nil, err
 	}
-	return model.NewTable(tableName, table.Header(), table.Records()), nil
+	return table.WithName(tableName), nil
 }
 
 // Header get table header name. The result is re-wrapped with the requested table
@@ -173,7 +160,7 @@ func (r *sqlite3Repository) Header(ctx context.Context, tableName string) (*mode
 	if err != nil {
 		return nil, err
 	}
-	return model.NewTable(tableName, table.Header(), table.Records()), nil
+	return table.WithName(tableName), nil
 }
 
 // resolveTableRef returns the quoted SQL reference a helper command should query
@@ -196,139 +183,119 @@ func (r *sqlite3Repository) resolveTableRef(ctx context.Context, tableName strin
 // objectExists reports whether a table or view whose name is exactly name exists
 // in either the temp or main schema.
 func (r *sqlite3Repository) objectExists(ctx context.Context, name string) (bool, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	const query = "SELECT 1 FROM sqlite_temp_master WHERE name = ? AND type IN ('table', 'view') " +
 		"UNION ALL SELECT 1 FROM sqlite_master WHERE name = ? AND type IN ('table', 'view') LIMIT 1"
-	var dummy int
-	err = tx.QueryRowContext(ctx, query, name, name).Scan(&dummy)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
+
+	exists := false
+	err := r.inTx(ctx, func(tx *sql.Tx) error {
+		var dummy int
+		err := tx.QueryRowContext(ctx, query, name, name).Scan(&dummy)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		exists = true
+		return nil
+	})
 	if err != nil {
 		return false, err
 	}
-	return true, tx.Commit()
+	return exists, nil
 }
 
 // Query execute "SELECT" or "EXPLAIN" query
 func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Table, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
+	var header []string
+	// Each row is kept as the driver's native cells. model.Cell derives the
+	// display string from that same value, so the strings the table and CSV
+	// formats print and the scalars the JSON formats emit cannot disagree, and a
+	// SQL NULL stays distinguishable from an empty string.
+	cells := [][]model.Cell{}
 
-	rows, err := tx.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	header, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	if len(header) == 0 {
-		return nil, repository.ErrNoRows
-	}
-
-	scanDest := make([]any, len(header))
-	rawResult := make([][]byte, len(header))
-	for i := range header {
-		scanDest[i] = &rawResult[i]
-	}
-
-	records := []model.Record{}
-	// nulls tracks which cells were SQL NULL. With a *[]byte scan target a NULL
-	// yields a nil slice, while an empty string yields a non-nil empty slice, so
-	// the two are distinguishable here even though both render as "".
-	nulls := [][]bool{}
-	for rows.Next() {
-		result := make([]string, len(header))
-		rowNulls := make([]bool, len(header))
-		err := rows.Scan(scanDest...)
+	err := r.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, query)
 		if err != nil {
-			return nil, err
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+
+		header, err = rows.Columns()
+		if err != nil {
+			return err
+		}
+		if len(header) == 0 {
+			return repository.ErrNoRows
 		}
 
-		for i, raw := range rawResult {
-			if raw == nil {
-				rowNulls[i] = true
-				continue
-			}
-			result[i] = string(raw)
+		scanDest := make([]any, len(header))
+		values := make([]any, len(header))
+		for i := range header {
+			scanDest[i] = &values[i]
 		}
-		records = append(records, result)
-		nulls = append(nulls, rowNulls)
-	}
-	if err = rows.Err(); err != nil {
+
+		for rows.Next() {
+			if err := rows.Scan(scanDest...); err != nil {
+				return err
+			}
+			row := make([]model.Cell, len(header))
+			for i, value := range values {
+				row[i] = model.NewCell(value)
+			}
+			cells = append(cells, row)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	table := model.NewTable(extractTableName(query), header, records)
-	table.SetNulls(nulls)
-	return table, nil
+	return model.NewTableFromCells(extractTableName(query), header, cells)
 }
 
 // QueryStream executes a read query and invokes fn once per result row, scanning
 // rows one at a time so a caller can aggregate without holding the whole result
 // set in memory. Each call gets the row's cell strings and a per-cell SQL NULL
-// flag (distinguished the same way Query does, via a *[]byte scan target).
+// flag (distinguished the same way Query does, via the driver's native value).
 func (r *sqlite3Repository) QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	rows, err := tx.QueryContext(ctx, query)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-
-	header, err := rows.Columns()
-	if err != nil {
-		return err
-	}
-	if len(header) == 0 {
-		return repository.ErrNoRows
-	}
-
-	scanDest := make([]any, len(header))
-	rawResult := make([][]byte, len(header))
-	for i := range header {
-		scanDest[i] = &rawResult[i]
-	}
-
-	for rows.Next() {
-		if err := rows.Scan(scanDest...); err != nil {
+	return r.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, query)
+		if err != nil {
 			return err
 		}
-		record := make([]string, len(header))
-		nulls := make([]bool, len(header))
-		for i, raw := range rawResult {
-			if raw == nil {
-				nulls[i] = true
-				continue
+		defer func() { _ = rows.Close() }()
+
+		header, err := rows.Columns()
+		if err != nil {
+			return err
+		}
+		if len(header) == 0 {
+			return repository.ErrNoRows
+		}
+
+		scanDest := make([]any, len(header))
+		values := make([]any, len(header))
+		for i := range header {
+			scanDest[i] = &values[i]
+		}
+
+		for rows.Next() {
+			if err := rows.Scan(scanDest...); err != nil {
+				return err
 			}
-			record[i] = string(raw)
+			record := make([]string, len(header))
+			nulls := make([]bool, len(header))
+			for i, value := range values {
+				cell := model.NewCell(value)
+				nulls[i] = cell.IsNull()
+				record[i] = cell.String()
+			}
+			if err := fn(record, nulls); err != nil {
+				return err
+			}
 		}
-		if err := fn(record, nulls); err != nil {
-			return err
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	return tx.Commit()
+		return rows.Err()
+	})
 }
 
 // extractTableName extract table name from query.
@@ -346,18 +313,12 @@ func extractTableName(query string) string {
 
 // Exec execute "INSERT" or "UPDATE" or "DELETE" statement
 func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	result, err := tx.ExecContext(ctx, statement)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := tx.Commit(); err != nil {
+	var result sql.Result
+	if err := r.inTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		result, err = tx.ExecContext(ctx, statement)
+		return err
+	}); err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()

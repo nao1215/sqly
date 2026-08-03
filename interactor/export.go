@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/nao1215/sqly/domain/cleanup"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/infrastructure/filesql"
@@ -97,14 +98,13 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 	}
 	tmpPath := tmpFile.Name()
 
-	// Ensure cleanup of the temporary file.
+	// Ensure cleanup of the temporary file. Both failures are joined onto
+	// whatever the export returned rather than replacing it: a staging file left
+	// on disk is precisely the leftover a caller needs to hear about, and it is
+	// most likely to be left there when the export already failed.
 	defer func() {
-		if cerr := tmpFile.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close temporary file: %w", cerr)
-		}
-		if rerr := e.fileRepo.Remove(tmpPath); rerr != nil && err == nil {
-			err = fmt.Errorf("remove temporary file: %w", rerr)
-		}
+		err = cleanup.Join(err, tmpFile.Close(), "close temporary file")
+		err = cleanup.Join(err, e.fileRepo.Remove(tmpPath), fmt.Sprintf("remove temporary file %q", tmpPath))
 	}()
 
 	w, closeComp, err := filesql.NewCompressingWriter(tmpFile, compression)
@@ -122,9 +122,7 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 	}
 
 	defer func() {
-		if cerr := finalizeComp(); cerr != nil && err == nil {
-			err = fmt.Errorf("finalize compression for %q: %w", filePath, cerr)
-		}
+		err = cleanup.Join(err, finalizeComp(), fmt.Sprintf("finalize compression for %q", filePath))
 	}()
 
 	if err = write(w); err != nil {
@@ -147,9 +145,7 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 		return fmt.Errorf("create output file %q: %w", filePath, err)
 	}
 	defer func() {
-		if cerr := targetFile.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close output file %q: %w", filePath, cerr)
-		}
+		err = cleanup.Join(err, targetFile.Close(), fmt.Sprintf("close output file %q", filePath))
 	}()
 
 	// Copy the validated content from the temp file to the target file.

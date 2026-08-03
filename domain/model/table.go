@@ -16,12 +16,13 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 )
 
-// getColumnData extracts data from a specific column index
-func getColumnData(records []Record, columnIndex int) []string {
+// columnData extracts one column's display strings, reading the table's own
+// storage rather than a copy of every row.
+func (t *Table) columnData(columnIndex int) []string {
 	var columnData []string
-	for _, record := range records {
-		if columnIndex < len(record) {
-			columnData = append(columnData, record[columnIndex])
+	for _, record := range t.Rows {
+		if columnIndex < record.Len() {
+			columnData = append(columnData, record.At(columnIndex))
 		}
 	}
 	return columnData
@@ -33,11 +34,8 @@ func getColumnData(records []Record, columnIndex int) []string {
 // ParseFloat also accepts but data rarely means as numbers: hexadecimal floats
 // ("0x1p4"), underscore digit separators ("1_000"), and the Infinity/NaN words.
 //
-// This is the single numeric contract shared by data profiling and table-mode
-// right alignment, so the same cell is classified the same way in both. Why
-// expose it from the model layer: presentation and profiling both depend on the
-// model, so a model-level predicate keeps the two surfaces in agreement without
-// duplicating the rules.
+// This is the numeric contract used by table-mode right alignment. Keeping the
+// predicate in the model layer avoids duplicating display rules elsewhere.
 func IsNumericValue(s string) bool {
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, ",", "")
@@ -52,8 +50,7 @@ func IsNumericValue(s string) bool {
 }
 
 // isAllNumeric checks if all values in a column look like numbers, skipping
-// blank cells. It uses IsNumericValue so column alignment follows the same
-// numeric contract as data profiling.
+// blank cells. It uses IsNumericValue so column alignment follows one contract.
 func isAllNumeric(values []string) bool {
 	if len(values) == 0 {
 		return false
@@ -171,24 +168,29 @@ type Table struct {
 	name string
 	// Header is table header.
 	header Header
-	// Records is table records.
+	// Records is table records: the display string of every cell, which is what
+	// the table, CSV, TSV, LTSV, and Markdown formats write.
 	records []Record
-	// nulls optionally marks which cells are SQL NULL (as opposed to an empty
-	// string), indexed as nulls[row][col]. It is set only for query results,
-	// where the distinction is known, and is consulted by JSON/NDJSON output so a
-	// NULL is emitted as JSON null. nil means "no NULL information"; text formats
-	// ignore it and render every cell as a string.
-	nulls [][]bool
-	// jsonTyped opts JSON/NDJSON output into the typed contract: a cell that is a
-	// canonical JSON number is emitted as a native number, "true"/"false" as a
-	// native boolean, and everything else as a JSON string. It is false by
-	// default so the legacy string contract stays the default; only the explicit
-	// opt-in (--json-typed/--ndjson-typed or .mode json-typed/ndjson-typed) turns
-	// it on. Other output formats ignore it.
-	jsonTyped bool
+	// cells optionally holds the driver's native value for every cell of a query
+	// result, stored row-major in a single allocation of columns per row rather
+	// than one slice per row.
+	// It is the source the records above were derived from, so a cell's string
+	// form and its JSON form always describe the same value. It is nil for a
+	// Table built from strings (an imported file, a synthesized report), where
+	// there is no type or NULL information to preserve and every cell is TEXT.
+	cells []Cell
+	// columns is the row width of cells. It is header's length; it is stored so
+	// indexing does not depend on the header slice a caller may have replaced.
+	columns int
 }
 
-// NewTable create new Table.
+// NewTable create new Table from string records. Use it for tables that have no
+// database types to preserve — an imported file, a synthesized report — where
+// every cell is TEXT and no cell is SQL NULL. Query results should be built with
+// NewTableFromCells so their INTEGER/REAL/TEXT/NULL distinctions survive to the
+// JSON and Parquet writers.
+//
+// The caller passes ownership of records; Table does not copy them.
 func NewTable(
 	name string,
 	header Header,
@@ -201,34 +203,58 @@ func NewTable(
 	}
 }
 
-// SetNulls records which cells are SQL NULL, indexed as nulls[row][col]. It is
-// used by query results so JSON/NDJSON output can emit a NULL as JSON null
-// rather than an empty string. Other output formats ignore it.
-func (t *Table) SetNulls(nulls [][]bool) {
-	t.nulls = nulls
+// NewTableFromCells builds a query-result table from the driver's native cell
+// values. Each row must hold exactly one cell per header column; a row of any
+// other width returns ErrCellShapeMismatch rather than being carried into a
+// formatter, where the mismatch would surface only after part of the output had
+// already been written.
+//
+// The cells are copied into storage the Table owns, so mutating rows afterwards
+// cannot change the Table, and Records() is derived from them once here, so the
+// displayed string and the JSON scalar of a cell can never disagree.
+func NewTableFromCells(name string, header Header, rows [][]Cell) (*Table, error) {
+	columns := len(header)
+	flat := make([]Cell, 0, len(rows)*columns)
+	records := make([]Record, 0, len(rows))
+	for i, row := range rows {
+		if len(row) != columns {
+			return nil, fmt.Errorf("%w: row %d has %d cells, header has %d columns", ErrCellShapeMismatch, i, len(row), columns)
+		}
+		record := make(Record, columns)
+		for j, cell := range row {
+			record[j] = cell.String()
+		}
+		flat = append(flat, row...)
+		records = append(records, record)
+	}
+	return &Table{
+		name:    name,
+		header:  header,
+		records: records,
+		cells:   flat,
+		columns: columns,
+	}, nil
 }
 
-// SetJSONTyped opts JSON and NDJSON output into the typed contract, where a cell
-// that is a canonical JSON number is emitted as a native number (large integers
-// verbatim, so no precision loss or scientific notation), "true"/"false" as a
-// native boolean, a SQL NULL as null, and every other value as a JSON string.
-// It has no effect on non-JSON output formats. The default (false) preserves the
-// legacy contract that emits every non-NULL value as a string.
-func (t *Table) SetJSONTyped(typed bool) {
-	t.jsonTyped = typed
-}
-
-// isNull reports whether the cell at (row, col) is a known SQL NULL.
-func (t *Table) isNull(row, col int) bool {
-	return row < len(t.nulls) && col < len(t.nulls[row]) && t.nulls[row][col]
+// cell returns the native cell at (row, col) and whether the table carries
+// native values at all.
+func (t *Table) cell(row, col int) (Cell, bool) {
+	if t.cells == nil || t.columns == 0 || col < 0 || col >= t.columns || row < 0 {
+		return Cell{}, false
+	}
+	idx := row*t.columns + col
+	if idx >= len(t.cells) {
+		return Cell{}, false
+	}
+	return t.cells[idx], true
 }
 
 // IsNull reports whether the cell at (row, col) is a known SQL NULL, as opposed
-// to an empty string. It returns false when no NULL information was recorded
-// (the table did not come from a query). It lets callers such as the profile
-// workflow distinguish a NULL from a blank value.
+// to an empty string. It returns false when no NULL information is available
+// (the table did not come from a query).
 func (t *Table) IsNull(row, col int) bool {
-	return t.isNull(row, col)
+	c, ok := t.cell(row, col)
+	return ok && c.IsNull()
 }
 
 // Name return table name.
@@ -236,14 +262,141 @@ func (t *Table) Name() string {
 	return t.name
 }
 
-// Header return table header.
-func (t *Table) Header() Header {
-	return t.header
+// WithName returns a copy with a different table name, preserving the native
+// cell values so a rename does not downgrade a query result to strings — .dump
+// and the describe path both re-wrap a result under the user's table name, and
+// JSON output of the renamed table has to keep emitting numbers and nulls.
+//
+// The header, the record slice, and the cell slice are all cloned, so the two
+// tables share no mutable storage: renaming a column on one cannot rename it on
+// the other, and appending to one cannot write into the other's backing array.
+// The row contents themselves are shared, which is safe because nothing can
+// reach them except through a RecordView or a copy.
+func (t *Table) WithName(name string) *Table {
+	cloned := &Table{
+		name:    name,
+		columns: t.columns,
+	}
+	if t.header != nil {
+		cloned.header = append(make(Header, 0, len(t.header)), t.header...)
+	}
+	if t.records != nil {
+		cloned.records = append(make([]Record, 0, len(t.records)), t.records...)
+	}
+	if t.cells != nil {
+		cloned.cells = append(make([]Cell, 0, len(t.cells)), t.cells...)
+	}
+	return cloned
 }
 
-// Records return table records.
+// Header returns a copy of the table's column names.
+//
+// The copy is why `table.Header()[0] = "corrupted"` cannot rename a column
+// behind the table's back. Code that only needs to read the names should use
+// ColumnCount, ColumnName, or Columns, which allocate nothing.
+func (t *Table) Header() Header {
+	if t.header == nil {
+		return nil
+	}
+	return append(make(Header, 0, len(t.header)), t.header...)
+}
+
+// ColumnCount returns the number of columns without copying the header.
+func (t *Table) ColumnCount() int {
+	return len(t.header)
+}
+
+// ColumnName returns the name of column i, or the empty string when i is
+// outside the header. It reads the header without copying it.
+func (t *Table) ColumnName(i int) string {
+	if i < 0 || i >= len(t.header) {
+		return ""
+	}
+	return t.header[i]
+}
+
+// Columns iterates the column names in order without copying them.
+func (t *Table) Columns(yield func(int, string) bool) {
+	for i, name := range t.header {
+		if !yield(i, name) {
+			return
+		}
+	}
+}
+
+// Records returns a copy of the table's records: the display string of every
+// cell, one Record per row.
+//
+// The copy is deep, so writing to the result cannot reach the Table:
+//
+//	records := table.Records()
+//	records[0][0] = "corrupted" // affects only the caller's copy
+//
+// This matters beyond ordinary defensiveness. A query result's strings are
+// derived from its native cells, and the JSON and Parquet writers read those
+// cells; a caller able to edit the strings in place could make the same table
+// print "corrupted" as CSV and the original value as JSON. Handing out the
+// internal slice made that a one-line mistake, and no test could have noticed
+// which of the two representations was right afterwards.
+//
+// Copying is the price of a safe public API. Code inside sqly that walks every
+// row — the formatters, the exporters, the INSERT builder — should use Rows or
+// RowCount instead, which read the same storage without copying it.
 func (t *Table) Records() []Record {
-	return t.records
+	if t.records == nil {
+		return nil
+	}
+	records := make([]Record, len(t.records))
+	for i, record := range t.records {
+		records[i] = append(make(Record, 0, len(record)), record...)
+	}
+	return records
+}
+
+// RowCount returns the number of records without materializing them, so a
+// caller asking only "is this empty?" does not pay for a copy of the table.
+func (t *Table) RowCount() int {
+	return len(t.records)
+}
+
+// Rows iterates the table's rows in order, as a range-over-func sequence:
+//
+//	for i, row := range table.Rows {
+//	    name := row.At(1)
+//	}
+//
+// The RecordView borrows the Table's storage, so iterating costs no allocation
+// however many rows there are — and it exposes no way to write through it, so
+// the borrow cannot corrupt the table. Call RecordView.Record if a caller needs
+// a copy it may keep or modify.
+func (t *Table) Rows(yield func(int, RecordView) bool) {
+	for i, record := range t.records {
+		if !yield(i, newRecordView(record)) {
+			return
+		}
+	}
+}
+
+// Row returns a read-only view of row i and whether it exists.
+func (t *Table) Row(i int) (RecordView, bool) {
+	if i < 0 || i >= len(t.records) {
+		return RecordView{}, false
+	}
+	return newRecordView(t.records[i]), true
+}
+
+// ValueAt returns the display string at (row, column), or the empty string when
+// either index is outside the table. It is the cheapest read there is: no view,
+// no copy, no allocation.
+func (t *Table) ValueAt(row, column int) string {
+	if row < 0 || row >= len(t.records) {
+		return ""
+	}
+	record := t.records[row]
+	if column < 0 || column >= len(record) {
+		return ""
+	}
+	return record[column]
 }
 
 // Equal compare Table.
@@ -254,11 +407,12 @@ func (t *Table) Equal(t2 *Table) bool {
 	if !t.header.Equal(t2.header) {
 		return false
 	}
-	if len(t.Records()) != len(t2.Records()) {
+	if t.RowCount() != t2.RowCount() {
 		return false
 	}
-	for i, record := range t.Records() {
-		if !record.Equal(t2.Records()[i]) {
+	for i, record := range t.Rows {
+		other, ok := t2.Row(i)
+		if !ok || !record.Record().Equal(other.Record()) {
 			return false
 		}
 	}
@@ -303,13 +457,12 @@ func (t *Table) IsEmptyRecords() bool {
 
 // IsSameHeaderColumnName return whether the table has a header column with the same name
 func (t *Table) IsSameHeaderColumnName() bool {
-	encountered := map[string]bool{}
-	for i := range t.header {
-		if !encountered[t.Header()[i]] {
-			encountered[t.Header()[i]] = true
-			continue
+	encountered := make(map[string]bool, len(t.header))
+	for _, name := range t.Columns {
+		if encountered[name] {
+			return true
 		}
-		return true
+		encountered[name] = true
 	}
 	return false
 }
@@ -347,8 +500,8 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 // printTable print all record with header; output format is table
 func (t *Table) printTable(out io.Writer) error {
 	// Create alignment configuration - detect numeric columns and align them right
-	alignment := make(tw.Alignment, len(t.Header()))
-	for i, h := range t.Header() {
+	alignment := make(tw.Alignment, t.ColumnCount())
+	for i, h := range t.Columns {
 		// Check if header suggests numeric data or if we should align right
 		headerName := strings.ToLower(h)
 		// Check for common numeric column patterns
@@ -363,7 +516,7 @@ func (t *Table) printTable(out io.Writer) error {
 			strings.Contains(headerName, "age") ||
 			strings.Contains(headerName, "年齢") ||
 			// Check if all data looks numeric (simple heuristic)
-			(len(t.Records()) > 0 && isAllNumeric(getColumnData(t.Records(), i)))
+			(t.RowCount() > 0 && isAllNumeric(t.columnData(i)))
 
 		if isNumeric {
 			alignment[i] = tw.AlignRight
@@ -373,8 +526,8 @@ func (t *Table) printTable(out io.Writer) error {
 	}
 
 	// Create header alignment configuration - center all headers
-	headerAlignment := make(tw.Alignment, len(t.Header()))
-	for i := range t.Header() {
+	headerAlignment := make(tw.Alignment, t.ColumnCount())
+	for i := range t.ColumnCount() {
 		headerAlignment[i] = tw.AlignCenter
 	}
 
@@ -386,17 +539,17 @@ func (t *Table) printTable(out io.Writer) error {
 	)
 
 	// Convert Header ([]string) to []any for the new API
-	headers := make([]any, len(t.Header()))
-	for i, h := range t.Header() {
+	headers := make([]any, t.ColumnCount())
+	for i, h := range t.Columns {
 		headers[i] = h
 	}
 	table.Header(headers...)
 
-	for _, v := range t.Records() {
-		// Convert Record ([]string) to []any for the new API
-		row := make([]any, len(v))
-		for i, cell := range v {
-			row[i] = cell
+	for _, v := range t.Rows {
+		// Convert the row to []any for the tablewriter API.
+		row := make([]any, v.Len())
+		for i := range v.Len() {
+			row[i] = v.At(i)
 		}
 		if err := table.Append(row); err != nil {
 			return fmt.Errorf("failed to append table row: %w", err)
@@ -424,7 +577,7 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 	if _, err := fmt.Fprint(out, "|"); err != nil {
 		return fmt.Errorf("failed to write markdown header prefix: %w", err)
 	}
-	for _, h := range t.Header() {
+	for _, h := range t.Columns {
 		if _, err := fmt.Fprintf(out, " %s |", markdownCell(h)); err != nil {
 			return fmt.Errorf("failed to write markdown header cell %q: %w", h, err)
 		}
@@ -437,7 +590,7 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 	if _, err := fmt.Fprint(out, "|"); err != nil {
 		return fmt.Errorf("failed to write markdown separator prefix: %w", err)
 	}
-	for range t.Header() {
+	for range t.ColumnCount() {
 		if _, err := fmt.Fprint(out, "-----|"); err != nil {
 			return fmt.Errorf("failed to write markdown separator cell: %w", err)
 		}
@@ -447,12 +600,12 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 	}
 
 	// Print data rows
-	for rowIdx, record := range t.Records() {
+	for rowIdx, record := range t.Rows {
 		if _, err := fmt.Fprint(out, "|"); err != nil {
 			return fmt.Errorf("failed to write markdown row %d prefix: %w", rowIdx, err)
 		}
-		for _, cell := range record {
-			if _, err := fmt.Fprintf(out, " %s |", markdownCell(cell)); err != nil {
+		for i := range record.Len() {
+			if _, err := fmt.Fprintf(out, " %s |", markdownCell(record.At(i))); err != nil {
 				return fmt.Errorf("failed to write markdown cell: %w", err)
 			}
 		}
@@ -486,8 +639,12 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	if err := w.Write([]string(t.Header())); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
-	for _, v := range t.Records() {
-		if err := w.Write([]string(v)); err != nil {
+	// One buffer, refilled per row: encoding/csv needs a []string, and the view
+	// will not surrender its own, so this is the allocation-free bridge.
+	buf := make([]string, 0, t.ColumnCount())
+	for _, v := range t.Rows {
+		buf = v.AppendTo(buf[:0])
+		if err := w.Write(buf); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}
 	}
@@ -504,13 +661,14 @@ func (t *Table) printLTSV(out io.Writer) error {
 	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
 		return err
 	}
-	for _, v := range t.Records() {
-		r := make(Record, 0, len(v))
-		for i, data := range v {
-			if err := ensureLTSVValueRepresentable(t.Header()[i], data); err != nil {
+	for _, v := range t.Rows {
+		r := make(Record, 0, v.Len())
+		for i := range v.Len() {
+			label, data := t.ColumnName(i), v.At(i)
+			if err := ensureLTSVValueRepresentable(label, data); err != nil {
 				return err
 			}
-			r = append(r, t.Header()[i]+":"+data)
+			r = append(r, label+":"+data)
 		}
 		if _, err := fmt.Fprintln(out, strings.Join(r, "\t")); err != nil {
 			return fmt.Errorf("failed to write LTSV record %v: %w", r, err)
@@ -542,13 +700,13 @@ const verticalRecordRuleWidth = 60
 // csv, tsv, ltsv, json — are unaffected.
 func (t *Table) printVertical(out io.Writer) error {
 	gutter := 0
-	for _, h := range t.Header() {
+	for _, h := range t.Columns {
 		if n := runewidth.StringWidth(h); n > gutter {
 			gutter = n
 		}
 	}
 
-	for i, record := range t.Records() {
+	for i, record := range t.Rows {
 		rule := fmt.Sprintf("-[ RECORD %d ]", i+1)
 		if pad := verticalRecordRuleWidth - runewidth.StringWidth(rule); pad > 0 {
 			rule += strings.Repeat("-", pad)
@@ -557,11 +715,8 @@ func (t *Table) printVertical(out io.Writer) error {
 			return fmt.Errorf("failed to write vertical record rule: %w", err)
 		}
 
-		for j, header := range t.Header() {
-			value := ""
-			if j < len(record) {
-				value = record[j]
-			}
+		for j, header := range t.Columns {
+			value := record.At(j)
 			name := header + strings.Repeat(" ", gutter-runewidth.StringWidth(header))
 			if _, err := fmt.Fprintf(out, "%s | %s\n", name, value); err != nil {
 				return fmt.Errorf("failed to write vertical column %s: %w", header, err)
@@ -629,14 +784,17 @@ func (t *Table) printExcel(out io.Writer) error {
 }
 
 // rowToJSONObject builds a JSON object for one record, preserving the header
-// column order. Why string values: the table model stores every cell as a
-// string, so emitting strings keeps output lossless (e.g. "007" stays "007")
-// and consistent with the other text formats. Why a manual builder: encoding's
-// map marshaling sorts keys alphabetically, which would drop column order.
-func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
+// column order. Each value is taken from the row's native cell when the Table
+// came from a query, so an INTEGER or REAL column is a JSON number and a NULL is
+// JSON null; a table built from strings emits every value as a JSON string, so a
+// TEXT "123", "true", or "00123" is never reinterpreted as a number or boolean.
+// Why a manual builder: encoding's map marshaling sorts keys alphabetically,
+// which would drop column order.
+func (t *Table) rowToJSONObject(row int, record RecordView) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
-	for i, h := range t.Header() {
+	// t.Columns, not t.Header(): this runs once per row, and Header() copies.
+	for i, h := range t.Columns {
 		if i > 0 {
 			b.WriteByte(',')
 		}
@@ -647,23 +805,13 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 		b.Write(key)
 		b.WriteByte(':')
 
-		// Emit a SQL NULL as JSON null so it is distinguishable from an empty
-		// string in machine-readable output.
-		if t.isNull(row, i) {
-			b.WriteString("null")
-			continue
+		var val any
+		if cell, ok := t.cell(row, i); ok {
+			val = cell.Value()
+		} else if i < record.Len() {
+			val = record.At(i)
 		}
-
-		var val string
-		if i < len(record) {
-			val = record[i]
-		}
-		var value []byte
-		if t.jsonTyped {
-			value, err = jsonScalarToken(val)
-		} else {
-			value, err = json.Marshal(val)
-		}
+		value, err := jsonScalarToken(val)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode value for column %q: %w", h, err)
 		}
@@ -673,81 +821,19 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// JSON boolean literals recognized by the typed output contract.
-const (
-	jsonLiteralTrue  = "true"
-	jsonLiteralFalse = "false"
-)
-
-// jsonScalarToken returns the JSON token for a cell value in typed output mode.
-// A value that is a canonical JSON number is emitted verbatim, so a large integer
-// stays lossless and never regresses into scientific notation; the JSON literals
-// "true" and "false" become native booleans; everything else is emitted as a JSON
-// string. A SQL NULL is handled by the caller before this is reached.
-func jsonScalarToken(s string) ([]byte, error) {
-	if s == jsonLiteralTrue || s == jsonLiteralFalse {
-		return []byte(s), nil
+// jsonScalarToken serializes a value using its original Go/database type.
+// In particular, a database string containing "123" or "true" remains a JSON
+// string; only a database numeric or boolean value becomes a JSON scalar. A nil
+// is SQL NULL and becomes JSON null, which is what distinguishes it from the
+// empty string.
+func jsonScalarToken(value any) ([]byte, error) {
+	if value == nil {
+		return []byte("null"), nil
 	}
-	if isCanonicalJSONNumber(s) {
-		return []byte(s), nil
+	if raw, ok := value.([]byte); ok {
+		return json.Marshal(string(raw))
 	}
-	return json.Marshal(s)
-}
-
-// isCanonicalJSONNumber reports whether s is a number in the exact JSON grammar
-// (RFC 8259): an optional leading minus, an integer part with no redundant
-// leading zero, an optional fraction, and an optional exponent. Emitting only
-// such strings verbatim as JSON numbers keeps the output valid while preserving
-// the original digits, so "007" stays a string and a 30-digit integer is not
-// rounded. Values like "+1", "1.", ".5", "1e", "NaN", or surrounding spaces are
-// rejected and fall back to a JSON string.
-func isCanonicalJSONNumber(s string) bool {
-	if s == "" {
-		return false
-	}
-	i, n := 0, len(s)
-	if s[i] == '-' {
-		i++
-		if i == n {
-			return false
-		}
-	}
-	// Integer part: a single "0", or a non-zero digit followed by more digits.
-	switch {
-	case s[i] == '0':
-		i++
-	case s[i] >= '1' && s[i] <= '9':
-		i++
-		for i < n && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-	default:
-		return false
-	}
-	// Optional fraction.
-	if i < n && s[i] == '.' {
-		i++
-		if i >= n || s[i] < '0' || s[i] > '9' {
-			return false
-		}
-		for i < n && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-	}
-	// Optional exponent.
-	if i < n && (s[i] == 'e' || s[i] == 'E') {
-		i++
-		if i < n && (s[i] == '+' || s[i] == '-') {
-			i++
-		}
-		if i >= n || s[i] < '0' || s[i] > '9' {
-			return false
-		}
-		for i < n && s[i] >= '0' && s[i] <= '9' {
-			i++
-		}
-	}
-	return i == n
+	return json.Marshal(value)
 }
 
 // duplicateColumnName returns the first column name that appears more than once
@@ -771,20 +857,20 @@ func (t *Table) printJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
 		return fmt.Errorf("json output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
-	if len(t.Records()) == 0 {
+	if t.RowCount() == 0 {
 		_, err := fmt.Fprintln(out, "[]")
 		return err
 	}
 	if _, err := fmt.Fprintln(out, "["); err != nil {
 		return err
 	}
-	for i, record := range t.Records() {
+	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {
 			return err
 		}
 		sep := ""
-		if i < len(t.Records())-1 {
+		if i < t.RowCount()-1 {
 			sep = ","
 		}
 		if _, err := fmt.Fprintf(out, "  %s%s\n", obj, sep); err != nil {
@@ -801,7 +887,7 @@ func (t *Table) printNDJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
 		return fmt.Errorf("ndjson output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
-	for i, record := range t.Records() {
+	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)
 		if err != nil {
 			return err
