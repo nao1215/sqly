@@ -41,6 +41,33 @@ sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --versio
 | `--encoding NAME` | text encoding for BOM-less input (default `utf-8`) |
 | `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged (content-hash keyed) |
 
+## Cache
+
+`--cache PATH` stores the imported tables as a SQLite snapshot, so a repeated run
+skips re-parsing the source files.
+
+```shell
+sqly --cache ./events.cache --sql "SELECT COUNT(*) FROM events" events.csv
+```
+
+The first run builds the snapshot at `PATH`; later runs read it.
+
+| Question | Answer |
+|:--|:--|
+| When is the cache used? | when `--cache PATH` is given and every input still matches the snapshot |
+| When is it rebuilt? | when an input's path, size, or SHA-256 content hash differs — editing a file is enough |
+| Where is it stored? | at `PATH`; sqly writes nothing outside it |
+| How do I disable it? | omit `--cache` |
+| How do I delete it? | delete the file at `PATH` |
+
+A cached run answers exactly what a cold run answers: the same rows, the same
+types, the same output bytes. If the snapshot cannot be read, the run falls back
+to importing the sources and still succeeds.
+
+A run that fails part-way leaves nothing behind for the next one. Restoring from
+a cache either restores every table or none of them, so a failed run cannot
+leave a half-populated session that a later run trips over.
+
 ## Inspection
 
 Each of these prints a report and exits, instead of running a query.

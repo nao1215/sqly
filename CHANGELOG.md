@@ -43,13 +43,59 @@ The command surface below is what v1.0.0 commits to. Anything not listed is not 
 * Updated the filesql dependency to v0.30.4. v0.30.2 stages ACH/Fedwire registry entries for publication after commit, rejects long rows under the `pad` policy instead of truncating them, and handles empty JSON/JSONL in the same streaming pass. v0.30.3 applies the same transaction and cleanup rules inside the loader: a failed rollback is reported rather than discarded, a load's transaction is ended exactly once, and a rollback reporting `sql.ErrTxDone` under a canceled context is treated as cancellation rather than a broken transaction. v0.30.4 extends that to the writers: closing a compressing writer, closing an XLSX load's insert statement, and removing an atomic write's staged file all report their failure instead of dropping it.
 * Synchronized the CLI, shell help, E2E specifications, website reference, and cookbook with the reduced surface.
 
+### Migration (Go API)
+CLI users are unaffected by everything in this section. It applies only to code importing `github.com/nao1215/sqly/domain/model`.
+
+Reading rows — the accessors no longer hand out the table's storage:
+
+```go
+// before
+for _, record := range table.Records() {
+    fmt.Println(record[0])
+}
+
+// after: same, but Records() is now a copy — fine, and safe to modify
+for _, record := range table.Records() {
+    fmt.Println(record[0])
+}
+
+// after: no copy, for walking a large result
+for _, row := range table.Rows {
+    fmt.Println(row.At(0))
+}
+```
+
+Building a query result — the setters are gone:
+
+```go
+// before
+t := model.NewTable("t", header, records)
+t.SetNulls(nulls)
+t.SetJSONValues(values)
+
+// after
+t, err := model.NewTableFromCells("t", header, [][]model.Cell{
+    {model.NewCell(int64(42)), model.NewTextCell("00123"), model.NullCell()},
+})
+```
+
+Inspecting errors — a failure may now carry a cleanup failure alongside its cause, so match on identity rather than on text:
+
+```go
+// before
+if strings.Contains(err.Error(), "rollback") { ... }
+
+// after
+if errors.Is(err, cleanup.ErrCleanup) { ... }
+```
+
 ### Public API
 `domain/model` is importable, so these changes affect anyone using it as a library:
 * Added `model.Cell` (with `NewCell`, `NewTextCell`, `NullCell`, `IsNull`, `Value`, `String`), `model.NewTableFromCells`, and `model.ErrCellShapeMismatch`. A query result is now one value per cell rather than a display string plus parallel side-tables.
 * Removed `Table.SetNulls` and `Table.SetJSONValues`. They injected two more two-dimensional slices after construction, with no check that their shape matched the records, so a mismatch surfaced part-way through an already-written output stream. `NewTableFromCells` rejects a shape mismatch up front and copies what it is given, so a caller cannot mutate a Table after building it.
 * Removed `Table.SetJSONTyped` along with the typed-JSON flags.
 * No public accessor hands out storage a caller can write through. `Table.Records()` and `Table.Header()` return copies; `Table.Row` and `Table.Rows` return a `RecordView`, which reads but cannot write, so a large result is still walked without copying it. Previously any of them let one assignment make the same result print one value as CSV and another as JSON.
-* Added `model.RecordView` (`Len`, `At`, `All`, `AppendTo`, `Record`), `Table.Rows` (a range-over-func iterator), `Table.Row`, `Table.RowCount`, `Table.ValueAt`, `Table.ColumnCount`, `Table.ColumnName`, and `Table.Columns`. The zero-copy readers exist so making the copying accessors safe costs nothing on the output path.
+* Added `model.RecordView` (`Len`, `At`, `AppendTo`, `Record`), `Table.Rows` (a range-over-func iterator), `Table.Row`, `Table.RowCount`, `Table.ValueAt`, `Table.ColumnCount`, `Table.ColumnName`, and `Table.Columns`. The zero-copy readers exist so making the copying accessors safe costs nothing on the output path.
 * `infrastructure.GenerateInsertStatement` takes a `model.RecordView` instead of a `model.Record`.
 * `Table.WithName` clones the header and the row slices, so renaming a column on one table cannot rename it on the other.
 

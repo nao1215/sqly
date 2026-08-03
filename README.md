@@ -88,10 +88,9 @@ sqly --inspect user.csv
 # Read a row too wide to fit a terminal: one column per line, in a block per record
 sqly --output-format vertical --sql "SELECT * FROM wide LIMIT 1" wide.csv
 
-# Convert: csv -> json, excel, parquet, markdown, gzipped csv
-sqly --output-format json    --output user.json    --sql "SELECT * FROM user" user.csv
-sqly --output-format excel   --output user.xlsx    --sql "SELECT * FROM user" user.csv
-sqly --output-format parquet --output user.parquet --sql "SELECT * FROM user" user.csv
+# Convert: the destination's extension picks the format
+sqly --output-format json  --output user.json  --sql "SELECT * FROM user" user.csv
+sqly --output-format excel --output user.xlsx  --sql "SELECT * FROM user" user.csv
 
 # Join two files, of any format, in one query
 sqly --sql "SELECT u.user_name, i.position
@@ -108,6 +107,9 @@ cat user.csv | sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
 # Pipe the result on: ndjson for jq, tsv for cut/awk/sort
 sqly --output-format ndjson --sql "SELECT path FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
 sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
+
+# Reuse a large import: --cache skips re-parsing while the inputs are unchanged
+sqly --cache ./big.cache --sql "SELECT COUNT(*) FROM events" events.csv
 
 # Rank with a window function
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv

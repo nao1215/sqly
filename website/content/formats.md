@@ -71,3 +71,51 @@ When a CSV or TSV row has a different field count from the header:
 | `stop` (default) | fail the import and report the row |
 | `skip` | drop the row, import the rest |
 | `pad` | pad a short row with empty values; reject a long one without truncating it |
+
+## Output formats
+
+`--output-format` picks how a result is printed. The same query, three ways:
+
+```shell
+sqly --output-format table --sql "SELECT * FROM t" t.csv
+```
+
+```text
++------+-----+------+
+| code | qty | note |
++------+-----+------+
+|  007 |  42 |      |
++------+-----+------+
+```
+
+```shell
+sqly --output-format csv --sql "SELECT * FROM t" t.csv
+```
+
+```text
+code,qty,note
+007,42,
+```
+
+```shell
+sqly --output-format json --sql "SELECT * FROM t" t.csv
+```
+
+```json
+[
+  {"code":"007","qty":42,"note":""}
+]
+```
+
+The three agree on every value; only JSON can express the types. A column SQLite
+holds as INTEGER or REAL becomes a JSON number, TEXT becomes a JSON string, and
+SQL NULL becomes `null`. Text is never re-read as a number, so `007` keeps its
+leading zeros and `true` stays a string.
+
+An empty field in a CSV is an empty string, not a NULL — above, `note` is `""`.
+A NULL comes from SQL: an outer join with no match, an explicit `NULL`, an
+aggregate over no rows. The two print as blank in `table` and `csv` alike, so
+JSON is where they are distinguishable as `""` and `null`.
+
+`tsv`, `ltsv`, `markdown`, `ndjson`, `vertical`, `excel`, and `parquet` are the
+remaining formats; see the [reference](/reference/#output-formats).
