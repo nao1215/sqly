@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/nao1215/sqly/domain"
@@ -850,9 +852,47 @@ func jsonScalarToken(value any) ([]byte, error) {
 		return []byte("null"), nil
 	}
 	if raw, ok := value.([]byte); ok {
-		return json.Marshal(string(raw))
+		// SQLite hands back both TEXT and BLOB as bytes, and JSON has no way to
+		// hold bytes at all. Text passes through as text; anything that is not
+		// valid UTF-8 is binary, and turning it into a string would replace every
+		// invalid byte with U+FFFD — output that looks fine and cannot be decoded
+		// back. Base64 keeps it, at the cost of being base64.
+		if utf8.Valid(raw) {
+			return json.Marshal(string(raw))
+		}
+		return json.Marshal(base64.StdEncoding.EncodeToString(raw))
+	}
+	if token, ok := jsonNonFiniteToken(value); ok {
+		return token, nil
 	}
 	return json.Marshal(value)
+}
+
+// jsonNonFiniteToken renders the three floats JSON cannot express. Without this,
+// a Parquet column holding an infinity fails the whole output with an encoder
+// error after the opening bracket is already on stdout. The strings are the ones
+// PostgreSQL's row_to_json produces, so a consumer that already handles one
+// database's JSON handles sqly's.
+func jsonNonFiniteToken(value any) ([]byte, bool) {
+	var f float64
+	switch v := value.(type) {
+	case float64:
+		f = v
+	case float32:
+		f = float64(v)
+	default:
+		return nil, false
+	}
+	switch {
+	case math.IsNaN(f):
+		return []byte(`"NaN"`), true
+	case math.IsInf(f, 1):
+		return []byte(`"Infinity"`), true
+	case math.IsInf(f, -1):
+		return []byte(`"-Infinity"`), true
+	default:
+		return nil, false
+	}
 }
 
 // duplicateColumnName returns the first column name that appears more than once

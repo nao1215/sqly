@@ -89,7 +89,7 @@ func (s *Shell) planRun() (runPlan, error) {
 
 	switch {
 	case arg.InspectFlag:
-		return runPlan{mode: modeInspect, stdinIsDataset: stdinIsDataset}, nil
+		return s.planWithQuerySource(runPlan{mode: modeInspect, stdinIsDataset: stdinIsDataset})
 	case arg.Query != "":
 		return s.planWithQuerySource(runPlan{mode: modeInlineSQL, stdinIsDataset: stdinIsDataset})
 	case arg.SQLFilePath != "":
@@ -124,7 +124,7 @@ func (s *Shell) planWithQuerySource(plan runPlan) (runPlan, error) {
 	switch s.stdinKind() {
 	case stdinPipe, stdinFile:
 		return runPlan{}, &invocationError{Err: fmt.Errorf(
-			"%s takes its statements from %s, so the data on stdin would be ignored; add --stdin-format FORMAT to read it as a table, or remove the redirect",
+			"%s works from %s, so the data on stdin would be ignored; add --stdin-format FORMAT to read it as a table, or remove the redirect",
 			plan.mode, plan.mode.source())}
 	default:
 		// A terminal, /dev/null, or an empty file: nothing was handed in that the
@@ -134,12 +134,16 @@ func (s *Shell) planWithQuerySource(plan runPlan) (runPlan, error) {
 	}
 }
 
-// source names where a mode's statements come from, for the message above.
+// source names where a mode's work comes from, for the message above.
 func (m runMode) source() string {
-	if m == modeSQLFile {
-		return "the file"
+	switch m {
+	case modeSQLFile:
+		return "the statements in the file"
+	case modeInspect:
+		return "the files named on the command line"
+	default:
+		return "the statement on the command line"
 	}
-	return "the command line"
 }
 
 // stdinKind is what standard input is attached to. It is decided from the file

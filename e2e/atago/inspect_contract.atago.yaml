@@ -1,0 +1,257 @@
+# The --inspect JSON contract, run against the real binary.
+#
+# --inspect exists to be parsed by something that is not a person, so its promises
+# are about bytes: what is sorted, what order rows come in, and how a value that
+# JSON has no spelling for is written down. Each scenario below pins one of them.
+#
+# Documented at website/content/reference.md#inspection.
+version: "1"
+
+suite:
+  name: sqly --inspect JSON contract
+
+scenarios:
+  - name: sorts tables by name regardless of the order they were given
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &abc
+          file: c.csv
+          content: |
+            v
+            3
+      - fixture:
+          file: a.csv
+          content: |
+            v
+            1
+      - fixture:
+          file: b.csv
+          content: |
+            v
+            2
+      - run:
+          command: sqly --inspect c.csv b.csv a.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: '(?s)"name": "a".*"name": "b".*"name": "c"'
+
+  - name: keeps columns in the file's order, not alphabetical order
+    env: *hist
+    steps:
+      - fixture:
+          file: cols.csv
+          content: |
+            zebra,alpha,middle
+            1,2,3
+      - run:
+          command: sqly --inspect cols.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: '(?s)"name": "zebra".*"name": "alpha".*"name": "middle"'
+
+  - name: samples the first rows of the file, in file order
+    env: *hist
+    steps:
+      - fixture:
+          file: ordered.csv
+          content: |
+            v
+            first
+            second
+            third
+            fourth
+      - run:
+          command: sqly --inspect --inspect-sample 2 ordered.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: '(?s)"sample_rows": \[\s*\{\s*"v": "first"\s*\},\s*\{\s*"v": "second"\s*\}\s*\]'
+
+  - name: gives the same bytes on two runs over the same inputs
+    env: *hist
+    steps:
+      - fixture:
+          file: stable.csv
+          content: |
+            a,b
+            1,x
+            2,y
+      - run:
+          command: sqly --inspect stable.csv --output-format table
+      - assert:
+          exit_code: 1
+      - run:
+          command: sh -c "sqly --inspect stable.csv > one.json && sqly --inspect stable.csv > two.json && cmp one.json two.json"
+          shell: true
+      - assert:
+          exit_code: 0
+
+  - name: reports an empty sample array rather than omitting the field
+    env: *hist
+    steps:
+      - fixture:
+          file: schema.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --inspect --inspect-sample 0 schema.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"sample_rows": []'
+
+  - name: distinguishes an empty CSV field from a SQL NULL
+    env: *hist
+    steps:
+      - fixture:
+          file: blank.csv
+          content: |
+            a,b
+            ,x
+      - run:
+          command: sqly --inspect blank.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"a": ""'
+      - assert:
+          stdout:
+            not_contains: '"a": null'
+
+  - name: emits a 64-bit integer in full
+    env: *hist
+    steps:
+      - fixture:
+          file: big.csv
+          content: |
+            n
+            9223372036854775807
+      - run:
+          command: sqly --inspect big.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "9223372036854775807"
+
+  - name: replaces bytes that are not valid UTF-8 rather than emitting invalid JSON
+    env: *hist
+    steps:
+      - fixture:
+          file: bad.csv
+          base64: "eAr//v0K"
+      - run:
+          command: sh -c "sqly --inspect bad.csv | python3 -c 'import json,sys; json.load(sys.stdin)'"
+          shell: true
+      - assert:
+          exit_code: 0
+
+  - name: writes an infinity as a JSON string instead of failing the output
+    env: *hist
+    steps:
+      - fixture:
+          file: any.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --output-format json --sql "SELECT 9e999 AS inf, -9e999 AS ninf" any.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"inf":"Infinity"'
+              - '"ninf":"-Infinity"'
+
+  - name: base64-encodes a BLOB that is not valid UTF-8
+    env: *hist
+    steps:
+      - fixture:
+          file: any.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --output-format json --sql "SELECT x'00ff41' AS b" any.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"b":"AP9B"'
+
+  - name: leaves a BLOB that is valid UTF-8 readable
+    env: *hist
+    steps:
+      - fixture:
+          file: any.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --output-format json --sql "SELECT x'414243' AS b" any.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"b":"ABC"'
+
+  - name: writes a SQL NULL as null and keeps a numeric string a string
+    env: *hist
+    steps:
+      - fixture:
+          file: typed.csv
+          content: |
+            t
+            00123
+      - run:
+          command: sqly --output-format json --sql "SELECT t, NULL AS n FROM typed" typed.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"t":"00123"'
+              - '"n":null'
+
+  - name: prints the report and nothing else on stdout
+    env: *hist
+    steps:
+      - fixture:
+          file: quiet.csv
+          content: |
+            a
+            1
+      - run:
+          command: sh -c "sqly --inspect quiet.csv | python3 -c 'import json,sys; print(len(json.load(sys.stdin)[\"tables\"]))'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: refuses to silently ignore a dataset piped in without --stdin-format
+    env: *hist
+    steps:
+      - fixture:
+          file: other.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --inspect other.csv
+          stdin: "a\n2\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--stdin-format"
+
+  - name: inspects a piped dataset when --stdin-format claims it
+    env: *hist
+    steps:
+      - run:
+          command: sqly --stdin-format csv --inspect
+          stdin: "a\n2\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"name": "stdin"'

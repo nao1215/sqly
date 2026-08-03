@@ -343,8 +343,10 @@ sqly ./data extra.csv --sql "SELECT * FROM extra"
 sqly --sql-file report.sql sales.csv
 ```
 
-The script may hold several statements; each result is printed in turn. Send a
-single-result script straight to a file:
+The script holds SQL, and may hold several statements; each result is printed in
+turn. Dot-commands are not SQL, so a `--sql-file` that runs one is rejected —
+pipe such a script to sqly instead. Send a single-result script straight to a
+file:
 
 ```shell
 sqly --output-format csv --sql-file report.sql --output report.csv sales.csv

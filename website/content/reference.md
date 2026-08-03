@@ -51,12 +51,51 @@ option applies to the inputs it can and the run proceeds.
 | Flag | Does |
 |:--|:--|
 | `-s`, `--sql SQL` | run one statement, then exit |
-| `-f`, `--sql-file FILE` | run every statement in a file, then exit; cannot combine with `--sql` |
+| `-f`, `--sql-file FILE` | run every SQL statement in a file, then exit; cannot combine with `--sql` |
 | `--dialect NAME` | write the query in `sqlite` (default), `mysql`, `postgresql`, or `googlesql` and have it translated |
 
 Without either query flag, sqly opens the interactive shell on a terminal, and
 reads SQL from stdin when it is piped. `--stdin-format` takes stdin for the data,
 so it needs `--sql`, `--sql-file`, or `--inspect` to say what to run.
+
+### What a `--sql-file` may contain
+
+A `--sql-file` holds SQL. A dot-command in one is rejected by name and line
+before any statement runs:
+
+```text
+$ sqly --sql-file save.sql user.csv
+--sql-file runs SQL only, but line 2 is the helper command ".save"; pipe the
+script to sqly instead: printf '...' | sqly FILE
+```
+
+The flag says SQL, and a `.sql` file that runs `.save` is a shell script wearing
+a SQL extension. A script that mixes both is what stdin is for, and it is the
+same text either way:
+
+```shell
+printf "UPDATE user SET name = 'x' WHERE id = 1;\n.save --in-place\n" | sqly user.csv
+```
+
+### What sqly does with standard input
+
+Standard input is a script, a dataset, or unused, and which one it is never
+depends on what it contains — only on the flags and on what stdin is attached to.
+sqly never reads stdin to find out, so a pipe with a slow writer or a FIFO with
+no writer at all cannot hang it.
+
+| Flags | stdin is | sqly does |
+|:--|:--|:--|
+| none | a terminal | opens the interactive shell |
+| none | a pipe or a redirected file | runs it as a script: SQL and dot-commands |
+| `--stdin-format FORMAT` | anything | imports it as the table `stdin` |
+| `--sql` / `--sql-file` / `--inspect` | a terminal, `/dev/null`, or an empty file | nothing; stdin is unused |
+| `--sql` / `--sql-file` / `--inspect` | a pipe or a non-empty file | rejects the run |
+
+The last row is the one worth knowing. `cat data.csv \| sqly --sql "..." other.csv`
+looks like it feeds `data.csv` in, and it does not — so instead of answering from
+`other.csv` alone and looking correct, sqly stops and says to add
+`--stdin-format`, or to drop the redirect.
 
 ### How many results a run may produce
 
@@ -140,19 +179,34 @@ ignoring the other.
 
 The report is one JSON document on stdout and nothing else, so it can be piped
 straight into `jq` or a program. Import progress and warnings go to stderr, and a
-clean run keeps stderr empty. Tables appear sorted by name, so two runs over the
-same inputs produce the same bytes. Each table carries its name, its source (a
-path, or `stdin` for a piped dataset), its row count, its columns in definition
-order, and up to `--inspect-sample` rows in table order — the same JSON encoding
-`--output-format json` uses, so numbers, text, and nulls keep their SQLite types.
-`--inspect-sample 0` gives schema only, and the `sample_rows` array is empty
-rather than absent.
+clean run keeps stderr empty.
+
+Two runs over the same inputs produce the same bytes:
+
+- `tables` is sorted by table name.
+- `columns` is in definition order — the file's column order.
+- `sample_rows` is the *first* rows of the table, in the order they were read
+  from the file, capped at `--inspect-sample` (default 5). `--inspect-sample 0`
+  gives schema only, and `sample_rows` is an empty array rather than absent.
+
+Each table carries its name, its source (a path, or `stdin` for a piped dataset),
+its row count, its columns, and its sample. Values use the same JSON encoding
+`--output-format json` uses, so SQLite's types survive:
+
+| Value | In the JSON |
+|:--|:--|
+| INTEGER, REAL | a JSON number — a 64-bit integer is emitted in full, and a consumer that parses JSON numbers as doubles will lose digits past 2^53 |
+| TEXT | a JSON string; `"123"` stays a string |
+| NULL | `null`, which is what distinguishes it from `""` |
+| BLOB | a JSON string: the bytes when they are valid UTF-8, base64 otherwise |
+| Infinity, -Infinity, NaN | the JSON strings `"Infinity"`, `"-Infinity"`, `"NaN"`, because JSON has no way to write them |
+| Bytes that are not valid UTF-8 in a TEXT column | the invalid bytes become U+FFFD, as they already did on import |
 
 ## Write back
 
 Write-back is a shell command, not a flag. `.save` writes the tables a session
 changed back out to files — at the interactive prompt, or in a script piped to
-sqly or given to `--sql-file`.
+sqly.
 
 | Command | Does |
 |:--|:--|
