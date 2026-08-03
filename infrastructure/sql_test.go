@@ -74,7 +74,7 @@ func TestGenerateInsertStatement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GenerateInsertStatement(tt.args.t.Name(), tt.args.t.Records()[0]); got != tt.want {
+			if got := GenerateInsertStatement(tt.args.t.Name(), mustRow(t, tt.args.t)); got != tt.want {
 				t.Errorf("generateInsertStatement() = %v, want %v", got, tt.want)
 			}
 		})
@@ -107,4 +107,15 @@ func TestQuoteTableRef(t *testing.T) {
 			t.Errorf("QuoteTableRef(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
+}
+
+// mustRow returns the table's first row as a read-only view, failing the test
+// when the table is empty.
+func mustRow(t *testing.T, table *model.Table) model.RecordView {
+	t.Helper()
+	row, ok := table.Row(0)
+	if !ok {
+		t.Fatalf("table %q has no rows", table.Name())
+	}
+	return row
 }

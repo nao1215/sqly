@@ -128,11 +128,7 @@ func parquetInsertStatement(t *model.Table, rowIdx int) string {
 			b.WriteString("NULL")
 			continue
 		}
-		var v string
-		if col < len(record) {
-			v = record[col]
-		}
-		b.WriteString(infra.SingleQuote(v))
+		b.WriteString(infra.SingleQuote(record.At(col)))
 	}
 	b.WriteString(");")
 	return b.String()

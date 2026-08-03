@@ -277,7 +277,7 @@ func BenchmarkRowsIteration(b *testing.B) {
 	for range b.N {
 		n := 0
 		for _, record := range table.Rows {
-			n += len(record)
+			n += record.Len()
 		}
 		if n == 0 {
 			b.Fatal("no rows")

@@ -60,7 +60,7 @@ func (h *historyRepository) Create(ctx context.Context, t *model.Table) error {
 		// Insert only the request and let SQLite's AUTOINCREMENT assign the id, so
 		// a write never depends on a caller-computed id from a full table scan. The
 		// request is the last column of the history table (id, request).
-		request := v[len(v)-1]
+		request := v.At(v.Len() - 1)
 		if _, err := tx.ExecContext(ctx, "INSERT INTO `history` (`request`) VALUES (?)", request); err != nil {
 			return err
 		}

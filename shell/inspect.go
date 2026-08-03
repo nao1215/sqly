@@ -156,14 +156,14 @@ func (s *Shell) inspectColumns(ctx context.Context, name string) ([]inspectColum
 	)
 	result := make([]inspectColumn, 0, cols.RowCount())
 	for _, rec := range cols.Rows {
-		if len(rec) <= colPK {
+		if rec.Len() <= colPK {
 			continue
 		}
 		result = append(result, inspectColumn{
-			Name:       rec[colName],
-			Type:       rec[colType],
-			Nullable:   rec[colNotNull] == "0",
-			PrimaryKey: rec[colPK] != "0",
+			Name:       rec.At(colName),
+			Type:       rec.At(colType),
+			Nullable:   rec.At(colNotNull) == "0",
+			PrimaryKey: rec.At(colPK) != "0",
 		})
 	}
 	return result, nil

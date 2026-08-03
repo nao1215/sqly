@@ -41,7 +41,7 @@ func (dr *delimitedRepository) Dump(f io.Writer, table *model.Table) error {
 	records := make([][]string, 0, 1+table.RowCount())
 	records = append(records, table.Header())
 	for _, v := range table.Rows {
-		records = append(records, v)
+		records = append(records, v.AppendTo(make([]string, 0, v.Len())))
 	}
 
 	for _, record := range records {

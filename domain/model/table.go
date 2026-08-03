@@ -21,8 +21,8 @@ import (
 func (t *Table) columnData(columnIndex int) []string {
 	var columnData []string
 	for _, record := range t.Rows {
-		if columnIndex < len(record) {
-			columnData = append(columnData, record[columnIndex])
+		if columnIndex < record.Len() {
+			columnData = append(columnData, record.At(columnIndex))
 		}
 	}
 	return columnData
@@ -267,16 +267,18 @@ func (t *Table) Name() string {
 // and the describe path both re-wrap a result under the user's table name, and
 // JSON output of the renamed table has to keep emitting numbers and nulls.
 //
-// The record and cell slices are cloned rather than aliased, so appending to
-// one table cannot write into the other's backing array — the failure a
-// struct-value copy allowed, where both tables shared one slice header and one
-// array beyond its length. The cloned rows themselves are shared, which is safe
-// because Records() is read-only by contract.
+// The header, the record slice, and the cell slice are all cloned, so the two
+// tables share no mutable storage: renaming a column on one cannot rename it on
+// the other, and appending to one cannot write into the other's backing array.
+// The row contents themselves are shared, which is safe because nothing can
+// reach them except through a RecordView or a copy.
 func (t *Table) WithName(name string) *Table {
 	cloned := &Table{
 		name:    name,
-		header:  t.header,
 		columns: t.columns,
+	}
+	if t.header != nil {
+		cloned.header = append(make(Header, 0, len(t.header)), t.header...)
 	}
 	if t.records != nil {
 		cloned.records = append(make([]Record, 0, len(t.records)), t.records...)
@@ -287,9 +289,39 @@ func (t *Table) WithName(name string) *Table {
 	return cloned
 }
 
-// Header return table header.
+// Header returns a copy of the table's column names.
+//
+// The copy is why `table.Header()[0] = "corrupted"` cannot rename a column
+// behind the table's back. Code that only needs to read the names should use
+// ColumnCount, ColumnName, or Columns, which allocate nothing.
 func (t *Table) Header() Header {
-	return t.header
+	if t.header == nil {
+		return nil
+	}
+	return append(make(Header, 0, len(t.header)), t.header...)
+}
+
+// ColumnCount returns the number of columns without copying the header.
+func (t *Table) ColumnCount() int {
+	return len(t.header)
+}
+
+// ColumnName returns the name of column i, or the empty string when i is
+// outside the header. It reads the header without copying it.
+func (t *Table) ColumnName(i int) string {
+	if i < 0 || i >= len(t.header) {
+		return ""
+	}
+	return t.header[i]
+}
+
+// Columns iterates the column names in order without copying them.
+func (t *Table) Columns(yield func(int, string) bool) {
+	for i, name := range t.header {
+		if !yield(i, name) {
+			return
+		}
+	}
 }
 
 // Records returns a copy of the table's records: the display string of every
@@ -327,31 +359,44 @@ func (t *Table) RowCount() int {
 	return len(t.records)
 }
 
-// Rows iterates the table's records in order, as a range-over-func sequence:
+// Rows iterates the table's rows in order, as a range-over-func sequence:
 //
-//	for i, record := range table.Rows {
-//	    ...
+//	for i, row := range table.Rows {
+//	    name := row.At(1)
 //	}
 //
-// The Record yielded is the Table's own storage and is valid only for the
-// duration of the call. Do not write to it or retain it past the iteration;
-// take a copy, or call Records, if either is needed. This is the read path the
-// hot loops use, so walking a million rows costs no allocation.
-func (t *Table) Rows(yield func(int, Record) bool) {
+// The RecordView borrows the Table's storage, so iterating costs no allocation
+// however many rows there are — and it exposes no way to write through it, so
+// the borrow cannot corrupt the table. Call RecordView.Record if a caller needs
+// a copy it may keep or modify.
+func (t *Table) Rows(yield func(int, RecordView) bool) {
 	for i, record := range t.records {
-		if !yield(i, record) {
+		if !yield(i, newRecordView(record)) {
 			return
 		}
 	}
 }
 
-// Row returns the record at index i and whether it exists. Like Rows it returns
-// the Table's own storage, so the result is read-only.
-func (t *Table) Row(i int) (Record, bool) {
+// Row returns a read-only view of row i and whether it exists.
+func (t *Table) Row(i int) (RecordView, bool) {
 	if i < 0 || i >= len(t.records) {
-		return nil, false
+		return RecordView{}, false
 	}
-	return t.records[i], true
+	return newRecordView(t.records[i]), true
+}
+
+// ValueAt returns the display string at (row, column), or the empty string when
+// either index is outside the table. It is the cheapest read there is: no view,
+// no copy, no allocation.
+func (t *Table) ValueAt(row, column int) string {
+	if row < 0 || row >= len(t.records) {
+		return ""
+	}
+	record := t.records[row]
+	if column < 0 || column >= len(record) {
+		return ""
+	}
+	return record[column]
 }
 
 // Equal compare Table.
@@ -367,7 +412,7 @@ func (t *Table) Equal(t2 *Table) bool {
 	}
 	for i, record := range t.Rows {
 		other, ok := t2.Row(i)
-		if !ok || !record.Equal(other) {
+		if !ok || !record.Record().Equal(other.Record()) {
 			return false
 		}
 	}
@@ -412,13 +457,12 @@ func (t *Table) IsEmptyRecords() bool {
 
 // IsSameHeaderColumnName return whether the table has a header column with the same name
 func (t *Table) IsSameHeaderColumnName() bool {
-	encountered := map[string]bool{}
-	for i := range t.header {
-		if !encountered[t.Header()[i]] {
-			encountered[t.Header()[i]] = true
-			continue
+	encountered := make(map[string]bool, len(t.header))
+	for _, name := range t.Columns {
+		if encountered[name] {
+			return true
 		}
-		return true
+		encountered[name] = true
 	}
 	return false
 }
@@ -456,8 +500,8 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 // printTable print all record with header; output format is table
 func (t *Table) printTable(out io.Writer) error {
 	// Create alignment configuration - detect numeric columns and align them right
-	alignment := make(tw.Alignment, len(t.Header()))
-	for i, h := range t.Header() {
+	alignment := make(tw.Alignment, t.ColumnCount())
+	for i, h := range t.Columns {
 		// Check if header suggests numeric data or if we should align right
 		headerName := strings.ToLower(h)
 		// Check for common numeric column patterns
@@ -482,8 +526,8 @@ func (t *Table) printTable(out io.Writer) error {
 	}
 
 	// Create header alignment configuration - center all headers
-	headerAlignment := make(tw.Alignment, len(t.Header()))
-	for i := range t.Header() {
+	headerAlignment := make(tw.Alignment, t.ColumnCount())
+	for i := range t.ColumnCount() {
 		headerAlignment[i] = tw.AlignCenter
 	}
 
@@ -495,17 +539,17 @@ func (t *Table) printTable(out io.Writer) error {
 	)
 
 	// Convert Header ([]string) to []any for the new API
-	headers := make([]any, len(t.Header()))
-	for i, h := range t.Header() {
+	headers := make([]any, t.ColumnCount())
+	for i, h := range t.Columns {
 		headers[i] = h
 	}
 	table.Header(headers...)
 
 	for _, v := range t.Rows {
-		// Convert Record ([]string) to []any for the new API
-		row := make([]any, len(v))
-		for i, cell := range v {
-			row[i] = cell
+		// Convert the row to []any for the tablewriter API.
+		row := make([]any, v.Len())
+		for i := range v.Len() {
+			row[i] = v.At(i)
 		}
 		if err := table.Append(row); err != nil {
 			return fmt.Errorf("failed to append table row: %w", err)
@@ -533,7 +577,7 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 	if _, err := fmt.Fprint(out, "|"); err != nil {
 		return fmt.Errorf("failed to write markdown header prefix: %w", err)
 	}
-	for _, h := range t.Header() {
+	for _, h := range t.Columns {
 		if _, err := fmt.Fprintf(out, " %s |", markdownCell(h)); err != nil {
 			return fmt.Errorf("failed to write markdown header cell %q: %w", h, err)
 		}
@@ -546,7 +590,7 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 	if _, err := fmt.Fprint(out, "|"); err != nil {
 		return fmt.Errorf("failed to write markdown separator prefix: %w", err)
 	}
-	for range t.Header() {
+	for range t.ColumnCount() {
 		if _, err := fmt.Fprint(out, "-----|"); err != nil {
 			return fmt.Errorf("failed to write markdown separator cell: %w", err)
 		}
@@ -560,8 +604,8 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 		if _, err := fmt.Fprint(out, "|"); err != nil {
 			return fmt.Errorf("failed to write markdown row %d prefix: %w", rowIdx, err)
 		}
-		for _, cell := range record {
-			if _, err := fmt.Fprintf(out, " %s |", markdownCell(cell)); err != nil {
+		for i := range record.Len() {
+			if _, err := fmt.Fprintf(out, " %s |", markdownCell(record.At(i))); err != nil {
 				return fmt.Errorf("failed to write markdown cell: %w", err)
 			}
 		}
@@ -595,8 +639,12 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	if err := w.Write([]string(t.Header())); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
+	// One buffer, refilled per row: encoding/csv needs a []string, and the view
+	// will not surrender its own, so this is the allocation-free bridge.
+	buf := make([]string, 0, t.ColumnCount())
 	for _, v := range t.Rows {
-		if err := w.Write([]string(v)); err != nil {
+		buf = v.AppendTo(buf[:0])
+		if err := w.Write(buf); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}
 	}
@@ -614,12 +662,13 @@ func (t *Table) printLTSV(out io.Writer) error {
 		return err
 	}
 	for _, v := range t.Rows {
-		r := make(Record, 0, len(v))
-		for i, data := range v {
-			if err := ensureLTSVValueRepresentable(t.Header()[i], data); err != nil {
+		r := make(Record, 0, v.Len())
+		for i := range v.Len() {
+			label, data := t.ColumnName(i), v.At(i)
+			if err := ensureLTSVValueRepresentable(label, data); err != nil {
 				return err
 			}
-			r = append(r, t.Header()[i]+":"+data)
+			r = append(r, label+":"+data)
 		}
 		if _, err := fmt.Fprintln(out, strings.Join(r, "\t")); err != nil {
 			return fmt.Errorf("failed to write LTSV record %v: %w", r, err)
@@ -651,7 +700,7 @@ const verticalRecordRuleWidth = 60
 // csv, tsv, ltsv, json — are unaffected.
 func (t *Table) printVertical(out io.Writer) error {
 	gutter := 0
-	for _, h := range t.Header() {
+	for _, h := range t.Columns {
 		if n := runewidth.StringWidth(h); n > gutter {
 			gutter = n
 		}
@@ -666,11 +715,8 @@ func (t *Table) printVertical(out io.Writer) error {
 			return fmt.Errorf("failed to write vertical record rule: %w", err)
 		}
 
-		for j, header := range t.Header() {
-			value := ""
-			if j < len(record) {
-				value = record[j]
-			}
+		for j, header := range t.Columns {
+			value := record.At(j)
 			name := header + strings.Repeat(" ", gutter-runewidth.StringWidth(header))
 			if _, err := fmt.Fprintf(out, "%s | %s\n", name, value); err != nil {
 				return fmt.Errorf("failed to write vertical column %s: %w", header, err)
@@ -744,10 +790,11 @@ func (t *Table) printExcel(out io.Writer) error {
 // TEXT "123", "true", or "00123" is never reinterpreted as a number or boolean.
 // Why a manual builder: encoding's map marshaling sorts keys alphabetically,
 // which would drop column order.
-func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
+func (t *Table) rowToJSONObject(row int, record RecordView) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteByte('{')
-	for i, h := range t.Header() {
+	// t.Columns, not t.Header(): this runs once per row, and Header() copies.
+	for i, h := range t.Columns {
 		if i > 0 {
 			b.WriteByte(',')
 		}
@@ -761,8 +808,8 @@ func (t *Table) rowToJSONObject(row int, record Record) ([]byte, error) {
 		var val any
 		if cell, ok := t.cell(row, i); ok {
 			val = cell.Value()
-		} else if i < len(record) {
-			val = record[i]
+		} else if i < record.Len() {
+			val = record.At(i)
 		}
 		value, err := jsonScalarToken(val)
 		if err != nil {
