@@ -41,9 +41,10 @@ and Fedwire files ((devel))
 
   Query:
     -s, --sql SQL               run one SQL statement, then exit
-    -f, --sql-file FILE         run every statement in this file, then exit;
-                                printing several results needs --output-format
-                                table, vertical, or markdown
+    -f, --sql-file FILE         run every SQL statement in this file, then exit;
+                                a dot-command is rejected, so pipe such a script
+                                in instead; printing several results needs
+                                --output-format table, vertical, or markdown
         --dialect NAME          write the query in one of: sqlite, mysql,
                                 postgresql, googlesql; sqly translates it to
                                 SQLite (default: sqlite)

@@ -153,7 +153,7 @@ func newArg(args []string) (*Arg, error) {
 	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "for csv and tsv, what to do with a row whose field count differs from the header: error (fail the import), skip (drop the row), pad (fill a short row, fail on a long one)")
 	// Query.
 	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
-	sqlFile := flag.StringP("sql-file", "f", "", "run every statement in this file, then exit; printing several results needs --output-format table, vertical, or markdown")
+	sqlFile := flag.StringP("sql-file", "f", "", "run every SQL statement in this file, then exit; a dot-command is rejected, so pipe such a script in instead; printing several results needs --output-format table, vertical, or markdown")
 	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: sqlite, mysql, postgresql, googlesql; sqly translates it to SQLite")
 	// Output.
 	output := flag.StringP("output", "o", "", "write the one query result to this file instead of stdout")
