@@ -122,6 +122,13 @@ type Shell struct {
 	// changed on disk. Every other run prints each count in place, so the counts
 	// stay interleaved with the results in statement order.
 	deferAffectedCounts bool
+	// plan is what this invocation is: which mode, and where stdin goes. It is
+	// decided once in Run, before anything is read.
+	plan runPlan
+	// stdinKindCached and stdinKindOnce memoize what standard input is attached
+	// to. The answer cannot change during a run, and the probe is a syscall.
+	stdinKindCached stdinKind
+	stdinKindOnce   bool
 	// files is every filesystem call the write-back commit path makes. It is a
 	// field so a test can fail exactly one of them; production always gets the
 	// real filesystem from NewShell.
@@ -269,27 +276,21 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
-	// --sql and --sql-file both supply a non-interactive query; accepting both
-	// would be ambiguous. Read and validate the SQL file before importing so a
-	// bad path fails fast without spending time on the import.
-	if s.argument.Query != "" && s.argument.SQLFilePath != "" {
-		return errors.New("--sql and --sql-file cannot be used together")
+	// Decide what this invocation is before reading anything: which mode, and
+	// where stdin goes. Every later question about stdin and about what a script
+	// may contain is answered from this one decision.
+	plan, err := s.planRun()
+	if err != nil {
+		return err
 	}
-	// --stdin-format stages piped stdin as a dataset, which consumes stdin entirely, so
-	// nothing remains to carry a query. Require an explicit query source;
-	// otherwise the dataset is imported and immediately discarded with a success
-	// exit code.
-	if s.argument.StdinFormat != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" && !s.argument.InspectFlag {
-		return errors.New("--stdin-format provides a dataset but no query was given; add --sql, --sql-file, or --inspect")
-	}
+	s.plan = plan
 
-	var sqlScript string
-	if s.argument.SQLFilePath != "" {
-		script, err := readSQLFile(s.argument.SQLFilePath)
-		if err != nil {
-			return err
-		}
-		sqlScript = script
+	// Read and parse the script now, so a script that cannot run — a bad
+	// boundary, or a helper command in a SQL file — fails before the import
+	// spends time on files. The same parse is what executes below.
+	elements, err := s.loadScript()
+	if err != nil {
+		return err
 	}
 
 	if err := s.init(ctx); err != nil {
@@ -308,40 +309,20 @@ func (s *Shell) Run(ctx context.Context) error {
 		}
 	}
 
-	// --inspect is a non-interactive discovery path: after import it prints a
-	// JSON report of the loaded tables and exits, so it takes precedence over
-	// --sql and the interactive/batch paths.
-	if s.argument.InspectFlag {
+	switch s.plan.mode {
+	case modeInspect:
 		return s.runInspect(ctx)
-	}
 
-	if s.argument.Query != "" {
-		// Direct --sql runs exactly one statement and prints (or exports) its single
-		// result. Multiple statements separated by ";" would silently drop every
-		// result but the last, so reject them up front instead of running the input
-		// and discarding output.
-		if n := countSQLStatements(s.argument.Query); n > 1 {
-			return fmt.Errorf("--sql accepts a single SQL statement, but got %d; run one statement per invocation or use --sql-file for a multi-statement script", n)
-		}
-		if err := s.execSQL(ctx, s.argument.Query); err != nil {
+	case modeInlineSQL, modeSQLFile:
+		if err := s.prepareForScript(ctx, elements); err != nil {
 			return err
 		}
-		return s.finishNonInteractive(ctx)
-	}
-
-	// --sql-file runs the loaded script with the same statement-splitting and
-	// error reporting as batch stdin mode, so multiline SQL and multiple
-	// statements behave identically whether they arrive from a file or a pipe.
-	if s.argument.SQLFilePath != "" {
-		if err := s.prepareForScript(ctx, sqlScript); err != nil {
-			return err
-		}
-		// With --output, export the script's single result set to the file instead
-		// of printing each statement's result, mirroring how --sql exports.
+		// With --output, export the run's single result set to the file instead of
+		// printing each statement's result.
 		if s.argument.Output.FilePath != "" {
-			return s.runSQLFileToOutput(ctx, sqlScript)
+			return s.runSQLFileToOutput(ctx, elements)
 		}
-		ranAny, err := s.runScript(ctx, sqlScript)
+		ranAny, err := s.runScript(ctx, elements)
 		if err != nil {
 			return err
 		}
@@ -349,40 +330,85 @@ func (s *Shell) Run(ctx context.Context) error {
 			return nil
 		}
 		return s.finishNonInteractive(ctx)
-	}
 
-	// Without a terminal (e.g. piped stdin) the interactive prompt cannot
-	// initialize, so read SQL and helper commands from stdin in batch mode. The
-	// whole script is read up front so write-back can be validated before the
-	// first statement runs and skipped for a read-only script.
-	if !s.isTTY() {
-		data, err := io.ReadAll(s.stdin)
-		if err != nil {
-			return fmt.Errorf("failed to read batch input: %w", err)
-		}
-		batchScript := strings.TrimPrefix(string(data), "\ufeff")
-		if err := s.prepareForScript(ctx, batchScript); err != nil {
+	case modeStdinScript:
+		if err := s.prepareForScript(ctx, elements); err != nil {
 			return err
 		}
-		ranAny, err := s.runScript(ctx, batchScript)
+		ranAny, err := s.runScript(ctx, elements)
 		if err != nil {
 			return err
 		}
-		// A non-interactive run that executed nothing (no TTY and empty or
-		// comment-only stdin, with no --sql/--sql-file) is a silent no-op that
-		// still exits 0, so headless wrappers and CI mistake it for a completed
-		// query. Surface a hint and fail instead.
+		// A non-interactive run that executed nothing — empty or comment-only
+		// stdin — is a silent no-op that still exits 0, so headless wrappers and CI
+		// mistake it for a completed query. Surface a hint and fail instead.
 		if !ranAny {
 			return errNoStatements
 		}
 		return s.finishNonInteractive(ctx)
+
+	default:
+		// Start shell. The welcome banner is printed inside communicate, only after
+		// the prompt session is created, so a terminal-backend failure (no usable
+		// /dev/tty) reports a clear error instead of looking like the shell started
+		// and then crashed right after the banner.
+		return s.communicate(ctx)
+	}
+}
+
+// loadScript reads and parses this run's statements, from wherever the mode says
+// they come. The interactive shell and --inspect have no script; every other
+// mode has exactly one, parsed once here and executed later from the same
+// result.
+func (s *Shell) loadScript() ([]scriptElement, error) {
+	var (
+		script string
+		origin string
+	)
+	switch s.plan.mode {
+	case modeInlineSQL:
+		script, origin = s.argument.Query, "--sql"
+	case modeSQLFile:
+		loaded, err := readSQLFile(s.argument.SQLFilePath)
+		if err != nil {
+			return nil, err
+		}
+		script, origin = loaded, s.argument.SQLFilePath
+	case modeStdinScript:
+		data, err := io.ReadAll(s.stdin)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read the script from stdin: %w", err)
+		}
+		script, origin = string(data), "stdin"
+	default:
+		return nil, nil
 	}
 
-	// Start shell. The welcome banner is printed inside communicate, only after
-	// the prompt session is created, so a terminal-backend failure (no usable
-	// /dev/tty) reports a clear error instead of looking like the shell started
-	// and then crashed right after the banner.
-	return s.communicate(ctx)
+	elements, err := parseScript(script)
+	if err != nil {
+		return nil, &scriptError{Err: fmt.Errorf("%s: %w", origin, err)}
+	}
+
+	// A SQL file holds SQL. Helper commands are the shell's language, and a
+	// script that wants them belongs on stdin, where the name of the thing being
+	// read does not promise otherwise — and where a destructive .save cannot
+	// arrive inside a file someone believed was a query.
+	if !s.plan.mode.allowsHelperCommands() {
+		if helper, found := firstHelper(elements); found {
+			return nil, &scriptError{Err: fmt.Errorf(
+				"%s runs SQL only, but line %d is the helper command %q; pipe the script to sqly instead: printf '...' | sqly FILE",
+				origin, helper.startLine, helper.commandName())}
+		}
+	}
+
+	// --sql runs one statement. Two would mean printing one result and dropping
+	// the other, so the count is checked against the same parse that would run it.
+	if s.plan.mode == modeInlineSQL && len(elements) > 1 {
+		return nil, &invocationError{Err: fmt.Errorf(
+			"--sql accepts a single SQL statement, but got %d; run one statement per invocation, or use --sql-file for a script",
+			len(elements))}
+	}
+	return elements, nil
 }
 
 // communicate is interactive command prompt for sqly.
@@ -1041,9 +1067,9 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 // result ends and the next begins — so those results are collected instead of
 // printed, and a script that produced more than one is rejected with nothing on
 // stdout. A script that produces none (only DDL/DML) is fine either way.
-func (s *Shell) runScript(ctx context.Context, script string) (bool, error) {
+func (s *Shell) runScript(ctx context.Context, elements []scriptElement) (bool, error) {
 	if s.state.mode.AllowsMultipleResults() {
-		return s.runBatchReader(ctx, strings.NewReader(script))
+		return s.runScriptElements(ctx, elements)
 	}
 
 	s.capturedRowsets = nil
@@ -1053,7 +1079,7 @@ func (s *Shell) runScript(ctx context.Context, script string) (bool, error) {
 		s.capturedRowsets = nil
 	}()
 
-	ranAny, err := s.runBatchReader(ctx, strings.NewReader(script))
+	ranAny, err := s.runScriptElements(ctx, elements)
 	if err != nil {
 		return ranAny, err
 	}
@@ -1080,7 +1106,7 @@ const multiResultAdvice = "keep one statement that returns rows, or use --output
 // clear error, matching the one-file/one-result contract of --sql --output.
 // Rowset results are captured rather than printed, so a successful run leaves
 // stdout clean and writes only to the output file.
-func (s *Shell) runSQLFileToOutput(ctx context.Context, script string) error {
+func (s *Shell) runSQLFileToOutput(ctx context.Context, elements []scriptElement) error {
 	// Start from a clean slate and clear on the way out, so a reused Shell never
 	// counts rowsets captured by an earlier run.
 	s.capturedRowsets = nil
@@ -1090,7 +1116,7 @@ func (s *Shell) runSQLFileToOutput(ctx context.Context, script string) error {
 		s.capturedRowsets = nil
 	}()
 
-	if _, err := s.runBatchReader(ctx, strings.NewReader(script)); err != nil {
+	if _, err := s.runScriptElements(ctx, elements); err != nil {
 		return err
 	}
 
@@ -1186,7 +1212,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	// produce them, so reject such a destination instead of silently writing CSV
 	// bytes to a misleading .ach/.fed path.
 	if model.IsInputOnlyExtension(s.argument.Output.FilePath) {
-		return fmt.Errorf("--output destination %q uses an input-only format (ACH/Fedwire); export to csv/tsv/json/parquet instead", s.argument.Output.FilePath)
+		return &outputPathError{Path: s.argument.Output.FilePath, Err: fmt.Errorf("--output destination %q uses an input-only format (ACH/Fedwire); export to csv/tsv/json/parquet instead", s.argument.Output.FilePath)}
 	}
 	mode := s.state.mode.PrintMode
 	explicit := model.ExportFormatFromPrintMode(mode)
@@ -1201,7 +1227,12 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
 		return fmt.Errorf("--output destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)
 	}
-	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
+	// The result is serialized beside the destination and moved onto it, so a
+	// format that rejects a value part-way — or a full disk — leaves an existing
+	// file whole rather than truncated. .save writes through the same steps.
+	if err := s.writeFileAtomically(filePath, func(staging string) error {
+		return s.usecases.export.DumpTable(staging, table, exportFmt, compression)
+	}); err != nil {
 		return err
 	}
 	// Status for a file-output operation is control-plane information; the data
@@ -1230,9 +1261,9 @@ func (s *Shell) outputAliasesImportedSource(path string) (string, bool) {
 // prepareForScript records what the whole script implies before its first
 // statement runs: whether a write-back is coming, which decides if the
 // affected-row counts can be printed as they happen.
-func (s *Shell) prepareForScript(ctx context.Context, script string) error {
-	s.deferAffectedCounts = scriptSaves(script)
-	return s.preflightSave(ctx, script)
+func (s *Shell) prepareForScript(_ context.Context, elements []scriptElement) error {
+	s.deferAffectedCounts = runsHelper(elements, saveCommand)
+	return s.preflightSave(elements)
 }
 
 // ensureWritableDestination rejects an output destination sqly cannot write a

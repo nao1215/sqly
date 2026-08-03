@@ -1,0 +1,56 @@
+package shell
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/nao1215/sqly/domain/cleanup"
+)
+
+// Writing a file is the same problem twice in sqly: `--output` writes one query
+// result, and `.save` writes the tables a session changed. Both have to leave an
+// existing file exactly as it was when anything goes wrong, and both have to
+// keep its permissions when it does not.
+//
+// The rules live here so there is one answer rather than two. What stays apart
+// is what genuinely differs: `--output` replaces a single file and can commit as
+// soon as it is written, while `.save` must hold every staged file until all of
+// them exist, and can then have to undo commits that already landed. That
+// difference is the reason `.save` drives the phases itself instead of calling
+// the helper below.
+
+// writeFileAtomically serializes into a scratch file beside dest and moves it
+// into place. The destination is not touched until write has finished
+// successfully, so a serializer that fails on the third row — a value the format
+// cannot hold, a full disk — leaves the previous file whole.
+//
+// write is given the scratch path and must produce the complete file at it.
+func (s *Shell) writeFileAtomically(dest string, write func(path string) error) (err error) {
+	staging, err := s.fs().stagingPath(dest, ".sqly-out-*")
+	if err != nil {
+		return &fileOpError{Op: opStage, Path: dest, Err: err}
+	}
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		// The scratch file is only ever left behind on a failure, and then it is a
+		// leftover the caller has to hear about, so its removal joins the error
+		// rather than replacing it.
+		err = cleanup.Join(err, s.fs().Remove(staging), fmt.Sprintf("remove the staged file %q", staging))
+	}()
+
+	if err := write(staging); err != nil {
+		// The serializer names the path it was writing, which is the scratch file.
+		// The user asked for the destination and has no reason to learn the other
+		// name, so the message reads as if the write had gone straight there.
+		return errors.New(strings.ReplaceAll(err.Error(), staging, dest))
+	}
+	if err := s.commitStagedFile(staging, dest); err != nil {
+		return &fileOpError{Op: opCommit, Path: dest, Err: err}
+	}
+	committed = true
+	return nil
+}
