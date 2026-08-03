@@ -178,8 +178,11 @@ func BenchmarkQueryMaterialize100k(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if len(table.Records()) != 100_000 {
-			b.Fatalf("rows = %d", len(table.Records()))
+		// RowCount, not Records: this benchmark measures materializing the
+		// result, and Records() deep-copies it. BenchmarkRecordsCopy measures
+		// that separately.
+		if got := table.RowCount(); got != 100_000 {
+			b.Fatalf("rows = %d", got)
 		}
 	}
 }
