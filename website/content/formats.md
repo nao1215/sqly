@@ -50,12 +50,52 @@ That keeps heterogeneous documents queryable — no schema is guessed, and a fie
 
 ## Excel
 
-Every sheet becomes its own `file_sheet` table, so a workbook is queried the way a
-directory is: pick the table you want.
+Every sheet becomes its own table, so a workbook is queried the way a directory
+is: pick the table you want. All sheets are imported — there is no flag to select
+one, because selecting one is what the `FROM` clause is for.
 
 ```shell
 sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 ```
+
+### How a sheet becomes a table name
+
+The table name is the file's base name, an underscore, and the sheet name:
+`book.xlsx` + sheet `Q3_actuals` becomes `book_Q3_actuals`. Both halves are
+sanitized so the result is usable as a SQL identifier:
+
+| In the sheet name | In the table name | Example |
+|:--|:--|:--|
+| Letters, digits, `_` | kept as they are, including case | `Sheet1` → `book_Sheet1` |
+| Spaces, `-`, `.` | become `_` | `Q3 actuals` → `book_Q3_actuals` |
+| Other punctuation (`()`, `#`, `$`, `%`, …) | dropped | `x(1)` → `book_x1` |
+| A leading digit | prefixed with `sheet_` | `2024` → `book_sheet_2024` |
+| Non-ASCII letters | kept, and the name then needs quoting | `売上` → `"book_売上"` |
+
+`.tables` prints each name the way you have to type it, already quoted when
+quoting is required, so the output can be pasted into a query. A sheet named
+after a SQLite keyword needs no quoting once the file name is in front of it:
+sheet `select` of `book.xlsx` is `book_select`, an ordinary identifier.
+
+### What is and is not imported
+
+| The workbook has | sqly does |
+|:--|:--|
+| Many sheets | imports every one; a hundred sheets is a hundred tables |
+| A hidden sheet | imports it like any other — hidden is a display property |
+| A sheet with no cells | skips it; no empty table is created |
+| A sheet with a header and no rows | imports it as a table with zero rows |
+| No usable sheet at all | fails the import, saying the file produced no table |
+| A sheet that cannot be read | fails the whole workbook; sqly does not import part of a file and report success |
+
+Two workbooks may hold the same sheet name — `a.xlsx` and `b.xlsx` both with
+`Sheet1` give `a_Sheet1` and `b_Sheet1`, because the file name is part of the
+table name.
+
+> **Known limitation.** Two sheets *in one workbook* whose names sanitize to the
+> same table name — `Data` and `data`, or `a b` and `a.b` — currently collapse
+> into one table, and the last sheet wins without a warning. Rename such sheets
+> before importing.
 
 An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.
 

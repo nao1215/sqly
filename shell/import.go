@@ -414,6 +414,12 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) e
 			s.clearDirImported(owned)
 			s.warnKeywordTableNames(owned)
 			return nil
+		case len(owned) == 0:
+			// No table was created, and no table carries this file's name — so the
+			// file did not collide with anything, it simply held no data. An Excel
+			// workbook whose only sheet has no cells arrives here. Saying "collision"
+			// would send the user looking for a second input that does not exist.
+			return fmt.Errorf("%s produced no table; the file has no rows to import", displayPath)
 		default:
 			// Two distinct plain-file inputs sanitized to the same table name (for
 			// example "a-b.csv" and "a_b.csv" both becoming "a_b"). filesql overwrote

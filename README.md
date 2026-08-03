@@ -289,7 +289,7 @@ Writing a *query result* somewhere is a different job, and that one is a flag:
 | CSV / TSV / LTSV | `.csv` `.tsv` `.ltsv` | one table, columns from the header |
 | JSON / JSONL | `.json` `.jsonl` | one table with a `data` column; query with `json_extract()` |
 | Parquet | `.parquet` | one table |
-| Excel | `.xlsx` | one table per sheet, named `file_sheet` |
+| Excel | `.xlsx` | one table per sheet, named `file_sheet` — every sheet, hidden ones included |
 | ACH | `.ach` | several tables (`_file_header`, `_batches`, `_entries`, `_addenda`) |
 | Fedwire | `.fed` | one `_message` table |
 
