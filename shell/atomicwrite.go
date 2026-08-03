@@ -3,6 +3,7 @@ package shell
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/nao1215/sqly/domain/cleanup"
@@ -43,14 +44,26 @@ func (s *Shell) writeFileAtomically(dest string, write func(path string) error) 
 	}()
 
 	if err := write(staging); err != nil {
-		// The serializer names the path it was writing, which is the scratch file.
-		// The user asked for the destination and has no reason to learn the other
-		// name, so the message reads as if the write had gone straight there.
-		return errors.New(strings.ReplaceAll(err.Error(), staging, dest))
+		return errors.New(renamePathInMessage(err.Error(), staging, dest))
 	}
 	if err := s.commitStagedFile(staging, dest); err != nil {
 		return &fileOpError{Op: opCommit, Path: dest, Err: err}
 	}
 	committed = true
 	return nil
+}
+
+// renamePathInMessage rewrites every mention of the scratch path as the
+// destination. The serializer names the path it was writing, which is the
+// scratch file; the user asked for the destination and has no reason to learn
+// the other name, so the message reads as if the write had gone straight there.
+//
+// Both spellings are replaced. A message that formatted the path with %q holds
+// it escaped, and on Windows escaping a path changes it: `.\\out.csv` in the
+// message is `.\out.csv` on disk. Replacing only the raw form left the scratch
+// name visible there and nowhere else, which is the kind of difference only the
+// platform it breaks on ever reports.
+func renamePathInMessage(message, staging, dest string) string {
+	message = strings.ReplaceAll(message, strconv.Quote(staging), strconv.Quote(dest))
+	return strings.ReplaceAll(message, staging, dest)
 }

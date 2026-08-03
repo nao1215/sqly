@@ -82,12 +82,12 @@ scenarios:
             old
           mode: "0640"
       - run:
-          command: sh -c "sqly --output-format csv --output out.csv --sql 'SELECT a FROM rows' rows.csv && stat -c %a out.csv"
+          command: sh -c "sqly --output-format csv --output out.csv --sql 'SELECT a FROM rows' rows.csv && ls -l out.csv | cut -c1-10"
           shell: true
       - assert:
           exit_code: 0
           stdout:
-            contains: "640"
+            contains: "-rw-r-----"
           file:
             path: out.csv
             contains: "1"
@@ -104,12 +104,12 @@ scenarios:
             1
           mode: "0640"
       - run:
-          command: sh -c "printf 'UPDATE perm SET a = 2;\n.save --in-place\n' | sqly perm.csv && stat -c %a perm.csv"
+          command: sh -c "printf 'UPDATE perm SET a = 2;\n.save --in-place\n' | sqly perm.csv && ls -l perm.csv | cut -c1-10"
           shell: true
       - assert:
           exit_code: 0
           stdout:
-            contains: "640"
+            contains: "-rw-r-----"
           file:
             path: perm.csv
             contains: "2"
