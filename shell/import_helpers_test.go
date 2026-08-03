@@ -96,18 +96,14 @@ func TestRemoteURLHelpers(t *testing.T) {
 	for _, test := range []struct {
 		raw      string
 		filename string
-		isExcel  bool
 	}{
-		{raw: "https://example.test/files/data.csv", filename: "data.csv", isExcel: false},
-		{raw: "https://example.test/files/REPORT.XLSX", filename: "REPORT.XLSX", isExcel: true},
-		{raw: "https://example.test/", filename: "", isExcel: false},
-		{raw: "http://[", filename: "", isExcel: false},
+		{raw: "https://example.test/files/data.csv", filename: "data.csv"},
+		{raw: "https://example.test/files/REPORT.XLSX", filename: "REPORT.XLSX"},
+		{raw: "https://example.test/", filename: ""},
+		{raw: "http://[", filename: ""},
 	} {
 		if got := remoteFilenameHint(test.raw); got != test.filename {
 			t.Errorf("remoteFilenameHint(%q) = %q, want %q", test.raw, got, test.filename)
-		}
-		if got := isRemoteExcelURL(test.raw); got != test.isExcel {
-			t.Errorf("isRemoteExcelURL(%q) = %v, want %v", test.raw, got, test.isExcel)
 		}
 	}
 }

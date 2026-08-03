@@ -30,8 +30,9 @@ scenarios:
           content: |
             UPDATE adebit_entries SET individual_name = 'RENAMED';
             UPDATE zdebit_entries SET amount = 999999999999;
+            .save --in-place
       - run:
-          command: sqly --save-in-place --sql-file script.sql adebit.ach zdebit.ach
+          command: sqly --sql-file script.sql adebit.ach zdebit.ach
       - assert:
           exit_code: 1
           stderr:
@@ -59,8 +60,9 @@ scenarios:
           content: |
             UPDATE adebit_entries SET individual_name = 'RENAMED';
             UPDATE zwire_message SET amount = 'BADAMOUNT';
+            .save --in-place
       - run:
-          command: sqly --save-in-place --sql-file script.sql adebit.ach zwire.fed
+          command: sqly --sql-file script.sql adebit.ach zwire.fed
       - assert:
           exit_code: 1
           stderr:
@@ -77,7 +79,10 @@ scenarios:
     steps:
       - fixture: *first_ach
       - run:
-          command: sqly --save-in-place --sql "UPDATE adebit_entries SET amount = 999999999999" adebit.ach
+          command: sqly adebit.ach
+          stdin: |
+            UPDATE adebit_entries SET amount = 999999999999;
+            .save --in-place
       - assert:
           exit_code: 1
           changes:
@@ -92,7 +97,7 @@ scenarios:
             line: 2
             equals: "1"
 
-  - name: a failing --save-tables run creates no destination files
+  - name: a failing .save DIR run creates no destination files
     steps:
       - fixture: *first_ach
       - fixture: *second_ach
@@ -101,8 +106,9 @@ scenarios:
           content: |
             UPDATE adebit_entries SET individual_name = 'RENAMED';
             UPDATE zdebit_entries SET amount = 999999999999;
+            .save out
       - run:
-          command: sqly --save-tables out --sql-file script.sql adebit.ach zdebit.ach
+          command: sqly --sql-file script.sql adebit.ach zdebit.ach
       - assert:
           exit_code: 1
       - assert:
@@ -127,8 +133,9 @@ scenarios:
           content: |
             UPDATE rows SET name = 'CHANGED';
             UPDATE adebit_entries SET individual_name = 'RENAMED';
+            .save --in-place
       - run:
-          command: sqly --save-in-place --sql-file script.sql rows.csv adebit.ach
+          command: sqly --sql-file script.sql rows.csv adebit.ach
       - assert:
           exit_code: 0
           stderr:
@@ -152,7 +159,7 @@ scenarios:
             line: 2
             equals: RENAMED
 
-  - name: a successful --save-tables run writes every target and touches no source
+  - name: a successful .save DIR run writes every target and touches no source
     steps:
       - fixture: *rows
       - fixture: *first_ach
@@ -161,8 +168,9 @@ scenarios:
           content: |
             UPDATE rows SET name = 'CHANGED';
             UPDATE adebit_entries SET individual_name = 'RENAMED';
+            .save out
       - run:
-          command: sqly --save-tables out --sql-file script.sql rows.csv adebit.ach
+          command: sqly --sql-file script.sql rows.csv adebit.ach
       - assert:
           exit_code: 0
           changes:

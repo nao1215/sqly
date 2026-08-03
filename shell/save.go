@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,13 +13,10 @@ import (
 )
 
 // inPlaceArg is the .save argument that selects destructive in-place overwrite.
-// It matches the --save-in-place flag so the shell and the command line describe
-// the same operation with the same word.
 const inPlaceArg = "--in-place"
 
-// noDataChangedMessage explains a save that wrote nothing because the run left
-// every table as imported. Both the .save command and the non-interactive
-// --save-in-place/--save-tables path report it, so a read-only run never looks like a
+// noDataChangedMessage explains a save that wrote nothing because the session
+// left every table as imported, so a read-only session never looks like a
 // successful write-back that silently produced no file.
 const noDataChangedMessage = "no table data changed in this session; nothing to save"
 
@@ -97,109 +93,13 @@ func noTablesToSaveError(interactive bool) error {
 	return errors.New("no tables to save: pass input files (e.g. sqly data.csv ...) before saving")
 }
 
-// validateSaveFlags checks the write-back flags before anything is imported.
-// The two destinations are mutually exclusive and a piped or remote input is
-// rejected while parsing; what is left needs the run mode and the script, so it
-// is checked here. sqlScript is the --sql-file contents, or "" for the other
-// modes.
-func (s *Shell) validateSaveFlags(sqlScript string) error {
-	if !s.argument.SaveInPlace && s.argument.SaveTablesDir == "" {
-		return nil
-	}
-	// --sql-file is a non-interactive execution path just like --sql and piped
-	// input, so it may carry write-back even when stdin is a TTY. Reject the save
-	// flags only for a genuinely interactive run with no query source.,
-	if s.argument.Query == "" && s.argument.SQLFilePath == "" && s.isTTY() {
-		return errors.New("--save-in-place/--save-tables require --sql, --sql-file, or piped input; use the .save command in the interactive shell")
-	}
-	// Write-back writes imported tables back to the files they came from, so a run
-	// with no input files has nothing to write. A script can create its own tables
-	// with .import, so only a run whose statements are all fixed up front — a
-	// --sql one-liner, or a --sql-file script with no .import — can be rejected
-	// here; the rest is caught by preflightSave before the first statement.
-	if len(s.argument.FilePaths) == 0 && !s.scriptMayImport(sqlScript) {
-		return errors.New("--save-in-place/--save-tables write imported tables back to their source files, but no input file or directory was given")
-	}
-	// A write-back run must be able to persist every table it imports: it is
-	// all-or-nothing, and a session cannot know up front which tables a statement
-	// will touch. planWriteBack enforces that too, but only once the files have
-	// been parsed; naming the input here means the run stops before it reads
-	// anything.
-	if unwritable := unwritableInputs(s.argument.FilePaths); len(unwritable) > 0 {
-		return fmt.Errorf("--save-in-place/--save-tables cannot write back %s; write-back supports csv, tsv, ltsv, parquet, ach, and fed files named directly. Drop the flag, or leave that input out of this run",
-			strings.Join(unwritable, ", "))
-	}
-	return nil
-}
-
-// unwritableInputs returns the inputs write-back can never persist: a directory
-// (whose tables are not a single editable source sqly owns) and a file whose
-// format has no writer. A path that cannot be stat-ed is skipped, so the import
-// step reports the real path error instead of this check misattributing it.
-func unwritableInputs(paths []string) []string {
-	var unwritable []string
-	for _, path := range paths {
-		info, err := os.Stat(path)
-		if err != nil {
-			continue // let the import report a missing or unreadable path
-		}
-		if info.IsDir() {
-			unwritable = append(unwritable, path+" (a directory import)")
-			continue
-		}
-		if model.FinancialWriteFormat(path) != "" {
-			continue // ACH/Fedwire are rebuilt from their whole table set
-		}
-		if _, _, ok := writableExportTarget(path); !ok {
-			unwritable = append(unwritable, path)
-		}
-	}
-	return unwritable
-}
-
-// scriptMayImport reports whether the run could still create tables of its own
-// after this point: a batch script read from stdin (not yet read here), or a
-// --sql-file script containing .import. A plain --sql run cannot.
-func (s *Shell) scriptMayImport(sqlScript string) bool {
-	if s.argument.Query == "" && s.argument.SQLFilePath == "" {
-		return true // batch stdin: the script is read after this check
-	}
-	return sqlScript != "" && scriptImportsInput(sqlScript)
-}
-
-// saveRequested reports whether a non-interactive write-back flag
-// (--save-in-place or --save-tables) is set.
-func (s *Shell) saveRequested() bool {
-	return s.argument != nil && (s.argument.SaveInPlace || s.argument.SaveTablesDir != "")
-}
-
-// saveDestDir returns the write-back destination directory: the --save-tables value,
-// or "" for --save-in-place.
-func (s *Shell) saveDestDir() string {
-	if s.argument.SaveTablesDir != "" {
-		return s.argument.SaveTablesDir
-	}
-	return ""
-}
-
-// maybeSave runs write-back after a non-interactive run when a save flag is set.
-func (s *Shell) maybeSave(ctx context.Context) error {
-	switch {
-	case s.argument.SaveTablesDir != "":
-		return s.writeBack(ctx, s.argument.SaveTablesDir)
-	case s.argument.SaveInPlace:
-		return s.writeBack(ctx, "")
-	default:
-		return nil
-	}
-}
-
-// preflightSave validates write-back before the SQL runs, so a run that cannot
-// persist fails before any query output reaches stdout and before any
-// file is written. It is a no-op when no save flag is set or
-// when the SQL is read-only, because a read-only run skips write-back.
-func (s *Shell) preflightSave(ctx context.Context, script string) error {
-	if !s.saveRequested() {
+// preflightSave rejects a script whose statements .save could never persist,
+// before the first of them runs. It checks the statements alone; which tables
+// can be written is left to .save, which sees the tables the session actually
+// changed and reports them the same way whether it was typed at the prompt or
+// read from a script.
+func (s *Shell) preflightSave(_ context.Context, script string) error {
+	if !scriptSaves(script) {
 		return nil
 	}
 	// Reject a statement whose effect write-back cannot represent (DDL, schema
@@ -208,52 +108,41 @@ func (s *Shell) preflightSave(ctx context.Context, script string) error {
 	// instead of exiting 0 while leaving the source unchanged.,
 	if stmt := firstSaveIncompatibleStatement(script); stmt != "" {
 		return fmt.Errorf(
-			"--save-in-place/--save-tables cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
+			".save cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
 			trimGaps(stmt))
 	}
-	// A script that imports its own input with .import creates its tables while it
-	// runs, so they cannot be listed up front. Defer write-back validation to the
-	// post-run save, which sees the imported tables.
-	if scriptImportsInput(script) {
-		return nil
-	}
-	if !scriptModifiesData(script) {
-		return nil
-	}
-	// Validate every file-backed table up front: at preflight no change has happened
-	// yet, so the unchanged-skip is disabled (false) to keep the validation meaningful.
-	_, err := s.planWriteBack(ctx, s.saveDestDir(), false)
-	return err
+	return nil
 }
 
-// finishNonInteractive runs write-back after a non-interactive run, but only when
-// a save flag is set and the run actually changed data. A read-only run, an
-// EXPLAIN, or a zero-row DML leaves the imported tables unchanged, so write-back
-// is skipped to avoid rewriting source files.
-func (s *Shell) finishNonInteractive(ctx context.Context) error {
-	if s.saveRequested() {
-		switch {
-		case s.dataChanged:
-			// Run write-back first. If it fails, return before flushing the buffered
-			// affected counts so stdout stays free of success text.
-			if err := s.maybeSave(ctx); err != nil {
-				return err
-			}
-		default:
-			// Say so instead of exiting 0 in silence. A run that asked to persist and
-			// wrote no file otherwise looks like it succeeded, and the missing
-			// destination is only noticed later. The .save command already reports the
-			// same thing for the same reason.
-			fmt.Fprintln(config.Stderr, noDataChangedMessage)
-		}
-	}
-	// The run succeeded (write-back ran, or there was nothing to write back), so
-	// flush the buffered affected counts to stdout now.
+// finishNonInteractive flushes the affected-row counts a non-interactive run
+// buffered. They are buffered rather than printed as they happen so that a run
+// which fails after a DML statement leaves stdout free of success text.
+func (s *Shell) finishNonInteractive(_ context.Context) error {
 	for _, msg := range s.pendingAffected {
 		fmt.Fprint(config.Stdout, msg)
 	}
 	s.pendingAffected = nil
 	return nil
+}
+
+// destinationIndex records which table has claimed each destination path, so a
+// second table cannot be planned onto a file the first will write.
+//
+// Paths are compared case-folded. A case-sensitive filesystem would allow
+// "Sales.csv" and "sales.csv" side by side, but macOS and Windows would not, and
+// a save that succeeds on Linux and silently overwrites one table with another
+// on a laptop is worse than a save that refuses everywhere.
+type destinationIndex map[string]string
+
+func newDestinationIndex() destinationIndex { return make(destinationIndex) }
+
+// claim records dest as belonging to table.
+func (d destinationIndex) claim(dest, table string) { d[strings.ToLower(dest)] = table }
+
+// claimedBy returns the table that already claimed dest, if any.
+func (d destinationIndex) claimedBy(dest string) (string, bool) {
+	table, ok := d[strings.ToLower(dest)]
+	return table, ok
 }
 
 // writeTarget is a resolved write-back destination. For a tabular source it
@@ -274,7 +163,7 @@ type writeTarget struct {
 
 // writeBack persists the current tables to files. When destDir is empty the
 // tables are written back over their source files in place (destructive); the
-// caller must have asked for --save-in-place. When destDir is set the tables are written
+// caller must have asked for .save --in-place. When destDir is set the tables are written
 // into that directory, preserving each source's file name, and the original
 // source files are left untouched.
 //
@@ -302,7 +191,7 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 
 // planWriteBack validates that every current table can be written and returns the
 // resolved write targets. It reports all problems at once and writes nothing, so
-// a session is never partially saved (). For --save-tables it also rejects a
+// a session is never partially saved. For .save DIR it also rejects a
 // destination that resolves to the source file () and a destination that
 // already exists ().
 // skipUnchanged selects whether a table whose content matches its import baseline
@@ -332,9 +221,12 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 	var targets []writeTarget
 	var problems []string
 	// Detect destination collisions so two tables never silently overwrite the
-	// same output file (defensive: same-name files already collapse to one table
-	// at import, but a future rename could break that assumption).
-	plannedDest := make(map[string]string)
+	// same output file. Same-name inputs already collapse to one table at import,
+	// but a destination is a path, not a table name: two tables whose names differ
+	// only in case land on one file on macOS and Windows, where the filesystem
+	// does not distinguish them. The key is case-folded so that collision is
+	// caught on every platform rather than only where it happens to bite.
+	plannedDest := newDestinationIndex()
 
 	// First pass: native financial sources (ACH/Fedwire) are reconstructed from a
 	// complete table set into one file, so they are planned per source rather than
@@ -365,7 +257,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		case skip:
 			// No member table changed; nothing to persist for this set.
 		default:
-			plannedDest[tgt.dest] = tgt.baseName
+			plannedDest.claim(tgt.dest, tgt.baseName)
 			targets = append(targets, tgt)
 		}
 	}
@@ -421,31 +313,31 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		dest := source
 		if destDir != "" {
 			dest = filepath.Join(destDir, filepath.Base(source))
-			// A --save-tables destination that resolves to the source file would
+			// A .save DIR destination that resolves to the source file would
 			// overwrite it, defeating the "originals
 			// untouched" contract.
 			if sameFilePath(dest, source) {
-				problems = append(problems, fmt.Sprintf("%s: --save-tables destination %s is the source file; use --save-in-place to overwrite it", name, dest))
+				problems = append(problems, fmt.Sprintf("%s: destination %s is the source file; use .save --in-place to overwrite it", name, dest))
 				continue
 			}
-			// Refuse to overwrite a pre-existing destination so --save-tables never
+			// Refuse to overwrite a pre-existing destination so .save DIR never
 			// silently clobbers an unrelated file. An in-place
-			// --save-in-place intentionally overwrites its own source, so this check is
-			// scoped to --save-tables.
+			// .save --in-place intentionally overwrites its own source, so this check is
+			// scoped to .save DIR.
 			if info, statErr := os.Stat(dest); statErr == nil {
 				if info.IsDir() {
 					problems = append(problems, fmt.Sprintf("%s: destination %s is an existing directory", name, dest))
 				} else {
-					problems = append(problems, fmt.Sprintf("%s: destination %s already exists; remove it or choose another --save-tables", name, dest))
+					problems = append(problems, fmt.Sprintf("%s: destination %s already exists; remove it or choose another directory", name, dest))
 				}
 				continue
 			}
 		}
-		if prev, ok := plannedDest[dest]; ok {
-			problems = append(problems, fmt.Sprintf("%s: destination %s collides with table %s", name, dest, prev))
+		if prev, ok := plannedDest.claimedBy(dest); ok {
+			problems = append(problems, fmt.Sprintf("%s: destination %s collides with the one already planned for table %s", name, dest, prev))
 			continue
 		}
-		plannedDest[dest] = name
+		plannedDest.claim(dest, name)
 		targets = append(targets, writeTarget{table: name, dest: dest, format: format, comp: comp})
 	}
 
@@ -461,7 +353,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 // changed and skipUnchanged is set. The required companion tables must all be
 // present, so a set left incomplete by a DROP is rejected with an explicit error
 // before any file is written, rather than producing a malformed .ach/.fed.
-func (s *Shell) planFinancialSet(ctx context.Context, source, format string, currentTables map[string]bool, destDir string, plannedDest map[string]string, skipUnchanged bool) (writeTarget, string, bool) {
+func (s *Shell) planFinancialSet(ctx context.Context, source, format string, currentTables map[string]bool, destDir string, plannedDest destinationIndex, skipUnchanged bool) (writeTarget, string, bool) {
 	base := s.usecases.importer.GetTableNameFromFilePath(source)
 	label := filepath.Base(source)
 
@@ -509,17 +401,17 @@ func (s *Shell) planFinancialSet(ctx context.Context, source, format string, cur
 	if destDir != "" {
 		dest = filepath.Join(destDir, label)
 		if sameFilePath(dest, source) {
-			return writeTarget{}, fmt.Sprintf("%s: --save-tables destination %s is the source file; use --save-in-place to overwrite it", label, dest), false
+			return writeTarget{}, fmt.Sprintf("%s: destination %s is the source file; use .save --in-place to overwrite it", label, dest), false
 		}
 		if info, statErr := os.Stat(dest); statErr == nil {
 			if info.IsDir() {
 				return writeTarget{}, fmt.Sprintf("%s: destination %s is an existing directory", label, dest), false
 			}
-			return writeTarget{}, fmt.Sprintf("%s: destination %s already exists; remove it or choose another --save-tables", label, dest), false
+			return writeTarget{}, fmt.Sprintf("%s: destination %s already exists; remove it or choose another directory", label, dest), false
 		}
 	}
-	if prev, ok := plannedDest[dest]; ok {
-		return writeTarget{}, fmt.Sprintf("%s: destination %s collides with %s", label, dest, prev), false
+	if prev, ok := plannedDest.claimedBy(dest); ok {
+		return writeTarget{}, fmt.Sprintf("%s: destination %s collides with the one already planned for %s", label, dest, prev), false
 	}
 	return writeTarget{table: base, dest: dest, setKind: format, baseName: base, members: members}, "", false
 }
@@ -564,9 +456,9 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	// it meant to write.
 	defer func() {
 		for _, w := range staged {
-			_ = os.Remove(w.staging)
+			_ = s.fs().Remove(w.staging)
 			if w.backup != "" {
-				_ = os.Remove(w.backup)
+				_ = s.fs().Remove(w.backup)
 			}
 		}
 	}()
@@ -585,7 +477,7 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	// commitStagedFile), and even a rename can fail on the last target after the
 	// first has landed.
 	for i := range staged {
-		backup, err := backupExisting(staged[i].target.dest)
+		backup, err := s.backupExisting(staged[i].target.dest)
 		if err != nil {
 			return fmt.Errorf("failed to prepare %s for saving: %w", staged[i].target.dest, err)
 		}
@@ -593,9 +485,17 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	}
 
 	for i, w := range staged {
-		if err := commitStagedFile(w.staging, w.target.dest); err != nil {
-			rollbackCommitted(staged[:i])
-			return fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
+		if err := s.commitStagedFile(w.staging, w.target.dest); err != nil {
+			commitErr := fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
+			// The rollback's own failure is reported alongside the commit failure,
+			// never instead of it. Both matter and they say different things: the
+			// commit error is why the save stopped, and the rollback error is which
+			// files are now neither the old version nor the new one. Dropping the
+			// second leaves the user believing the sources are untouched.
+			if rollbackErr := s.rollbackCommitted(staged[:i]); rollbackErr != nil {
+				return errors.Join(commitErr, rollbackErr)
+			}
+			return commitErr
 		}
 	}
 
@@ -614,31 +514,39 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 }
 
 // rollbackCommitted undoes the commits that already landed, so a save that fails
-// partway leaves every destination as it was. It is best effort: a restore that
-// fails cannot be reported without hiding the error that caused the rollback,
-// which is the one worth showing.
-func rollbackCommitted(done []stagedWrite) {
+// partway leaves every destination as it was. It returns what it could not
+// restore: a destination left holding new content after the save failed is the
+// one thing the user has to know about, and it must not be swallowed just
+// because another error is already on its way up. Every destination is attempted
+// even after one fails, so the report covers all of them.
+func (s *Shell) rollbackCommitted(done []stagedWrite) error {
+	var failures []error
 	for i := len(done) - 1; i >= 0; i-- {
 		w := done[i]
 		if w.backup == "" {
 			// The destination did not exist before this save created it.
-			_ = os.Remove(w.target.dest)
+			if err := s.fs().Remove(w.target.dest); err != nil {
+				failures = append(failures, fmt.Errorf("could not remove the file this save created at %s: %w", w.target.dest, err))
+			}
 			continue
 		}
-		_ = copyOnto(w.backup, w.target.dest)
+		if err := s.fs().Copy(w.backup, w.target.dest); err != nil {
+			failures = append(failures, fmt.Errorf("could not restore %s from its backup; it now holds the new content: %w", w.target.dest, err))
+		}
 	}
+	return errors.Join(failures...)
 }
 
 // backupExisting copies path to a temporary file beside it, or returns "" when
 // path does not exist yet.
-func backupExisting(path string) (string, error) {
-	if _, err := os.Stat(path); err != nil {
+func (s *Shell) backupExisting(path string) (string, error) {
+	if _, err := s.fs().Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
 		return "", err
 	}
-	return copyToBackup(path)
+	return s.copyToBackup(path)
 }
 
 // commitStagedFile moves a staged file onto its destination.
@@ -648,78 +556,54 @@ func backupExisting(path string) (string, error) {
 // open, and an in-place save overwrites exactly the files the session imported
 // from, so there the staged bytes are copied over it instead. The caller holds a
 // copy of the destination and restores it if this fails.
-func commitStagedFile(staging, dest string) error {
+func (s *Shell) commitStagedFile(staging, dest string) error {
 	// A rename carries the staging file's own mode onto the destination, and the
 	// staging file was created 0600. Left alone, saving a world-readable CSV in
 	// place would quietly make it owner-only. Take the destination's mode first
 	// and put it on the staging file, so the rename preserves it.
-	if err := adoptDestinationMode(staging, dest); err != nil {
+	if err := s.adoptDestinationMode(staging, dest); err != nil {
 		return err
 	}
 
-	err := os.Rename(staging, dest)
+	err := s.fs().Rename(staging, dest)
 	if err == nil {
 		return nil
 	}
-	if _, statErr := os.Stat(dest); statErr != nil {
+	if _, statErr := s.fs().Stat(dest); statErr != nil {
 		// Nothing was in the way, so the copy cannot help either.
 		return err
 	}
-	return copyOnto(staging, dest)
+	return s.fs().Copy(staging, dest)
 }
 
 // adoptDestinationMode gives the staged file the permissions of the file it is
-// about to replace. A destination that does not exist yet (a --save-tables
+// about to replace. A destination that does not exist yet (a .save DIR
 // export) keeps the staging file's own mode, which is the conservative 0600 the
 // temp file was created with. A chmod failure is reported rather than ignored:
 // the caller treats it as a failed commit and restores what was there, which is
 // better than landing a file whose permissions are not the ones it had.
-func adoptDestinationMode(staging, dest string) error {
-	info, err := os.Stat(dest)
+func (s *Shell) adoptDestinationMode(staging, dest string) error {
+	info, err := s.fs().Stat(dest)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return err
 	}
-	return os.Chmod(staging, info.Mode().Perm())
+	return s.fs().Chmod(staging, info.Mode().Perm())
 }
 
 // copyToBackup copies path to a temporary file beside it and returns that path.
-func copyToBackup(path string) (string, error) {
-	backup, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".sqly-bak*")
+func (s *Shell) copyToBackup(path string) (string, error) {
+	name, err := s.fs().stagingPath(path, ".sqly-bak*")
 	if err != nil {
 		return "", err
 	}
-	name := backup.Name()
-	if err := backup.Close(); err != nil {
-		_ = os.Remove(name)
-		return "", err
-	}
-	if err := copyOnto(path, name); err != nil {
-		_ = os.Remove(name)
+	if err := s.fs().Copy(path, name); err != nil {
+		_ = s.fs().Remove(name)
 		return "", err
 	}
 	return name, nil
-}
-
-// copyOnto replaces dest's contents with src's, truncating whatever was there.
-func copyOnto(src, dest string) error {
-	in, err := os.Open(src) //nolint:gosec // src is a file sqly created or was given as the output
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // dest is the destination the caller asked to save to
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
-		return err
-	}
-	return out.Close()
 }
 
 // stageWriteTarget writes one target to a scratch path next to its destination
@@ -728,23 +612,15 @@ func copyOnto(src, dest string) error {
 // where a rename is atomic; a dot prefix keeps it out of the way of a directory
 // listing if the process dies between the write and the move.
 func (s *Shell) stageWriteTarget(ctx context.Context, tgt writeTarget) (stagedWrite, error) {
-	dir := filepath.Dir(tgt.dest)
-	f, err := os.CreateTemp(dir, "."+filepath.Base(tgt.dest)+".sqly-save-*")
+	staging, err := s.fs().stagingPath(tgt.dest, ".sqly-save-*")
 	if err != nil {
-		return stagedWrite{}, fmt.Errorf("failed to stage the save for %s: %w", tgt.dest, err)
-	}
-	staging := f.Name()
-	// The writers below open the path themselves; the handle is only how the name
-	// was reserved.
-	if err := f.Close(); err != nil {
-		_ = os.Remove(staging)
 		return stagedWrite{}, fmt.Errorf("failed to stage the save for %s: %w", tgt.dest, err)
 	}
 
 	w := stagedWrite{target: tgt, staging: staging}
 	if tgt.setKind != "" {
 		if err := s.writeFinancialSet(ctx, tgt, staging); err != nil {
-			_ = os.Remove(staging)
+			_ = s.fs().Remove(staging)
 			return stagedWrite{}, err
 		}
 		w.baselines = tgt.members
@@ -754,11 +630,11 @@ func (s *Shell) stageWriteTarget(ctx context.Context, tgt writeTarget) (stagedWr
 
 	table, err := s.usecases.metadata.List(ctx, tgt.table)
 	if err != nil {
-		_ = os.Remove(staging)
+		_ = s.fs().Remove(staging)
 		return stagedWrite{}, fmt.Errorf("failed to read table %s: %w", tgt.table, err)
 	}
 	if err := s.usecases.export.DumpTable(staging, table, tgt.format, tgt.comp); err != nil {
-		_ = os.Remove(staging)
+		_ = s.fs().Remove(staging)
 		return stagedWrite{}, fmt.Errorf("failed to save table %s to %s: %w", tgt.table, tgt.dest, err)
 	}
 	w.baselines = []string{tgt.table}

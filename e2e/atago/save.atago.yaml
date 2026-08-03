@@ -1,6 +1,6 @@
 # Migrated from sqly's ShellSpec spec/save_spec.sh.
-# DML changes persist to files only through --save-in-place / --save-tables / .save. --save-in-place
-# overwrites the sources; --save-tables never touches them.
+# DML changes persist to files only through .save. `.save --in-place` overwrites
+# the sources; `.save DIR` never touches them.
 # Run with: make test-e2e
 version: "1"
 
@@ -8,7 +8,7 @@ suite:
   name: sqly write-back
 
 scenarios:
-  - name: writes to --save-tables without modifying the source
+  - name: writes to .save DIR without modifying the source
     steps:
       - fixture: &u
           file: u.csv
@@ -17,7 +17,10 @@ scenarios:
             booker12,1,Rachel
             jenkins46,2,Mary
       - run:
-          command: sqly --sql "UPDATE u SET first_name = 'CHANGED' WHERE identifier = 1" u.csv --save-tables out
+          command: sqly u.csv
+          stdin: |
+            UPDATE u SET first_name = 'CHANGED' WHERE identifier = 1;
+            .save out
       - assert:
           exit_code: 0
           stdout:
@@ -32,28 +35,14 @@ scenarios:
             path: out/u.csv
             contains: CHANGED
 
-  - name: refuses a write-back that would need both destinations
+  - name: overwrites the source in place with .save --in-place
     steps:
       - fixture: *u
       - run:
-          command: sqly --sql "UPDATE u SET first_name = 'X'" u.csv --save-in-place --save-tables out
-      - assert:
-          exit_code: 1
-          stderr:
-            contains: "--save-in-place"
-          file:
-            path: u.csv
-            not_contains: "X,"
-      - assert:
-          file:
-            path: out
-            exists: false
-
-  - name: overwrites the source in place with --save-in-place
-    steps:
-      - fixture: *u
-      - run:
-          command: sqly --sql "DELETE FROM u WHERE identifier > 1" u.csv --save-in-place
+          command: sqly u.csv
+          stdin: |
+            DELETE FROM u WHERE identifier > 1;
+            .save --in-place
       - assert:
           exit_code: 0
           stdout:
@@ -65,7 +54,10 @@ scenarios:
     steps:
       - fixture: *u
       - run:
-          command: sqly --sql "DELETE FROM u WHERE identifier > 1" u.csv --save-in-place
+          command: sqly u.csv
+          stdin: |
+            DELETE FROM u WHERE identifier > 1;
+            .save --in-place
       - run:
           command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM u" u.csv
       - assert:
@@ -80,7 +72,10 @@ scenarios:
           file: c.csv.gz
           from: testdata/user.csv.gz
       - run:
-          command: sqly --sql "UPDATE c SET first_name = 'GZ' WHERE identifier = 1" c.csv.gz --save-in-place
+          command: sqly c.csv.gz
+          stdin: |
+            UPDATE c SET first_name = 'GZ' WHERE identifier = 1;
+            .save --in-place
       - run:
           command: sqly --output-format csv --sql "SELECT first_name FROM c WHERE identifier = 1" c.csv.gz
       - assert:
@@ -107,12 +102,15 @@ scenarios:
 
   # A read-only run persists nothing on purpose, so the only thing separating it
   # from a successful write-back is what sqly says. It used to say nothing at all
-  # and exit 0, leaving --save-tables looking like it had written the directory.
-  - name: reports that a read-only --save-tables run wrote nothing
+  # and exit 0, leaving .save DIR looking like it had written the directory.
+  - name: reports that a read-only .save DIR run wrote nothing
     steps:
       - fixture: *u
       - run:
-          command: sqly --sql "SELECT * FROM u" u.csv --save-tables out
+          command: sqly u.csv
+          stdin: |
+            SELECT * FROM u;
+            .save out
       - assert:
           exit_code: 0
           stdout:
@@ -128,11 +126,14 @@ scenarios:
             path: out/u.csv
             exists: false
 
-  - name: reports that a read-only --save-in-place run wrote nothing
+  - name: reports that a read-only .save --in-place run wrote nothing
     steps:
       - fixture: *u
       - run:
-          command: sqly --sql "SELECT COUNT(*) AS c FROM u" u.csv --save-in-place
+          command: sqly u.csv
+          stdin: |
+            SELECT COUNT(*) AS c FROM u;
+            .save --in-place
       - assert:
           exit_code: 0
           stderr:
@@ -150,7 +151,10 @@ scenarios:
     steps:
       - fixture: *u
       - run:
-          command: sqly --sql "UPDATE u SET first_name = 'NOPE' WHERE identifier = 999" u.csv --save-in-place
+          command: sqly u.csv
+          stdin: |
+            UPDATE u SET first_name = 'NOPE' WHERE identifier = 999;
+            .save --in-place
       - assert:
           exit_code: 0
           stderr:
@@ -162,16 +166,6 @@ scenarios:
             created: []
             modified: []
             deleted: []
-
-  - name: guides a non-interactive --save-in-place with no input files toward passing input
-    steps:
-      - run:
-          command: sqly --save-in-place --sql "UPDATE foo SET x = 1"
-      - assert:
-          exit_code: 1
-          stderr:
-            contains:
-              - "no input file or directory was given"
 
   - name: guides a batch .save with no imported tables toward passing input
     steps:

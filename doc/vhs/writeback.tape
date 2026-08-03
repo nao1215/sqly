@@ -1,5 +1,5 @@
-# Write-back safety demo: a schema change is rejected before anything is written,
-# --save-tables leaves the source alone, and --save-in-place overwrites it.
+# Write-back safety demo: .save DIR leaves the source alone, a schema change is
+# rejected before anything is written, and .save --in-place overwrites the source.
 # Regenerate with: vhs doc/vhs/writeback.tape  (run from the repository root)
 Output "doc/img/writeback-demo.gif"
 Set Shell "bash"
@@ -11,15 +11,15 @@ Hide
 Type "WORK=$(mktemp -d); cp testdata/user.csv $WORK/; export PATH=$PWD:$PATH; cd $WORK; export PS1='$ '; clear"
 Enter
 Show
-Type "sqly --sql 'UPDATE user SET identifier = identifier + 100' --save-tables ./copies user.csv"
+Type "printf 'UPDATE user SET identifier = identifier + 100;\n.save ./copies\n' | sqly user.csv"
 Sleep 600ms
 Enter
 Sleep 2500ms
-Type "sqly --sql 'CREATE TABLE backup AS SELECT * FROM user' --save-tables ./out user.csv"
+Type "printf 'CREATE TABLE backup AS SELECT * FROM user;\n.save ./out\n' | sqly user.csv"
 Sleep 600ms
 Enter
 Sleep 2500ms
-Type "sqly --sql 'UPDATE user SET identifier = identifier + 100' --save-in-place user.csv"
+Type "printf 'UPDATE user SET identifier = identifier + 100;\n.save --in-place\n' | sqly user.csv"
 Sleep 600ms
 Enter
 Sleep 2s

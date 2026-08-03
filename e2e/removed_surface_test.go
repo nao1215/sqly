@@ -75,12 +75,19 @@ func removedFlags() []removedFlag {
 		{category: "renamed-input", flag: "--stdin-name", value: "piped"},
 		{category: "renamed-input", flag: "--import-mode", value: "skip"},
 		{category: "renamed-input", flag: "--ragged-rows", value: "skip"},
-		{category: "renamed-writeback", flag: "--save"},
-		{category: "renamed-writeback", flag: "--save-dir", value: "out"},
+		// Write-back is a shell command now, not a flag. Every spelling it ever had
+		// as a flag has to fail: a flag that half-works would be worse than one
+		// that never existed, because a script would not notice.
+		{category: "removed-writeback", flag: "--save"},
+		{category: "removed-writeback", flag: "--save-dir", value: "out"},
+		{category: "removed-writeback", flag: "--save-tables", value: "out"},
+		{category: "removed-writeback", flag: "--save-in-place"},
+		{category: "removed-writeback", flag: "--force"},
 
-		// --force confirmed the in-place write that --save-in-place now names on
-		// its own. Left in place it would be a flag that silently does nothing.
-		{category: "removed-force", flag: "--force"},
+		// --sheet selected one Excel worksheet. Every sheet is imported now, so the
+		// table to query is the same either way and the flag only chose how much
+		// work to do — with ambiguous meaning across several workbooks.
+		{category: "removed-sheet", flag: "--sheet", value: "Sheet1"},
 
 		// The import cache. It was an opt-in snapshot the user had to name, place,
 		// and delete, and it silently did nothing for several kinds of input.

@@ -182,7 +182,10 @@ scenarios:
             booker12,1,Rachel
             jenkins46,2,Mary
       - run:
-          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;
+            .save --in-place
       - assert:
           exit_code: 0
           file:

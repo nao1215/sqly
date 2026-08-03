@@ -1,6 +1,6 @@
 # Migrated from sqly's ShellSpec spec/ach_fedwire_writeback_spec.sh (issue #242).
 # sqly reconstructs a complete .ach/.fed file from its imported table set after
-# an in-session UPDATE, via the whole-set --save-in-place/--save-tables path. The
+# an in-session UPDATE, via the whole-set .save path. The
 # single-table --output/.dump path still rejects .ach/.fed. ACH/Fed testdata is
 # copied in via fixture.from. Run with: make test-e2e
 version: "1"
@@ -9,13 +9,16 @@ suite:
   name: sqly ACH/Fedwire native write-back
 
 scenarios:
-  - name: round-trips an ACH file through --save-in-place after an UPDATE
+  - name: round-trips an ACH file through .save --in-place after an UPDATE
     steps:
       - fixture: &ach
           file: payment.ach
           from: testdata/ppd-debit.ach
       - run:
-          command: sqly --sql "UPDATE payment_entries SET individual_name='E2E Receiver' WHERE entry_index=0" --save-in-place payment.ach
+          command: sqly payment.ach
+          stdin: |
+            UPDATE payment_entries SET individual_name='E2E Receiver' WHERE entry_index=0;
+            .save --in-place
       - assert:
           stderr:
             contains: Saved
@@ -26,11 +29,14 @@ scenarios:
           stdout:
             contains: "E2E Receiver"
 
-  - name: writes a reconstructed ACH file into a directory with --save-tables
+  - name: writes a reconstructed ACH file into a directory with .save DIR
     steps:
       - fixture: *ach
       - run:
-          command: sqly --sql "UPDATE payment_entries SET individual_name='Dir Receiver' WHERE entry_index=0" --save-tables out payment.ach
+          command: sqly payment.ach
+          stdin: |
+            UPDATE payment_entries SET individual_name='Dir Receiver' WHERE entry_index=0;
+            .save out
       - assert:
           stderr:
             contains: Saved
@@ -41,13 +47,16 @@ scenarios:
           stdout:
             contains: "Dir Receiver"
 
-  - name: round-trips a Fedwire file through --save-in-place after an UPDATE
+  - name: round-trips a Fedwire file through .save --in-place after an UPDATE
     steps:
       - fixture:
           file: transfer.fed
           from: testdata/customer-transfer.fed
       - run:
-          command: sqly --sql "UPDATE transfer_message SET sender_reference='E2EREF'" --save-in-place transfer.fed
+          command: sqly transfer.fed
+          stdin: |
+            UPDATE transfer_message SET sender_reference='E2EREF';
+            .save --in-place
       - assert:
           stderr:
             contains: Saved

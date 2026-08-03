@@ -24,7 +24,7 @@ weight: 50
 
 `--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
-ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `--save-in-place`/`--save-tables` do, not `--output`.
+ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `.save` does, not `--output`.
 
 ## Compression
 
@@ -50,10 +50,11 @@ That keeps heterogeneous documents queryable — no schema is guessed, and a fie
 
 ## Excel
 
-Each sheet becomes `file_sheet`. `--sheet NAME` imports one sheet by its original name:
+Every sheet becomes its own `file_sheet` table, so a workbook is queried the way a
+directory is: pick the table you want.
 
 ```shell
-sqly --sheet "Q3 actuals" --sql "SELECT * FROM book_Q3_actuals" book.xlsx
+sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 ```
 
 An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.

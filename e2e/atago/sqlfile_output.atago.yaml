@@ -82,7 +82,7 @@ scenarios:
       - assert:
           exit_code: 1
           stderr:
-            contains: "single result set"
+            contains: "result sets"
           file:
             path: out.csv
             exists: false

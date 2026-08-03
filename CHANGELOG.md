@@ -8,35 +8,44 @@
 * Removed `--json-typed` and `--ndjson-typed`, and the `.mode json-typed` / `.mode ndjson-typed` shell modes that went with them; `--output-format json` and `--output-format jsonl` preserve SQLite's native INTEGER/REAL/TEXT/NULL values. SQLite has no boolean type, so TRUE/FALSE literals and boolean expressions are emitted as integer JSON numbers `1`/`0`, while TEXT values such as `"true"` remain strings. Zero-padded values remain strings.
 * Removed the import cache: `--cache`, and the `--cache-clear` that went with it. A snapshot the user has to name, place, and delete is not part of what sqly does — read files, run SQL, write the result — and it silently did nothing for a piped dataset, a URL, or ACH/Fedwire input. Repeated queries over one import belong in the shell or in a `--sql-file` script, which import once and answer many times.
 * Renamed malformed-row policy `fill` to `pad`. `pad` fills short CSV/TSV rows and rejects long rows instead of truncating them.
-* Renamed the options whose names described something other than what they did. `--stdin FORMAT` is `--stdin-format FORMAT` and `--stdin-name NAME` is `--stdin-table NAME` (both old names read as booleans or said nothing about the table they name); `--save` is `--save-in-place`, because a flag that overwrites the user's files should say so; `--save-dir DIR` is `--save-tables DIR`, because "save dir" reads like a directory for query output, which is `--output`'s job, while this one writes the imported tables back out.
+* Renamed `--stdin FORMAT` to `--stdin-format FORMAT` and `--stdin-name NAME` to `--stdin-table NAME`. The old names read as booleans, or said nothing about the table they name.
+* Removed the write-back flags. `--save`, `--save-dir`, `--save-tables`, `--save-in-place`, and `--force` are gone; write-back is the shell's `.save DIR` and `.save --in-place`, which work at the prompt and in a piped or `--sql-file` script alike. Overwriting the files you are reading is the one thing sqly does that cannot be undone, and it belongs after the statements that changed something rather than in the flags that start the run. Removing it from the flag surface also removed eight exclusivity rules that existed only to keep it out of trouble.
+* Removed `--sheet`. Every sheet of a workbook is imported, and the table to query — `file_sheet` — is the same either way, so the flag only chose how much work to do while its meaning across several workbooks was ambiguous (a workbook without the sheet was skipped with a warning rather than failing).
 * Replaced `--import-mode stop|skip|pad` with `--row-mismatch error|skip|pad`, and the shell command `.import-mode` with `.row-mismatch`. "Import mode" said nothing about what it decides, and `stop` read as "stop and keep what you have" when it means the import fails. The policy applies to CSV and TSV only, which the flag description and the docs now say. The old names and the old `stop` value are rejected, not aliased.
-* Removed `--force`. It existed only to confirm `--save`, and `--save-in-place` now carries that meaning in its own name. `.save --force` is `.save --in-place`.
-* Removed the `-S` (`--sheet`) and `-i` (`--inspect`) shorthands. `-S` sat one shift-key away from `-s` (`--sql`), so a typo silently turned a query into an Excel sheet name, and `-i` means in-place in most Unix tools. Both long forms are unchanged.
+* Removed the `-i` shorthand for `--inspect`; `-i` means in-place in most Unix tools. The long form is unchanged. (`-S` for `--sheet` went with `--sheet`.)
 * Renamed the newline-delimited JSON format from `ndjson` to `jsonl`, in `--output-format`, `.mode`, and the `.dump`/`--output` extension it prefers. sqly reads `.jsonl` files and called the input format `jsonl` already; one concept now has one name. A `.ndjson` destination is still recognized and kept as written.
 * `--output-format excel` and `--output-format parquet` are now rejected for a `--sql`/`--sql-file` run with no `--output`. They are binary container formats with no on-screen form, and the run used to print CSV instead.
-* `--save-in-place` with `--save-tables` is now rejected while parsing arguments, before anything is imported or printed.
-* Write-back is rejected before the import for every case that could never persist: no input file, an `http(s)` input, a `--stdin-format` dataset, a directory argument, or an input whose format has no writer (JSON, JSONL, Excel). Each names the input in the error, exits non-zero, writes nothing to stdout, and creates no file or directory.
+* A script may return several result sets only in a format that can separate them: `table`, `vertical`, and `markdown` print them in order with a blank line between. `csv`, `tsv`, `ltsv`, `json`, and `jsonl` reject the run instead, because two CSV bodies concatenated are one CSV whose third line is a header, and two JSON arrays back to back are not a JSON document. Nothing is printed before the rejection.
+* An import option the user typed that cannot apply to any input of the run is now an error. `--row-mismatch` needs a CSV or TSV input; `--encoding` needs a text input. A flag that is accepted and then silently ignored is indistinguishable from one that worked.
 * `.save` rejects an argument beginning with `-` that is not `--in-place`. `.save --force`, the spelling this command used before, created a directory named `--force` and reported success while leaving the sources it was asked to overwrite alone.
+* `--output` requires its destination's parent directory to exist, and says so before importing anything rather than after the query has run.
 
 ### Fixed
+* A dot-command after any SQL statement was invisible to the classifiers that decide what a script does. They accumulated every line into one buffer and asked whether it was at a statement boundary, which stopped being true after the first statement ended — so `.save` and `.import` in the natural position, at the end of a script, were never seen. The buffer is now drained as statements complete.
+* `--sql-file` no longer hangs when stdin is an open pipe with nothing on it. It peeked at stdin to warn about piped SQL it would ignore, and that peek blocks forever on a pipe that is never written to or closed. A CLI that can hang is worse than one that ignores an input it was never going to read.
 * An in-place write-back preserves the source file's permissions. It writes through a temporary file created `0600` and renames it into place, so saving a `0644` CSV silently made it owner-only.
+* A failed rollback is reported alongside the failure that caused it, instead of being dropped. When a save fails part-way and a file cannot be restored, that file is now named: it holds content from a run that reported an error.
+* A save plans destinations case-insensitively, so two tables whose names differ only in case are rejected everywhere rather than silently overwriting each other on macOS and Windows.
+* `CREATE TEMP TABLE` no longer blocks a script that saves. Scratch space is never written back, so building some and then saving the imported tables is allowed; a persistent `CREATE TABLE` is still rejected, because write-back would silently not include it.
 
 ### Migration Notes
 * Replace `--profile`/`--compare` invocations with explicit SQL queries.
 * Replace `--json-typed`/`--ndjson-typed` with `--output-format json`/`--output-format jsonl`.
 * Replace every removed output flag listed above with `--output-format FORMAT` (for example, `--csv` becomes `--output-format csv`).
 * Replace `--import-mode`/`.import-mode` with `--row-mismatch`/`.row-mismatch`, and the policy names `stop` and `fill` with `error` and `pad`. A long row now fails so its extra fields are not silently lost.
+* Replace the write-back flags with `.save` in a script: `sqly --sql "UPDATE ..." --save-in-place f.csv` becomes `printf "UPDATE ...;\n.save --in-place\n" | sqly f.csv`.
+* Drop `--sheet`; query the sheet's table (`file_sheet`) instead.
 
 ### v1.0.0 CLI Surface
 The command surface below is what v1.0.0 commits to. Anything not listed is not part of the guarantee.
 
-* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--sheet NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`.
+* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`.
 * Query: `--sql/-s SQL`, `--sql-file/-f FILE`, `--dialect sqlite|mysql|postgresql|googlesql`.
 * Output: `--output/-o FILE`, `--output-format table|vertical|csv|tsv|ltsv|json|jsonl|markdown|excel|parquet`.
 * Inspection: `--inspect`, `--inspect-sample N`.
-* Write back: `--save-tables DIR`, `--save-in-place`.
 * General: `--help/-h`, `--version/-v`.
-* `--help` prints those six groups under those names, so the option list and this contract stay the same shape.
+* `--help` prints those five groups under those names, so the option list and this contract stay the same shape.
+* Write-back is not a flag: it is `.save DIR` and `.save --in-place` in the shell, available interactively and in a piped or `--sql-file` script.
 * Shell commands: `.cd`, `.clear`, `.describe`, `.dialect`, `.dump`, `.exit`, `.header`, `.help`, `.import`, `.ls`, `.mode`, `.pwd`, `.row-mismatch`, `.save`, `.schema`, `.tables`.
 * `sqly` has no subcommands. A positional `help` or `version` is rejected with a pointer to `--help` / `--version`.
 * `--sql` runs exactly one statement. `--sql-file` runs every statement and prints every result in order; `--output` requires the run to produce exactly one result and rejects zero or several rather than writing whichever came last.

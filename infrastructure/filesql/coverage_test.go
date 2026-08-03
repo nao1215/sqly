@@ -242,80 +242,6 @@ func TestDumpACHFile_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestDumpFedWireFile_RoundTrip loads a Fedwire file and dumps it back out,
-// asserting a non-empty file is produced. It also checks the nil-DB guard.
-//
-// This test loads a Fedwire file, which registers a TableSet in filesql's
-// process-global registry, so it must not run in parallel with other FED tests.
-func TestDumpFedWireFile_RoundTrip(t *testing.T) {
-	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
-	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
-		t.Skip("FED test data not available")
-	}
-
-	ctx := context.Background()
-	a := covFsqlNewAdapter(t)
-	if err := a.LoadFile(ctx, fedFile); err != nil {
-		t.Fatalf("LoadFile FED: %v", err)
-	}
-
-	baseName := GetTableNameFromFilePath(fedFile)
-	out := filepath.Join(t.TempDir(), "dumped.fed")
-	if err := a.DumpFedWireFile(ctx, baseName, out); err != nil {
-		t.Fatalf("DumpFedWireFile: %v", err)
-	}
-	info, err := os.Stat(out)
-	if err != nil {
-		t.Fatalf("dumped FED not written: %v", err)
-	}
-	if info.Size() == 0 {
-		t.Error("dumped FED file is empty")
-	}
-
-	// nil-DB guard.
-	if err := NewFileSQLAdapter(nil).DumpFedWireFile(ctx, baseName, out); err == nil {
-		t.Error("DumpFedWireFile with nil DB = nil error, want error")
-	}
-}
-
-// TestSheetNames_Success reads the worksheet list from a real .xlsx workbook.
-func TestSheetNames_Success(t *testing.T) {
-	t.Parallel()
-
-	xlsx := filepath.Join("..", "..", "testdata", "sample.xlsx")
-	if _, err := os.Stat(xlsx); os.IsNotExist(err) {
-		t.Skip("xlsx test data not available")
-	}
-	names, err := SheetNames(xlsx)
-	if err != nil {
-		t.Fatalf("SheetNames: %v", err)
-	}
-	if len(names) == 0 {
-		t.Error("SheetNames returned no sheets, want at least one")
-	}
-}
-
-// TestSheetNames_MissingFile checks the error path when the workbook cannot be
-// opened.
-func TestSheetNames_MissingFile(t *testing.T) {
-	t.Parallel()
-
-	if _, err := SheetNames(filepath.Join(t.TempDir(), "nope.xlsx")); err == nil {
-		t.Fatal("SheetNames on missing file = nil error, want error")
-	}
-}
-
-// TestSheetNames_NotExcel checks the error path when the file exists but is not a
-// valid Excel workbook.
-func TestSheetNames_NotExcel(t *testing.T) {
-	t.Parallel()
-
-	path := covFsqlWriteCSV(t, "not-excel.xlsx", "id,name\n1,alice\n")
-	if _, err := SheetNames(path); err == nil {
-		t.Fatal("SheetNames on non-Excel content = nil error, want error")
-	}
-}
-
 // TestQuery_SQLError checks that an invalid query returns a FileSQLError.
 func TestQuery_SQLError(t *testing.T) {
 	t.Parallel()
@@ -379,5 +305,41 @@ func TestGetTableHeader_ClosedDB(t *testing.T) {
 
 	if _, err := a.GetTableHeader(context.Background(), "some_table"); err == nil {
 		t.Fatal("GetTableHeader on closed DB = nil error, want error")
+	}
+}
+
+// TestDumpFedWireFile_RoundTrip loads a Fedwire file and dumps it back out,
+// asserting a non-empty file is produced. It also checks the nil-DB guard.
+//
+// This test loads a Fedwire file, which registers a TableSet in filesql's
+// process-global registry, so it must not run in parallel with other FED tests.
+func TestDumpFedWireFile_RoundTrip(t *testing.T) {
+	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
+	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
+		t.Skip("FED test data not available")
+	}
+
+	ctx := context.Background()
+	a := covFsqlNewAdapter(t)
+	if err := a.LoadFile(ctx, fedFile); err != nil {
+		t.Fatalf("LoadFile FED: %v", err)
+	}
+
+	baseName := GetTableNameFromFilePath(fedFile)
+	out := filepath.Join(t.TempDir(), "dumped.fed")
+	if err := a.DumpFedWireFile(ctx, baseName, out); err != nil {
+		t.Fatalf("DumpFedWireFile: %v", err)
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("dumped FED not written: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("dumped FED file is empty")
+	}
+
+	// nil-DB guard.
+	if err := NewFileSQLAdapter(nil).DumpFedWireFile(ctx, baseName, out); err == nil {
+		t.Error("DumpFedWireFile with nil DB = nil error, want error")
 	}
 }

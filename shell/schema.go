@@ -35,7 +35,7 @@ func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string)
 	}
 
 	if isStructuredMode(s.state.mode.PrintMode) {
-		t := model.NewTable("schema", model.Header{"table", "schema"}, []model.Record{{tableName, createSQL}})
+		t := model.NewTable("schema", model.Header{formatNameTable, "schema"}, []model.Record{{tableName, createSQL}})
 		return t.Print(config.Stdout, s.state.mode.PrintMode)
 	}
 	fmt.Fprintln(config.Stdout, createSQL)

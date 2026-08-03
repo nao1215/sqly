@@ -328,7 +328,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-tables out user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;
+            .save out
       - assert:
           exit_code: 0
           stdout:
@@ -347,18 +350,24 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET identifier = identifier + 100;
+            .save --in-place
       - assert:
           exit_code: 0
           file:
             path: user.csv
             contains: "101"
 
-  - name: rejects a schema-changing statement under --save-tables before writing anything
+  - name: rejects a schema-changing statement under .save DIR before writing anything
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-tables out user.csv
+          command: sqly user.csv
+          stdin: |
+            CREATE TABLE backup AS SELECT * FROM user;
+            .save out
       - assert:
           exit_code: 1
           stderr:
@@ -371,7 +380,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET identifier = identifier + 100" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET identifier = identifier + 100;
+            .save --in-place
       - assert:
           exit_code: 0
           stdout:

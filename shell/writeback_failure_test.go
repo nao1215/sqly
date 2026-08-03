@@ -73,50 +73,57 @@ func leftoverFiles(t *testing.T, dir string, expected ...string) []string {
 	return extra
 }
 
+// failOnNth2 is failOnNth for the two-argument calls (Rename, Copy).
+func failOnNth2[T, U any](n int, delegate func(T, U) error, err error) func(T, U) error {
+	calls := 0
+	return func(a T, b U) error {
+		calls++
+		if calls == n {
+			return err
+		}
+		return delegate(a, b)
+	}
+}
+
+// errInjected is the failure these tests inject. It is deliberately not an
+// os.PathError: a real filesystem error would make it ambiguous whether the code
+// path or the environment produced it.
+var errInjected = errors.New("injected failure")
+
 // TestWriteBack_SerializeFailureLeavesEverySourceUntouched is the central
 // guarantee: nothing is moved onto a source file until every target has been
-// serialized. The second table's directory is made read-only, so staging it
-// fails after the first one has already been written to its scratch file.
+// serialized. Staging the second table is made to fail while the first is
+// already written to its scratch file.
 func TestWriteBack_SerializeFailureLeavesEverySourceUntouched(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("a read-only directory does not block file creation on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores directory write permissions")
-	}
-
-	root := t.TempDir()
-	firstDir := filepath.Join(root, "first")
-	secondDir := filepath.Join(root, "second")
-	for _, d := range []string{firstDir, secondDir} {
-		if err := os.Mkdir(d, 0o750); err != nil {
-			t.Fatal(err)
-		}
-	}
+	dir := t.TempDir()
 	const firstContent = "id,name\n1,alice\n"
 	const secondContent = "id,city\n1,tokyo\n"
-	first := writeCSV(t, firstDir, "people.csv", firstContent)
-	second := writeCSV(t, secondDir, "places.csv", secondContent)
+	first := writeCSV(t, dir, "people.csv", firstContent)
+	second := writeCSV(t, dir, "places.csv", secondContent)
 
 	shell, cleanup := writeBackShell(t, first, second)
 	defer cleanup()
 	silenceStderr(t)
 	markChanged(t, shell, "people", "places")
 
-	// Staging happens in the destination's own directory, so a read-only
-	// directory fails the second target while the first is already staged.
-	//nolint:gosec // a directory needs its execute bit to stay traversable
-	if err := os.Chmod(secondDir, 0o500); err != nil {
-		t.Fatal(err)
+	// The second staging file cannot be created; the first already exists.
+	ops := defaultFileOps()
+	shell.files = ops
+	calls := 0
+	shell.files.CreateTemp = func(d, pattern string) (*os.File, error) {
+		calls++
+		if calls == 2 {
+			return nil, errInjected
+		}
+		return ops.CreateTemp(d, pattern)
 	}
-	t.Cleanup(func() { _ = os.Chmod(secondDir, 0o750) }) //nolint:gosec // restoring the directory mode t.TempDir created
 
 	err := shell.writeBack(context.Background(), "")
 	if err == nil {
 		t.Fatal("writeBack succeeded although the second target could not be staged")
 	}
-	if !strings.Contains(err.Error(), second) {
-		t.Errorf("error should name the target that failed, got: %v", err)
+	if !errors.Is(err, errInjected) {
+		t.Errorf("error should wrap the injected failure, got: %v", err)
 	}
 
 	if got := readFile(t, first); got != firstContent {
@@ -125,8 +132,119 @@ func TestWriteBack_SerializeFailureLeavesEverySourceUntouched(t *testing.T) {
 	if got := readFile(t, second); got != secondContent {
 		t.Errorf("the second source changed:\n got %q\nwant %q", got, secondContent)
 	}
-	if extra := leftoverFiles(t, firstDir, "people.csv"); len(extra) > 0 {
-		t.Errorf("staging or backup files left behind in %s: %v", firstDir, extra)
+	if extra := leftoverFiles(t, dir, "people.csv", "places.csv"); len(extra) > 0 {
+		t.Errorf("staging or backup files left behind: %v", extra)
+	}
+}
+
+// TestWriteBack_BackupFailureStopsBeforeAnyCommit checks the step between
+// staging and committing: if the backup of an existing destination cannot be
+// taken, the save must stop rather than replace a file it cannot put back.
+func TestWriteBack_BackupFailureStopsBeforeAnyCommit(t *testing.T) {
+	dir := t.TempDir()
+	const content = "id,name\n1,alice\n"
+	src := writeCSV(t, dir, "people.csv", content)
+
+	shell, cleanup := writeBackShell(t, src)
+	defer cleanup()
+	silenceStderr(t)
+	markChanged(t, shell, "people")
+
+	ops := defaultFileOps()
+	shell.files = ops
+	// The first Copy is the backup; the commit's copy fallback comes later.
+	shell.files.Copy = failOnNth2(1, ops.Copy, errInjected)
+
+	if err := shell.writeBack(context.Background(), ""); err == nil {
+		t.Fatal("writeBack succeeded although the backup could not be taken")
+	}
+	if got := readFile(t, src); got != content {
+		t.Errorf("the source was replaced although the backup failed:\n got %q\nwant %q", got, content)
+	}
+	if extra := leftoverFiles(t, dir, "people.csv"); len(extra) > 0 {
+		t.Errorf("staging or backup files left behind: %v", extra)
+	}
+}
+
+// TestWriteBack_ChmodFailureStopsTheCommit checks that a save which cannot carry
+// the destination's permissions onto the staged file stops instead of landing a
+// file with the wrong mode.
+func TestWriteBack_ChmodFailureStopsTheCommit(t *testing.T) {
+	dir := t.TempDir()
+	const content = "id,name\n1,alice\n"
+	src := writeCSV(t, dir, "people.csv", content)
+
+	shell, cleanup := writeBackShell(t, src)
+	defer cleanup()
+	silenceStderr(t)
+	markChanged(t, shell, "people")
+
+	ops := defaultFileOps()
+	shell.files = ops
+	shell.files.Chmod = func(string, os.FileMode) error { return errInjected }
+
+	if err := shell.writeBack(context.Background(), ""); err == nil {
+		t.Fatal("writeBack succeeded although the permissions could not be carried over")
+	}
+	if got := readFile(t, src); got != content {
+		t.Errorf("the source was replaced although the commit failed:\n got %q\nwant %q", got, content)
+	}
+	if extra := leftoverFiles(t, dir, "people.csv"); len(extra) > 0 {
+		t.Errorf("staging or backup files left behind: %v", extra)
+	}
+}
+
+// TestWriteBack_RollbackFailureIsReportedWithTheCause is the case a user must
+// never be left guessing about: the commit failed, and putting the earlier file
+// back failed too, so a source now holds content from a save that reported an
+// error. Both errors have to come out.
+func TestWriteBack_RollbackFailureIsReportedWithTheCause(t *testing.T) {
+	dir := t.TempDir()
+	first := writeCSV(t, dir, "people.csv", "id,name\n1,alice\n")
+	second := writeCSV(t, dir, "places.csv", "id,city\n1,tokyo\n")
+
+	shell, cleanup := writeBackShell(t, first, second)
+	defer cleanup()
+	silenceStderr(t)
+	markChanged(t, shell, "people", "places")
+
+	ops := defaultFileOps()
+	shell.files = ops
+	// The second rename fails, and so does the copy the commit falls back to, so
+	// the first commit has to be rolled back — and that restore fails too.
+	//
+	// Copy runs once per backup before any commit (2), then as the failed
+	// commit's fallback (3), then as the rollback's restore (4).
+	rollbackErr := errors.New("restore refused")
+	shell.files.Rename = failOnNth2(2, ops.Rename, errInjected)
+	copyCalls := 0
+	shell.files.Copy = func(src, dest string) error {
+		copyCalls++
+		switch copyCalls {
+		case 3:
+			return errInjected
+		case 4:
+			return rollbackErr
+		default:
+			return ops.Copy(src, dest)
+		}
+	}
+
+	err := shell.writeBack(context.Background(), "")
+	if err == nil {
+		t.Fatal("writeBack succeeded although a commit and its rollback both failed")
+	}
+	if !errors.Is(err, errInjected) {
+		t.Errorf("the commit failure must survive: %v", err)
+	}
+	if !errors.Is(err, rollbackErr) {
+		t.Errorf("the rollback failure must be reported too, not swallowed: %v", err)
+	}
+	if !strings.Contains(err.Error(), first) {
+		t.Errorf("the error should name the file left holding new content: %v", err)
+	}
+	if extra := leftoverFiles(t, dir, "people.csv", "places.csv"); len(extra) > 0 {
+		t.Errorf("staging or backup files left behind: %v", extra)
 	}
 }
 
@@ -250,16 +368,8 @@ func TestWriteBack_OnlyChangedTablesAreWritten(t *testing.T) {
 	changed := writeCSV(t, dir, "people.csv", "id,name\n1,alice\n")
 	untouched := writeCSV(t, dir, "places.csv", untouchedContent)
 
-	shell, cleanup, err := newShell(t, []string{"sqly", "--sql", "UPDATE people SET name = 'bob'", "--save-in-place", changed, untouched})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	shell.isTTY = func() bool { return true }
-	silenceStderr(t)
-
-	if runErr := shell.Run(context.Background()); runErr != nil {
-		t.Fatalf("Run: %v", runErr)
+	if _, err := runScript(t, "UPDATE people SET name = 'bob';\n.save --in-place\n", changed, untouched); err != nil {
+		t.Fatalf("run: %v", err)
 	}
 
 	if got := readFile(t, changed); !strings.Contains(got, "bob") {
@@ -270,25 +380,29 @@ func TestWriteBack_OnlyChangedTablesAreWritten(t *testing.T) {
 	}
 }
 
-// TestRollbackCommitted_RestoreFailureIsNotReportedOverTheCause documents the
-// one place a failure is deliberately not surfaced. A rollback runs because
-// something already failed; reporting a failed restore instead of that original
-// error would hide the one the user has to act on, so rollbackCommitted is best
-// effort and the caller's error is the one returned.
-func TestRollbackCommitted_RestoreFailureIsNotReportedOverTheCause(t *testing.T) {
+// TestRollbackCommitted_ReportsWhatItCouldNotRestore checks the unit directly:
+// a restore that fails is returned, not dropped. The caller joins it with the
+// error that caused the rollback, so the user learns both why the save stopped
+// and which file was left holding the new content.
+func TestRollbackCommitted_ReportsWhatItCouldNotRestore(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "gone.csv")
 
 	// A backup path that does not exist makes the restore fail.
-	rollbackCommitted([]stagedWrite{{
+	err := (&Shell{}).rollbackCommitted([]stagedWrite{{
 		target: writeTarget{dest: dest},
 		backup: filepath.Join(dir, "missing.bak"),
 	}})
+	if err == nil {
+		t.Fatal("rollbackCommitted returned nil although the restore failed")
+	}
+	if !strings.Contains(err.Error(), dest) {
+		t.Errorf("error should name the file it could not restore: %v", err)
+	}
 
-	// The destination is left as it was (absent); the call itself does not panic
-	// and returns nothing for the caller to mistake for success.
-	if _, err := os.Stat(dest); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("stat %s = %v, want it to stay absent", dest, err)
+	// The destination is left as it was: absent.
+	if _, statErr := os.Stat(dest); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("stat %s = %v, want it to stay absent", dest, statErr)
 	}
 }
 

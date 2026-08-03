@@ -64,18 +64,8 @@ type Arg struct {
 	// 0 means schema-only (no sample rows), which keeps the report small for
 	// wide or multi-table sources.
 	InspectSample int
-	// SaveInPlace, when true, writes each table back over its source file after
-	// the run (for --save-in-place). It overwrites the source files, which is why
-	// the flag spells that out instead of being a bare --save.
-	SaveInPlace bool
-	// SaveTablesDir, when non-empty, writes each table into this directory after the
-	// run (for --save-tables), preserving each source's format and compression and
-	// leaving the original source files untouched.
-	SaveTablesDir string
 	// Usage message
 	Usage string
-	// SheetName is excel sheet name that is imported into the DB.
-	SheetName string
 	// StdinFormat, when non-empty, makes sqly read stdin as an input dataset of
 	// this format (csv, tsv, ltsv, json, jsonl) instead of as SQL/helper commands.
 	StdinFormat string
@@ -90,6 +80,11 @@ type Arg struct {
 	// Encoding selects how a text import without a Unicode BOM is decoded before
 	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs.
 	Encoding model.TextEncoding
+	// ExplicitFlags names the flags the user actually typed, as opposed to the
+	// ones sitting at their default. A flag that was typed but can never apply to
+	// any of this run's inputs is an error, and only the user's intent — not the
+	// value, which may equal the default — distinguishes the two cases.
+	ExplicitFlags map[string]bool
 	// Dialect is the SQL dialect applied to user queries (loading always uses
 	// SQLite). It sets the initial dialect for the session; the .dialect shell
 	// command can change it at runtime.
@@ -154,34 +149,23 @@ func newArg(args []string) (*Arg, error) {
 	// Input.
 	stdinFormat := flag.String("stdin-format", "", "read stdin as a dataset instead of as SQL; one of: "+stdinFormatHelp)
 	stdinTable := flag.String("stdin-table", defaultStdinTable, "table name for the --stdin-format dataset")
-	sheetName := flag.String("sheet", "", "import only this sheet from Excel (.xlsx) inputs")
-	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "decode CSV, TSV, LTSV, JSON, and JSONL inputs that have no BOM as one of: "+strings.ReplaceAll(model.TextEncodingHelp(), "|", ", "))
-	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "CSV/TSV only: handle a row whose field count differs from the header, as one of: error (fail the import), skip (drop the row), pad (pad a short row, fail on a long one)")
+	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "decode every csv, tsv, ltsv, json, and jsonl input that has no BOM as one of: "+strings.ReplaceAll(model.TextEncodingHelp(), "|", ", "))
+	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "for csv and tsv, what to do with a row whose field count differs from the header: error (fail the import), skip (drop the row), pad (fill a short row, fail on a long one)")
 	// Query.
 	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
-	sqlFile := flag.StringP("sql-file", "f", "", "run every statement in this SQL file, printing each result, then exit")
+	sqlFile := flag.StringP("sql-file", "f", "", "run every statement in this file, then exit; printing several results needs --output-format table, vertical, or markdown")
 	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: sqlite, mysql, postgresql, googlesql; sqly translates it to SQLite")
 	// Output.
-	output := flag.StringP("output", "o", "", "write the query result to this file instead of stdout; the run must produce exactly one result")
+	output := flag.StringP("output", "o", "", "write the one query result to this file instead of stdout")
 	outputFormat := flag.String("output-format", outputFormatTable, "print the query result as one of: "+outputFormatHelp+"; excel and parquet need --output")
 	// Inspection.
-	flag.BoolVar(&arg.InspectFlag, "inspect", false, "print a JSON report of the imported tables (schema, row counts, sample rows) and exit")
+	flag.BoolVar(&arg.InspectFlag, "inspect", false, "print one JSON report of the imported tables (schema, row counts, sample rows) and exit")
 	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "sample rows per table in the --inspect report; 0 for schema only")
-	// Write-back.
-	saveTablesDir := flag.String("save-tables", "", "after the run, write every table the session changed into this directory, in its source format; the sources are untouched")
-	flag.BoolVar(&arg.SaveInPlace, "save-in-place", false, "after the run, overwrite the source file of every table the session changed (destructive)")
 	// General.
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print this help and exit")
 	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print the sqly version and exit")
 	if err := flag.Parse(args[1:]); err != nil {
 		return nil, err
-	}
-
-	// An explicit empty --sheet ("--sheet \"\"") is a mistake: the empty string
-	// is the "no sheet selected" sentinel, so accepting it would silently behave
-	// like the flag was never passed. Reject it so the error is visible.
-	if flag.Changed("sheet") && *sheetName == "" {
-		return nil, errEmptySheet
 	}
 
 	// Reject other flags given an explicit empty value for the same reason: each
@@ -195,9 +179,6 @@ func newArg(args []string) (*Arg, error) {
 	}
 	if flag.Changed("sql-file") && *sqlFile == "" {
 		return nil, errEmptySQLFile
-	}
-	if flag.Changed("save-tables") && *saveTablesDir == "" {
-		return nil, errEmptySaveTables
 	}
 	if flag.Changed("stdin-format") && *stdinFormat == "" {
 		return nil, errEmptyStdinFormat
@@ -214,28 +195,6 @@ func newArg(args []string) (*Arg, error) {
 	// without --inspect instead of silently ignoring it.
 	if flag.Changed("inspect-sample") && !arg.InspectFlag {
 		return nil, errInspectSampleWithoutInspect
-	}
-
-	// The two write-back destinations are mutually exclusive: one run cannot both
-	// leave the sources alone and overwrite them. Reject the pair here, at parse
-	// time, rather than after the query has already produced output.
-	if arg.SaveInPlace && *saveTablesDir != "" {
-		return nil, errSaveInPlaceWithSaveTables
-	}
-
-	// Write-back rewrites the files the tables were imported from, so it needs
-	// inputs that are files. A piped dataset is consumed and gone, and a remote
-	// input is not sqly's to write. Rejecting both here, before anything is
-	// imported, keeps a run that cannot persist from looking like one that did.
-	if arg.SaveInPlace || *saveTablesDir != "" {
-		if *stdinFormat != "" {
-			return nil, errSaveWithStdinDataset
-		}
-		for _, path := range flag.Args() {
-			if isRemoteInput(path) {
-				return nil, fmt.Errorf("%w: %s", errSaveWithRemoteInput, path)
-			}
-		}
 	}
 
 	// Validate --stdin-table so it cannot be empty or contain path separators.
@@ -273,27 +232,30 @@ func newArg(args []string) (*Arg, error) {
 	arg.Version = version
 	arg.Output = newOutput(*output, outputMode)
 	arg.FilePaths = flag.Args()
-	arg.SheetName = *sheetName
 	arg.StdinFormat = *stdinFormat
 	arg.StdinTableName = *stdinTable
 	arg.RowMismatch = rowMismatchPolicy
 	arg.Encoding = importTextEncoding
+	arg.ExplicitFlags = explicitFlags(&flag)
 	arg.Dialect = sqlDialectValue
 	arg.Query = *query
 	arg.SQLFilePath = *sqlFile
-	arg.SaveTablesDir = *saveTablesDir
 	arg.InspectSample = *inspectSample
 
 	return arg, nil
 }
 
-// isRemoteInput reports whether an input argument names an http(s) URL rather
-// than a local path. Only the scheme is examined, which is all the write-back
-// check needs: the import path does the real URL validation and reports its own
-// errors for a malformed one.
-func isRemoteInput(path string) bool {
-	lower := strings.ToLower(path)
-	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+// explicitFlags records which flags the user typed. pflag knows this per flag;
+// collecting it once keeps the rest of the program from needing the FlagSet.
+func explicitFlags(flags *pflag.FlagSet) map[string]bool {
+	typed := make(map[string]bool)
+	flags.Visit(func(f *pflag.Flag) { typed[f.Name] = true })
+	return typed
+}
+
+// IsExplicit reports whether the user typed the named flag on the command line.
+func (a *Arg) IsExplicit(name string) bool {
+	return a != nil && a.ExplicitFlags[name]
 }
 
 // validateStdinTable rejects a --stdin-table that is empty or path-like. The name
@@ -394,11 +356,10 @@ type optionGroup struct {
 // newArg appears in exactly one group; helpUsage fails loudly if that stops
 // being true, so a flag added later cannot silently vanish from --help.
 var optionGroups = []optionGroup{
-	{title: "Input", options: []string{"stdin-format", "stdin-table", "sheet", "encoding", "row-mismatch"}},
+	{title: "Input", options: []string{"stdin-format", "stdin-table", "encoding", "row-mismatch"}},
 	{title: "Query", options: []string{"sql", "sql-file", "dialect"}},
 	{title: "Output", options: []string{"output", "output-format"}},
 	{title: "Inspection", options: []string{"inspect", "inspect-sample"}},
-	{title: "Write back", options: []string{"save-tables", "save-in-place"}},
 	{title: "General", options: []string{"help", "version"}},
 }
 
@@ -420,7 +381,6 @@ const (
 var optionArgNames = map[string]string{
 	"stdin-format":   argFormat,
 	"stdin-table":    argName,
-	"sheet":          argName,
 	"encoding":       argEncoding,
 	"row-mismatch":   argPolicy,
 	"sql":            argSQL,
@@ -429,7 +389,6 @@ var optionArgNames = map[string]string{
 	"output":         argFile,
 	"output-format":  argFormat,
 	"inspect-sample": argCount,
-	"save-tables":    argDir,
 }
 
 // helpWidth is the column the option descriptions wrap at. 80 keeps --help
@@ -447,7 +406,8 @@ func usage(flag pflag.FlagSet) string {
 	s += "  Each input is loaded into an in-memory SQLite database as a table named\n"
 	s += "  after the file. With --sql or --sql-file, sqly runs the query and exits;\n"
 	s += "  with neither, it opens an interactive shell, or runs SQL piped into it.\n"
-	s += "  sqly has no subcommands. Dot-commands are available inside the shell.\n"
+	s += "  sqly has no subcommands. Dot-commands run inside the shell, including\n"
+	s += "  .save, which writes changed tables back to their files.\n"
 	s += "\n"
 	s += "[Examples]\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("open the shell with a file loaded"))

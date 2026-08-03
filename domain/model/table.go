@@ -162,6 +162,25 @@ func (p PrintMode) IsDisplayOnly() bool {
 	return p == PrintModeTable || p == PrintModeVertical
 }
 
+// AllowsMultipleResults reports whether this format can carry more than one
+// result set in a single stream.
+//
+// A format a person reads can: two tables, two vertical blocks, or two Markdown
+// tables separated by a blank line are still exactly what they look like. A
+// format a program parses cannot. Two CSV bodies concatenated are one CSV whose
+// third line is a second header row; two JSON arrays back to back are not a JSON
+// document; and JSONL has no way to say "a new result starts here". Emitting
+// those anyway produces a file that parses — into the wrong thing, or not at
+// all — which is worse than refusing, so a run that would need one is rejected.
+func (p PrintMode) AllowsMultipleResults() bool {
+	switch p {
+	case PrintModeTable, PrintModeVertical, PrintModeMarkdownTable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Table is DB table.
 type Table struct {
 	// Name is table name.

@@ -18,7 +18,10 @@ scenarios:
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
       - run:
-          command: sqly --sql "ALTER TABLE user RENAME COLUMN first_name TO fname" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            ALTER TABLE user RENAME COLUMN first_name TO fname;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -31,7 +34,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "DROP TABLE user" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            DROP TABLE user;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -42,7 +48,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "CREATE VIEW v AS SELECT user_name FROM user" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            CREATE VIEW v AS SELECT user_name FROM user;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -53,7 +62,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "CREATE INDEX idx ON user(identifier)" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            CREATE INDEX idx ON user(identifier);
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -64,7 +76,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "CREATE TABLE backup (id INTEGER)" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            CREATE TABLE backup (id INTEGER);
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -75,7 +90,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "REINDEX" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            REINDEX;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -86,18 +104,24 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "ANALYZE" --save-in-place user.csv
+          command: sqly user.csv
+          stdin: |
+            ANALYZE;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
             empty: false
 
-  - name: rejects CREATE TABLE AS SELECT under --save-tables and writes nothing
+  - name: rejects CREATE TABLE AS SELECT under .save DIR and writes nothing
     env: *hist
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "CREATE TABLE backup AS SELECT * FROM user" --save-tables out user.csv
+          command: sqly user.csv
+          stdin: |
+            CREATE TABLE backup AS SELECT * FROM user;
+            .save out
       - assert:
           exit_code: 1
           stderr:
@@ -115,14 +139,15 @@ scenarios:
           content: |
             CREATE TABLE backup AS SELECT * FROM user;
             UPDATE user SET first_name='Z' WHERE identifier=1;
+            .save --in-place
       - run:
-          command: sqly --sql-file s.sql --save-tables out user.csv
+          command: sqly --sql-file s.sql user.csv
       - assert:
           exit_code: 1
           stderr:
             empty: false
 
-  - name: allows a .import + UPDATE batch under --save-tables and writes the change
+  - name: allows a .import + UPDATE batch under .save DIR and writes the change
     env: *hist
     steps:
       - fixture:
@@ -135,8 +160,9 @@ scenarios:
           content: |
             .import testdata/user.csv
             UPDATE user SET first_name='Batch' WHERE identifier=1;
+            .save out
       - run:
-          command: sqly --sql-file imp.sql --save-tables out
+          command: sqly --sql-file imp.sql
       - assert:
           exit_code: 0
           stdout:

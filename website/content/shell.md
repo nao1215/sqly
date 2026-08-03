@@ -98,3 +98,5 @@ Saved user to out/user.csv
 ```
 
 `.save DIR` never touches the sources. `.save --in-place` overwrites them. A session that changed no row writes no file and says so.
+
+Write-back lives here rather than on the command line: it is the one thing sqly does that cannot be undone, and `.save` puts it after the statements that changed something, where you can look first. The same commands work in a piped script, so a batch job writes back the same way a person does. The [reference](/reference/#write-back) has the full contract — which formats can be written, what happens when several files are saved at once, and what is guaranteed if one of them fails.

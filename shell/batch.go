@@ -47,7 +47,7 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 // output cannot leak into a pipeline that the process then reports as failed
 // (). A ".exit" command stops early with success, mirroring the
 // interactive shell. ranAny reports whether at least one statement or command
-// was executed, so callers can skip post-run side effects (e.g. --save-in-place
+// was executed, so callers can skip post-run side effects (e.g. a .save
 // write-back) for an empty batch ().
 func (s *Shell) runBatchReader(ctx context.Context, r io.Reader) (ranAny bool, err error) {
 	// Strip a leading UTF-8 BOM so a BOM-prefixed batch stream (common from
@@ -476,19 +476,52 @@ func scriptModifiesData(script string) bool {
 // they are not misclassified as SQL. It is the shared front end for the write-back
 // classifiers below.
 func scriptSQLStatements(script string) []string {
-	var sql strings.Builder
+	_, stmts := walkScript(script)
+	return stmts
+}
+
+// walkScript separates a batch or --sql-file script into the helper commands it
+// runs and the SQL statements it runs, the same way the batch reader does.
+//
+// The buffer has to be drained as statements complete. Accumulating every line
+// and only asking "are we at a statement boundary?" works until the first
+// statement ends: from then on the buffer is never empty again, so every later
+// dot-line looks like it is inside an unterminated statement. That is what made
+// ".save" and ".import" invisible to the classifiers whenever any SQL came
+// first — the exact shape every real script has.
+func walkScript(script string) (helpers []string, stmts []string) {
+	var pending strings.Builder
 	for _, line := range strings.Split(script, "\n") {
-		if atStatementBoundary(sql.String()) && strings.HasPrefix(strings.TrimSpace(line), ".") {
-			continue // a helper command, not part of any SQL statement
+		if atStatementBoundary(pending.String()) && strings.HasPrefix(strings.TrimSpace(line), ".") {
+			helpers = append(helpers, strings.TrimSpace(line))
+			continue
 		}
-		sql.WriteString(line)
-		sql.WriteString("\n")
+		pending.WriteString(line)
+		pending.WriteString("\n")
+
+		complete, remainder := splitSQLStatements(pending.String())
+		if len(complete) == 0 {
+			continue
+		}
+		stmts = append(stmts, complete...)
+		pending.Reset()
+		pending.WriteString(remainder)
 	}
-	stmts, remainder := splitSQLStatements(sql.String())
-	if leftover := stripLeadingSQLComments(remainder); leftover != "" {
+	if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
 		stmts = append(stmts, leftover)
 	}
-	return stmts
+	return helpers, stmts
+}
+
+// scriptRunsHelper reports whether the script issues the named helper command.
+func scriptRunsHelper(script, command string) bool {
+	helpers, _ := walkScript(script)
+	for _, helper := range helpers {
+		if fields := strings.Fields(helper); len(fields) > 0 && fields[0] == command {
+			return true
+		}
+	}
+	return false
 }
 
 // countSQLStatements returns the number of complete SQL statements in s, counting
@@ -521,12 +554,28 @@ func statementSaveCompatible(stmt string) bool {
 	if statementModifiesData(stmt) {
 		return true
 	}
+	// A TEMP table is scratch space that never reaches a file: it is dropped with
+	// the session and write-back skips it like any other SQL-created table. A
+	// script is allowed to build one and still save the tables it imported.
+	if createsTempTable(stmt) {
+		return true
+	}
 	switch leadingSQLKeyword(stmt) {
 	case kwSelect, kwValues, "WITH", "EXPLAIN", "TABLE":
 		return true
 	default:
 		return false
 	}
+}
+
+// createsTempTable reports whether a statement creates a temporary table or
+// view: "CREATE TEMP ..." or "CREATE TEMPORARY ...", in any case.
+func createsTempTable(stmt string) bool {
+	fields := strings.Fields(strings.ToUpper(stripLeadingSQLComments(stmt)))
+	if len(fields) < 2 || fields[0] != sqlCreate {
+		return false
+	}
+	return fields[1] == "TEMP" || fields[1] == "TEMPORARY"
 }
 
 // firstSaveIncompatibleStatement returns the first statement a non-interactive
@@ -546,24 +595,14 @@ func firstSaveIncompatibleStatement(script string) string {
 // runs, so save preflight cannot list them up front and instead defers write-back
 // validation until after the run.
 func scriptImportsInput(script string) bool {
-	var sql strings.Builder
-	for _, line := range strings.Split(script, "\n") {
-		if !atStatementBoundary(sql.String()) {
-			sql.WriteString(line)
-			sql.WriteString("\n")
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, ".") {
-			if fields := strings.Fields(trimmed); len(fields) > 0 && fields[0] == importCommand {
-				return true
-			}
-			continue // another helper command, not part of any SQL statement
-		}
-		sql.WriteString(line)
-		sql.WriteString("\n")
-	}
-	return false
+	return scriptRunsHelper(script, importCommand)
+}
+
+// scriptSaves reports whether a batch or --sql-file script issues a ".save"
+// helper command. Only such a script can write files back, so it is the one that
+// needs write-back validated before its first statement runs.
+func scriptSaves(script string) bool {
+	return scriptRunsHelper(script, saveCommand)
 }
 
 // statementModifiesData reports whether a single statement changes table data:

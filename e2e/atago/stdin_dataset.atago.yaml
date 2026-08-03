@@ -100,10 +100,15 @@ scenarios:
           stdout:
             not_contains: "sqly-stdin-"
 
-  - name: rejects --save-in-place for a stdin-backed table
+  - name: rejects .save for a stdin-backed table
     steps:
+      - fixture:
+          file: save.sql
+          content: |
+            UPDATE stdin SET name = 'x';
+            .save --in-place
       - run:
-          command: sqly --stdin-format csv --sql "UPDATE stdin SET name = 'x'" --save-in-place
+          command: sqly --stdin-format csv --sql-file save.sql
           stdin: |
             id,name
             1,alice

@@ -89,6 +89,12 @@ func newMode(w io.Writer, m model.PrintMode) *mode {
 	}
 }
 
+// AllowsMultipleResults reports whether the current output format can carry more
+// than one result set in one stream.
+func (m *mode) AllowsMultipleResults() bool {
+	return m.PrintMode.AllowsMultipleResults()
+}
+
 // displayName returns the user-facing name of the current mode.
 func (m *mode) displayName() string {
 	return m.String()

@@ -117,42 +117,6 @@ func TestTablesMatchingFile_Cov(t *testing.T) {
 	}
 }
 
-// TestExcelWorkbooks_Cov covers the directory-walk branch, the direct-file branch,
-// and the stat-error skip.
-func TestExcelWorkbooks_Cov(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	dir := t.TempDir()
-	copyTestFile(t, "sample.xlsx", filepath.Join(dir, "in-dir.xlsx"))
-	standalone := filepath.Join(dir, "standalone.xlsx")
-	copyTestFile(t, "sample.xlsx", standalone)
-	// Also drop a non-Excel file so the walk filters it out.
-	if err := os.WriteFile(filepath.Join(dir, "note.csv"), []byte("a\n1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	books := s.excelWorkbooks([]string{dir, standalone, filepath.Join(dir, "missing")})
-	var inDir, sole bool
-	for _, b := range books {
-		if strings.HasSuffix(b, "in-dir.xlsx") {
-			inDir = true
-		}
-		if b == standalone {
-			sole = true
-		}
-	}
-	if !inDir {
-		t.Errorf("excelWorkbooks did not find the workbook inside the directory: %v", books)
-	}
-	if !sole {
-		t.Errorf("excelWorkbooks did not find the standalone workbook: %v", books)
-	}
-}
-
 // TestIsRecordedSource_Cov confirms the stdin sentinel is skipped and a real
 // recorded source path is recognized.
 func TestIsRecordedSource_Cov(t *testing.T) {
@@ -330,38 +294,5 @@ func TestSaveFinancialSetFedwireInPlace(t *testing.T) {
 	}
 	if _, statErr := os.Stat(src); statErr != nil {
 		t.Errorf("in-place Fedwire save removed the source: %v", statErr)
-	}
-}
-
-// TestMaybeSaveInPlace covers the non-interactive --save-in-place path where a
-// row-modifying query writes a CSV table back over its source file.
-func TestMaybeSaveInPlace(t *testing.T) {
-	dir := t.TempDir()
-	src := filepath.Join(dir, "t.csv")
-	if err := os.WriteFile(src, []byte("id,name\n1,a\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	s, cleanup, err := newShell(t, []string{"sqly", "--save-in-place", "--sql", "UPDATE t SET name='b' WHERE id=1", src})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	s.isTTY = func() bool { return false }
-
-	_ = captureStderr(t, func() {
-		_ = captureStdout(t, func() {
-			if runErr := s.Run(context.Background()); runErr != nil {
-				t.Fatalf("Run with --save-in-place: %v", runErr)
-			}
-		})
-	})
-
-	after, readErr := os.ReadFile(src) //nolint:gosec // test path
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	if !strings.Contains(string(after), "1,b") {
-		t.Errorf("in-place --save did not persist the change; source = %q", after)
 	}
 }

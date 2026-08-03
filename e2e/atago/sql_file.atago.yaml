@@ -68,7 +68,7 @@ scenarios:
             SELECT 'first' AS x;
             SELECT 'second' AS x;
       - run:
-          command: sqly --output-format csv --sql-file multi.sql actor.csv
+          command: sqly --output-format table --sql-file multi.sql actor.csv
       - assert:
           exit_code: 0
           stdout:

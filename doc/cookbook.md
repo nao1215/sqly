@@ -15,7 +15,7 @@ SQLite can do, sqly can do — the file is just the table.
 | Join files of different formats | [Join across formats](#join-across-formats) |
 | Read a `.gz` / `.zst` / `.xz` file | [Compressed files](#compressed-files) |
 | Pull fields out of JSON or JSONL | [JSON and JSONL](#json-and-jsonl) |
-| Pick one sheet out of a workbook | [Excel workbooks](#excel-workbooks) |
+| Query a sheet of a workbook | [Excel workbooks](#excel-workbooks) |
 | Query a file on a web server | [Files over HTTP](#files-over-http) |
 | Pipe data in from another command | [Pipe data in](#pipe-data-in) |
 | Pipe the result into jq, awk, or sort | [Pipe data out](#pipe-data-out) |
@@ -203,10 +203,10 @@ sqly --inspect book.xlsx
 sqly --sql "SELECT * FROM book_Sheet1" book.xlsx
 ```
 
-Import one sheet by its original name:
+Every sheet is imported, so pick the one you want by its table name:
 
 ```shell
-sqly --sheet "Q3 actuals" --sql "SELECT * FROM book_Q3_actuals" book.xlsx
+sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 ```
 
 Write a result back out as a workbook:
@@ -415,37 +415,36 @@ sqly --sql "SELECT * FROM users WHERE TRIM(email) = ''" users.csv
 
 ## Write changes back
 
-A session is in-memory only. `--save-tables` writes each changed table into a
-directory and leaves the originals alone:
+A session is in-memory only until `.save` writes it out. `.save DIR` writes every
+table the session changed into `DIR` and leaves the sources alone:
 
 ```shell
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-tables ./out user.csv
+printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./out\n" | sqly user.csv
 ```
 
-`--save-in-place` overwrites the source files:
+`.save --in-place` overwrites the source files instead:
 
 ```shell
-sqly --sql "DELETE FROM user WHERE identifier > 100" --save-in-place user.csv
+printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place\n" | sqly user.csv
 ```
 
-Compression and format are preserved, so a `.csv.gz` source is rewritten as
-`.csv.gz`. A run that changes no row writes no file and says so. A save covering
-several files is all-or-nothing.
-
-From the shell:
+The same commands work in the interactive shell, where you can look at the
+result before saving it:
 
 ```shell
+sqly user.csv
 sqly:~(table)$ UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;
-sqly:~(table)$ .save ./out
+sqly:~(table)$ SELECT * FROM user;
 sqly:~(table)$ .save --in-place
 ```
 
-Dump one table to a file without ending the session:
+csv, tsv, ltsv, and parquet sources are written individually, preserving format,
+compression, and permissions; a whole ACH or Fedwire set is reconstructed into
+one file. A table the session did not change is not rewritten, and a save
+covering several files is all-or-nothing.
 
-```shell
-sqly:~(table)$ .mode json
-sqly:~(table)$ .dump user user.json
-```
+To write a *query result* somewhere — in any format, including json and excel —
+use `--output`, which is a different job with different rules.
 
 ## Other SQL dialects
 
@@ -513,8 +512,7 @@ sqly --sql "SELECT amount, beneficiary_name FROM transfer_message" transfer.fed
 Edits are written back into a valid file, with the whole set reconstructed:
 
 ```shell
-sqly --sql "UPDATE payment_entries SET individual_name = 'NEW NAME' WHERE entry_index = 0" \
-     --save-in-place payment.ach
+printf "UPDATE payment_entries SET individual_name = 'NEW NAME' WHERE entry_index = 0;\n.save --in-place\n" | sqly payment.ach
 ```
 
 ## Scripting

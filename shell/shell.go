@@ -3,7 +3,6 @@
 package shell
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -54,6 +53,9 @@ const (
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
 	msgExcelSheet     = "Excel sheet"
+	// formatNameTable is the default output format's name, used where a literal
+	// would otherwise repeat across completion, schema output, and help.
+	formatNameTable = "table"
 )
 
 // errNoStatements is returned by a non-interactive run that reads stdin in batch
@@ -114,11 +116,25 @@ type Shell struct {
 	// to stdout only after write-back succeeds, so a run that fails during
 	// write-back leaves stdout free of success counts.
 	pendingAffected []string
+	// deferAffectedCounts holds back the "affected is N row(s)" lines until the
+	// run has succeeded. It is set only for a script that ends in .save, where a
+	// failure during write-back would otherwise leave stdout claiming rows were
+	// changed on disk. Every other run prints each count in place, so the counts
+	// stay interleaved with the results in statement order.
+	deferAffectedCounts bool
+	// files is every filesystem call the write-back commit path makes. It is a
+	// field so a test can fail exactly one of them; production always gets the
+	// real filesystem from NewShell.
+	files fileOps
 	// collectingOutput routes rowset results into capturedRowsets instead of
 	// printing them, so --sql-file combined with --output can export the single
 	// result set the script produces. No-rowset statements stay silent in this
 	// mode, keeping stdout clean for the exported-data run.
 	collectingOutput bool
+	// printedResults counts the result sets a non-interactive run has already
+	// written to stdout, so the second and later ones can be separated from the
+	// one before.
+	printedResults int
 	// capturedRowsets holds the rowset results produced while collectingOutput is
 	// set. The one-result-set contract is enforced after the script finishes: zero
 	// or more than one captured rowset is an error.
@@ -164,6 +180,7 @@ func NewShell(
 		commands: cmds,
 		usecases: usecases,
 		state:    state,
+		files:    defaultFileOps(),
 		newPrompt: func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
 			const historySize = 100
 
@@ -216,12 +233,6 @@ func (s *Shell) Run(ctx context.Context) error {
 		return errors.New(hint)
 	}
 
-	// --sheet only affects Excel imports; reject it up front when no input can
-	// be an Excel file so a typo is not silently ignored.
-	if err := s.validateSheetFlag(); err != nil {
-		return err
-	}
-
 	// --inspect is self-contained; reject conflicting action/side-effect flags
 	// up front instead of silently discarding them.
 	if err := s.validateInspectFlags(); err != nil {
@@ -235,9 +246,11 @@ func (s *Shell) Run(ctx context.Context) error {
 		return errors.New("--output requires --sql or --sql-file")
 	}
 
-	// Reject an --output destination that is an existing directory before import,
-	// so it is not silently rewritten to a sibling file.
-	if err := ensureNotDirectory(s.argument.Output.FilePath); err != nil {
+	// Check the destination before the import, so a run that cannot write its
+	// result never spends time reading files: an existing directory would be
+	// silently rewritten to a sibling file, and a missing parent directory would
+	// only surface after the query had already run.
+	if err := ensureWritableDestination(s.argument.Output.FilePath); err != nil {
 		return err
 	}
 
@@ -247,6 +260,12 @@ func (s *Shell) Run(ctx context.Context) error {
 	// Ask for the destination rather than guessing. The interactive shell is
 	// unaffected: there the format is a standing choice that .dump acts on.
 	if err := s.validateBinaryOutputFormat(); err != nil {
+		return err
+	}
+
+	// An import option the user typed that no input of this run can use is a
+	// no-op the user did not ask for. Reject it before reading anything.
+	if err := s.validateOptionApplicability(); err != nil {
 		return err
 	}
 
@@ -271,22 +290,6 @@ func (s *Shell) Run(ctx context.Context) error {
 			return err
 		}
 		sqlScript = script
-
-		// --sql-file takes its query from the file, not stdin. Without --stdin-format to
-		// route piped stdin to a dataset, non-empty piped stdin would be silently
-		// dropped, so reject it and point the user at --stdin-format. Empty stdin (e.g.
-		// CI redirecting /dev/null) is fine.
-		if s.argument.StdinFormat == "" && !s.isTTY() && s.pipedStdinHasData() {
-			return errors.New("--sql-file does not read SQL from stdin; piped stdin would be ignored. Use --stdin-format FORMAT to load it as a dataset, or remove the pipe")
-		}
-	}
-
-	// Write-back is validated here, before the import: a run that could never
-	// persist must fail without reading a file, creating a directory, or printing
-	// a row. What it cannot see yet — which tables a script's own .import will
-	// create — is left to preflightSave, which runs before the first statement.
-	if err := s.validateSaveFlags(sqlScript); err != nil {
-		return err
 	}
 
 	if err := s.init(ctx); err != nil {
@@ -320,11 +323,6 @@ func (s *Shell) Run(ctx context.Context) error {
 		if n := countSQLStatements(s.argument.Query); n > 1 {
 			return fmt.Errorf("--sql accepts a single SQL statement, but got %d; run one statement per invocation or use --sql-file for a multi-statement script", n)
 		}
-		// Validate write-back before running, so a run that cannot persist fails
-		// before any query output reaches stdout.
-		if err := s.preflightSave(ctx, s.argument.Query); err != nil {
-			return err
-		}
 		if err := s.execSQL(ctx, s.argument.Query); err != nil {
 			return err
 		}
@@ -335,7 +333,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// error reporting as batch stdin mode, so multiline SQL and multiple
 	// statements behave identically whether they arrive from a file or a pipe.
 	if s.argument.SQLFilePath != "" {
-		if err := s.preflightSave(ctx, sqlScript); err != nil {
+		if err := s.prepareForScript(ctx, sqlScript); err != nil {
 			return err
 		}
 		// With --output, export the script's single result set to the file instead
@@ -343,7 +341,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		if s.argument.Output.FilePath != "" {
 			return s.runSQLFileToOutput(ctx, sqlScript)
 		}
-		ranAny, err := s.runBatchReader(ctx, strings.NewReader(sqlScript))
+		ranAny, err := s.runScript(ctx, sqlScript)
 		if err != nil {
 			return err
 		}
@@ -363,18 +361,17 @@ func (s *Shell) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to read batch input: %w", err)
 		}
 		batchScript := strings.TrimPrefix(string(data), "\ufeff")
-		if err := s.preflightSave(ctx, batchScript); err != nil {
+		if err := s.prepareForScript(ctx, batchScript); err != nil {
 			return err
 		}
-		ranAny, err := s.runBatchReader(ctx, strings.NewReader(batchScript))
+		ranAny, err := s.runScript(ctx, batchScript)
 		if err != nil {
 			return err
 		}
 		// A non-interactive run that executed nothing (no TTY and empty or
 		// comment-only stdin, with no --sql/--sql-file) is a silent no-op that
 		// still exits 0, so headless wrappers and CI mistake it for a completed
-		// query. Surface a hint and fail instead. Returning before write-back also
-		// keeps an empty --save-in-place/--save-tables batch from rewriting source files.
+		// query. Surface a hint and fail instead.
 		if !ranAny {
 			return errNoStatements
 		}
@@ -618,17 +615,6 @@ func (s *Shell) init(ctx context.Context) error {
 	return importErr
 }
 
-// pipedStdinHasData reports whether stdin currently has at least one unread
-// byte. It wraps stdin in a buffered reader and peeks one byte, keeping that
-// byte available for any later reader. It is used to detect a piped payload that
-// would otherwise be silently ignored (e.g. SQL piped into a --sql-file run).
-func (s *Shell) pipedStdinHasData() bool {
-	br := bufio.NewReader(s.stdin)
-	s.stdin = br
-	_, err := br.Peek(1)
-	return err == nil
-}
-
 // stdinTableSource is the synthetic source recorded for tables imported from a
 // piped --stdin-format dataset, in place of the ephemeral staging temp path.
 const stdinTableSource = "stdin"
@@ -791,15 +777,6 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 	// is therefore len(completed).
 	completed := completedCommandWords(text, currentWord)
 
-	// .import --sheet completion: when the in-progress token is the value of the
-	// --sheet flag, suggest the workbook's sheet names instead of file paths. This
-	// runs before path completion so the sheet value is not treated as a path.
-	if len(completed) >= 1 && completed[0] == importCommand {
-		if wb, partial, quote, joined, ok := s.sheetCompletionContext(completed, currentWord); ok {
-			return s.getSheetCompletions(wb, partial, quote, joined)
-		}
-	}
-
 	// Command-aware path completion: the path-taking helper commands complete
 	// filesystem paths at their path argument. .cd and .save target a directory,
 	// so only directories are offered; .ls/.dump/.import also offer importable
@@ -916,7 +893,7 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "LIMIT", Description: "SQL: upper Limit of records"},
 		{Text: "OFFSET", Description: "SQL: identify the starting point to return result rows"},
 		{Text: "CASE", Description: "SQL: branching by conditions"},
-		{Text: "table", Description: "sqly command argument: table output format"},
+		{Text: formatNameTable, Description: "sqly command argument: table output format"},
 		{Text: "markdown", Description: "sqly command argument: markdown table output format"},
 		{Text: "csv", Description: "sqly command argument: csv output format"},
 		{Text: "tsv", Description: "sqly command argument: tsv output format"},
@@ -1056,6 +1033,47 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 	return nil
 }
 
+// runScript runs a multi-statement script that prints to stdout.
+//
+// How many result sets the script may produce depends on the output format. A
+// format a person reads carries several, separated as they are printed. A format
+// a program parses carries exactly one, because there is no way to say where one
+// result ends and the next begins — so those results are collected instead of
+// printed, and a script that produced more than one is rejected with nothing on
+// stdout. A script that produces none (only DDL/DML) is fine either way.
+func (s *Shell) runScript(ctx context.Context, script string) (bool, error) {
+	if s.state.mode.AllowsMultipleResults() {
+		return s.runBatchReader(ctx, strings.NewReader(script))
+	}
+
+	s.capturedRowsets = nil
+	s.collectingOutput = true
+	defer func() {
+		s.collectingOutput = false
+		s.capturedRowsets = nil
+	}()
+
+	ranAny, err := s.runBatchReader(ctx, strings.NewReader(script))
+	if err != nil {
+		return ranAny, err
+	}
+	if len(s.capturedRowsets) > 1 {
+		return ranAny, fmt.Errorf(
+			"--output-format %s carries one result set, but the script produced %d; %s",
+			s.state.mode, len(s.capturedRowsets), multiResultAdvice)
+	}
+	for _, table := range s.capturedRowsets {
+		if err := table.Print(config.Stdout, s.state.mode.PrintMode); err != nil {
+			return ranAny, fmt.Errorf("failed to print table: %w", err)
+		}
+	}
+	return ranAny, nil
+}
+
+// multiResultAdvice is the recovery half of every "one result set" error, shared
+// so --output and the machine-readable stdout formats say the same thing.
+const multiResultAdvice = "keep one statement that returns rows, or use --output-format table, vertical, or markdown, which separate several results"
+
 // runSQLFileToOutput runs a --sql-file script and exports its single result set
 // to --output. The script may run any number of setup statements (DDL/DML), but
 // exactly one must produce a result set: zero or more than one is rejected with a
@@ -1085,7 +1103,7 @@ func (s *Shell) runSQLFileToOutput(ctx context.Context, script string) error {
 		}
 		return s.finishNonInteractive(ctx)
 	default:
-		return fmt.Errorf("--output supports a single result set, but the --sql-file script produced %d; reduce it to one SELECT or run without --output", len(s.capturedRowsets))
+		return fmt.Errorf("--output writes one file, but the script produced %d result sets; %s", len(s.capturedRowsets), multiResultAdvice)
 	}
 }
 
@@ -1123,10 +1141,11 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
 		}
 		msg := statementResultMessage(req, affectedRows)
-		// When a write-back is requested, buffer the result line instead of printing
-		// it now: it is flushed to stdout only after write-back succeeds, so a run
-		// that fails during write-back leaves stdout clean.
-		if s.saveRequested() {
+		// In a non-interactive run the count is buffered rather than printed now: a
+		// later statement (or a .save) can still fail the run, and stdout must not
+		// carry success text from a run that exits non-zero. finishNonInteractive
+		// flushes it once the run has succeeded.
+		if s.deferAffectedCounts {
 			s.pendingAffected = append(s.pendingAffected, msg)
 			return nil
 		}
@@ -1145,9 +1164,17 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if s.argument.NeedsOutputToFile() {
 		return s.outputToFile(table)
 	}
+	// Separate this result from the one before it. Two Markdown tables with no
+	// blank line between them render as one broken table, and two ASCII tables or
+	// vertical blocks read as one run-on block. Only a format that allows several
+	// results reaches here more than once.
+	if s.printedResults > 0 {
+		fmt.Fprintln(config.Stdout)
+	}
 	if err := table.Print(config.Stdout, s.state.mode.PrintMode); err != nil {
 		return fmt.Errorf("failed to print table: %w", err)
 	}
+	s.printedResults++
 	return nil
 }
 
@@ -1169,10 +1196,10 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	}
 	filePath := model.BuildOutputPath(s.argument.Output.FilePath, exportFmt, compression)
 	// Refuse an --output destination that aliases an imported source file. A
-	// destructive source write must go through --save-in-place, not a one-off
+	// destructive source write must go through .save --in-place, not a one-off
 	// export, so a stray --output cannot silently destroy the dataset.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
-		return fmt.Errorf("--output destination %s is the source file for table %q; use --save-in-place to overwrite a source", filePath, name)
+		return fmt.Errorf("--output destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)
 	}
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
 		return err
@@ -1200,26 +1227,42 @@ func (s *Shell) outputAliasesImportedSource(path string) (string, bool) {
 	return "", false
 }
 
-// ensureNotDirectory rejects an output destination that is, or looks like, a
-// directory. Without this check the path gets a format extension appended,
-// silently writing to a sibling file (e.g. "out" -> "out.csv") or, for a
+// prepareForScript records what the whole script implies before its first
+// statement runs: whether a write-back is coming, which decides if the
+// affected-row counts can be printed as they happen.
+func (s *Shell) prepareForScript(ctx context.Context, script string) error {
+	s.deferAffectedCounts = scriptSaves(script)
+	return s.preflightSave(ctx, script)
+}
+
+// ensureWritableDestination rejects an output destination sqly cannot write a
+// single file to. Without this check the path gets a format extension appended,
+// silently writing to a sibling file ("out" -> "out.csv") or, for a
 // directory-like path ending in a separator, a hidden file ("outdir/" ->
-// "outdir/.csv"). A path ending in a path separator is rejected up front (Ref
-// ,), as is an existing directory. A plain non-existent path is fine; it
-// is created on write.
-func ensureNotDirectory(path string) error {
+// "outdir/.csv"). A path whose parent directory does not exist is rejected too,
+// rather than failing after the query has already run. A plain non-existent file
+// under an existing directory is fine; it is created on write.
+func ensureWritableDestination(path string) error {
 	if path == "" {
 		return nil
 	}
 	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(os.PathSeparator)) {
 		return fmt.Errorf("output destination %q ends with a path separator; specify a file path, not a directory", path)
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil //nolint:nilerr // a missing path is created at write time; other errors surface there
-	}
-	if info.IsDir() {
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		return fmt.Errorf("output destination %q is a directory; specify a file path", path)
+	}
+	// The parent must already exist. sqly does not create directories for an
+	// output path: a typo in a directory name would otherwise leave a tree of
+	// empty directories behind. Checking here means the run stops before the
+	// import instead of after the query has run.
+	parent := filepath.Dir(path)
+	info, err := os.Stat(parent)
+	if err != nil {
+		return fmt.Errorf("output destination %q: directory %q does not exist", path, parent)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("output destination %q: %q is not a directory", path, parent)
 	}
 	return nil
 }
@@ -1443,42 +1486,6 @@ func keepDirsOnly(suggestions []Suggest, dirsOnly bool) []Suggest {
 	return filtered
 }
 
-// sheetCompletionContext reports whether the in-progress token is the value of
-// a .import --sheet flag (separated "--sheet NAME" or joined "--sheet=NAME"),
-// and if so returns the workbook to read sheet names from, the typed sheet
-// fragment, the opening quote rune (0 if unquoted), and whether the joined form
-// is used. completed holds the already-typed tokens (shell-decoded, excluding
-// the in-progress word). The workbook is the first Excel file among them, so the
-// behavior is deterministic when several files are present.
-func (s *Shell) sheetCompletionContext(completed []string, currentWord string) (workbook, partial string, quote rune, joined, ok bool) {
-	switch {
-	case strings.HasPrefix(currentWord, sheetFlagAssign): // --sheet=...
-		joined = true
-		quote, partial = decodeSheetPartial(strings.TrimPrefix(currentWord, sheetFlagAssign))
-	case completed[len(completed)-1] == sheetFlag: // separated "--sheet NAME"
-		quote, partial = decodeSheetPartial(currentWord)
-	default:
-		return "", "", 0, false, false
-	}
-
-	// completed tokens are already shell-decoded, so a quoted/escaped workbook
-	// path with spaces is one intact token here.
-	for _, w := range completed[1:] {
-		if w == sheetFlag || strings.HasPrefix(w, sheetFlagAssign) || strings.HasPrefix(w, "--") {
-			continue
-		}
-		token, err := expandTilde(w)
-		if err == nil && s.usecases.importer.IsExcelFile(token) {
-			workbook = token
-			break
-		}
-	}
-	if workbook == "" {
-		return "", "", 0, false, false
-	}
-	return workbook, partial, quote, joined, true
-}
-
 // completedCommandWords splits the already-typed portion of text (everything
 // before the in-progress word) into shell-aware tokens, so a quoted or escaped
 // earlier argument stays a single decoded token. It falls back to whitespace
@@ -1491,44 +1498,6 @@ func completedCommandWords(text, currentWord string) []string {
 		return strings.Fields(prefix)
 	}
 	return args
-}
-
-// decodeSheetPartial decodes a typed --sheet fragment into the opening quote
-// rune (0 if unquoted) and the literal sheet-name prefix to match.
-func decodeSheetPartial(raw string) (quote rune, partial string) {
-	if q, inner, openOK := openQuotePrefix(raw); openOK {
-		return q, decodeQuotedPath(inner, q)
-	}
-	return 0, unescapeCompletionPath(raw)
-}
-
-// getSheetCompletions returns sheet-name suggestions for a workbook, matching
-// the typed partial. Suggestions preserve the input style so the accepted
-// command stays valid: a quoted fragment is re-quoted, an unquoted fragment is
-// backslash-escaped, and the joined form keeps the --sheet= prefix.
-func (s *Shell) getSheetCompletions(workbook, partial string, quote rune, joined bool) []Suggest {
-	names, err := s.usecases.importer.ListExcelSheetNames(workbook)
-	if err != nil {
-		return nil
-	}
-	var suggestions []Suggest
-	for _, name := range names {
-		if !strings.HasPrefix(name, partial) {
-			continue
-		}
-		var text string
-		if quote != 0 {
-			q := string(quote)
-			text = q + name + q
-		} else {
-			text = escapeCompletionPath(name)
-		}
-		if joined {
-			text = sheetFlagAssign + text
-		}
-		suggestions = append(suggestions, Suggest{Text: text, Description: msgExcelSheet})
-	}
-	return suggestions
 }
 
 // getFilePathCompletions returns importable-file and directory suggestions

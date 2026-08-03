@@ -25,20 +25,6 @@ scenarios:
           stderr:
             contains: "--sql-file"
 
-  - name: rejects an empty --save-tables
-    steps:
-      - fixture: &user
-          file: user.csv
-          content: |
-            user_name,identifier,first_name,last_name
-            booker12,1,Rachel,Booker
-      - run:
-          command: sqly --sql "SELECT 1" --save-tables "" user.csv
-      - assert:
-          exit_code: 1
-          stderr:
-            contains: "--save-tables"
-
   - name: rejects an empty --stdin-format
     steps:
       - run:
@@ -119,7 +105,11 @@ scenarios:
 
   - name: strips a UTF-8 BOM from a --sql-file script
     steps:
-      - fixture: *user
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier,first_name,last_name
+            booker12,1,Rachel,Booker
       - fixture:
           file: q.sql
           base64: "77u/U0VMRUNUIDIgQVMgeTsK"
@@ -140,21 +130,6 @@ scenarios:
           exit_code: 0
           stdout:
             contains: "7"
-
-  - name: rejects non-empty piped stdin with --sql-file
-    steps:
-      - fixture: *user
-      - fixture:
-          file: q.sql
-          content: |
-            SELECT 1 AS x;
-      - run:
-          command: sqly --sql-file q.sql user.csv
-          stdin: "SELECT 999 AS y;\n"
-      - assert:
-          exit_code: 1
-          stderr:
-            contains: stdin
 
   - name: fails a --stdin-format dataset run with no query
     steps:
@@ -239,7 +214,10 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET first_name='P' WHERE identifier=1" --save-tables . user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET first_name='P' WHERE identifier=1;
+            .save .
       - assert:
           exit_code: 1
           stderr:
@@ -258,7 +236,10 @@ scenarios:
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
       - run:
-          command: sqly --sql "UPDATE user SET first_name='Q' WHERE identifier=1" --save-tables out src/user.csv
+          command: sqly src/user.csv
+          stdin: |
+            UPDATE user SET first_name='Q' WHERE identifier=1;
+            .save out
       - assert:
           exit_code: 1
           stderr:
@@ -271,22 +252,29 @@ scenarios:
           file: sample.xlsx
           from: testdata/sample.xlsx
       - run:
-          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=1" --save-tables out user.csv sample.xlsx
+          command: sqly user.csv sample.xlsx
+          stdin: |
+            UPDATE user SET first_name='X' WHERE identifier=1;
+            UPDATE sample_test_sheet SET name='X' WHERE id=1;
+            .save out
       - assert:
           exit_code: 1
           stdout:
             not_contains: affected
           stderr:
-            contains: "cannot write back sample.xlsx"
+            contains: "sample.xlsx"
           file:
             path: out
             exists: false
 
-  - name: skips write-back for a read-only query under --save-in-place
+  - name: skips write-back for a read-only query under .save --in-place
     steps:
       - fixture: *user
       - run:
-          command: sqly --output-format csv --sql "SELECT * FROM user WHERE identifier=1" --save-in-place user.csv
+          command: sqly --output-format csv user.csv
+          stdin: |
+            SELECT * FROM user WHERE identifier=1;
+            .save --in-place
       - assert:
           exit_code: 0
           stdout:
@@ -294,22 +282,3 @@ scenarios:
           stderr:
             not_contains: Saved
 
-  - name: skips workbooks lacking the requested sheet (multi-workbook --sheet)
-    steps:
-      - fixture:
-          file: sheet_with_spaces.xlsx
-          from: testdata/sheet_with_spaces.xlsx
-      - fixture:
-          file: sample.xlsx
-          from: testdata/sample.xlsx
-      - fixture:
-          file: sheet_with_accents.xlsx
-          from: testdata/sheet_with_accents.xlsx
-      - run:
-          command: sqly --inspect --sheet "A test" sheet_with_spaces.xlsx sample.xlsx sheet_with_accents.xlsx
-      - assert:
-          exit_code: 0
-          stdout:
-            contains: sheet_with_spaces
-          stderr:
-            contains: Skipped

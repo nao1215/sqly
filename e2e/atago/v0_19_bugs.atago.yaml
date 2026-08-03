@@ -152,15 +152,6 @@ scenarios:
           stderr:
             contains: "inspect-sample"
 
-  - name: rejects the two write-back destinations together
-    steps:
-      - run:
-          command: sqly --save-in-place --save-tables out --sql "SELECT 1 AS x"
-      - assert:
-          exit_code: 1
-          stderr:
-            contains: "--save-tables"
-
   - name: rejects --inspect combined with --output-format csv
     steps:
       - fixture: *user
@@ -241,22 +232,28 @@ scenarios:
           stderr:
             not_contains: arguments
 
-  - name: does not write back for an EXPLAIN under --save-tables
+  - name: does not write back for an EXPLAIN under .save DIR
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "EXPLAIN UPDATE user SET first_name='X' WHERE identifier=1" --save-tables out user.csv
+          command: sqly user.csv
+          stdin: |
+            EXPLAIN UPDATE user SET first_name='X' WHERE identifier=1;
+            .save out
       - assert:
           exit_code: 0
           file:
             path: out/user.csv
             exists: false
 
-  - name: does not write back for a zero-row DML under --save-tables
+  - name: does not write back for a zero-row DML under .save DIR
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "UPDATE user SET first_name='X' WHERE identifier=999999" --save-tables out user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET first_name='X' WHERE identifier=999999;
+            .save out
       - assert:
           exit_code: 0
           stdout:
@@ -271,7 +268,10 @@ scenarios:
           file: products.parquet
           from: testdata/products.parquet
       - run:
-          command: sqly --sql "DELETE FROM products" --save-in-place products.parquet
+          command: sqly products.parquet
+          stdin: |
+            DELETE FROM products;
+            .save --in-place
       - assert:
           exit_code: 1
           stdout:

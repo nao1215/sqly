@@ -192,7 +192,7 @@ scenarios:
             {"id":2}
       - run:
           command: sqly data.jsonl
-          stdin: "CREATE TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --in-place\n"
+          stdin: "CREATE TEMP TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --in-place\n"
       - assert:
           exit_code: 0
           stdout:
@@ -225,7 +225,7 @@ scenarios:
             path: netzero.csv
             contains: "alice,30"
 
-  - name: does not rewrite the source after net-zero edits via --sql-file --save-in-place
+  - name: does not rewrite the source after net-zero edits in a --sql-file script that saves
     env: *hist
     steps:
       - fixture:
@@ -239,8 +239,9 @@ scenarios:
           content: |
             UPDATE netzero_file SET age=99 WHERE name='alice';
             UPDATE netzero_file SET age=30 WHERE name='alice';
+            .save --in-place
       - run:
-          command: sqly --sql-file netzero.sql --save-in-place netzero_file.csv
+          command: sqly --sql-file netzero.sql netzero_file.csv
       - assert:
           exit_code: 0
           stderr:

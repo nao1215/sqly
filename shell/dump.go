@@ -59,7 +59,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 
 	// Reject a directory destination before doing any work, so it is not
 	// silently rewritten to a sibling file (e.g. "dir" -> "dir.csv").
-	if err := ensureNotDirectory(userPath); err != nil {
+	if err := ensureWritableDestination(userPath); err != nil {
 		return err
 	}
 

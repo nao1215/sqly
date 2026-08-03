@@ -7,7 +7,8 @@ and Fedwire files ((devel))
   Each input is loaded into an in-memory SQLite database as a table named
   after the file. With --sql or --sql-file, sqly runs the query and exits;
   with neither, it opens an interactive shell, or runs SQL piped into it.
-  sqly has no subcommands. Dot-commands are available inside the shell.
+  sqly has no subcommands. Dot-commands run inside the shell, including
+  .save, which writes changed tables back to their files.
 
 [Examples]
   - open the shell with a file loaded
@@ -29,44 +30,37 @@ and Fedwire files ((devel))
                                 of: csv, tsv, ltsv, json, jsonl
         --stdin-table NAME      table name for the --stdin-format dataset
                                 (default: stdin)
-        --sheet NAME            import only this sheet from Excel (.xlsx) inputs
-        --encoding ENCODING     decode CSV, TSV, LTSV, JSON, and JSONL inputs
-                                that have no BOM as one of: utf-8, shift-jis,
-                                euc-jp, iso-2022-jp, utf-16le, utf-16be
-                                (default: utf-8)
-        --row-mismatch POLICY   CSV/TSV only: handle a row whose field count
-                                differs from the header, as one of: error (fail
-                                the import), skip (drop the row), pad (pad a
+        --encoding ENCODING     decode every csv, tsv, ltsv, json, and jsonl
+                                input that has no BOM as one of: utf-8,
+                                shift-jis, euc-jp, iso-2022-jp, utf-16le,
+                                utf-16be (default: utf-8)
+        --row-mismatch POLICY   for csv and tsv, what to do with a row whose
+                                field count differs from the header: error (fail
+                                the import), skip (drop the row), pad (fill a
                                 short row, fail on a long one) (default: error)
 
   Query:
     -s, --sql SQL               run one SQL statement, then exit
-    -f, --sql-file FILE         run every statement in this SQL file, printing
-                                each result, then exit
+    -f, --sql-file FILE         run every statement in this file, then exit;
+                                printing several results needs --output-format
+                                table, vertical, or markdown
         --dialect NAME          write the query in one of: sqlite, mysql,
                                 postgresql, googlesql; sqly translates it to
                                 SQLite (default: sqlite)
 
   Output:
-    -o, --output FILE           write the query result to this file instead of
-                                stdout; the run must produce exactly one result
+    -o, --output FILE           write the one query result to this file instead
+                                of stdout
         --output-format FORMAT  print the query result as one of: table,
                                 vertical, csv, tsv, ltsv, json, jsonl, markdown,
                                 excel, parquet; excel and parquet need --output
                                 (default: table)
 
   Inspection:
-        --inspect               print a JSON report of the imported tables
+        --inspect               print one JSON report of the imported tables
                                 (schema, row counts, sample rows) and exit
         --inspect-sample N      sample rows per table in the --inspect report; 0
                                 for schema only (default: 5)
-
-  Write back:
-        --save-tables DIR       after the run, write every table the session
-                                changed into this directory, in its source
-                                format; the sources are untouched
-        --save-in-place         after the run, overwrite the source file of
-                                every table the session changed (destructive)
 
   General:
     -h, --help                  print this help and exit

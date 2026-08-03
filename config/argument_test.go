@@ -619,11 +619,6 @@ func TestNewArgDependentFlagValidation(t *testing.T) {
 			wantErr: errInspectSampleWithoutInspect,
 		},
 		{
-			name:    "both write-back destinations together are rejected",
-			args:    []string{"sqly", "--save-in-place", "--save-tables", "out", "--sql", "SELECT 1"},
-			wantErr: errSaveInPlaceWithSaveTables,
-		},
-		{
 			name:    "stdin-table that is a SQLite keyword is rejected",
 			args:    []string{"sqly", "--stdin-format", "csv", "--stdin-table", "select", "--sql", "SELECT 1"},
 			wantErr: errStdinTableReserved,
@@ -646,7 +641,6 @@ func TestNewArgDependentFlagValidation(t *testing.T) {
 		ok := [][]string{
 			{"sqly", "--stdin-format", "csv", "--stdin-table", "data", "--sql", "SELECT 1"},
 			{"sqly", "--inspect", "--inspect-sample", "0"},
-			{"sqly", "--save-in-place", "--sql", "SELECT 1"},
 		}
 		for _, args := range ok {
 			if _, err := NewArg(args); err != nil {

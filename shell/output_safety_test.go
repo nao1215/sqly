@@ -14,21 +14,21 @@ func TestEnsureNotDirectory(t *testing.T) {
 
 	t.Run("existing directory is rejected", func(t *testing.T) {
 		t.Parallel()
-		if err := ensureNotDirectory(dir); err == nil {
+		if err := ensureWritableDestination(dir); err == nil {
 			t.Errorf("want error for existing directory, got nil")
 		}
 	})
 
 	t.Run("path ending with a separator is rejected", func(t *testing.T) {
 		t.Parallel()
-		if err := ensureNotDirectory(filepath.Join(dir, "outdir") + "/"); err == nil {
+		if err := ensureWritableDestination(filepath.Join(dir, "outdir") + "/"); err == nil {
 			t.Errorf("want error for trailing-separator path, got nil")
 		}
 	})
 
 	t.Run("plain non-existent file path is accepted", func(t *testing.T) {
 		t.Parallel()
-		if err := ensureNotDirectory(filepath.Join(dir, "out.csv")); err != nil {
+		if err := ensureWritableDestination(filepath.Join(dir, "out.csv")); err != nil {
 			t.Errorf("want nil for plain file path, got %v", err)
 		}
 	})

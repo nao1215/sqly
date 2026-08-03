@@ -100,12 +100,6 @@ func remoteFilenameHint(raw string) string {
 	return base
 }
 
-// isRemoteExcelURL reports whether the URL path hints an Excel workbook.
-func isRemoteExcelURL(raw string) bool {
-	name := remoteFilenameHint(raw)
-	return name != "" && strings.HasSuffix(strings.ToLower(name), ".xlsx")
-}
-
 // downloadRemoteInput fetches a supported remote file to a temp path and
 // returns that path plus a cleanup. The staged filename preserves the source
 // extension so the existing filesql import path can detect the format.

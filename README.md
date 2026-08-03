@@ -111,9 +111,6 @@ sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f
 # Rank with a window function
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
 
-# Edit a file in place
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-in-place user.csv
-
 # Write MySQL, PostgreSQL, or BigQuery syntax and have it translated
 sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" user.csv
 ```
@@ -138,16 +135,23 @@ sqly:~/data(json)$ .save ./out
 
 ## Write changes back
 
-A session is in-memory only. `--save-tables DIR` writes every table the session changed into a directory and leaves the sources alone; `--save-in-place` overwrites the source files. Both write the tables back in their source format — the query result is `--output`'s job.
+A session is in-memory only. `.save` writes the tables the session changed back
+out — in the shell, or in a script piped to sqly:
 
 ![save demo](./doc/img/save-demo.gif)
 
 ```shell
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-tables ./out user.csv
-sqly --sql "DELETE FROM user WHERE identifier > 100" --save-in-place user.csv
+printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./out\n" | sqly user.csv
 ```
 
-Format, compression, and file permissions are preserved. A table the session did not change is not rewritten, and a save covering several files is all-or-nothing. Only row changes are persisted; a schema change is rejected before anything is written. See the [reference](https://nao1215.github.io/sqly/reference/#write-back) for what is rejected up front.
+`.save DIR` writes copies into `DIR` and leaves the sources alone; `.save
+--in-place` overwrites them. Format, compression, and file permissions are
+preserved, a table the session did not change is not rewritten, and a save
+covering several files is all-or-nothing. See the [shell
+page](https://nao1215.github.io/sqly/shell/) for what it can and cannot write.
+
+Writing a *query result* somewhere is a different job, and that one is a flag:
+`--output`.
 
 ## Formats
 
@@ -164,9 +168,9 @@ All except ACH and Fedwire also read the compression extensions above. Text inpu
 
 ## Flags
 
-sqly is flag-driven and has no subcommands: use `sqly --help` and `sqly --version`, not `sqly help` or `sqly version` (those are read as input paths). Helper commands such as `.tables` and `.import` run inside the shell or batch stdin mode, not as arguments.
+sqly has no subcommands: `sqly --help`, not `sqly help`. Twelve flags, in five groups — input, query, output, inspection, and the two meta ones. Everything else, including writing changes back, is a dot-command inside the shell.
 
-The [reference](https://nao1215.github.io/sqly/reference/) lists every flag, the table name rules, and the exit codes.
+The [reference](https://nao1215.github.io/sqly/reference/) lists every flag and what it applies to, the multi-result rules, the table name rules, and the exit codes.
 
 ## Limitations
 

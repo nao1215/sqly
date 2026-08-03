@@ -115,12 +115,12 @@ See [Shell](/shell/).
 `UPDATE`, `INSERT`, and `DELETE` change the in-memory tables only. To persist them:
 
 ```shell
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-tables ./out user.csv
-sqly --sql "DELETE FROM user WHERE identifier > 100" --save-in-place user.csv
+printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./out\n" | sqly user.csv
+printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place\n" | sqly user.csv
 ```
 
-`--save-tables` writes into a directory and leaves the sources alone. `--save-in-place` overwrites them. Either way the format and compression of each source are preserved, a run that changes no row writes no file, and a save covering several files is all-or-nothing.
+`.save DIR` writes into a directory and leaves the sources alone. `.save --in-place` overwrites them. Either way the format, compression, and permissions of each source are preserved, a table the session did not change is not rewritten, and a save covering several files is all-or-nothing. Write-back is a shell command, not a flag, so it works the same interactively and in a piped script.
 
 ## Next
 
-The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, inspecting data, and writing MySQL or BigQuery syntax.
+The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, querying Excel sheets, inspecting data, and writing MySQL or BigQuery syntax.
