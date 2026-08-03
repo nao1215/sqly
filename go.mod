@@ -11,7 +11,7 @@ require (
 	github.com/google/wire v0.7.0
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
-	github.com/nao1215/filesql v0.30.3
+	github.com/nao1215/filesql v0.30.4
 	github.com/nao1215/prompt v0.0.13
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/spf13/pflag v1.0.10
