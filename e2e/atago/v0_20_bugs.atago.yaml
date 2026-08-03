@@ -134,14 +134,9 @@ scenarios:
     env: *hist
     steps:
       - fixture: *user
-      - fixture:
-          file: s.sql
-          content: |
-            CREATE TABLE backup AS SELECT * FROM user;
-            UPDATE user SET first_name='Z' WHERE identifier=1;
-            .save --in-place
       - run:
-          command: sqly --sql-file s.sql user.csv
+          command: sqly user.csv
+          stdin: "CREATE TABLE backup AS SELECT * FROM user;\nUPDATE user SET first_name='Z' WHERE identifier=1;\n.save --in-place\n"
       - assert:
           exit_code: 1
           stderr:
@@ -155,14 +150,9 @@ scenarios:
           content: |
             user_name,identifier,first_name,last_name
             booker12,1,Rachel,Booker
-      - fixture:
-          file: imp.sql
-          content: |
-            .import testdata/user.csv
-            UPDATE user SET first_name='Batch' WHERE identifier=1;
-            .save out
       - run:
-          command: sqly --sql-file imp.sql
+          command: sqly
+          stdin: ".import testdata/user.csv\nUPDATE user SET first_name='Batch' WHERE identifier=1;\n.save out\n"
       - assert:
           exit_code: 0
           stdout:

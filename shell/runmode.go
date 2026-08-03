@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"github.com/nao1215/sqly/config"
 )
 
 // What sqly does with a run is decided by three things: whether a query was
@@ -108,30 +111,46 @@ func (s *Shell) planRun() (runPlan, error) {
 	return runPlan{mode: modeStdinScript}, nil
 }
 
-// planWithQuerySource finishes a plan whose statements come from --sql or
-// --sql-file, where stdin is either the dataset or unused.
+// planWithQuerySource finishes a plan whose work comes from --sql, --sql-file, or
+// --inspect, where stdin is either the dataset or unused.
 //
-// Unused is the case worth rejecting. A run given both a query flag and an input
-// on stdin has an input the user meant something by; ignoring it and answering
-// from the file arguments alone is the kind of silence that looks like success.
-// So a stdin carrying something — a pipe, or a redirected file with bytes in it
-// — that was not claimed by --stdin-format stops the run. A stdin that is known
-// to be empty does not: nothing is being dropped.
+// Unused is the case worth saying something about. `cat data.csv | sqly --sql
+// "..." other.csv` looks like it feeds data.csv in, and it does not: the answer
+// comes from other.csv alone and looks perfectly correct. So sqly says so.
+//
+// It says so rather than failing, because it cannot tell a pipe carrying a file
+// from a pipe carrying nothing without reading it, and reading it is what hangs
+// on a FIFO with no writer. A wrapper that attaches an empty pipe to every child
+// — Go's os/exec does, and so do several CI runners — must keep working, so the
+// exit code does not change and only stderr does.
 func (s *Shell) planWithQuerySource(plan runPlan) (runPlan, error) {
-	if plan.stdinIsDataset {
+	if plan.stdinIsDataset || s.stdinNamedAsInput() {
 		return plan, nil
 	}
 	switch s.stdinKind() {
 	case stdinPipe, stdinFile:
-		return runPlan{}, &invocationError{Err: fmt.Errorf(
-			"%s works from %s, so the data on stdin would be ignored; add --stdin-format FORMAT to read it as a table, or remove the redirect",
-			plan.mode, plan.mode.source())}
+		fmt.Fprintf(config.Stderr,
+			"warning: standard input was not read; %s works from %s. To query it, add --stdin-format FORMAT.\n",
+			plan.mode, plan.mode.source())
 	default:
 		// A terminal, /dev/null, or an empty file: nothing was handed in that the
-		// run would be throwing away. An empty stdin is how CI and wrappers invoke
-		// a CLI they are not feeding, so it must stay valid.
-		return plan, nil
+		// run would be throwing away, so there is nothing to mention.
 	}
+	return plan, nil
+}
+
+// stdinNamedAsInput reports whether an input argument is standard input under one
+// of the names a shell gives it. `sqly --sql "..." /dev/stdin` reads the pipe as a
+// file, so the pipe is not being dropped and the rejection above must not fire —
+// the user said what to do with stdin, just not with a flag.
+func (s *Shell) stdinNamedAsInput() bool {
+	for _, path := range s.argument.FilePaths {
+		switch filepath.ToSlash(path) {
+		case "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0":
+			return true
+		}
+	}
+	return false
 }
 
 // source names where a mode's work comes from, for the message above.

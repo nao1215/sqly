@@ -100,7 +100,11 @@ scenarios:
           stdout:
             not_contains: "sqly-stdin-"
 
-  - name: rejects .save for a stdin-backed table
+  # A stdin dataset takes stdin, so the script has to come from --sql or
+  # --sql-file — and neither of those runs helper commands. There is therefore no
+  # way to reach .save with a stdin-backed table, which is a stronger guarantee
+  # than the runtime rejection it replaced: the run stops before the import.
+  - name: rejects a .save script given to --sql-file alongside a stdin dataset
     steps:
       - fixture:
           file: save.sql
@@ -117,7 +121,10 @@ scenarios:
           stdout:
             not_contains: affected
           stderr:
-            contains: stdin
+            contains: ".save"
+      - assert:
+          stderr:
+            contains: "runs SQL only"
 
   - name: rejects a non-identifier --stdin-table so the name stays queryable
     steps:

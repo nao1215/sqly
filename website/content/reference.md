@@ -90,12 +90,21 @@ no writer at all cannot hang it.
 | none | a pipe or a redirected file | runs it as a script: SQL and dot-commands |
 | `--stdin-format FORMAT` | anything | imports it as the table `stdin` |
 | `--sql` / `--sql-file` / `--inspect` | a terminal, `/dev/null`, or an empty file | nothing; stdin is unused |
-| `--sql` / `--sql-file` / `--inspect` | a pipe or a non-empty file | rejects the run |
+| `--sql` / `--sql-file` / `--inspect` | a pipe or a non-empty file | nothing, and says so on stderr |
 
 The last row is the one worth knowing. `cat data.csv \| sqly --sql "..." other.csv`
-looks like it feeds `data.csv` in, and it does not — so instead of answering from
-`other.csv` alone and looking correct, sqly stops and says to add
-`--stdin-format`, or to drop the redirect.
+looks like it feeds `data.csv` in, and it does not — the answer comes from
+`other.csv` alone and looks perfectly correct. sqly warns rather than failing:
+telling an empty pipe from a full one means reading it, and reading it is what
+hangs on a FIFO nobody is writing to. The exit code is unchanged, so a wrapper
+that hands every child an empty pipe keeps working.
+
+Naming standard input as an input file works and is not warned about, because
+nothing is being dropped:
+
+```shell
+cat data.csv | sqly --sql "SELECT COUNT(*) FROM stdin" /dev/stdin
+```
 
 ### How many results a run may produce
 

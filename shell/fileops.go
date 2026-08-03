@@ -85,8 +85,13 @@ func copyFileContents(src, dest string) error {
 // file lives in the destination's own directory so the later rename stays within
 // one filesystem, where it is atomic; a dot prefix keeps it out of the way of a
 // directory listing if the process dies between the write and the move.
+//
+// The destination's extension is kept on the end, because a writer may read it:
+// the Excel and Parquet writers pick their format from the path they are handed,
+// and a scratch name ending in ".sqly-out-1234" is a workbook format none of
+// them recognize.
 func (f fileOps) stagingPath(dest, suffix string) (string, error) {
-	file, err := f.CreateTemp(filepath.Dir(dest), "."+filepath.Base(dest)+suffix)
+	file, err := f.CreateTemp(filepath.Dir(dest), "."+filepath.Base(dest)+suffix+filepath.Ext(dest))
 	if err != nil {
 		return "", err
 	}

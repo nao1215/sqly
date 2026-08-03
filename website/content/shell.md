@@ -88,6 +88,17 @@ EOF
 
 A failing statement stops the script and exits non-zero, naming the statement and its line.
 
+A helper command must start its own line; `SELECT 1; .save ./out` is rejected,
+because reading it as two things depends on knowing where the statement ended,
+which is what the line does not show. Leading whitespace is fine, so a script can
+indent. A `.` inside a string, a `--` comment, or a `/* */` block is part of the
+statement, not a command.
+
+This is also the only place a helper command runs. `--sql-file` holds SQL, and a
+dot-command in one is rejected by name and line — a `.sql` file that runs `.save`
+is a shell script wearing a SQL extension. Pipe such a script in instead, exactly
+as written above.
+
 ## Write-back from the shell
 
 ```text

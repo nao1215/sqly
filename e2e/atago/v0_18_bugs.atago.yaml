@@ -186,13 +186,9 @@ scenarios:
           content: |
             user_name,identifier,first_name,last_name
             alt1,1,ALT,One
-      - fixture:
-          file: cmds.sql
-          content: |
-            .import dir
-            SELECT user_name FROM user ORDER BY identifier;
       - run:
-          command: sqly --sql-file cmds.sql user.csv
+          command: sqly user.csv
+          stdin: ".import dir\nSELECT user_name FROM user ORDER BY identifier;\n"
       - assert:
           exit_code: 0
           stdout:
