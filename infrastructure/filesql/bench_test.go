@@ -235,3 +235,49 @@ func BenchmarkPrintTable(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkRecordsCopy measures the deep copy the public Records() accessor
+// makes. It is the price of an API a caller cannot corrupt, and it is reported
+// separately from the formatters so the two are not confused: nothing on the
+// output path calls it.
+func BenchmarkRecordsCopy(b *testing.B) {
+	adapter, cleanup := benchQueryFixture(b, 100_000)
+	defer cleanup()
+
+	table, err := adapter.Query(context.Background(), "SELECT * FROM bench")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if got := len(table.Records()); got != 100_000 {
+			b.Fatalf("rows = %d", got)
+		}
+	}
+}
+
+// BenchmarkRowsIteration measures the read path the formatters use, which walks
+// the same rows without copying them.
+func BenchmarkRowsIteration(b *testing.B) {
+	adapter, cleanup := benchQueryFixture(b, 100_000)
+	defer cleanup()
+
+	table, err := adapter.Query(context.Background(), "SELECT * FROM bench")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		n := 0
+		for _, record := range table.Rows {
+			n += len(record)
+		}
+		if n == 0 {
+			b.Fatal("no rows")
+		}
+	}
+}
