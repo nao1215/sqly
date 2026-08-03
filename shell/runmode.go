@@ -56,10 +56,6 @@ func (m runMode) String() string {
 	}
 }
 
-// readsStdinAsScript reports whether this mode reads stdin as SQL and helper
-// commands. Exactly one mode does.
-func (m runMode) readsStdinAsScript() bool { return m == modeStdinScript }
-
 // allowsHelperCommands reports whether a script in this mode may contain helper
 // commands. A script typed at the prompt or piped in is the shell's own
 // language, so it may; a file named by --sql-file is a SQL file, and the flag

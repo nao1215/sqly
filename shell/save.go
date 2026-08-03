@@ -118,11 +118,19 @@ func (s *Shell) preflightSave(elements []scriptElement) error {
 // buffered. They are buffered rather than printed as they happen so that a run
 // which fails after a DML statement leaves stdout free of success text.
 func (s *Shell) finishNonInteractive(_ context.Context) error {
+	s.flushPendingAffected()
+	return nil
+}
+
+// flushPendingAffected prints the buffered counts and empties the buffer. A
+// successful write-back calls it before reporting the files it wrote, so the
+// counts read in statement order; a run that ends without one calls it at the
+// end. Calling it twice is harmless, which is what makes both paths safe.
+func (s *Shell) flushPendingAffected() {
 	for _, msg := range s.pendingAffected {
 		fmt.Fprint(config.Stdout, msg)
 	}
 	s.pendingAffected = nil
-	return nil
 }
 
 // destinationIndex records which table has claimed each destination path, so a
@@ -498,6 +506,12 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 			return commitErr
 		}
 	}
+
+	// Every destination is committed, so the run has succeeded and the counts the
+	// statements produced can be released. They go out before the "Saved" lines
+	// because that is the order the things happened in: the rows changed, then
+	// the files were written.
+	s.flushPendingAffected()
 
 	for _, w := range staged {
 		for _, name := range w.baselines {

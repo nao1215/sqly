@@ -1,9 +1,6 @@
 package shell
 
-import (
-	"errors"
-	"fmt"
-)
+import "fmt"
 
 // The failures below are the ones a caller — a test, or a future feature —
 // might want to tell apart. Each is a type rather than a formatted string, so
@@ -82,29 +79,3 @@ const (
 	opCommit   = "commit"
 	opRollback = "roll back"
 )
-
-// isRollbackFailure reports whether err contains a rollback that did not
-// complete — the case where a file is left holding content from a failed save.
-func isRollbackFailure(err error) bool {
-	var opErr *fileOpError
-	for e := err; e != nil; {
-		if errors.As(e, &opErr) && opErr.Op == opRollback {
-			return true
-		}
-		unwrapped := errors.Unwrap(e)
-		if unwrapped == nil {
-			// errors.Join produces a tree, so walk its branches too.
-			var joined interface{ Unwrap() []error }
-			if errors.As(e, &joined) {
-				for _, branch := range joined.Unwrap() {
-					if isRollbackFailure(branch) {
-						return true
-					}
-				}
-			}
-			return false
-		}
-		e = unwrapped
-	}
-	return false
-}

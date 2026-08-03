@@ -10,10 +10,6 @@ import (
 	"github.com/nao1215/sqly/config"
 )
 
-// maxBatchLineBytes caps a single batch input line, preventing unbounded memory
-// growth on input without newlines.
-const maxBatchLineBytes = 10 * 1024 * 1024
-
 // SQL keyword tokens used by statement classification, named once to avoid
 // repeating the literals across the quote-aware scanners.
 const (
