@@ -31,7 +31,14 @@ func TestDownloadRemoteInput_RejectsABodyOverTheSizeLimit(t *testing.T) {
 	// of this reach the disk first, so the byte count is asserted as well as the
 	// error: it is the difference between refusing a huge download and merely
 	// reporting one that already happened.
-	const offered = 64
+	//
+	// The threshold is a fraction of what was offered, not a multiple of the
+	// limit. How much the transport buffers past the point the reader stops is
+	// the runner's business — a CI machine was seen handing over 594 KiB against
+	// a 64 KiB limit, which is bounded reading with a big socket buffer, not a
+	// missing limit. What distinguishes the two is whether the whole body got
+	// through.
+	const offered = 256
 	var served atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
@@ -60,11 +67,9 @@ func TestDownloadRemoteInput_RejectsABodyOverTheSizeLimit(t *testing.T) {
 		t.Errorf("error should say the download was too large, got: %v", err)
 	}
 
-	// Generous slack for the transport's buffering; the point is that it is a
-	// small multiple of the limit rather than the whole body.
-	if ceiling := testDownloadLimit * 8; served.Load() > ceiling {
-		t.Errorf("the server got to send %d bytes against a %d byte limit; the read is not bounded",
-			served.Load(), testDownloadLimit)
+	if ceiling := offered * testDownloadLimit / 2; served.Load() > ceiling {
+		t.Errorf("the server handed over %d of the %d bytes it offered against a %d byte limit; the read is not bounded",
+			served.Load(), offered*testDownloadLimit, testDownloadLimit)
 	}
 }
 
