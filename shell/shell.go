@@ -103,14 +103,20 @@ type Shell struct {
 	// an EXPLAIN or a zero-row DML leaves source files untouched.,
 	//,.
 	dataChanged bool
-	// importBaseline maps an imported file-backed table name to a fingerprint of its
-	// content as loaded. Write-back compares the current content against this
-	// baseline and skips a table whose content is unchanged, so a session that only
-	// touched a TEMP or SQL-created scratch table, or that made net-zero edits that
-	// cancel out, never rewrites an untouched source file. dataChanged is a coarse
-	// session-wide gate; this map is the per-table truth that prevents a spurious
-	// write.
+	// importBaseline maps an imported file-backed table name to a fingerprint of
+	// its content as loaded, and never moves. It answers "has this session changed
+	// this table?", which is what decides whether a `.save DIR` exports it: a
+	// session that only touched a TEMP or scratch table, or that made net-zero
+	// edits that cancel out, exports nothing. dataChanged is a coarse session-wide
+	// gate; this map is the per-table truth that prevents a spurious write.
 	importBaseline map[string]string
+	// sourceBaseline is a fingerprint of what each table's *source file* holds. It
+	// starts equal to importBaseline and moves forward when an in-place save
+	// rewrites the source. It answers "does the source still need writing?", which
+	// is a different question, and merging the two is what made
+	// `UPDATE; .save out; .save --in-place` leave the source with its old rows:
+	// the export moved a baseline that describes a file it never touched.
+	sourceBaseline map[string]string
 	// pendingAffected holds "affected is N row(s)" lines produced during a
 	// write-back run. They are buffered rather than printed immediately and flushed
 	// to stdout only after write-back succeeds, so a run that fails during

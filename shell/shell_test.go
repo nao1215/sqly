@@ -2710,7 +2710,10 @@ func TestShellRun_StdinDataset(t *testing.T) {
 			t.Fatal(initErr)
 		}
 		shell.dataChanged = true
+		// An in-place save reads the source baseline, so both have to go for the
+		// table to reach the plan at all.
 		delete(shell.importBaseline, "stdin")
+		delete(shell.sourceBaseline, "stdin")
 
 		backupStderr := config.Stderr
 		config.Stderr = &bytes.Buffer{}

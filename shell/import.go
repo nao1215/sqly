@@ -612,6 +612,27 @@ func (s *Shell) snapshotBaseline(ctx context.Context, name string) {
 		s.importBaseline = make(map[string]string)
 	}
 	s.importBaseline[name] = fp
+	s.snapshotSourceBaseline(name, fp)
+}
+
+// snapshotSourceBaseline records what the table's source file now holds. Import
+// sets it alongside the import baseline; an in-place save moves it on its own,
+// because that is the only operation that makes the source match the table.
+func (s *Shell) snapshotSourceBaseline(name, fingerprint string) {
+	if s.sourceBaseline == nil {
+		s.sourceBaseline = make(map[string]string)
+	}
+	s.sourceBaseline[name] = fingerprint
+}
+
+// snapshotSourceFromTable recomputes the fingerprint and records it as the
+// source's, for use after an in-place save has written the table out.
+func (s *Shell) snapshotSourceFromTable(ctx context.Context, name string) {
+	fp, err := s.tableContentFingerprint(ctx, name)
+	if err != nil {
+		return
+	}
+	s.snapshotSourceBaseline(name, fp)
 }
 
 // tableContentFingerprint returns a hash of a table's current relational content
@@ -650,7 +671,22 @@ func (s *Shell) tableContentFingerprint(ctx context.Context, name string) (strin
 // could not be computed) is treated as changed, so write-back never skips a table
 // it is unsure about.
 func (s *Shell) tableChanged(ctx context.Context, name string) bool {
-	baseline, ok := s.importBaseline[name]
+	return s.tableDiffersFrom(ctx, s.importBaseline, name)
+}
+
+// tableNeedsSourceWrite reports whether a table's content differs from what its
+// source file holds. An in-place save asks this: a table already written out
+// needs no second write, and rewriting it would churn the file's bytes for no
+// change.
+func (s *Shell) tableNeedsSourceWrite(ctx context.Context, name string) bool {
+	return s.tableDiffersFrom(ctx, s.sourceBaseline, name)
+}
+
+// tableDiffersFrom compares a table's current content against one of the two
+// baselines. A table with no entry is treated as different, so write-back never
+// skips a table it is unsure about.
+func (s *Shell) tableDiffersFrom(ctx context.Context, baselines map[string]string, name string) bool {
+	baseline, ok := baselines[name]
 	if !ok {
 		return true
 	}

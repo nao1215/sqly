@@ -39,7 +39,10 @@ func markChanged(t *testing.T, s *Shell, tables ...string) {
 	t.Helper()
 	s.dataChanged = true
 	for _, name := range tables {
+		// Both baselines: a table with no import baseline counts as changed by the
+		// session, and one with no source baseline counts as needing a write.
 		delete(s.importBaseline, name)
+		delete(s.sourceBaseline, name)
 	}
 }
 

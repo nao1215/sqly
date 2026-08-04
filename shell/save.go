@@ -182,10 +182,8 @@ type writeTarget struct {
 // formats are rejected with a clear error before anything is written, so a
 // session is never partially saved.
 func (s *Shell) writeBack(ctx context.Context, destDir string) error {
-	// skipUnchanged: an actual save persists only tables whose content differs from
-	// the import baseline, so a session that touched only a TEMP or scratch table,
-	// or made net-zero edits, writes nothing instead of rewriting an untouched
-	// source. Preflight validation uses the unfiltered plan (see preflightSave).
+	// Both destinations skip a table the session did not change, and they mean
+	// different things by "did not change" — see planWriteBack.
 	targets, err := s.planWriteBack(ctx, destDir, true)
 	if err != nil {
 		return err
@@ -202,10 +200,10 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 // a session is never partially saved. For .save DIR it also rejects a
 // destination that resolves to the source file () and a destination that
 // already exists ().
-// skipUnchanged selects whether a table whose content matches its import baseline
-// is dropped from the plan. An actual save passes true (persist only real changes);
-// preflight passes false (validate every file-backed table up front, before any
-// change has happened).
+// skipUnchanged selects whether an unchanged table is dropped from the plan. An
+// actual save passes true (persist only real changes); preflight passes false
+// (validate every file-backed table up front, before any change has happened).
+// What counts as unchanged depends on the destination — see tableNeedsWriting.
 func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged bool) ([]writeTarget, error) {
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
@@ -286,7 +284,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		// An actual save persists only tables whose content changed. This is checked
 		// before the writability and stdin/directory rejections below, so an unchanged
 		// JSONL or Excel import is silently skipped rather than reported as unwritable.
-		if skipUnchanged && !s.tableChanged(ctx, name) {
+		if skipUnchanged && !s.tableNeedsWriting(ctx, name, destDir) {
 			continue
 		}
 		if source == stdinTableSource {
@@ -355,6 +353,28 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 	return targets, nil
 }
 
+// tableNeedsWriting reports whether a save to this destination has anything to
+// write for a table.
+//
+// The two destinations ask different questions, because they write different
+// files. `.save --in-place` rewrites the source, so it asks whether the table
+// still differs from what the source holds: a table already written out needs no
+// second write. `.save DIR` writes somewhere else — usually a file that does not
+// exist yet — so the source is irrelevant, and the question is whether the
+// session changed the table at all.
+//
+// Sharing one answer broke both directions in turn. With the export moving the
+// source's baseline, `UPDATE; .save out; .save --in-place` left the source with
+// its old rows. With the export reading the source's baseline,
+// `UPDATE; .save --in-place; .save out` wrote no export at all. They are two
+// questions and now there are two baselines.
+func (s *Shell) tableNeedsWriting(ctx context.Context, name, destDir string) bool {
+	if destDir == "" {
+		return s.tableNeedsSourceWrite(ctx, name)
+	}
+	return s.tableChanged(ctx, name)
+}
+
 // planFinancialSet validates and resolves the write-back target for one native
 // financial source (ACH or Fedwire). It returns the target, or a problem string
 // describing why the set cannot be saved, or skip=true when no member table
@@ -395,7 +415,9 @@ func (s *Shell) planFinancialSet(ctx context.Context, source, format string, cur
 	if skipUnchanged {
 		changed := false
 		for _, m := range members {
-			if s.tableChanged(ctx, m) {
+			// A financial set is one file, so it asks the same question its
+			// destination asks of every other table.
+			if s.tableNeedsWriting(ctx, m, destDir) {
 				changed = true
 				break
 			}
@@ -540,7 +562,7 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	for _, w := range staged {
 		if inPlace {
 			for _, name := range w.baselines {
-				s.snapshotBaseline(ctx, name)
+				s.snapshotSourceFromTable(ctx, name)
 			}
 		}
 		// Write-back is a file-output operation; its confirmation is control-plane

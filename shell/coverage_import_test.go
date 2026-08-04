@@ -296,8 +296,11 @@ func TestSaveFinancialSetFedwireInPlace(t *testing.T) {
 		}
 	})
 
-	// Force a change for the sole member table so the set is written.
+	// Force a change for the sole member table so the set is written. An in-place
+	// save asks whether the table still differs from its source, so the source
+	// baseline is the one that has to go.
 	delete(s.importBaseline, "customer_transfer_message")
+	delete(s.sourceBaseline, "customer_transfer_message")
 	s.dataChanged = true
 
 	stderr := captureStderr(t, func() {

@@ -79,6 +79,42 @@ scenarios:
             path: u.csv
             contains: alice
 
+  # The mirror of the same defect: an in-place save brings the source up to date,
+  # and a DIR export afterwards then had nothing "changed" left to write — so the
+  # export directory was never created and the run said "nothing to save". The
+  # baseline describes the source; an export destination is a different file.
+  - name: exports to a directory after an in-place save has brought the source up to date
+    env: *hist
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET name = 'zoe';\n.save --in-place\n.save out\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out/u.csv
+            contains: zoe
+      - assert:
+          file:
+            path: u.csv
+            contains: zoe
+
+  - name: still writes nothing at all when the session changed no row
+    env: *hist
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "SELECT * FROM u;\n.save out\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: out
+            exists: false
+
   # --- a re-import owns its own tables, and only those ----------------------
   #
   # Regression: ownership was guessed from the table name — the file's base name

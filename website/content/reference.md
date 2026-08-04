@@ -274,6 +274,27 @@ even when a sibling table was, and a session that changed nothing writes no file
 at all and says so on stderr. A net-zero edit — a value changed and changed back —
 counts as unchanged.
 
+The two destinations measure against different things, because they write
+different files:
+
+| Command | Writes a table when |
+|:--|:--|
+| `.save --in-place` | the table differs from what its **source file** holds |
+| `.save DIR` | the table differs from what it held **at import** |
+
+So the two can be used in either order, and each does its own job:
+
+```shell
+printf "UPDATE u SET name='zoe';\n.save out\n.save --in-place\n" | sqly u.csv
+```
+
+The export is written, and the source is written too — the export changed nothing
+about the source, so the source still needs writing. Reversing the two commands
+works the same way: the in-place save brings the source up to date, and the
+export is still written, because it is a different file that does not hold the
+table yet. A second `.save --in-place` in either session reports "nothing to
+save", which by then is true.
+
 Only `INSERT`/`UPDATE`/`DELETE` on an imported table are persisted. A script whose
 statements include a schema change or a maintenance statement is rejected before
 its first statement runs, because `.save` could not represent the result; a
