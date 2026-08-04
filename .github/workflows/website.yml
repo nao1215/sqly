@@ -214,7 +214,10 @@ jobs:
           schema=$(curl -fsSL --max-time 30 "${url}") || {
             echo "::error::${url} is not being served" >&2; exit 1;
           }
-          for needle in '"$schema"' 'json-schema.org/draft/2020-12/schema' '"schema_version"' '"sample_rows"'; do
+          # The draft URL is only ever the value of the "$schema" keyword, so
+          # matching it covers the keyword too — and avoids writing a literal
+          # $schema that shellcheck reads as an unexpanded variable.
+          for needle in 'json-schema.org/draft/2020-12/schema' '"schema_version"' '"sample_rows"'; do
             case "${schema}" in
               *"${needle}"*) ;;
               *) echo "::error::the deployed inspect schema does not contain ${needle}" >&2; exit 1 ;;

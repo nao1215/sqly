@@ -15,7 +15,7 @@ import (
 
 // The contract --inspect makes to a program that runs it.
 //
-// The one at the centre is that a default run does not print the data. --inspect
+// The one at the center is that a default run does not print the data. --inspect
 // is the command an agent, a wrapper, or a CI job reaches for when it has been
 // handed a file nobody has read yet, and "tell me what this is" must not answer
 // with what is inside it. Every other assertion here — the sample cap, the two
