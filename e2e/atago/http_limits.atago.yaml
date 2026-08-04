@@ -1,0 +1,112 @@
+# Resource limits on a remote input. A URL is the one input to sqly that nobody
+# local vouched for: the server chooses the size, the redirect chain, and where
+# the chain ends. A timeout bounds how long it may take; these bound the rest.
+#
+# The download size cap is not exercised here. It is 2 GiB, and a suite that
+# moved that much per run to prove a comparison would be paid for on every CI
+# run; it is covered in shell/remote_limits_test.go against an injected limit.
+# What is left is the redirect policy, which is cheap to drive end to end and is
+# the part a unit test cannot show reaching the real binary.
+#
+# The servers are plain python3, waited for by connecting rather than sleeping,
+# for the same reason as http_import.atago.yaml.
+version: "1"
+
+suite:
+  name: HTTP input limits
+
+scenarios:
+  - name: refuses a redirect that leaves http for another scheme
+    # A server answering with "Location: file:///etc/passwd" is asking sqly to
+    # read a local file as though the user had named it on the command line.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: server.py
+          content: |
+            import http.server
+
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(302)
+                    self.send_header("Location", "file:///etc/passwd")
+                    self.end_headers()
+
+                def log_message(self, *args):
+                    pass
+
+            http.server.HTTPServer(("127.0.0.1", 18091), Handler).serve_forever()
+      - run:
+          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18091)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --sql "SELECT 1" http://127.0.0.1:18091/data.csv'
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "sqly downloads over http and https only"
+
+  - name: stops a redirect chain that does not settle
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: server.py
+          content: |
+            import http.server
+
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(302)
+                    self.send_header("Location", "http://127.0.0.1:18092/again.csv")
+                    self.end_headers()
+
+                def log_message(self, *args):
+                    pass
+
+            http.server.HTTPServer(("127.0.0.1", 18092), Handler).serve_forever()
+      - run:
+          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18092)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --sql "SELECT 1" http://127.0.0.1:18092/start.csv'
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "stopped after 5 redirects"
+
+  - name: still follows an ordinary redirect within http
+    # The limits must not cost the case they exist to protect: a plain redirect
+    # to the real file is what a hosted dataset actually does.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - fixture:
+          file: server.py
+          content: |
+            import http.server
+
+            class Handler(http.server.SimpleHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == "/go":
+                        self.send_response(302)
+                        self.send_header("Location", "/user.csv")
+                        self.end_headers()
+                        return
+                    super().do_GET()
+
+                def log_message(self, *args):
+                    pass
+
+            http.server.HTTPServer(("127.0.0.1", 18093), Handler).serve_forever()
+      - run:
+          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18093)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --output-format csv --sql "SELECT user_name FROM user" http://127.0.0.1:18093/go'
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: booker12

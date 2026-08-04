@@ -11,6 +11,15 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
+)
+
+// schemeHTTP and schemeHTTPS are the two schemes sqly downloads over. They are
+// named because three separate checks — is this a URL, may a redirect go here,
+// is this an unfetchable scheme — have to agree on the answer.
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
 )
 
 const (
@@ -19,6 +28,83 @@ const (
 	remoteJSONContentType      = "application/json"
 	remoteJSONFilename         = "download.json"
 )
+
+// A timeout bounds how long a remote server may take. These bound what it may
+// cost, which is the other half and the one the server chooses: a URL is the one
+// input to sqly that nobody local vouched for.
+//
+// The numbers are set where an ordinary dataset is nowhere near them and a
+// runaway response is stopped before it matters. A 2 GiB CSV is far past what
+// belongs in an in-memory SQLite database — the import would exhaust memory long
+// before the disk — so the download limit is not what makes such a file fail, it
+// is only what keeps a server from filling the disk on the way there. Both are
+// documented at https://nao1215.github.io/sqly/formats/ so a user who hits one
+// knows what they hit.
+//
+// Why not make them flags: a limit that is routinely raised is not protecting
+// anything, and every input sqly reads locally is already unbounded. The remote
+// case is different because the size is not the user's to know in advance.
+const (
+	// maxRemoteDownloadBytes caps what one URL may transfer.
+	maxRemoteDownloadBytes int64 = 2 << 30 // 2 GiB
+	// maxRemoteRedirects caps the redirect chain. Go's default is 10 with an
+	// error that does not say sqly chose it; a smaller number and sqly's own
+	// message make the refusal explainable.
+	maxRemoteRedirects = 5
+)
+
+// downloadLimit returns the byte cap for one download. Tests lower it so the
+// limit can be exercised without moving two gigabytes through the disk; nothing
+// outside tests sets the field, so a run always uses the constant above.
+func (s *Shell) downloadLimit() int64 {
+	if s.maxDownloadBytes > 0 {
+		return s.maxDownloadBytes
+	}
+	return maxRemoteDownloadBytes
+}
+
+// newRemoteClient builds the HTTP client sqly downloads inputs with. The
+// policies it carries are part of the download contract, so they live with the
+// rest of it rather than inline in the shell constructor — and a test that
+// swaps in a server's transport keeps them.
+func newRemoteClient() *http.Client {
+	return &http.Client{
+		// Bound the full request/response body read so a server that stalls
+		// mid-download cannot hang the CLI indefinitely.
+		Timeout: 15 * time.Minute,
+		Transport: &http.Transport{
+			// A custom Transport replaces http.DefaultTransport wholesale, which
+			// is where proxy support lives. Without this a user behind a corporate
+			// proxy cannot fetch a URL at all, and the failure looks like the host
+			// being unreachable rather than like a setting sqly ignored.
+			Proxy:                 http.ProxyFromEnvironment,
+			ResponseHeaderTimeout: 30 * time.Second,
+		},
+		CheckRedirect: checkRemoteRedirect,
+	}
+}
+
+// checkRemoteRedirect decides whether to follow a redirect. It bounds the chain
+// and, more importantly, keeps it inside HTTP.
+//
+// A redirect changes the URL sqly fetches to one the user never wrote. Go's
+// default client refuses a redirect to a non-HTTP scheme in the sense that its
+// transport has no handler for one, but the resulting error describes a missing
+// protocol rather than a server having tried to redirect sqly at
+// file:///etc/passwd. Saying that plainly is worth the four lines.
+func checkRemoteRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRemoteRedirects {
+		return fmt.Errorf("stopped after %d redirects; the chain starting at %s does not settle",
+			maxRemoteRedirects, via[0].URL)
+	}
+	switch strings.ToLower(req.URL.Scheme) {
+	case schemeHTTP, schemeHTTPS:
+		return nil
+	default:
+		return fmt.Errorf("refused a redirect to the %q scheme (%s); sqly downloads over http and https only",
+			req.URL.Scheme, req.URL)
+	}
+}
 
 // isRemoteURL reports whether raw is an absolute HTTP/HTTPS URL sqly can
 // download as an input dataset.
@@ -31,7 +117,7 @@ func isRemoteURL(raw string) bool {
 		return false
 	}
 	switch strings.ToLower(u.Scheme) {
-	case "http", "https":
+	case schemeHTTP, schemeHTTPS:
 		return true
 	default:
 		return false
@@ -118,6 +204,16 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 		return "", nil, fmt.Errorf("download %s: unexpected HTTP status %s", rawURL, resp.Status)
 	}
 
+	// A declared size over the limit is refused before a byte of the body is
+	// read. ContentLength is -1 for a chunked response, which is why this is the
+	// cheap path and not the check: the one that has to hold is below, while the
+	// body is being copied.
+	limit := s.downloadLimit()
+	if resp.ContentLength > limit {
+		return "", nil, fmt.Errorf("download %s: too large: the server declared %d bytes and the limit is %d",
+			rawURL, resp.ContentLength, limit)
+	}
+
 	filename, err := s.remoteDownloadFilename(rawURL, resp)
 	if err != nil {
 		return "", nil, err
@@ -139,11 +235,21 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 		return "", nil, fmt.Errorf("create staging file for %s: %w", rawURL, err)
 	}
 
-	_, copyErr := io.Copy(f, resp.Body)
+	// Read one byte past the limit rather than exactly the limit, so a body that
+	// is precisely at it is still distinguishable from one that ran over.
+	written, copyErr := io.Copy(f, io.LimitReader(resp.Body, limit+1))
 	closeErr := f.Close()
 	if copyErr != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("download %s: %w", rawURL, copyErr)
+	}
+	if written > limit {
+		// The staged file goes with the refusal. A partial download left on disk
+		// turns a rejected import into a slow leak across repeated runs, and half a
+		// CSV is worse than none: it parses.
+		cleanup()
+		return "", nil, fmt.Errorf("download %s: too large: the response exceeded the %d byte limit",
+			rawURL, limit)
 	}
 	if closeErr != nil {
 		cleanup()
@@ -156,10 +262,22 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 // Content-Disposition filename when present, then the URL path, then a
 // Content-Type-derived extension. Candidate ranking reuses the importer's
 // supported-format check so the extension list stays in one authority.
+//
+// The URL it reads is the one the response came from, not the one the user
+// typed. A dataset published behind a redirect — a short link, a "latest"
+// alias — would otherwise be named after the alias, so `sqly host/latest`
+// landing on `sales.csv` gave a table named after the Content-Type fallback
+// rather than after the file that actually arrived.
 func (s *Shell) remoteDownloadFilename(rawURL string, resp *http.Response) (string, error) {
+	finalURL := rawURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+
 	var first string
 	for _, candidate := range []string{
 		contentDispositionFilename(resp.Header.Get("Content-Disposition")),
+		remoteFilenameHint(finalURL),
 		remoteFilenameHint(rawURL),
 		filenameFromContentType(resp.Header.Get("Content-Type")),
 	} {
