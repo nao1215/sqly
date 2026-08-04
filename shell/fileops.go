@@ -90,7 +90,14 @@ func copyFileContents(src, dest string) error {
 // the Excel and Parquet writers pick their format from the path they are handed,
 // and a scratch name ending in ".sqly-out-1234" is a workbook format none of
 // them recognize.
+//
+// Symlinks are resolved first, for the same reason the directory is the
+// destination's: a link can point at another filesystem, and staging beside the
+// link rather than beside the file it names would put the scratch file on the
+// wrong one — where the rename fails and the commit falls back to a copy that is
+// not atomic. Resolving keeps the fast, safe path available.
 func (f fileOps) stagingPath(dest, suffix string) (string, error) {
+	dest = resolveFilePath(dest)
 	file, err := f.CreateTemp(filepath.Dir(dest), "."+filepath.Base(dest)+suffix+filepath.Ext(dest))
 	if err != nil {
 		return "", err
