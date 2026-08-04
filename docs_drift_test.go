@@ -764,6 +764,11 @@ func readDoc(t *testing.T, path string) string {
 // section returns the body of a Markdown section by heading text, or "" when the
 // heading is absent. Checking inside a section rather than across a whole file
 // is what keeps a claim from being satisfied by an unrelated mention elsewhere.
+//
+// A section ends at the next heading of its own depth or shallower. Stopping
+// only at its own depth would let a "###" section run on into the "##" that
+// follows it, which is the case where the whole point of checking a section
+// rather than a file is lost.
 func section(body, heading string) string {
 	start := strings.Index(body, heading)
 	if start < 0 {
@@ -771,11 +776,14 @@ func section(body, heading string) string {
 	}
 	rest := body[start+len(heading):]
 	depth := strings.Count(strings.TrimSpace(heading), "#")
-	marker := "\n" + strings.Repeat("#", depth) + " "
-	if end := strings.Index(rest, marker); end >= 0 {
-		rest = rest[:end]
+	end := len(rest)
+	for level := 1; level <= depth; level++ {
+		marker := "\n" + strings.Repeat("#", level) + " "
+		if at := strings.Index(rest, marker); at >= 0 && at < end {
+			end = at
+		}
 	}
-	return rest
+	return rest[:end]
 }
 
 // TestREADME_ShowsBothScriptFlags pins the one comparison a reader needs before
@@ -841,9 +849,15 @@ func TestFormats_StatesTheVisibleOnlyDefault(t *testing.T) {
 		"doc/cookbook.md":            "",
 		"README.md":                  "",
 	}
+	// Phrases that were true and are not. Each was in the tree when the default
+	// changed, so this list is a record of what had to be corrected rather than a
+	// guess at what someone might write.
 	stale := []string{
 		"every sheet is imported",
 		"Every sheet is imported",
+		"All sheets are imported",
+		"all sheets are imported",
+		"Every sheet becomes its own table",
 		"imports every one; a hundred sheets",
 		"hidden ones included",
 		"imports it like any other",

@@ -70,7 +70,7 @@ they did not build.
 An import that leaves sheets behind says so on stderr, as a count:
 
 ```text
-Skipped 2 hidden sheets in book.xlsx; use --include-hidden-sheets to import them.
+Skipped 2 hidden sheets in book.xlsx; start sqly with --include-hidden-sheets to import them.
 ```
 
 It is a count and not a list. The names of hidden sheets are the part of a
@@ -534,7 +534,7 @@ as it does on its own.
 `130` and `143` are `128` plus the signal number, which is what a shell reports
 for a process a signal killed. They are separate codes because the next move
 differs: a Ctrl-C is a person changing their mind, while a SIGTERM is the
-surrounding system — a cancelled CI job, a service manager shutting down, a
+surrounding system — a canceled CI job, a service manager shutting down, a
 `timeout` giving up — taking the run away, which is the case a wrapper may want
 to retry or report.
 

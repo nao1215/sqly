@@ -357,6 +357,30 @@ scenarios:
           stdout:
             contains: "prompt"
 
+  - name: two signals sent back to back still end the run
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          # The scenario above spaces the two signals apart, which is what a
+          # person does. This one sends them with nothing in between, so the
+          # second can land while the first is still being handled and the
+          # default disposition has not been restored yet. A one-slot channel
+          # drops it there, and "press it again" would need a third press.
+          command: sh -c 'mkfifo pipe; (exec 3> pipe; touch writer-ready; exec sleep 30) >/dev/null 2>&1 & holder=$!; sqly rows.csv < pipe > /dev/null 2>/dev/null & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; sleep 2; start=$(date +%s); kill -INT $child; kill -INT $child 2>/dev/null; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $holder 2>/dev/null; wait $holder 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "exit=130"
+              - "prompt"
+
   - name: a signal during a download ends the run and removes what it staged
     skip:
       os: windows

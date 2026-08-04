@@ -92,9 +92,11 @@ That keeps heterogeneous documents queryable — no schema is guessed, and a fie
 
 ## Excel
 
-Every sheet becomes its own table, so a workbook is queried the way a directory
-is: pick the table you want. All sheets are imported — there is no flag to select
-one, because selecting one is what the `FROM` clause is for.
+Each sheet the workbook shows becomes its own table, so a workbook is queried the
+way a directory is: pick the table you want. There is no flag to select a single
+sheet, because selecting one is what the `FROM` clause is for. Sheets the
+workbook hides are left out unless [`--include-hidden-sheets`](#hidden-sheets)
+asks for them.
 
 ```shell
 sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
@@ -164,7 +166,7 @@ opens a file they did not build.
 An import that left sheets behind says how many, on stderr:
 
 ```text
-Skipped 2 hidden sheets in book.xlsx; use --include-hidden-sheets to import them.
+Skipped 2 hidden sheets in book.xlsx; start sqly with --include-hidden-sheets to import them.
 ```
 
 That is a count, not a list: the names of hidden sheets are the part of a

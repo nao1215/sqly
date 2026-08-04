@@ -69,7 +69,12 @@ func run(args []string) int {
 	defer cancel()
 
 	trap := &signalTrap{}
-	signals := make(chan os.Signal, 1)
+	// Two slots, not one. The second is for a signal that arrives in the moment
+	// between the first being delivered and the default disposition being
+	// restored below: with one slot that signal has nowhere to go and is dropped,
+	// and "press it again" would then need a third press. The window is tiny, but
+	// `kill -TERM` twice in a script closes it faster than any person could.
+	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
 	// Trapping a signal takes away the one guarantee the default handler gave:
@@ -89,6 +94,18 @@ func run(args []string) int {
 		trap.record(sig)
 		signal.Stop(signals)
 		cancel()
+
+		// A signal that was already queued behind the first one means the user
+		// has asked twice, and the second ask is "stop now" rather than "stop
+		// tidily". Honoring it here is what the restored default disposition
+		// does for every later signal; this only covers the one that arrived too
+		// early to reach it. The cleanup is deliberately skipped — that is what
+		// pressing it again means.
+		select {
+		case second := <-signals:
+			osExit(shell.ExitCodeForSignal(second))
+		default:
+		}
 	}()
 
 	sqlyShell, cleanup, err := di.NewShell(args)

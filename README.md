@@ -237,8 +237,8 @@ sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\
 ### Run SQL or a sqly script from a file
 
 ```shell
-sqly --sql-file report.sql sales.csv
-sqly --script-file update.sqly sales.csv
+sqly --sql-file examples/report.sql examples/data/sales.csv
+sqly --script-file examples/update.sqly examples/data/sales.csv
 ```
 
 `--sql-file` takes SQL only; a dot-command in it is a usage error. `--script-file`

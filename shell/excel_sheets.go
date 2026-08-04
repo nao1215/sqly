@@ -97,8 +97,12 @@ func (s *Shell) warnSkippedExcelSheets(loadPath, displayPath string) {
 	if hidden == 1 {
 		noun, pronoun = "sheet", "it"
 	}
+	// "start sqly with", not "use": the flag is the session's policy, set once
+	// when the process starts. This notice also prints after an .import at an
+	// interactive prompt, where telling the reader to "use" a flag they cannot
+	// reach without restarting would be advice they can only fail to follow.
 	fmt.Fprintf(s.importStatusWriter(),
-		"Skipped %d hidden %s in %s; use --include-hidden-sheets to import %s.\n",
+		"Skipped %d hidden %s in %s; start sqly with --include-hidden-sheets to import %s.\n",
 		hidden, noun, displayPath, pronoun)
 }
 

@@ -43,7 +43,7 @@ const (
 	// signal.
 	ExitInterrupt = 130
 	// ExitTerminated is a run stopped by SIGTERM — something else asked it to
-	// stop: a CI job being cancelled, a service manager shutting down, a
+	// stop: a CI job being canceled, a service manager shutting down, a
 	// `timeout` command giving up. It is 128+SIGTERM, for the same reason.
 	//
 	// The two are separate codes because the caller's next move differs. A
