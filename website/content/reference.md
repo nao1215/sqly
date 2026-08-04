@@ -180,6 +180,11 @@ An existing destination is **overwritten**. `--output` is how you name the file 
 want; it does not ask. The file's permissions are preserved when it already exists,
 and a new file is created with the usual `0600`.
 
+A destination that is a symlink is written *through*: the file it names receives
+the result and the link stays a link. The same holds for `.save --in-place` on a
+symlinked source. A rename would replace the link itself, leaving a regular file
+where the link was and the real file still holding the old rows.
+
 ## Inspection
 
 | Flag | Does |

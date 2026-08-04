@@ -301,3 +301,64 @@ scenarios:
           file:
             path: two.csv
             contains: "8"
+
+  - name: writes through a symlinked source instead of replacing the link
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: real/u.csv
+          content: |
+            id,name
+            1,alice
+      - fixture:
+          file: link.csv
+          symlink: real/u.csv
+      - run:
+          command: sqly link.csv
+          stdin: "UPDATE link SET name = 'zoe';\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: real/u.csv
+            contains: zoe
+      - run:
+          command: sh -c "test -L link.csv && echo still-a-link"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: still-a-link
+
+  - name: writes an --output result through a symlink to the file it names
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: rows2.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: real/out.csv
+          content: |
+            old
+      - fixture:
+          file: out-link.csv
+          symlink: real/out.csv
+      - run:
+          command: sqly --output-format csv --output out-link.csv --sql "SELECT a FROM rows2" rows2.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: real/out.csv
+            contains: "1"
+      - run:
+          command: sh -c "test -L out-link.csv && echo still-a-link"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: still-a-link

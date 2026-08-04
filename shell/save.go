@@ -597,6 +597,17 @@ func (s *Shell) backupExisting(path string) (string, error) {
 // when touched is true — which is why the return value exists rather than a
 // comment saying "be careful here".
 func (s *Shell) commitStagedFile(staging, dest string, beforeFallback func() error) (touched bool, err error) {
+	// A rename replaces the name, not the file the name points at. Where the
+	// destination is a symlink that means the link itself is replaced by a
+	// regular file: the link is gone, the file it pointed at still holds the old
+	// rows, and sqly says "Saved". Everything else here already follows the link —
+	// Stat, and the copy that opens the destination for writing — so the rename
+	// is the one step that has to be told to, by being pointed at the real file.
+	//
+	// A destination that does not exist resolves to itself, which is what a
+	// `.save DIR` export and a new `--output` file want.
+	dest = resolveFilePath(dest)
+
 	// A rename carries the staging file's own mode onto the destination, and the
 	// staging file was created 0600. Left alone, saving a world-readable CSV in
 	// place would quietly make it owner-only. Take the destination's mode first

@@ -319,3 +319,69 @@ func TestOutputWrite_SuccessfulRenameCopiesNothing(t *testing.T) {
 		t.Errorf("destination = %q, want %q", got, updated)
 	}
 }
+
+// TestWriteBack_InPlaceSaveFollowsASymlink is a silent-loss regression. A rename
+// replaces the name, not the file behind it, so an in-place save over a symlink
+// used to leave a regular file where the link had been, with the file it pointed
+// at still holding the old rows — and "Saved" on stderr. Everything the user
+// could see said the edit had landed.
+func TestWriteBack_InPlaceSaveFollowsASymlink(t *testing.T) {
+	dir := t.TempDir()
+	realDir := filepath.Join(dir, "real")
+	if err := os.Mkdir(realDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	target := writeCSV(t, realDir, "u.csv", "id,name\n1,alice\n")
+	link := filepath.Join(dir, "link.csv")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks not supported here: %v", err)
+	}
+
+	if _, err := runScript(t, "UPDATE link SET name = 'zoe';\n.save --in-place\n", link); err != nil {
+		t.Fatalf("save through a symlink: %v", err)
+	}
+
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatalf("lstat the link: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("the save replaced the symlink with a regular file")
+	}
+	if got := readFile(t, target); !strings.Contains(got, "zoe") {
+		t.Errorf("the file the link points at was not updated: %q", got)
+	}
+}
+
+// TestOutputWrite_FollowsASymlink is the same for --output: writing a result to
+// a path that is a symlink must write the file it names, not stand in for it.
+func TestOutputWrite_FollowsASymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.csv")
+	if err := os.WriteFile(target, []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.csv")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks not supported here: %v", err)
+	}
+
+	s := &Shell{files: defaultFileOps()}
+	const updated = "id\n2\n"
+	if err := s.writeFileAtomically(link, func(staging string) error {
+		return os.WriteFile(staging, []byte(updated), 0o600)
+	}); err != nil {
+		t.Fatalf("writeFileAtomically through a symlink: %v", err)
+	}
+
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatalf("lstat the link: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("the write replaced the symlink with a regular file")
+	}
+	if got := readFile(t, target); got != updated {
+		t.Errorf("the file the link points at holds %q, want %q", got, updated)
+	}
+}
