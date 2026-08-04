@@ -2,19 +2,24 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc1` is a broad candidate, not the final contract. Breaking changes are
-still being made, and they are being made now rather than after v1.0.0.
+`v1.0.0-rc2` is the final release candidate. The CLI surface it ships is the one
+v1.0.0 commits to, and this is the version to pin against.
 
-* Breaking changes land before the final release candidate.
-* From the final RC onward, only bug fixes and documentation changes.
-* Nothing user-visible changes between the final RC and v1.0.0 — same flags,
-  same output, same exit codes.
-* Every change to what rc1 promised is listed under Breaking Changes below.
+`v1.0.0-rc1` was the broad candidate: breaking changes were still being made,
+deliberately before v1.0.0 rather than after it. Everything rc1 promised and rc2
+changed is listed under Breaking Changes below.
 
-The final RC is announced as the final one in its release notes. That is the
-point to pin a version against.
+* Breaking changes landed before this candidate. There are no more.
+* From here to v1.0.0, only bug fixes and documentation changes.
+* Nothing user-visible changes between rc2 and v1.0.0 — same flags, same output,
+  same exit codes.
 
 ## [Unreleased]
+
+## [v1.0.0-rc2](https://github.com/nao1215/sqly/compare/v1.0.0-rc1...v1.0.0-rc2) (2026-08-04)
+
+The final release candidate for v1.0.0. Everything below is a change from rc1;
+from here to v1.0.0 nothing user-visible moves.
 
 ### Breaking Changes
 * Added `--script-file FILE`, and `--sql-file` now points at it when it rejects a dot-command. `--sql-file` still holds SQL only; a script that mixes SQL and dot-commands has an entry point of its own instead of only working when piped. `--sql`, `--sql-file`, and `--script-file` are mutually exclusive, and `--output` does not apply to `--script-file` — a script writes files with `.dump`, where the destination means something.
@@ -51,7 +56,7 @@ point to pin a version against.
 * Drift tests cover the new claims: both script flags appear in the README with a link to `examples/`, the reference documents `--include-hidden-sheets`, the formats and cookbook pages state the visible-only default, the documented signal codes match `128+SIGINT` and `128+SIGTERM`, the download limit is described as a body limit, and the example files exist, are linked, and are run by the E2E suite. Flag names are matched as whole tokens, so `--sql-file` can no longer stand in for a missing `--sql`.
 
 ### v1.0.0 CLI Surface
-This supersedes the list under v1.0.0-rc1, which is left as the record of what that tag promised.
+This is the frozen surface: v1.0.0 ships it unchanged. It supersedes the list under v1.0.0-rc1, which is left as the record of what that tag promised.
 
 * Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`, `--include-hidden-sheets`.
 * Query: `--sql/-s SQL`, `--sql-file/-f FILE`, `--script-file FILE`, `--dialect sqlite|mysql|postgresql|googlesql`.
