@@ -42,6 +42,19 @@ func (e *partialImportError) Error() string {
 // Unwrap exposes errPartialImport so errors.Is keeps matching the sentinel.
 func (e *partialImportError) Unwrap() error { return errPartialImport }
 
+// importFailedError is an import where nothing loaded: every requested input
+// failed. It is the same class of problem as a partial import — an input sqly
+// could not read — and is a type for the same reason, so the exit code is
+// decided from what happened rather than from the shape of the message.
+type importFailedError struct {
+	failed  int
+	summary string
+}
+
+func (e *importFailedError) Error() string {
+	return fmt.Sprintf("all %d import(s) failed: %s", e.failed, e.summary)
+}
+
 // importCommand imports files into the in-memory database.
 // Each file/directory is loaded individually so that same-name tables from
 // different directories are overwritten (last-wins) rather than failing.
@@ -49,7 +62,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	if len(argv) == 0 {
 		// A missing path argument is a command error so a batch script fails fast
 		// instead of skipping the import and exiting 0. The usage rides on the error.
-		return errors.New(".import requires at least one file or directory path\n" + importUsageText())
+		//
+		// It is an invocationError, not an import failure: the command as written
+		// cannot be run, and nothing was read to fail at. That keeps a malformed
+		// .import in the usage class with every other "you typed it wrong", rather
+		// than reporting it as an input sqly could not read.
+		return &invocationError{Err: errors.New(".import requires at least one file or directory path\n" + importUsageText())}
 	}
 
 	var errorMessages []string
@@ -57,10 +75,11 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 	for _, path := range argv {
 		// Reject an empty path so `.import ""` does not silently import the
-		// current working directory.
+		// current working directory. Like a missing argument, this is decided from
+		// the command line alone, so it is a usage error rather than an input that
+		// could not be read.
 		if strings.TrimSpace(path) == "" {
-			errorMessages = append(errorMessages, "empty import path")
-			continue
+			return &invocationError{Err: errors.New(".import was given an empty path\n" + importUsageText())}
 		}
 
 		var pathImported bool
@@ -115,7 +134,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		// drop context already computed here.
 		summary := summarizeImportErrors(errorMessages)
 		if successCount == 0 {
-			return fmt.Errorf("all %d import(s) failed: %s", len(errorMessages), summary)
+			return &importFailedError{failed: len(errorMessages), summary: summary}
 		}
 		// A requested input failed while others succeeded. Return a
 		// partialImportError so non-interactive runs exit non-zero and callers can

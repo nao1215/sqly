@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/di"
+	"github.com/nao1215/sqly/shell"
 )
 
 // osExit is a variable that holds the os.Exit function.
@@ -22,21 +25,47 @@ func main() {
 }
 
 // run execute sqly command. This function do dependency injection
-// and run the interactive shell.
-// Returns 0 for success case, 1 for error case.
+// and run the interactive shell. The exit code classifies the failure; see
+// shell.ExitCode for what each one means.
+//
+// SIGINT and SIGTERM cancel the run's context rather than killing the process,
+// so the deferred cleanup still removes the temp directories a download or a
+// staged stdin dataset created. The interactive shell is unaffected: the prompt
+// puts the terminal in raw mode, where Ctrl-C arrives as a keystroke and no
+// signal is delivered at all.
 func run(args []string) int {
-	shell, cleanup, err := di.NewShell(args)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// Trapping a signal takes away the one guarantee the default handler gave:
+	// that it always kills the process. Cancellation reaches every blocking read
+	// sqly does itself, but not one inside a dependency or the kernel, and a CLI
+	// that can swallow Ctrl-C is worse than one that exits untidily. Restoring the
+	// default disposition after the first signal means a second one kills it
+	// outright, which is the usual "press it again" contract.
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
+	sqlyShell, cleanup, err := di.NewShell(args)
 	if err != nil {
 		fmt.Fprintln(config.Stderr, startupErrorMessage(err))
-		return 1
+		return shell.ExitCode(err)
 	}
 	defer cleanup()
 
-	if err := shell.Run(context.Background()); err != nil {
+	if err := sqlyShell.Run(ctx); err != nil {
 		fmt.Fprintf(config.Stderr, "%v\n", err)
-		return 1
+		// A canceled context is reported as an interrupt whatever the failing
+		// statement called it. A query that notices the cancellation first returns
+		// a driver error that says nothing about a signal, so the signal's own
+		// record of what happened is what decides.
+		if ctx.Err() != nil {
+			return shell.ExitInterrupt
+		}
+		return shell.ExitCode(err)
 	}
-	return 0
+	return shell.ExitOK
 }
 
 // startupErrorMessage renders the stderr line for an error returned by

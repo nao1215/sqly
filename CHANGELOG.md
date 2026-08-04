@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+* Exit codes now classify the failure instead of reporting every one as `1`. A bad command line or an unrunnable script exits `2`, an input that could not be read exits `3`, a destination that could not be written exits `4`, and a statement that ran and failed still exits `1`. A wrapper that only checks for non-zero is unaffected; one that checks for `1` specifically has to widen the check. The class is decided from the failure itself, so a `.save` that cannot write exits `4` inside a script exactly as it does on its own.
+
+### New Features
+* SIGINT and SIGTERM cancel the run and exit `130` instead of killing the process. The query is canceled, the deferred cleanup runs, and the temp directories a download or a staged stdin dataset created are removed. The interactive shell is unaffected: the prompt reads Ctrl-C as a keystroke.
+
 ## [v1.0.0-rc1](https://github.com/nao1215/sqly/compare/v0.31.0...v1.0.0-rc1) (2026-08-04)
 
 The release candidate for v1.0.0. The command surface below is what v1.0.0 commits to; this tag exists so it can be used before it is frozen.

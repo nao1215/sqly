@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -584,6 +585,59 @@ func TestDialectsPage_PassThroughClaimsAreSpecified(t *testing.T) {
 	for _, m := range queries {
 		if !strings.Contains(string(specData), m[1]) {
 			t.Errorf("%s documents %q as a pass-through divergence, but %s does not assert it", page, m[1], spec)
+		}
+	}
+}
+
+// TestExitCodes_DocumentedTableMatchesTheConstants keeps the reference's exit
+// code table and the codes sqly actually returns from drifting apart. The table
+// is what a script author writes their `case $?` against, so a code that exists
+// and is undocumented is unusable and a documented code that no longer exists is
+// a wrong branch nobody notices until it is taken.
+func TestExitCodes_DocumentedTableMatchesTheConstants(t *testing.T) {
+	t.Parallel()
+
+	const (
+		page    = "website/content/reference.md"
+		section = "## Exit codes"
+	)
+
+	data, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("read %s: %v", page, err)
+	}
+	body := string(data)
+	start := strings.Index(body, section)
+	if start < 0 {
+		t.Fatalf("%s no longer has the %q section", page, section)
+	}
+	rest := body[start+len(section):]
+	if end := strings.Index(rest, "\n## "); end >= 0 {
+		rest = rest[:end]
+	}
+
+	documented := make(map[string]bool)
+	for _, m := range regexp.MustCompile("(?m)^\\| `(\\d+)` \\|").FindAllStringSubmatch(rest, -1) {
+		documented[m[1]] = true
+	}
+
+	defined := map[string]string{
+		strconv.Itoa(shell.ExitOK):        "ExitOK",
+		strconv.Itoa(shell.ExitFailure):   "ExitFailure",
+		strconv.Itoa(shell.ExitUsage):     "ExitUsage",
+		strconv.Itoa(shell.ExitInput):     "ExitInput",
+		strconv.Itoa(shell.ExitOutput):    "ExitOutput",
+		strconv.Itoa(shell.ExitInterrupt): "ExitInterrupt",
+	}
+
+	for code, name := range defined {
+		if !documented[code] {
+			t.Errorf("shell.%s is %s, which %s does not document", name, code, page)
+		}
+	}
+	for code := range documented {
+		if _, ok := defined[code]; !ok {
+			t.Errorf("%s documents exit code %s, which sqly no longer returns", page, code)
 		}
 	}
 }

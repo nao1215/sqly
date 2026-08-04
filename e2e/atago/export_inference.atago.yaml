@@ -90,7 +90,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT identifier FROM user LIMIT 1" user.csv --output outdir
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: directory
           file:
@@ -107,7 +107,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".dump user outdir\n"
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: directory
 

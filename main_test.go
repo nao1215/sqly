@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/shell"
 	"github.com/nao1215/sqly/testutil"
 )
 
@@ -89,17 +90,39 @@ func Test_run(t *testing.T) {
 }
 
 func Test_runErrPatern(t *testing.T) {
-	t.Run("empty argument", func(t *testing.T) {
+	t.Run("empty argument is a usage error", func(t *testing.T) {
 		got := run([]string{})
-		if got != 1 {
-			t.Errorf("mismatch got=%d, want=%d", got, 1)
+		if got != shell.ExitUsage {
+			t.Errorf("mismatch got=%d, want=%d", got, shell.ExitUsage)
 		}
 	})
 
-	t.Run("specify ocsv file that do not exist", func(t *testing.T) {
+	t.Run("an unknown flag is a usage error", func(t *testing.T) {
+		got := run([]string{"sqly", "--no-such-flag"})
+		if got != shell.ExitUsage {
+			t.Errorf("mismatch got=%d, want=%d", got, shell.ExitUsage)
+		}
+	})
+
+	t.Run("a csv file that does not exist is an input error", func(t *testing.T) {
 		got := run([]string{"sqly", "not_exist.csv"})
-		if got != 1 {
-			t.Errorf("mismatch got=%d, want=%d", got, 1)
+		if got != shell.ExitInput {
+			t.Errorf("mismatch got=%d, want=%d", got, shell.ExitInput)
+		}
+	})
+
+	t.Run("an output destination whose parent is missing is an output error", func(t *testing.T) {
+		dest := filepath.Join(t.TempDir(), "no-such-dir", "out.csv")
+		got := run([]string{"sqly", "--sql", "SELECT 1", "--output", dest, "testdata/actor.csv"})
+		if got != shell.ExitOutput {
+			t.Errorf("mismatch got=%d, want=%d", got, shell.ExitOutput)
+		}
+	})
+
+	t.Run("a failing query is the general failure code", func(t *testing.T) {
+		got := run([]string{"sqly", "--sql", "SELECT * FROM no_such_table", "testdata/actor.csv"})
+		if got != shell.ExitFailure {
+			t.Errorf("mismatch got=%d, want=%d", got, shell.ExitFailure)
 		}
 	})
 

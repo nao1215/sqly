@@ -26,6 +26,29 @@ type scriptError struct{ Err error }
 func (e *scriptError) Error() string { return e.Err.Error() }
 func (e *scriptError) Unwrap() error { return e.Err }
 
+// scriptSourceError is a script sqly could not read: a --sql-file path that does
+// not exist, a stdin stream that failed mid-read. It is separate from
+// scriptError, which is a script that was read and cannot be run as written —
+// the first is a problem with the file, the second with its contents.
+type scriptSourceError struct{ Err error }
+
+func (e *scriptSourceError) Error() string { return e.Err.Error() }
+func (e *scriptSourceError) Unwrap() error { return e.Err }
+
+// batchStopError ends a script at the statement that failed. The detail — which
+// statement, which line, and what it said — is already on stderr by the time
+// this is returned, so its own message stays the one-line summary and does not
+// repeat it.
+//
+// It still wraps the cause. Nothing prints the wrapped error, but the exit code
+// is decided from it: a `.save` that could not write is an output failure
+// whether it ran at the prompt or as line 9 of a script, and a wrapper that
+// replaced the cause with a fresh error made every one of them look the same.
+type batchStopError struct{ Err error }
+
+func (e *batchStopError) Error() string { return "batch stopped: statement failed" }
+func (e *batchStopError) Unwrap() error { return e.Err }
+
 // resultCountError is a run that produced a number of result sets the chosen
 // destination or format cannot carry.
 type resultCountError struct {

@@ -62,7 +62,7 @@ scenarios:
       - run:
           command: sqly --sql-file q.sql --output out.csv user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "result set"
           file:
@@ -80,7 +80,7 @@ scenarios:
       - run:
           command: sqly --sql-file q.sql --output out.csv user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "result sets"
           file:

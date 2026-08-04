@@ -17,7 +17,7 @@ scenarios:
       - run:
           command: sqly --inspect --sql "SELECT * FROM user LIMIT 1" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--inspect"
 
@@ -27,7 +27,7 @@ scenarios:
       - run:
           command: sqly --inspect --output out.csv user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--inspect"
           file:

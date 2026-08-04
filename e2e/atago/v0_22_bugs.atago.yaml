@@ -95,7 +95,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1 AS x" --output fake.ach.gzip.zst
       - assert:
-          exit_code: 1
+          exit_code: 4
           file:
             path: fake.ach.gzip.zst
             exists: false

@@ -243,7 +243,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// with a confusing "path does not exist" import error. Detect that exact
 	// accidental form and point the user at the right flag instead.
 	if hint, ok := positionalSubcommandHint(s.argument.FilePaths); ok {
-		return errors.New(hint)
+		return &invocationError{Err: errors.New(hint)}
 	}
 
 	// --inspect is self-contained; reject conflicting action/side-effect flags
@@ -256,7 +256,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// one result set). Without either (batch stdin or interactive) the flag was
 	// silently ignored, so reject it instead of looking successful.
 	if s.argument.Output.FilePath != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" {
-		return errors.New("--output requires --sql or --sql-file")
+		return &invocationError{Err: errors.New("--output requires --sql or --sql-file")}
 	}
 
 	// Check the destination before the import, so a run that cannot write its
@@ -294,7 +294,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// Read and parse the script now, so a script that cannot run — a bad
 	// boundary, or a helper command in a SQL file — fails before the import
 	// spends time on files. The same parse is what executes below.
-	elements, err := s.loadScript()
+	elements, err := s.loadScript(ctx)
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		// stdin — is a silent no-op that still exits 0, so headless wrappers and CI
 		// mistake it for a completed query. Surface a hint and fail instead.
 		if !ranAny {
-			return errNoStatements
+			return &invocationError{Err: errNoStatements}
 		}
 		return s.finishNonInteractive(ctx)
 
@@ -366,7 +366,7 @@ func (s *Shell) Run(ctx context.Context) error {
 // they come. The interactive shell and --inspect have no script; every other
 // mode has exactly one, parsed once here and executed later from the same
 // result.
-func (s *Shell) loadScript() ([]scriptElement, error) {
+func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 	var (
 		script string
 		origin string
@@ -377,13 +377,15 @@ func (s *Shell) loadScript() ([]scriptElement, error) {
 	case modeSQLFile:
 		loaded, err := readSQLFile(s.argument.SQLFilePath)
 		if err != nil {
+			// readSQLFile already classifies: a path it could not read is an input
+			// failure, a file holding no statement is a script failure.
 			return nil, err
 		}
 		script, origin = loaded, s.argument.SQLFilePath
 	case modeStdinScript:
-		data, err := io.ReadAll(s.stdin)
+		data, err := readAllContext(ctx, s.stdin)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read the script from stdin: %w", err)
+			return nil, &scriptSourceError{Err: fmt.Errorf("failed to read the script from stdin: %w", err)}
 		}
 		script, origin = string(data), "stdin"
 	default:
@@ -541,8 +543,8 @@ func (s *Shell) validateBinaryOutputFormat() error {
 	}
 	switch s.argument.Output.Mode {
 	case model.PrintModeExcel, model.PrintModeParquet:
-		return fmt.Errorf("--output-format %s writes a binary file and cannot be printed; add --output FILE",
-			s.argument.Output.Mode)
+		return &invocationError{Err: fmt.Errorf("--output-format %s writes a binary file and cannot be printed; add --output FILE",
+			s.argument.Output.Mode)}
 	default:
 		return nil
 	}
@@ -613,9 +615,9 @@ func (s *Shell) init(ctx context.Context) error {
 		// stageStdinDataset reads stdin to EOF; on a terminal that would hang
 		// waiting for the user. --stdin-format is only meaningful with piped input.
 		if s.isTTY() {
-			return errors.New("--stdin-format requires piped or redirected stdin")
+			return &invocationError{Err: errors.New("--stdin-format requires piped or redirected stdin")}
 		}
-		stdinPath, cleanup, err := s.stageStdinDataset()
+		stdinPath, cleanup, err := s.stageStdinDataset(ctx)
 		if err != nil {
 			return err
 		}
@@ -680,7 +682,7 @@ var stdinFormatExtensions = map[string]string{
 // arguments (including table naming and joins). The returned cleanup removes the
 // temp directory; it is safe to call after import because the data is already
 // copied into the shared database.
-func (s *Shell) stageStdinDataset() (string, func(), error) {
+func (s *Shell) stageStdinDataset(ctx context.Context) (string, func(), error) {
 	ext, ok := stdinFormatExtensions[s.argument.StdinFormat]
 	if !ok {
 		return "", nil, fmt.Errorf("unsupported --stdin-format value %q: want csv, tsv, ltsv, json, or jsonl", s.argument.StdinFormat)
@@ -698,10 +700,18 @@ func (s *Shell) stageStdinDataset() (string, func(), error) {
 		cleanup()
 		return "", nil, fmt.Errorf("create stdin staging file: %w", err)
 	}
-	if _, err := io.Copy(f, s.stdin); err != nil {
+	// Cancellation-aware for the same reason the script read is: a piped dataset
+	// whose writer never closes would otherwise ignore the interrupt entirely.
+	data, err := readAllContext(ctx, s.stdin)
+	if err != nil {
 		_ = f.Close()
 		cleanup()
 		return "", nil, fmt.Errorf("read stdin data: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		cleanup()
+		return "", nil, fmt.Errorf("write stdin staging file: %w", err)
 	}
 	if err := f.Close(); err != nil {
 		cleanup()
@@ -1286,10 +1296,10 @@ func ensureWritableDestination(path string) error {
 		return nil
 	}
 	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(os.PathSeparator)) {
-		return fmt.Errorf("output destination %q ends with a path separator; specify a file path, not a directory", path)
+		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q ends with a path separator; specify a file path, not a directory", path)}
 	}
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		return fmt.Errorf("output destination %q is a directory; specify a file path", path)
+		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q is a directory; specify a file path", path)}
 	}
 	// The parent must already exist. sqly does not create directories for an
 	// output path: a typo in a directory name would otherwise leave a tree of
@@ -1298,10 +1308,10 @@ func ensureWritableDestination(path string) error {
 	parent := filepath.Dir(path)
 	info, err := os.Stat(parent)
 	if err != nil {
-		return fmt.Errorf("output destination %q: directory %q does not exist", path, parent)
+		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q: directory %q does not exist", path, parent)}
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("output destination %q: %q is not a directory", path, parent)
+		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q: %q is not a directory", path, parent)}
 	}
 	return nil
 }

@@ -17,7 +17,7 @@ scenarios:
       - run:
           command: sqly --output-format json --sql "SELECT user_name FROM user LIMIT 1" user.csv /no/such/file.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             empty: true
           stderr:
@@ -30,7 +30,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" /no/such/a.csv /no/such/b.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             empty: true
           stderr:
@@ -45,7 +45,7 @@ scenarios:
       - run:
           command: sqly --inspect user.csv /no/such/file.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             empty: true
           stderr:
@@ -58,7 +58,7 @@ scenarios:
           command: sqly
           stdin: ".import user.csv /no/such/file.csv\n.tables\n"
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             not_contains: "TABLE NAME"
           stderr:
@@ -69,7 +69,7 @@ scenarios:
       - run:
           command: sqly --stdin-format csv --output-format json --sql "SELECT COUNT(*) FROM stdin"
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             empty: true
           stderr:

@@ -56,7 +56,7 @@ func (s *Shell) runScriptElements(ctx context.Context, elements []scriptElement)
 			}
 			fmt.Fprintf(config.Stderr, "batch statement %d failed at %s: %q: %v\n",
 				i+1, loc, previewStatement(element.text), runErr)
-			failErr = errors.New("batch stopped: statement failed")
+			failErr = &batchStopError{Err: runErr}
 			break
 		}
 	}
@@ -554,15 +554,19 @@ func withMainVerb(stmt string) string {
 // inspect it with errors.Is) and rejects a file with no SQL, so an empty or
 // whitespace-only script fails loudly instead of running nothing.
 func readSQLFile(path string) (string, error) {
+	// The two kinds of failure below are told apart deliberately. A path that
+	// cannot be read is a problem with the file, like any other input; a file that
+	// was read and holds no statement is a problem with what the user wrote. They
+	// exit with different codes, so they are different types here.
 	data, err := os.ReadFile(path) //nolint:gosec // path is the user-specified --sql-file
 	if err != nil {
-		return "", fmt.Errorf("failed to read --sql-file %q: %w", path, err)
+		return "", &scriptSourceError{Err: fmt.Errorf("failed to read --sql-file %q: %w", path, err)}
 	}
 	// Strip a leading UTF-8 BOM so a BOM-prefixed script (common from Windows
 	// editors and export tools) parses the same as plain UTF-8.
 	content := strings.TrimPrefix(string(data), "\ufeff")
 	if strings.TrimSpace(content) == "" {
-		return "", fmt.Errorf("--sql-file %q is empty", path)
+		return "", &scriptError{Err: fmt.Errorf("--sql-file %q is empty", path)}
 	}
 	// A comment-only script has no executable SQL, which is the same failure as
 	// an empty file: splitting yields no terminated statements and the remainder
@@ -570,7 +574,7 @@ func readSQLFile(path string) (string, error) {
 	// of silently running nothing.
 	stmts, remainder := splitSQLStatements(content)
 	if len(stmts) == 0 && stripLeadingSQLComments(remainder) == "" {
-		return "", fmt.Errorf("--sql-file %q contains no executable SQL statements", path)
+		return "", &scriptError{Err: fmt.Errorf("--sql-file %q contains no executable SQL statements", path)}
 	}
 	return content, nil
 }

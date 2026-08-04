@@ -421,7 +421,7 @@ scenarios:
       - run:
           command: sqly --dialect oracle --sql "SELECT 1" users.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains:
               - "unknown SQL dialect"

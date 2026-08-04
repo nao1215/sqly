@@ -18,7 +18,7 @@ scenarios:
       - run:
           command: sqly --output-format parquet --sql "SELECT * FROM user" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:
@@ -32,7 +32,7 @@ scenarios:
       - run:
           command: sqly --output-format excel --sql "SELECT * FROM user" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:
@@ -55,7 +55,7 @@ scenarios:
       - run:
           command: sqly --stdin-table piped --sql "SELECT 1" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--stdin-format"
 
@@ -129,7 +129,7 @@ scenarios:
       - run:
           command: sqly --output out.csv --sql-file two.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "result sets"
           file:
@@ -146,7 +146,7 @@ scenarios:
       - run:
           command: sqly --output out.csv --sql-file none.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "one result set"
           file:
@@ -168,7 +168,7 @@ scenarios:
       - run:
           command: sqly --output-format csv --sql-file two.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:
@@ -183,7 +183,7 @@ scenarios:
       - run:
           command: sqly --output-format json --sql-file two.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:
@@ -196,7 +196,7 @@ scenarios:
       - run:
           command: sqly --output-format jsonl --sql-file two.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:
@@ -237,7 +237,7 @@ scenarios:
       - run:
           command: sqly --output nodir/out.csv --sql "SELECT 1" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "does not exist"
           file:

@@ -147,7 +147,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1 AS x; SELECT 2 AS y" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "single SQL statement"
 
@@ -158,7 +158,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1 AS x; UPDATE user SET first_name='z'" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "single SQL statement"
 
@@ -168,7 +168,7 @@ scenarios:
       - run:
           command: sqly --output-format csv --sql "SELECT 1 AS x; SELECT 2 AS y" --output out.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "single SQL statement"
           file:

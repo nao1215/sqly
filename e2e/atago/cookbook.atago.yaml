@@ -227,7 +227,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" ragged.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: column count mismatch
 

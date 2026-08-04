@@ -72,6 +72,6 @@ scenarios:
           command: sqly
           stdin: ".import space name.csv\n"
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: space

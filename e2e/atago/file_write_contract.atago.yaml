@@ -161,7 +161,7 @@ scenarios:
       - run:
           command: sqly --output-format parquet --sql "SELECT a FROM rows" rows.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--output"
 
@@ -172,7 +172,7 @@ scenarios:
       - run:
           command: sqly --output-format csv --output out.ach --sql "SELECT a FROM rows" rows.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           file:
             path: out.ach
             exists: false

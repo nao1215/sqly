@@ -53,18 +53,18 @@ func (s *Shell) validateInspectFlags() error {
 	}
 	switch {
 	case s.argument.Query != "":
-		return errors.New("--inspect cannot be combined with --sql")
+		return &invocationError{Err: errors.New("--inspect cannot be combined with --sql")}
 	case s.argument.SQLFilePath != "":
-		return errors.New("--inspect cannot be combined with --sql-file")
+		return &invocationError{Err: errors.New("--inspect cannot be combined with --sql-file")}
 	case s.argument.Output.FilePath != "":
-		return errors.New("--inspect cannot be combined with --output")
+		return &invocationError{Err: errors.New("--inspect cannot be combined with --output")}
 	// --output-format selects a result format, but --inspect always emits its
 	// own JSON report. Reject the conflicting flag instead of silently discarding
 	// it, matching the other --inspect conflict checks. What counts is that the
 	// user wrote it: --output-format table is discarded exactly as much as
 	// --output-format csv is, and only the default nobody asked for is silent.
 	case s.argument.IsExplicit("output-format"):
-		return fmt.Errorf("--inspect cannot be combined with --output-format %s", outputModeFlagName(s.argument.Output))
+		return &invocationError{Err: fmt.Errorf("--inspect cannot be combined with --output-format %s", outputModeFlagName(s.argument.Output))}
 	}
 	return nil
 }

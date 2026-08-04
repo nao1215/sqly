@@ -349,7 +349,7 @@ func TestStageStdinDataset_UnsupportedFormat(t *testing.T) {
 	shell.argument.StdinFormat = "xml"
 	shell.argument.StdinTableName = "stdin"
 
-	_, _, err = shell.stageStdinDataset()
+	_, _, err = shell.stageStdinDataset(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "unsupported --stdin-format value") {
 		t.Fatalf("stageStdinDataset unsupported format error = %v, want format error", err)
 	}
@@ -370,7 +370,7 @@ func TestStageStdinDataset_SuccessStagesFile(t *testing.T) {
 	shell.argument.StdinTableName = "piped"
 	shell.stdin = strings.NewReader("a,b\n1,2\n")
 
-	path, stageCleanup, err := shell.stageStdinDataset()
+	path, stageCleanup, err := shell.stageStdinDataset(context.Background())
 	if err != nil {
 		t.Fatalf("stageStdinDataset error: %v", err)
 	}
