@@ -229,8 +229,22 @@ scenarios:
   # 130: the run was stopped by a signal. This is the class a unit test cannot
   # reach — it is the process's own exit status, produced by the signal handler,
   # the cancellation reaching a blocking read, and the cleanup that follows.
-  - name: an interrupted run exits 130
-    # Needs a POSIX shell for job control and kill.
+  #
+  # Two things make these scenarios prove something. First, the FIFO writer is
+  # what synchronizes: `exec > pipe` blocks until a reader opens the other end,
+  # so the ready marker cannot appear before sqly has the FIFO open. A sleep
+  # would only be a guess about how long that takes.
+  #
+  # Second, the exit status alone proves nothing here, for two reasons. A process
+  # killed by the default SIGINT handler is also reported as 130 by the shell —
+  # so stderr is asserted, and a process killed outright never gets to write it.
+  # And a run that ignores the cancellation still exits 130 eventually, once the
+  # FIFO writer goes away and the read finally returns: that is the original bug,
+  # and it is invisible to any assertion that does not care how long it took. So
+  # the elapsed time between the signal and the exit is what is checked, not just
+  # the code.
+  - name: an interrupted run exits 130 after reporting the cancellation itself
+    # Needs a POSIX shell for job control, FIFOs, and kill.
     skip:
       os: windows
     steps:
@@ -240,16 +254,19 @@ scenarios:
             id
             1
       - run:
-          # A FIFO whose writer never writes: sqly reads it as a script and
-          # blocks. Before the signal handler observed cancellation this hung
-          # forever on SIGINT instead of exiting, which is the regression the
-          # scenario exists to catch.
-          command: sh -c 'mkfifo pipe; sleep 30 > pipe & holder=$!; sqly rows.csv < pipe >/dev/null 2>/dev/null & child=$!; sleep 1; kill -INT $child; wait $child; code=$?; kill $holder 2>/dev/null; echo "exit=$code"'
+          command: sh -c 'mkfifo pipe; (exec 3> pipe; touch writer-ready; sleep 30) & holder=$!; sqly rows.csv < pipe > /dev/null 2> err.log & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; start=$(date +%s); kill -INT $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $holder 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"'
           shell: true
       - assert:
           exit_code: 0
           stdout:
-            contains: "exit=130"
+            contains:
+              - "exit=130"
+              - "prompt"
+      - assert:
+          # A process killed outright never gets to say this.
+          file:
+            path: err.log
+            contains: "context canceled"
 
   - name: an interrupted run leaves no staged temp directory behind
     skip:
@@ -261,10 +278,11 @@ scenarios:
             id
             1
       - run:
-          # TMPDIR is redirected into the workdir so the check sees only what
-          # this run created. A signal that killed the process outright would
-          # leave the staged stdin dataset behind.
-          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; mkfifo pipe; sleep 30 > pipe & holder=$!; sqly --stdin-format csv --sql "SELECT 1" < pipe >/dev/null 2>/dev/null & child=$!; sleep 1; kill -INT $child; wait $child; kill $holder 2>/dev/null; ls tmp | grep -c sqly- || echo 0'
+          # TMPDIR is redirected into the workdir so the check sees only what this
+          # run created. The staging directory is made before the read blocks, so
+          # by the time the signal arrives there is something to clean up: a
+          # process killed outright would leave it behind.
+          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; mkfifo pipe; (exec 3> pipe; touch writer-ready; sleep 30) & holder=$!; sqly --stdin-format csv --sql "SELECT 1" < pipe > /dev/null 2>/dev/null & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; kill -INT $child; wait $child; kill $holder 2>/dev/null; ls tmp | grep -c sqly- || echo 0'
           shell: true
       - assert:
           exit_code: 0
