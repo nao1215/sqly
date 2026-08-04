@@ -109,9 +109,13 @@ jobs:
         run: |
           attempt=1
           while [ "${attempt}" -le "${MAX_ATTEMPTS}" ]; do
+            # Quote-agnostic on purpose: Hugo's minifier renders the tag as
+            # `name=sqly-build-commit content="..."`, dropping the quotes around
+            # any attribute value that does not need them. Matching the tag and
+            # then pulling the 40-hex commit out of it does not care either way.
             live=$(curl -fsSL --max-time 30 "${SITE}?cachebust=${GITHUB_RUN_ID}-${attempt}" \
-              | grep -o 'name="sqly-build-commit" content="[0-9a-f]*"' \
-              | sed 's/.*content="//; s/"//') || live=""
+              | grep -o 'sqly-build-commit[^>]*' \
+              | grep -o '[0-9a-f]\{40\}') || live=""
             if [ "${live}" = "${EXPECTED_SHA}" ]; then
               echo "the live site is ${live}"
               exit 0
