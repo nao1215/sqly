@@ -203,7 +203,10 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath stri
 		// existing tables whose name matches this file's signature.
 		fileTables := diffTableNames(mustTables(ctx, s), beforeSet)
 		if len(fileTables) == 0 {
-			fileTables = s.tablesMatchingFile(file, beforeSet)
+			// The file overwrote tables that already existed. Which ones is decided
+			// by the record and by an exact name claim — never by a prefix another
+			// file produces exactly.
+			fileTables = s.tablesOverwrittenBy(file, beforeSet, true)
 		}
 
 		for _, name := range fileTables {
@@ -272,14 +275,15 @@ func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
 	return files, nil
 }
 
-// tablesMatchingFile returns the table names in the given set that a file owns by
-// name. A single-table format (CSV/TSV/LTSV/JSON/Parquet) owns only the exact
-// table name derived from its path. The "<base>_" prefix is matched only for
-// multi-table formats (Excel sheets, ACH, Fedwire), where one file produces
-// "<base>_<sheet>" tables. Without that restriction a file like "a.csv" would
-// spuriously claim unrelated tables such as "a_b". It is used to
-// identify which existing tables a re-imported file overwrote.
-func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []string {
+// tablesNamedAfterFile returns the table names in the given set that this file
+// would produce: the sanitized base name, plus the "<base>_" prefixed names for
+// the formats where one file becomes several tables.
+//
+// It answers "did something already take the name this import wanted?", and
+// nothing else. It must not be used to decide what a file owns, because a name
+// is not ownership: sample_test.csv and sample.xlsx produce names that look
+// related and are not. tablesFromSource answers that question.
+func (s *Shell) tablesNamedAfterFile(file string, names map[string]struct{}) []string {
 	base := s.usecases.importer.GetTableNameFromFilePath(file)
 	var matched []string
 	if _, ok := names[base]; ok {
@@ -293,7 +297,87 @@ func (s *Shell) tablesMatchingFile(file string, names map[string]struct{}) []str
 			}
 		}
 	}
+	sort.Strings(matched)
 	return matched
+}
+
+// tablesOverwrittenBy returns the tables an import of this file just replaced:
+// the ones already recorded against it, plus its base name when nothing with a
+// stronger claim holds it.
+//
+// A "<base>_" prefix is never a claim on its own. It looks like one for the
+// formats where a file becomes several tables, and that is where this went
+// wrong: a directory holding sample.xlsx and sample_test.csv let the workbook
+// claim sample_test, so re-importing the workbook took a table it had never
+// produced — clearing its directory marker and making a file the session must
+// not write suddenly writable. A workbook's own sheet tables are recorded
+// against it, so the record already covers them and the guess adds nothing but
+// the bug.
+//
+// The base name is a real claim: this file does produce that table. Who may take
+// it from whom depends on which side asked for the import, which is what
+// fromDirectory says.
+//
+// A directory sweep takes any name it produces: loading a tree is last-wins by
+// definition, and the alternative is a directory that refuses to load because
+// something in it shares a name with an earlier argument. An individually named
+// file is narrower: it takes a free name, a name it already holds, and a name
+// held by a directory import — a bulk sweep yields to a file the user named —
+// but not one another explicitly named file produced, which the caller reports
+// as a collision.
+func (s *Shell) tablesOverwrittenBy(file string, names map[string]struct{}, fromDirectory bool) []string {
+	claimed := make(map[string]struct{})
+	for _, name := range s.tablesFromSource(file, names) {
+		claimed[name] = struct{}{}
+	}
+	base := s.usecases.importer.GetTableNameFromFilePath(file)
+	if _, exists := names[base]; exists && (fromDirectory || !s.heldByAnotherExplicitFile(base)) {
+		claimed[base] = struct{}{}
+	}
+
+	owned := make([]string, 0, len(claimed))
+	for name := range claimed {
+		owned = append(owned, name)
+	}
+	sort.Strings(owned)
+	return owned
+}
+
+// heldByAnotherExplicitFile reports whether a different, individually named
+// input produced this table. A table that arrived through a directory import
+// does not count: that is the case an explicit import is allowed to take over.
+func (s *Shell) heldByAnotherExplicitFile(name string) bool {
+	if s.dirImported[name] {
+		return false
+	}
+	source, ok := s.tableSources[name]
+	return ok && source != stdinTableSource
+}
+
+// tablesFromSource returns the tables that were recorded as coming from this
+// exact source when they were imported.
+//
+// This is what "the tables this file owns" means, and it is a lookup rather than
+// a guess. The guess it replaces was the base name plus everything sharing it as
+// a prefix, which is right for a workbook's own sheets and wrong for anything
+// else named similarly: a directory holding sample.xlsx and sample_test.csv gave
+// the workbook ownership of sample_test as well, so re-importing the workbook
+// cleared the directory marker from a table it had never produced and made a
+// file the session must not write become writable. The record is exact for every
+// input, including directory imports, which register each file individually.
+func (s *Shell) tablesFromSource(source string, names map[string]struct{}) []string {
+	var owned []string
+	for name := range names {
+		recorded, ok := s.tableSources[name]
+		if !ok || recorded == stdinTableSource {
+			continue
+		}
+		if sameSourceLocation(source, recorded) {
+			owned = append(owned, name)
+		}
+	}
+	sort.Strings(owned)
+	return owned
 }
 
 // warnKeywordTableNames warns when an imported table's name is a SQLite keyword.
@@ -397,24 +481,24 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) e
 	// or more tables that already existed in the session.
 	newNames := diffTableNames(after, existingTables)
 	if len(newNames) == 0 {
-		owned := s.tablesMatchingFile(loadPath, existingTables)
+		// Ownership is read from the record, never inferred from the name. Only the
+		// tables this exact source produced are re-pointed or unmarked below; a
+		// sibling table that merely shares a prefix keeps whatever it had, and a
+		// table another file produced is a collision rather than a takeover —
+		// which is the difference between this and a directory import, where
+		// last-wins across the tree is the point.
+		owned := s.tablesOverwrittenBy(displayPath, existingTables, false)
 		switch {
-		case s.isRecordedSource(displayPath):
+		case len(owned) > 0:
 			// Re-import of the same source path (including a symlink alias) is a
 			// harmless last-wins overwrite. Take clean ownership so a table first
 			// seen via a directory import becomes a normal file-backed table that
-			// write-back accepts.
-			s.clearDirImported(owned)
-			return nil
-		case s.anyDirImported(owned):
-			// A deliberate single-file .import replaces directory-sourced data of the
-			// same name: re-point the table to this standalone file and drop the
-			// directory marker so write-back targets the file the user named. Ref
+			// write-back accepts, and re-point it at the path the user named.
 			s.recordTableSources(ctx, owned, displayPath)
 			s.clearDirImported(owned)
 			s.warnKeywordTableNames(owned)
 			return nil
-		case len(owned) == 0:
+		case len(s.tablesNamedAfterFile(loadPath, existingTables)) == 0:
 			// No table was created, and no table carries this file's name — so the
 			// file did not collide with anything, it simply held no data. An Excel
 			// workbook whose only sheet has no cells arrives here. Saying "collision"
@@ -434,22 +518,6 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) e
 	return nil
 }
 
-// isRecordedSource reports whether path is already the source of an imported
-// table. Paths are compared with symlink resolution, so a symlink alias of an
-// imported source is recognized as the same source and re-importing through it is
-// a harmless last-wins overwrite rather than a table-name collision.
-func (s *Shell) isRecordedSource(path string) bool {
-	for _, src := range s.tableSources {
-		if src == stdinTableSource {
-			continue
-		}
-		if sameSourceLocation(path, src) {
-			return true
-		}
-	}
-	return false
-}
-
 // clearDirImported removes the directory-import marker from the given tables, so
 // a table first seen via a directory import becomes a normal file-backed table
 // that write-back accepts once it is re-imported directly from a single file.
@@ -457,19 +525,6 @@ func (s *Shell) clearDirImported(names []string) {
 	for _, name := range names {
 		delete(s.dirImported, name)
 	}
-}
-
-// anyDirImported reports whether any of the given tables came from a directory
-// import. It lets a deliberate single-file .import replace directory-sourced data
-// of the same name, while two distinct plain-file inputs that collide are still
-// rejected.
-func (s *Shell) anyDirImported(names []string) bool {
-	for _, name := range names {
-		if s.dirImported[name] {
-			return true
-		}
-	}
-	return false
 }
 
 // recordTableSources remembers which source path produced each table name, so

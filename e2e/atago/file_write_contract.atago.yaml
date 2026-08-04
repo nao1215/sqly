@@ -5,6 +5,14 @@
 # observe: an existing file is either the old one or the new one, never a
 # truncated one, and its permissions survive.
 #
+# What is *not* here is the failure that only a specific syscall can produce: a
+# rename the platform refuses, falling back to a copy that truncates the
+# destination and then fails on a full disk. An atago scenario cannot choose
+# which syscall fails, so those live in shell/partialwrite_test.go, where the
+# rename and the copy are stubbed to damage the destination before returning an
+# error. The scenarios here pin what a user can see: which file holds which
+# bytes after a run, and what the run said about it.
+#
 # Documented at website/content/reference.md#what---output-guarantees.
 version: "1"
 
@@ -221,3 +229,75 @@ scenarios:
           file:
             path: rows.csv
             contains: "1"
+
+  - name: leaves every target untouched when one of them cannot be written
+    env: *hist
+    steps:
+      - fixture:
+          file: good.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: bad.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly good.csv bad.ach
+          stdin: "UPDATE good SET a = 9;\nUPDATE bad_entries SET amount = 999999999999;\n.save --in-place\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            not_contains: Saved
+      - assert:
+          file:
+            path: good.csv
+            contains: "1"
+      - assert:
+          file:
+            path: good.csv
+            not_contains: "9"
+
+  - name: leaves no scratch or backup file behind when a save fails
+    env: *hist
+    steps:
+      - fixture:
+          file: good.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: bad.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sh -c "printf 'UPDATE good SET a = 9;\nUPDATE bad_entries SET amount = 999999999999;\n.save --in-place\n' | sqly good.csv bad.ach; ls -a | grep -c 'sqly-save\\|sqly-bak' || true"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: writes every target of a multi-file in-place save when all of them can be written
+    env: *hist
+    steps:
+      - fixture:
+          file: one.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: two.csv
+          content: |
+            b
+            2
+      - run:
+          command: sqly one.csv two.csv
+          stdin: "UPDATE one SET a = 9;\nUPDATE two SET b = 8;\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: one.csv
+            contains: "9"
+      - assert:
+          file:
+            path: two.csv
+            contains: "8"

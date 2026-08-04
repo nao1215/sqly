@@ -3,6 +3,7 @@ package shell
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -26,30 +27,79 @@ import (
 // successfully, so a serializer that fails on the third row — a value the format
 // cannot hold, a full disk — leaves the previous file whole.
 //
+// A rename is what makes that true, and a rename is not always available:
+// commitStagedFile falls back to copying over the destination where the platform
+// refuses one, and a copy truncates before it writes. So an existing destination
+// is copied aside first and put back if the commit reports it was touched. That
+// backup is the difference between "an existing file is either the old one or
+// the new one" being a guarantee and being a hope about which syscall was used.
+//
 // write is given the scratch path and must produce the complete file at it.
 func (s *Shell) writeFileAtomically(dest string, write func(path string) error) (err error) {
 	staging, err := s.fs().stagingPath(dest, ".sqly-out-*")
 	if err != nil {
 		return &fileOpError{Op: opStage, Path: dest, Err: err}
 	}
-	committed := false
 	defer func() {
-		if committed {
-			return
+		// The scratch file is removed whatever happened. A successful rename already
+		// consumed it, but the fallback copy does not: it leaves the scratch file
+		// sitting beside the destination, which is how a Windows run would litter a
+		// dot-file next to every export. Remove is therefore unconditional, and a
+		// "no such file" from the rename case is not a failure.
+		if removeErr := s.fs().Remove(staging); !isNotExist(removeErr) {
+			err = cleanup.Join(err, removeErr, fmt.Sprintf("remove the staged file %q", staging))
 		}
-		// The scratch file is only ever left behind on a failure, and then it is a
-		// leftover the caller has to hear about, so its removal joins the error
-		// rather than replacing it.
-		err = cleanup.Join(err, s.fs().Remove(staging), fmt.Sprintf("remove the staged file %q", staging))
 	}()
 
 	if err := write(staging); err != nil {
 		return errors.New(renamePathInMessage(err.Error(), staging, dest))
 	}
-	if err := s.commitStagedFile(staging, dest); err != nil {
-		return &fileOpError{Op: opCommit, Path: dest, Err: err}
+
+	backup, err := s.backupExisting(dest)
+	if err != nil {
+		return &fileOpError{Op: opBackup, Path: dest, Err: err}
 	}
-	committed = true
+	if backup != "" {
+		defer func() {
+			err = cleanup.Join(err, s.fs().Remove(backup), fmt.Sprintf("remove the backup file %q", backup))
+		}()
+	}
+
+	touched, commitErr := s.commitStagedFile(staging, dest)
+	if commitErr == nil {
+		return nil
+	}
+	failure := error(&fileOpError{Op: opCommit, Path: dest, Err: commitErr})
+	if !touched {
+		// A rename that failed did not create or alter the destination, so there is
+		// nothing to put back.
+		return failure
+	}
+	if restoreErr := s.restoreFromBackup(dest, backup); restoreErr != nil {
+		// The destination is now neither the old file nor the new one, which is the
+		// one outcome the user has to be told about. It is reported alongside the
+		// failure that caused it, never instead of it.
+		return errors.Join(failure, restoreErr)
+	}
+	return failure
+}
+
+// restoreFromBackup puts dest back to what backup holds, or removes dest when
+// there was no file there before this write created one. It is what
+// rollbackCommitted does for one target, shared so `--output` and `.save` undo a
+// touched destination the same way.
+func (s *Shell) restoreFromBackup(dest, backup string) error {
+	if backup == "" {
+		if err := s.fs().Remove(dest); err != nil {
+			return &fileOpError{Op: opRollback, Path: dest,
+				Err: fmt.Errorf("could not remove the file this write created: %w", err)}
+		}
+		return nil
+	}
+	if err := s.fs().Copy(backup, dest); err != nil {
+		return &fileOpError{Op: opRollback, Path: dest,
+			Err: fmt.Errorf("could not restore it from its backup; it now holds the new content: %w", err)}
+	}
 	return nil
 }
 
@@ -66,4 +116,10 @@ func (s *Shell) writeFileAtomically(dest string, write func(path string) error) 
 func renamePathInMessage(message, staging, dest string) string {
 	message = strings.ReplaceAll(message, strconv.Quote(staging), strconv.Quote(dest))
 	return strings.ReplaceAll(message, staging, dest)
+}
+
+// isNotExist reports whether err is nil or a "no such file" — the two answers
+// that mean there is nothing left to clean up.
+func isNotExist(err error) bool {
+	return err == nil || errors.Is(err, os.ErrNotExist)
 }

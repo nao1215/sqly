@@ -125,9 +125,14 @@ func (s *Shell) planRun() (runPlan, error) {
 //
 // It says so rather than failing, because it cannot tell a pipe carrying a file
 // from a pipe carrying nothing without reading it, and reading it is what hangs
-// on a FIFO with no writer. A wrapper that attaches an empty pipe to every child
-// — Go's os/exec does, and so do several CI runners — must keep working, so the
-// exit code does not change and only stderr does.
+// on a FIFO with no writer.
+//
+// The pipe is not always the user's doing. A harness that hands its child a
+// reader gets a pipe whether or not anything is written to it — Go's os/exec
+// creates one for any non-*os.File Stdin, including an empty strings.Reader, and
+// test runners and CI wrappers do the same. (An os/exec Cmd with a nil Stdin
+// gets the null device instead, which is the quiet case above.) Those runs must
+// keep working, so the exit code does not change and only stderr does.
 func (s *Shell) planWithQuerySource(plan runPlan) (runPlan, error) {
 	if plan.stdinIsDataset || s.stdinNamedAsInput() {
 		return plan, nil

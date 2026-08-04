@@ -493,18 +493,30 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	}
 
 	for i, w := range staged {
-		if err := s.commitStagedFile(w.staging, w.target.dest); err != nil {
-			commitErr := fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
-			// The rollback's own failure is reported alongside the commit failure,
-			// never instead of it. Both matter and they say different things: the
-			// commit error is why the save stopped, and the rollback error is which
-			// files are now neither the old version nor the new one. Dropping the
-			// second leaves the user believing the sources are untouched.
-			if rollbackErr := s.rollbackCommitted(staged[:i]); rollbackErr != nil {
-				return errors.Join(commitErr, rollbackErr)
-			}
-			return commitErr
+		touched, err := s.commitStagedFile(w.staging, w.target.dest)
+		if err == nil {
+			continue
 		}
+		commitErr := fmt.Errorf("failed to move the saved data onto %s: %w", w.target.dest, err)
+		// The target that just failed is rolled back with the ones before it when
+		// it was touched. It is the likeliest of all of them to be broken: a
+		// fallback copy truncates before it writes, so the file it failed on is
+		// the one holding half a table. Leaving it out of the rollback — which is
+		// what "undo the commits that already landed" reads like — restores every
+		// file except the damaged one.
+		done := staged[:i]
+		if touched {
+			done = staged[:i+1]
+		}
+		// The rollback's own failure is reported alongside the commit failure,
+		// never instead of it. Both matter and they say different things: the
+		// commit error is why the save stopped, and the rollback error is which
+		// files are now neither the old version nor the new one. Dropping the
+		// second leaves the user believing the sources are untouched.
+		if rollbackErr := s.rollbackCommitted(done); rollbackErr != nil {
+			return errors.Join(commitErr, rollbackErr)
+		}
+		return commitErr
 	}
 
 	// Every destination is committed, so the run has succeeded and the counts the
@@ -513,12 +525,21 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	// the files were written.
 	s.flushPendingAffected()
 
+	// The baseline is what the *source* file holds, and it is the answer to "has
+	// this table changed since it was imported?". Only an in-place save makes the
+	// source match the table, so only an in-place save may move it forward.
+	//
+	// A `.save DIR` export used to advance it too, which said the source had
+	// caught up when the export had. `UPDATE; .save out; .save --in-place` then
+	// wrote the export and reported "nothing to save" for the source — the one
+	// sequence where the contract that DIR leaves the sources alone turns into
+	// the sources never being writable again.
+	inPlace := destDir == ""
 	for _, w := range staged {
-		for _, name := range w.baselines {
-			// The file now matches the table, so move the baseline forward. A later
-			// .save in the same session then treats the table as unchanged and does not
-			// rewrite an identical file.
-			s.snapshotBaseline(ctx, name)
+		if inPlace {
+			for _, name := range w.baselines {
+				s.snapshotBaseline(ctx, name)
+			}
 		}
 		// Write-back is a file-output operation; its confirmation is control-plane
 		// output and goes to stderr so stdout stays free of non-data noise.
@@ -537,15 +558,8 @@ func (s *Shell) rollbackCommitted(done []stagedWrite) error {
 	var failures []error
 	for i := len(done) - 1; i >= 0; i-- {
 		w := done[i]
-		if w.backup == "" {
-			// The destination did not exist before this save created it.
-			if err := s.fs().Remove(w.target.dest); err != nil {
-				failures = append(failures, fmt.Errorf("could not remove the file this save created at %s: %w", w.target.dest, err))
-			}
-			continue
-		}
-		if err := s.fs().Copy(w.backup, w.target.dest); err != nil {
-			failures = append(failures, fmt.Errorf("could not restore %s from its backup; it now holds the new content: %w", w.target.dest, err))
+		if err := s.restoreFromBackup(w.target.dest, w.backup); err != nil {
+			failures = append(failures, err)
 		}
 	}
 	return errors.Join(failures...)
@@ -563,31 +577,47 @@ func (s *Shell) backupExisting(path string) (string, error) {
 	return s.copyToBackup(path)
 }
 
-// commitStagedFile moves a staged file onto its destination.
+// commitStagedFile moves a staged file onto its destination. It reports whether
+// the destination was touched, which is the only thing the caller cannot work
+// out for itself after a failure.
 //
 // A plain rename is the goal: it is atomic, so nothing ever sees a half-written
-// file. Windows refuses to rename over a destination another handle still has
-// open, and an in-place save overwrites exactly the files the session imported
-// from, so there the staged bytes are copied over it instead. The caller holds a
-// copy of the destination and restores it if this fails.
-func (s *Shell) commitStagedFile(staging, dest string) error {
+// file, and a rename that fails leaves the destination untouched. Windows
+// refuses to rename over a destination another handle still has open, and an
+// in-place save overwrites exactly the files the session imported from, so there
+// the staged bytes are copied over it instead.
+//
+// That fallback is not atomic and cannot be made so: it truncates the
+// destination and then writes. A disk that fills up on the third block leaves
+// the destination truncated or half-written, and no ordering of the copy avoids
+// that. So the fallback reports touched=true before it can fail, and every
+// caller of this function must hold a backup of the destination and restore it
+// when touched is true — which is why the return value exists rather than a
+// comment saying "be careful here".
+func (s *Shell) commitStagedFile(staging, dest string) (touched bool, err error) {
 	// A rename carries the staging file's own mode onto the destination, and the
 	// staging file was created 0600. Left alone, saving a world-readable CSV in
 	// place would quietly make it owner-only. Take the destination's mode first
 	// and put it on the staging file, so the rename preserves it.
 	if err := s.adoptDestinationMode(staging, dest); err != nil {
-		return err
+		return false, err
 	}
 
-	err := s.fs().Rename(staging, dest)
+	err = s.fs().Rename(staging, dest)
 	if err == nil {
-		return nil
+		return true, nil
 	}
 	if _, statErr := s.fs().Stat(dest); statErr != nil {
-		// Nothing was in the way, so the copy cannot help either.
-		return err
+		// Nothing was in the way, so the copy cannot help either, and nothing was
+		// written: a rename that fails does not create its destination.
+		return false, err
 	}
-	return s.fs().Copy(staging, dest)
+	// From here the destination may end up truncated, partly written, or whole.
+	// The caller restores it from its backup either way.
+	if copyErr := s.fs().Copy(staging, dest); copyErr != nil {
+		return true, copyErr
+	}
+	return true, nil
 }
 
 // adoptDestinationMode gives the staged file the permissions of the file it is

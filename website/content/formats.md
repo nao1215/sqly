@@ -92,10 +92,19 @@ Two workbooks may hold the same sheet name — `a.xlsx` and `b.xlsx` both with
 `Sheet1` give `a_Sheet1` and `b_Sheet1`, because the file name is part of the
 table name.
 
-> **Known limitation.** Two sheets *in one workbook* whose names sanitize to the
-> same table name — `Data` and `data`, or `a b` and `a.b` — currently collapse
-> into one table, and the last sheet wins without a warning. Rename such sheets
-> before importing.
+Two sheets of one workbook can want the same table name: `Q1 sales` and
+`Q1.sales` both sanitize to `book_Q1_sales`, and `x(1)` and `x1` both become
+`book_x1`. That import is refused before any sheet is read, naming both sheets
+and the table they share:
+
+```text
+$ sqly --sql "SELECT 1" book.xlsx
+sheets "Q1 sales" and "Q1.sales" of book.xlsx both map to table
+"book_Q1_sales"; rename one of them
+```
+
+Rename one of the sheets. (Two sheets differing only in case cannot occur —
+Excel compares sheet names case-insensitively itself.)
 
 An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.
 
@@ -106,8 +115,11 @@ A text input without a Unicode BOM is decoded as UTF-8 unless `--encoding` says 
 ## Row mismatches
 
 When a CSV or TSV row has a different field count from the header. Only CSV and
-TSV can have this problem, so `--row-mismatch` applies to those two formats and
-is ignored for the rest.
+TSV can have this problem, so `--row-mismatch` affects those two formats and no
+others. It is not silently accepted for a run it could never affect: a run whose
+inputs hold no CSV or TSV at all is rejected rather than exiting 0 having ignored
+the flag. In a mixed run it applies to the CSV and TSV inputs and leaves the
+rest alone.
 
 | `--row-mismatch` | Behavior |
 |:--|:--|

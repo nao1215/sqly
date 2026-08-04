@@ -90,10 +90,10 @@ func TestWithMainVerb_Cov(t *testing.T) {
 	}
 }
 
-// TestTablesMatchingFile_Cov confirms a single-table format claims only its exact
-// table name, while a multi-table (ACH) format also claims its "<base>_" prefixed
-// tables.
-func TestTablesMatchingFile_Cov(t *testing.T) {
+// TestTablesNamedAfterFile_Cov confirms a single-table format claims only its
+// exact table name, while a multi-table (ACH) format also claims its "<base>_"
+// prefixed names. This is name matching, used only to detect a collision.
+func TestTablesNamedAfterFile_Cov(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -101,25 +101,27 @@ func TestTablesMatchingFile_Cov(t *testing.T) {
 	defer cleanup()
 
 	csvNames := map[string]struct{}{"data": {}, "data_extra": {}}
-	got := s.tablesMatchingFile("data.csv", csvNames)
+	got := s.tablesNamedAfterFile("data.csv", csvNames)
 	if len(got) != 1 || got[0] != "data" {
-		t.Errorf("csv tablesMatchingFile = %v, want [data] only (no prefix claim)", got)
+		t.Errorf("csv tablesNamedAfterFile = %v, want [data] only (no prefix claim)", got)
 	}
 
 	achNames := map[string]struct{}{"pay": {}, "pay_entries": {}, "pay_batches": {}, "other": {}}
-	got = s.tablesMatchingFile("pay.ach", achNames)
+	got = s.tablesNamedAfterFile("pay.ach", achNames)
 	set := map[string]bool{}
 	for _, n := range got {
 		set[n] = true
 	}
 	if !set["pay"] || !set["pay_entries"] || !set["pay_batches"] || set["other"] {
-		t.Errorf("ach tablesMatchingFile = %v, want base plus pay_ prefixed tables", got)
+		t.Errorf("ach tablesNamedAfterFile = %v, want base plus pay_ prefixed tables", got)
 	}
 }
 
-// TestIsRecordedSource_Cov confirms the stdin sentinel is skipped and a real
-// recorded source path is recognized.
-func TestIsRecordedSource_Cov(t *testing.T) {
+// TestTablesFromSource_Cov pins what "this file owns these tables" means: the
+// record made at import, not a resemblance between names. The prefixed sibling
+// below is the regression — sample_test came from its own CSV, and a workbook
+// named sample must never claim it.
+func TestTablesFromSource_Cov(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -127,24 +129,38 @@ func TestIsRecordedSource_Cov(t *testing.T) {
 	defer cleanup()
 
 	dir := t.TempDir()
-	src := filepath.Join(dir, "real.csv")
-	if err := os.WriteFile(src, []byte("a\n1\n"), 0o600); err != nil {
-		t.Fatal(err)
+	book := filepath.Join(dir, "sample.xlsx")
+	sibling := filepath.Join(dir, "sample_test.csv")
+	for _, path := range []string{book, sibling} {
+		if err := os.WriteFile(path, []byte("a\n1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	s.tableSources = map[string]string{
-		"fromStdin": stdinTableSource,
-		"fromFile":  src,
+		"sample_Sheet1": book,
+		"sample_test":   sibling,
+		"fromStdin":     stdinTableSource,
 	}
+	names := map[string]struct{}{"sample_Sheet1": {}, "sample_test": {}, "fromStdin": {}}
 
-	if !s.isRecordedSource(src) {
-		t.Error("a recorded file source should be recognized")
+	got := s.tablesFromSource(book, names)
+	if len(got) != 1 || got[0] != "sample_Sheet1" {
+		t.Errorf("tablesFromSource(workbook) = %v, want only the workbook's own sheet table", got)
 	}
-	if s.isRecordedSource(filepath.Join(dir, "other.csv")) {
-		t.Error("an unrecorded path should not be recognized")
+	if got := s.tablesFromSource(sibling, names); len(got) != 1 || got[0] != "sample_test" {
+		t.Errorf("tablesFromSource(sibling) = %v, want only [sample_test]", got)
 	}
-	// The stdin sentinel must be skipped, not matched as a path.
-	if s.isRecordedSource(stdinTableSource) {
-		t.Error("the stdin sentinel must not be treated as a recorded file source")
+	if got := s.tablesFromSource(filepath.Join(dir, "other.csv"), names); len(got) != 0 {
+		t.Errorf("tablesFromSource(unrecorded) = %v, want nothing", got)
+	}
+	// The stdin sentinel is not a path and must never match one.
+	if got := s.tablesFromSource(stdinTableSource, names); len(got) != 0 {
+		t.Errorf("tablesFromSource(stdin sentinel) = %v, want nothing", got)
+	}
+	// Name resemblance alone still identifies a collision candidate, which is the
+	// only thing it is allowed to decide.
+	if got := s.tablesNamedAfterFile(book, names); len(got) != 2 {
+		t.Errorf("tablesNamedAfterFile(workbook) = %v, want both prefixed names as collision candidates", got)
 	}
 }
 

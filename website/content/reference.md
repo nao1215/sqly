@@ -34,6 +34,12 @@ sqly has no per-file syntax for them.
 | `--encoding` | csv, tsv, ltsv, json, jsonl | Excel and Parquet (they carry their own encoding), ACH and Fedwire (defined as ASCII), and the `--sql-file` script, which is always read as UTF-8 |
 | `--row-mismatch` | csv, tsv | every other format: none of them has a header row a later row can disagree with |
 
+"Does not apply to" means the option has no effect on that input, not that
+typing it is tolerated. A run whose inputs are *all* of the formats an option
+cannot affect is rejected — `--row-mismatch skip data.json` fails rather than
+exiting 0 having done nothing. A run with a CSV and a JSON accepts it and applies
+it to the CSV.
+
 A Unicode BOM wins over `--encoding`: a file that declares its own encoding is
 read the way it declares itself.
 
@@ -200,16 +206,37 @@ Two runs over the same inputs produce the same bytes:
 
 Each table carries its name, its source (a path, or `stdin` for a piped dataset),
 its row count, its columns, and its sample. Values use the same JSON encoding
-`--output-format json` uses, so SQLite's types survive:
+`--output-format json` uses:
 
 | Value | In the JSON |
 |:--|:--|
 | INTEGER, REAL | a JSON number — a 64-bit integer is emitted in full, and a consumer that parses JSON numbers as doubles will lose digits past 2^53 |
 | TEXT | a JSON string; `"123"` stays a string |
 | NULL | `null`, which is what distinguishes it from `""` |
-| BLOB | a JSON string: the bytes when they are valid UTF-8, base64 otherwise |
+| BLOB | a JSON string: the bytes when they are valid UTF-8, base64 otherwise (see below) |
 | Infinity, -Infinity, NaN | the JSON strings `"Infinity"`, `"-Infinity"`, `"NaN"`, because JSON has no way to write them |
 | Bytes that are not valid UTF-8 in a TEXT column | the invalid bytes become U+FFFD, as they already did on import |
+
+The distinction JSON keeps is number / string / null, and that is the whole of
+it. Three of the rows above land on "a JSON string", and a reader of the output
+cannot tell them apart:
+
+- a TEXT value that happens to read `"YWJj"`,
+- a BLOB holding the three bytes `abc`, which is valid UTF-8 and is written `"abc"`,
+- a BLOB holding bytes that are not valid UTF-8, which is written base64 and
+  carries no marker saying so.
+
+So **`--inspect` and `--output-format json` do not preserve the BLOB type**, and
+a program that has to distinguish a blob from text must get the type from
+elsewhere — `typeof(col)` in the query is the direct way:
+
+```shell
+sqly --output-format json --sql "SELECT typeof(payload) AS kind, payload FROM t" t.parquet
+```
+
+Base64 for the invalid-UTF-8 case is not a type tag; it is what keeps the bytes
+recoverable at all. Written as a string, every invalid byte would become U+FFFD
+and the value could not be decoded back.
 
 ## Write back
 

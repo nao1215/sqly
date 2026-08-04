@@ -211,10 +211,11 @@ func TestWriteBack_RollbackFailureIsReportedWithTheCause(t *testing.T) {
 	ops := defaultFileOps()
 	shell.files = ops
 	// The second rename fails, and so does the copy the commit falls back to, so
-	// the first commit has to be rolled back — and that restore fails too.
+	// both targets have to be rolled back — and the first one's restore fails too.
 	//
 	// Copy runs once per backup before any commit (2), then as the failed
-	// commit's fallback (3), then as the rollback's restore (4).
+	// commit's fallback (3), then as the rollback's restores, newest first: the
+	// second target (4), then the first (5).
 	rollbackErr := errors.New("restore refused")
 	shell.files.Rename = failOnNth2(2, ops.Rename, errInjected)
 	copyCalls := 0
@@ -223,7 +224,7 @@ func TestWriteBack_RollbackFailureIsReportedWithTheCause(t *testing.T) {
 		switch copyCalls {
 		case 3:
 			return errInjected
-		case 4:
+		case 5:
 			return rollbackErr
 		default:
 			return ops.Copy(src, dest)

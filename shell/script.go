@@ -57,11 +57,6 @@ func (e scriptElement) commandName() string {
 	return ""
 }
 
-// maxScriptLineBytes caps a single script line. The limit exists so a file that
-// is not a script — a binary blob, a minified blob of JSON — fails with a clear
-// message instead of being read into memory a line at a time.
-const maxScriptLineBytes = 1 << 20
-
 // parseScript splits a script into the statements and helper commands it runs.
 //
 // A line is a helper command when it begins with "." and no SQL statement is
@@ -70,6 +65,12 @@ const maxScriptLineBytes = 1 << 20
 // helper commands can alternate freely. That rule is what keeps ".save" inside a
 // string literal, inside a line comment, and inside a block comment from being
 // mistaken for the command — the text is still part of an open statement there.
+//
+// There is no limit on how long a line may be. One used to reject a line over a
+// megabyte as "not a SQL script", which protected nothing — the whole script is
+// already a string by the time it arrives here — while breaking the scripts that
+// really do have one enormous line: a dump's multi-row INSERT, a base64 literal,
+// a minified query.
 //
 // Leading whitespace before a helper command is allowed, so a script can indent
 // its commands. A helper command sharing a line with SQL is rejected: reading
@@ -85,10 +86,6 @@ func parseScript(script string) ([]scriptElement, error) {
 	)
 	for lineIndex, line := range strings.Split(script, "\n") {
 		lineNo := lineIndex + 1
-		if len(line) > maxScriptLineBytes {
-			return nil, fmt.Errorf("line %d is longer than %d bytes; this does not look like a SQL script", lineNo, maxScriptLineBytes)
-		}
-
 		if atStatementBoundary(pending.String()) {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" {

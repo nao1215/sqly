@@ -1,0 +1,240 @@
+# Session state seen from outside: what a save writes, what it leaves alone, and
+# what a re-import is allowed to change about a table that came from somewhere
+# else.
+#
+# Every scenario here is a regression. Each one passed as a unit test while the
+# binary did the wrong thing, because the wrong thing was a *sequence* — two
+# saves in one session, or an import after an import — and the unit tests
+# exercised one step at a time. That is why these live in E2E: the contract is
+# about what a second command sees of the first one's effects.
+#
+# Documented at website/content/reference.md#write-back and
+# website/content/formats.md#excel.
+version: "1"
+
+suite:
+  name: sqly session state integrity
+
+scenarios:
+  # --- .save DIR must not make the source look saved ------------------------
+  #
+  # Regression: a DIR export advanced the same "what does the source hold?"
+  # baseline an in-place save does, so the export told the session the source
+  # had caught up. The very next .save --in-place then found nothing changed and
+  # the source kept its old rows — for good, in that session.
+  - name: a .save DIR export leaves the source writable by a later in-place save
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &u
+          file: u.csv
+          content: |
+            id,name
+            1,alice
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET name = 'zoe';\n.save out\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out/u.csv
+            contains: zoe
+      - assert:
+          file:
+            path: u.csv
+            contains: zoe
+      - assert:
+          stderr:
+            not_contains: "nothing to save"
+
+  - name: reports nothing to save only once both the export and the source are current
+    env: *hist
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET name = 'zoe';\n.save out\n.save --in-place\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: u.csv
+            contains: zoe
+
+  - name: still leaves the source alone when only a DIR export runs
+    env: *hist
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly u.csv
+          stdin: "UPDATE u SET name = 'zoe';\n.save out\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out/u.csv
+            contains: zoe
+      - assert:
+          file:
+            path: u.csv
+            contains: alice
+
+  # --- a re-import owns its own tables, and only those ----------------------
+  #
+  # Regression: ownership was guessed from the table name — the file's base name
+  # plus anything starting with it. A directory holding sample.xlsx and
+  # sample_test.csv therefore let the workbook claim sample_test, so re-importing
+  # the workbook cleared the directory marker from a table it never produced and
+  # made a file the session must not write suddenly writable.
+  - name: re-importing a workbook does not make a sibling table writable
+    env: *hist
+    steps:
+      - fixture:
+          file: shop/sample.xlsx
+          from: testdata/sheets_many.xlsx
+      - fixture:
+          file: shop/sample_test.csv
+          content: |
+            id,label
+            1,from-the-csv
+      - run:
+          command: sqly ./shop
+          stdin: ".import shop/sample.xlsx\nUPDATE sample_test SET label = 'edited';\n.save --in-place\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: sample_test
+      - assert:
+          file:
+            path: shop/sample_test.csv
+            contains: from-the-csv
+      - assert:
+          file:
+            path: shop/sample_test.csv
+            not_contains: edited
+
+  # The other half of the same split: the re-import does take ownership of the
+  # tables it really did produce, so those become saveable in the same run that
+  # leaves the sibling alone. Without both halves, "nothing is ever re-owned"
+  # would pass the scenario above.
+  - name: re-importing one file of a directory takes ownership of that file only
+    env: *hist
+    steps:
+      - fixture: &shop_a
+          file: shop/a.csv
+          content: |
+            id,label
+            1,a-original
+      - fixture: &shop_b
+          file: shop/b.csv
+          content: |
+            id,label
+            1,b-original
+      - run:
+          command: sqly ./shop
+          stdin: ".import shop/a.csv\nUPDATE a SET label = 'edited';\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: shop/a.csv
+            contains: edited
+
+  - name: leaves the rest of the directory unwritable after one file is re-imported
+    env: *hist
+    steps:
+      - fixture: *shop_a
+      - fixture: *shop_b
+      - run:
+          command: sqly ./shop
+          stdin: ".import shop/a.csv\nUPDATE b SET label = 'edited';\n.save --in-place\n"
+      - assert:
+          exit_code: 1
+          file:
+            path: shop/b.csv
+            contains: b-original
+
+  - name: still lets a directly re-imported file be saved in place
+    env: *hist
+    steps:
+      - fixture:
+          file: shop/only.csv
+          content: |
+            id,label
+            1,original
+      - run:
+          command: sqly ./shop
+          stdin: ".import shop/only.csv\nUPDATE only SET label = 'edited';\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: shop/only.csv
+            contains: edited
+
+  # --- a workbook whose sheets collide is refused, not silently reduced -----
+  #
+  # Regression: "Q1 sales" and "Q1.sales" both sanitize to one table name, and
+  # the loader created them in turn, so the second sheet replaced the first and
+  # its rows were gone with the import reporting success. Fixed in filesql
+  # (v0.31.0); this pins that sqly refuses the workbook, and names both sheets.
+  - name: refuses a workbook whose two sheets map to one table
+    env: *hist
+    steps:
+      - fixture:
+          file: collide.xlsx
+          from: testdata/sheets_collide.xlsx
+      - run:
+          command: sqly --sql "SELECT 1" collide.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "Q1 sales"
+              - "Q1.sales"
+              - collide_Q1_sales
+
+  - name: imports no table at all from a colliding workbook
+    env: *hist
+    steps:
+      - fixture:
+          file: collide.xlsx
+          from: testdata/sheets_collide.xlsx
+      - run:
+          command: sqly collide.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 1
+          stdout:
+            not_contains: collide_Q1_sales
+
+  - name: still imports a workbook whose sheet names stay distinct
+    env: *hist
+    steps:
+      - fixture:
+          file: fine.xlsx
+          from: testdata/sheets_many.xlsx
+      - run:
+          command: sqly fine.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - fine_Sheet1
+              - fine_Second
+              - fine_Third
+
+  # --- a script's line length is not a limit --------------------------------
+  #
+  # Regression: a line over a megabyte was rejected as "not a SQL script", which
+  # protected nothing — the script is a string by then — and broke the scripts
+  # that really do have one long line: a dump's multi-row INSERT.
+  - name: runs a script whose INSERT is a single very long line
+    env: *hist
+    steps:
+      - run:
+          command: sh -c "python3 -c \"vals=','.join('(%d)' % i for i in range(60000)); print('CREATE TABLE big(v INTEGER);'); print('INSERT INTO big VALUES ' + vals + ';'); print('SELECT COUNT(*) AS n FROM big;')\" > big.sql && wc -c < big.sql && sqly --output-format csv --sql-file big.sql"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "60000"
