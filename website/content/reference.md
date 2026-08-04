@@ -658,7 +658,7 @@ wrong" from "that file would not load" without reading stderr.
 |:--|:--|:--|
 | `0` | success | — |
 | `1` | a statement ran and failed: a SQL error, a missing table, a constraint | the SQL |
-| `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a format that cannot carry the results | the invocation |
+| `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a script whose several result sets the chosen format cannot separate | the invocation |
 | `3` | an input could not be read: a missing path, an unsupported format, a download that failed or hit a limit, a malformed row under `--row-mismatch error` | the input |
 | `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback, a value or column set the chosen output format cannot represent — including when the destination is stdout | the destination |
 | `130` | SIGINT stopped the run — someone pressed Ctrl-C | — |
