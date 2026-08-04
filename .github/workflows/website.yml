@@ -129,7 +129,7 @@ jobs:
 
       - name: Check the reference page shows the current flags
         run: |
-          page=$(curl -fsSL --max-time 30 "${SITE}reference/?cachebust=${GITHUB_RUN_ID}")
+          page=$(curl -fsSL --max-time 30 "${SITE}reference/?cachebust=${GITHUB_RUN_ID}" | tr -s '[:space:]' ' ')
 
           # Present: flags v1.0.0 commits to. A page that lost one is a page a
           # reader cannot use to write a working command.
@@ -160,8 +160,19 @@ jobs:
           # name check cannot see, and the one that misleads a reader worst: a
           # wrapper written against the wrong exit code, or an untrusted URL run
           # on the belief that 2 GiB bounds what it can cost.
-          reference=$(curl -fsSL --max-time 30 "${SITE}reference/?cachebust=${GITHUB_RUN_ID}")
-          formats=$(curl -fsSL --max-time 30 "${SITE}formats/?cachebust=${GITHUB_RUN_ID}")
+          # Every run of whitespace is collapsed to one space before matching.
+          # Hugo keeps a Markdown paragraph's source newlines in the HTML, so a
+          # claim that wraps in the source — "not a sandbox or an SSRF\ndefense"
+          # — is not the string this step looks for, and the check failed while
+          # the page was right. The Go drift tests already flatten for exactly
+          # this reason (see flatten() in docs_drift_test.go); this makes both
+          # readers of the same claim agree.
+          fetch() {
+            curl -fsSL --max-time 30 "$1" | tr -s '[:space:]' ' '
+          }
+
+          reference=$(fetch "${SITE}reference/?cachebust=${GITHUB_RUN_ID}")
+          formats=$(fetch "${SITE}formats/?cachebust=${GITHUB_RUN_ID}")
 
           require() {
             haystack=$1
@@ -195,11 +206,11 @@ jobs:
           require "${formats}" "not a sandbox or an SSRF defense" "formats"
           require "${formats}" "--allow-remote" "formats"
 
-          dialects=$(curl -fsSL --max-time 30 "${SITE}dialects/?cachebust=${GITHUB_RUN_ID}")
+          dialects=$(fetch "${SITE}dialects/?cachebust=${GITHUB_RUN_ID}")
           require "${dialects}" "translation, not emulation" "dialects"
           require "${dialects}" "SQLite semantics" "dialects"
 
-          about=$(curl -fsSL --max-time 30 "${SITE}about/?cachebust=${GITHUB_RUN_ID}")
+          about=$(fetch "${SITE}about/?cachebust=${GITHUB_RUN_ID}")
           require "${about}" "Historical measurement" "about"
           require "${about}" "not a performance guarantee" "about"
           echo "the deployed pages state the v1.0.0 contracts"
