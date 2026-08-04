@@ -71,7 +71,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// vertical); otherwise the format (and any compression) is inferred from the
 	// destination path.
 	mode := s.state.mode.PrintMode
-	exportFmt, compression, err := model.ResolveOutputTarget(userPath, model.ExportFormatFromPrintMode(mode), !mode.IsDisplayOnly())
+	exportFmt, compression, err := resolveOutputTarget(userPath, model.ExportFormatFromPrintMode(mode), !mode.IsDisplayOnly())
 	if err != nil {
 		return err
 	}
@@ -81,10 +81,10 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// .dump, so a stray .dump cannot silently rewrite the dataset in another
 	// format.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
-		return fmt.Errorf(".dump destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)
+		return &outputPathError{Path: filePath, Err: fmt.Errorf(".dump destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)}
 	}
 	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
-		return err
+		return &outputPathError{Path: filePath, Err: err}
 	}
 	// .dump writes data to a file, so its status line is control-plane output
 	// and goes to stderr, keeping stdout free of non-data noise.

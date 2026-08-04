@@ -20,6 +20,10 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ## [Unreleased]
 
+### Breaking Changes
+
+* Four kinds of failure that exited `1` now exit `2` or `4`. `1` means a statement ran and failed, so it told a wrapper to fix the SQL; none of these four is a SQL problem. An `--output` or `.dump` destination that is one of the run's source files exits `4` (the collision the exit-code table already named). A value or column set the chosen output format cannot represent — a tab inside an LTSV field, two result columns of the same name in JSON — exits `4`, whether the result was going to a file or to stdout, because what has to change is the format or the destination. An `--output-format` that contradicts the destination's extension exits `2`, and is now decided from the command line before any input is read, so a run with a missing input still reports the conflict rather than the missing file; the same contradiction inside a script, where `.mode` is session state, exits `2` at the statement that hits it. `--inspect` with nothing to inspect exits `2`, which is where an agent expanding an empty file list into `sqly --inspect $FILES` lands. A wrapper that branched on `1` for any of these has to branch on the new code.
+
 ## [v1.0.0-rc3](https://github.com/nao1215/sqly/compare/v1.0.0-rc2...v1.0.0-rc3) (2026-08-05)
 
 A release candidate for v1.0.0, not the final one. Everything below is a change

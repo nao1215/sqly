@@ -167,6 +167,11 @@ func TestShell_runInspect_reportsNoTables(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error when there are no tables to inspect, got nil")
 	}
+	// Nothing ran, so this is a command line to fix rather than a statement that
+	// failed. A wrapper reading exit 1 here would look for SQL that never existed.
+	if got := ExitCode(err); got != ExitUsage {
+		t.Errorf("ExitCode(%v) = %d, want %d", err, got, ExitUsage)
+	}
 }
 
 // TestShell_negativeInspectSample_isRejectedBeforeTheRun records where the

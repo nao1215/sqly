@@ -202,7 +202,7 @@ scenarios:
       - run:
           command: sqly --output-format csv --sql "SELECT * FROM user WHERE identifier=1" --output user.csv user.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "--output"
 

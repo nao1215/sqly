@@ -36,7 +36,7 @@ scenarios:
       - run:
           command: sqly --output-format ltsv --output keep.ltsv --sql "SELECT a FROM tabbed" tabbed.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           file:
             path: keep.ltsv
             equals: |
@@ -53,7 +53,7 @@ scenarios:
       - run:
           command: sqly --output-format ltsv --output keep.ltsv --sql "SELECT a FROM tabbed" tabbed.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: '"keep.ltsv"'
             not_contains: "sqly-out-"
@@ -184,7 +184,7 @@ scenarios:
       - run:
           command: sqly --output-format csv --output rows.csv --sql "SELECT a FROM rows" rows.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           file:
             path: rows.csv
             contains: "a"

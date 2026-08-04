@@ -305,10 +305,15 @@ destination exactly as it was — never truncated, half-written, or removed.
 
 The checks that can run before the import do: a destination that is a directory,
 ends in a path separator, or whose parent directory does not exist is rejected
-before any input is read. A destination that resolves to one of the input files is
-rejected too — overwriting a source is `.save --in-place`'s job, not a side effect
-of `--output`. Symlinks are resolved before that comparison, so an alias cannot
-get around it.
+before any input is read, as is an `--output-format` that contradicts the
+destination's extension.
+
+A destination that resolves to one of the input files is rejected too —
+overwriting a source is `.save --in-place`'s job, not a side effect of
+`--output`. Symlinks are resolved before that comparison, so an alias cannot get
+around it. This one is not a pre-import check: which files became which tables is
+only known once they have been imported, so the inputs are read before the
+destination is refused. It exits `4` either way.
 
 An existing destination is **overwritten**. `--output` is how you name the file you
 want; it does not ask. The file's permissions are preserved when it already exists,
@@ -655,14 +660,16 @@ wrong" from "that file would not load" without reading stderr.
 | `1` | a statement ran and failed: a SQL error, a missing table, a constraint | the SQL |
 | `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a format that cannot carry the results | the invocation |
 | `3` | an input could not be read: a missing path, an unsupported format, a download that failed or hit a limit, a malformed row under `--row-mismatch error` | the input |
-| `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback | the destination |
+| `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback, a value or column set the chosen output format cannot represent — including when the destination is stdout | the destination |
 | `130` | SIGINT stopped the run — someone pressed Ctrl-C | — |
 | `143` | SIGTERM stopped the run — something else asked it to stop | — |
 
-Most code-`2` failures are decided before anything is read or written. The
-exception is a script whose result sets the chosen format cannot separate: that
-is only known once the script has run, so the inputs were read even though
-nothing was printed. A `4` means the query may already have produced results.
+Most code-`2` failures are decided before anything is read or written. Two are
+not. A script whose result sets the chosen format cannot separate is only known
+once the script has run, so the inputs were read even though nothing was
+printed. A script whose `.mode` contradicts a `.dump` destination is the same
+case: the mode is session state, so the contradiction only exists at the
+statement that hits it. A `4` means the query may already have produced results.
 
 The class is the same whether a failure happens at the top level or inside a
 script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly

@@ -92,6 +92,6 @@ scenarios:
       - run:
           command: sqly --output-format parquet --output empty.parquet --sql "SELECT user_name FROM user WHERE 1=0" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "empty result"

@@ -292,6 +292,16 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// An --output-format that contradicts the destination's extension is decided
+	// from the command line alone, so it is settled here rather than after the
+	// import: a caller whose invocation cannot mean anything should not have to
+	// read past import diagnostics for a message about two flags, and a missing
+	// input must not change the answer from "fix the command line" to "fix the
+	// file".
+	if err := s.validateOutputFormatAgainstDestination(); err != nil {
+		return err
+	}
+
 	// Excel and Parquet are binary container formats with no on-screen rendering,
 	// so a query run that selects one without a destination used to print CSV to
 	// stdout instead: the user asked for one format and silently received another.
@@ -587,6 +597,27 @@ func (s *Shell) validateBinaryOutputFormat() error {
 	default:
 		return nil
 	}
+}
+
+// validateOutputFormatAgainstDestination rejects an --output-format that
+// contradicts the extension of the --output path.
+//
+// The check runs before the import because both halves of it are on the command
+// line: no file changes the answer, so a run this rejects should read nothing.
+// Only the conflict is reported here. What else the resolution can reject —
+// compression a format cannot carry, stacked codecs — describes the destination
+// rather than the invocation, and is left to the write that would produce it.
+func (s *Shell) validateOutputFormatAgainstDestination() error {
+	if s.argument.Output.FilePath == "" {
+		return nil
+	}
+	mode := s.state.mode.PrintMode
+	_, _, err := resolveOutputTarget(s.argument.Output.FilePath, model.ExportFormatFromPrintMode(mode), !mode.IsDisplayOnly())
+	var invocationErr *invocationError
+	if errors.As(err, &invocationErr) {
+		return err
+	}
+	return nil
 }
 
 // positionalSubcommandHint reports whether the first positional argument is the
@@ -1140,8 +1171,8 @@ func (s *Shell) runScript(ctx context.Context, elements []scriptElement) (bool, 
 			s.state.mode, len(s.capturedRowsets), multiResultAdvice)}
 	}
 	for _, table := range s.capturedRowsets {
-		if err := table.Print(config.Stdout, s.state.mode.PrintMode); err != nil {
-			return ranAny, fmt.Errorf("failed to print table: %w", err)
+		if err := printResultTable(table, s.state.mode.PrintMode); err != nil {
+			return ranAny, err
 		}
 	}
 	return ranAny, nil
@@ -1250,11 +1281,48 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if s.printedResults > 0 {
 		fmt.Fprintln(config.Stdout)
 	}
-	if err := table.Print(config.Stdout, s.state.mode.PrintMode); err != nil {
-		return fmt.Errorf("failed to print table: %w", err)
+	if err := printResultTable(table, s.state.mode.PrintMode); err != nil {
+		return err
 	}
 	s.printedResults++
 	return nil
+}
+
+// stdoutDestination is the Path an outputPathError carries when the destination
+// was stdout rather than a file, so a caller reading Path always finds where the
+// result was going.
+const stdoutDestination = "stdout"
+
+// printResultTable writes table to stdout and reports a rendering failure as an
+// output failure.
+//
+// A format that cannot represent a value (a tab inside an LTSV field) or a
+// column set (two columns of the same name in JSON) is not a SQL error: the
+// statement ran and produced the rows it was asked for. What has to change is
+// the chosen --output-format or where the result goes, which is what the output
+// class tells a caller. Reporting it as a failed statement sent them back to the
+// query instead.
+func printResultTable(table *model.Table, mode model.PrintMode) error {
+	if err := table.Print(config.Stdout, mode); err != nil {
+		return &outputPathError{Path: stdoutDestination, Err: fmt.Errorf("failed to print table: %w", err)}
+	}
+	return nil
+}
+
+// resolveOutputTarget resolves path against the run's format and reports a
+// conflict between the two as a usage error.
+//
+// The conflict is a contradiction between two things the user typed — an output
+// mode and a destination extension — so nothing about the data can settle it and
+// the fix is on the command line or in the script. The rest of what
+// ResolveOutputTarget rejects is about what the destination itself can hold, and
+// keeps the class it already had.
+func resolveOutputTarget(path string, explicit model.ExportFormat, explicitSet bool) (model.ExportFormat, model.Compression, error) {
+	format, compression, err := model.ResolveOutputTarget(path, explicit, explicitSet)
+	if errors.Is(err, model.ErrOutputFormatConflict) {
+		return 0, model.CompressionNone, &invocationError{Err: err}
+	}
+	return format, compression, err
 }
 
 // outputToFile output table data to file. The export format and compression are
@@ -1269,7 +1337,7 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	}
 	mode := s.state.mode.PrintMode
 	explicit := model.ExportFormatFromPrintMode(mode)
-	exportFmt, compression, err := model.ResolveOutputTarget(s.argument.Output.FilePath, explicit, !mode.IsDisplayOnly())
+	exportFmt, compression, err := resolveOutputTarget(s.argument.Output.FilePath, explicit, !mode.IsDisplayOnly())
 	if err != nil {
 		return err
 	}
@@ -1278,15 +1346,20 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	// destructive source write must go through .save --in-place, not a one-off
 	// export, so a stray --output cannot silently destroy the dataset.
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
-		return fmt.Errorf("--output destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)
+		return &outputPathError{Path: filePath, Err: fmt.Errorf("--output destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)}
 	}
 	// The result is serialized beside the destination and moved onto it, so a
 	// format that rejects a value part-way — or a full disk — leaves an existing
 	// file whole rather than truncated. .save writes through the same steps.
+	//
+	// Everything this can fail at is about the destination: a value the format
+	// cannot hold, a staging file that could not be written, a commit that did
+	// not land. The wrapper carries no text of its own, so the message stays the
+	// one the failing step produced.
 	if err := s.writeFileAtomically(filePath, func(staging string) error {
 		return s.usecases.export.DumpTable(staging, table, exportFmt, compression)
 	}); err != nil {
-		return err
+		return &outputPathError{Path: filePath, Err: err}
 	}
 	// Status for a file-output operation is control-plane information; the data
 	// went to the file, so keep stdout empty and report progress on stderr.

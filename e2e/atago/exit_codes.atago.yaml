@@ -181,6 +181,155 @@ scenarios:
       - assert:
           exit_code: 4
 
+  # A destination that is also one of the run's inputs is the collision the
+  # contract names under 4. It used to exit 1, which told a wrapper to fix the
+  # SQL when the SQL was fine and the destination was the problem.
+  - name: an --output destination that is a source file exits 4
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly --output staff.csv --sql "SELECT 1" staff.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: 'is the source file for table "staff"'
+
+  - name: a .dump destination that is a source file exits 4
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly staff.csv
+          stdin: ".dump staff staff.csv\n"
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: 'is the source file for table "staff"'
+
+  # A format the results cannot be carried in is not a SQL error: the fix is a
+  # different --output-format or a different destination, so it belongs with the
+  # other output failures rather than with the statements that ran and failed.
+  - name: a value LTSV cannot represent exits 4 on stdout
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly --output-format ltsv --sql "SELECT 'a' || char(9) || 'b' AS x" staff.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "contains a tab or newline"
+
+  - name: a value LTSV cannot represent exits 4 when writing a file
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly --output-format ltsv --output bad.ltsv --sql "SELECT 'a' || char(9) || 'b' AS x" staff.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "contains a tab or newline"
+
+  - name: a column set JSON cannot represent exits 4
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly --output-format json --sql "SELECT name AS c, dept AS c FROM staff" staff.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "json output requires unique column names"
+
+  - name: a column set LTSV cannot represent exits 4
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly --output-format ltsv --sql "SELECT name AS c, dept AS c FROM staff" staff.csv
+      - assert:
+          exit_code: 4
+
+  # --output-format against the destination extension is decided from argv
+  # alone, so it is a usage error and it is settled before anything is read.
+  - name: an --output-format that contradicts the destination extension exits 2
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly --output-format csv --output m.json --sql "SELECT 1" staff.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "does not match destination extension"
+
+  # The decisive case: with an input that does not exist, a run that still
+  # reports 2 proved it decided before the import. A 3 here means the conflict
+  # is being evaluated after the files are read.
+  - name: an --output-format conflict is decided before any input is read
+    steps:
+      - run:
+          command: sqly --output-format csv --output m.json --sql "SELECT 1" nosuch.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            empty: true
+          stderr:
+            not_contains: "Import failed"
+
+  # The same conflict inside a script depends on session state (.mode), so it
+  # can only be seen when the statement runs. It is still a script sqly will not
+  # accept, which is 2.
+  - name: a .mode that contradicts a .dump destination exits 2
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sqly staff.csv
+          stdin: ".mode csv\n.dump staff z.json\n"
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "does not match destination extension"
+
+  # --inspect with nothing to inspect ran no statement at all, so 1 would send a
+  # wrapper looking for a SQL error. An agent expanding an empty file list into
+  # `sqly --inspect $FILES` lands here.
+  - name: --inspect with no inputs exits 2
+    steps:
+      - run:
+          command: sqly --inspect
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "no tables to inspect"
+
   # 1: the invocation and the data were both fine and a statement failed. This
   # is the only class where the SQL itself is what needs changing.
   - name: a query against a table that does not exist exits 1

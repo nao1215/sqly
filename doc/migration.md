@@ -7,6 +7,43 @@ The [CHANGELOG](../CHANGELOG.md) records every change. This file records the one
 that require an edit to a command line, a script, or a program that reads sqly's
 output.
 
+## v1.0.0-rc3 → v1.0.0-rc4
+
+### Four failures moved off exit code `1`
+
+`1` means a statement ran and failed, so a wrapper reading it goes back to the
+SQL. Four failures that had nothing to do with SQL were reported that way and now
+carry the code that says what to fix.
+
+| Failure | Before | Now |
+|:--|:--|:--|
+| `--output` or `.dump` names one of the run's source files | `1` | `4` |
+| the output format cannot represent a value or a column set, to a file or to stdout | `1` | `4` |
+| `--output-format` contradicts the destination's extension | `1` | `2` |
+| `--inspect` with no input files | `1` | `2` |
+
+**What to change:** a wrapper that branched on `1` for any of these branches on
+the new code. Nothing about the messages changed, so one matching on stderr text
+needs nothing.
+
+The format conflict also moved earlier. It is decided from the command line
+before any input is read, so a run that names both a contradiction and a missing
+file now reports the contradiction:
+
+```text
+Before rc4:
+  sqly --output-format csv --output m.json --sql "SELECT 1" nosuch.csv
+  # exit 3, "Import failed" on stderr
+
+From rc4:
+  sqly --output-format csv --output m.json --sql "SELECT 1" nosuch.csv
+  # exit 2, nothing imported
+```
+
+The same contradiction inside a script — a `.mode` that disagrees with a `.dump`
+destination — stays a runtime check, because the mode is session state. It exits
+`2` at the statement that hits it.
+
 ## v1.0.0-rc2 → v1.0.0-rc3
 
 Two defaults changed, in the same direction and for the same reason: sqly is run
