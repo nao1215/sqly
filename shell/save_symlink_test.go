@@ -3,7 +3,6 @@ package shell
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -149,16 +148,18 @@ func TestSave_RejectsFollowSymlinksWithADirectory(t *testing.T) {
 	}
 }
 
-// requireSymlinks skips a test where symlinks cannot be created. Unprivileged
-// Windows accounts without developer mode cannot make them, and a skip there is
-// honest where a failure would only report the runner's configuration.
+// requireSymlinks skips a test where symlinks cannot be created, so a failure
+// always means the policy is wrong rather than that the runner would not let the
+// test set itself up.
+//
+// The probe runs everywhere rather than only on Windows. An unprivileged Windows
+// account without developer mode is the usual case, but it is not the only one —
+// a restricted container or a filesystem mounted without symlink support says no
+// on Linux too — and asking is both cheaper and more honest than assuming.
 func requireSymlinks(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "windows" {
-		return
-	}
 	dir := t.TempDir()
 	if err := os.Symlink(filepath.Join(dir, "a"), filepath.Join(dir, "b")); err != nil {
-		t.Skipf("this account cannot create symlinks: %v", err)
+		t.Skipf("this environment cannot create symlinks: %v", err)
 	}
 }
