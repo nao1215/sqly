@@ -56,6 +56,10 @@ scenarios:
 
   # Write back: CSV, TSV, LTSV, and Parquet can, and compression is preserved.
   - name: writes a compressed csv source back in the same compression
+    # Needs gzip(1)/bzip2(1) and a POSIX shell; the compression handling
+    # itself is not platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: t.csv
@@ -97,6 +101,10 @@ scenarios:
   # Compressed Parquet reads but cannot be written back: Parquet already
   # compresses internally, and .save will not produce a doubly compressed file.
   - name: reads a compressed parquet source but refuses to write it back
+    # Needs gzip(1)/bzip2(1) and a POSIX shell; the compression handling
+    # itself is not platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: t.csv
@@ -122,6 +130,10 @@ scenarios:
   # A bzip2 source cannot be written back at all: there is no bzip2 writer, and
   # the refusal comes before anything is touched.
   - name: refuses a bzip2 source before touching it
+    # Needs gzip(1)/bzip2(1) and a POSIX shell; the compression handling
+    # itself is not platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: t.csv
