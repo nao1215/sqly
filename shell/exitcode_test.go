@@ -222,6 +222,6 @@ func TestRun_StdinScriptReadObservesCancellation(t *testing.T) {
 			t.Errorf("ExitCode = %d, want %d (%v)", got, ExitInterrupt, runErr)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("Run did not return after the context was cancelled; the stdin read ignores cancellation")
+		t.Fatal("Run did not return after the context was canceled; the stdin read ignores cancellation")
 	}
 }
