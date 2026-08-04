@@ -1126,7 +1126,7 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	excelRepo := persistence.NewExcelRepository()
 	fileRepo := persistence.NewFileRepository()
 
-	// Use memory-based sqlite3 repository matching production wiring (di/wire_gen.go)
+	// Use memory-based sqlite3 repository matching production wiring (di/di.go)
 	sqlite3Repository := memory.NewSQLite3Repository(memoryDB)
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)

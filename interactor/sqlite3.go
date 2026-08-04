@@ -1,3 +1,4 @@
+// Package interactor implements the usecase layer.
 package interactor
 
 import (

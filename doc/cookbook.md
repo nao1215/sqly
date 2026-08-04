@@ -117,9 +117,11 @@ sqly --sql "
 ```
 
 They are loaded as one operation, not one after another. If any input is
-unreadable or malformed, none of the files in that import are committed: the
-tables from the files that were fine are rolled back, the files after the bad
-one are never read, and the session is left exactly as it was.
+unreadable or malformed, no table and no session metadata from that import is
+committed: the tables from the files that were fine are rolled back. Inputs may
+already have been resolved or downloaded by then — that work happens before the
+load — but the temporary resources it produced are cleaned up, and the session
+is left exactly as it was.
 
 ```text
 $ sqly --sql "SELECT * FROM users" users.csv broken.xlsx orders.csv
