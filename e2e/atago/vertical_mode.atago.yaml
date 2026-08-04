@@ -121,7 +121,7 @@ scenarios:
       - run:
           command: sqly --output-format unsupported --sql "SELECT 1" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 

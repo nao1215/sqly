@@ -82,7 +82,7 @@ scenarios:
       - run:
           command: sqly --inspect stable.csv --output-format table
       - assert:
-          exit_code: 1
+          exit_code: 2
       - run:
           command: sh -c "sqly --inspect stable.csv > one.json && sqly --inspect stable.csv > two.json && cmp one.json two.json"
           shell: true

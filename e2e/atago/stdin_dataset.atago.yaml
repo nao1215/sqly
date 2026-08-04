@@ -117,7 +117,7 @@ scenarios:
             id,name
             1,alice
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             not_contains: affected
           stderr:
@@ -134,7 +134,7 @@ scenarios:
             id,name
             1,alice
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "stdin-table"
 
@@ -146,7 +146,7 @@ scenarios:
             a
             1
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "stdin-table"
           file:

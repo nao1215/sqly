@@ -139,7 +139,7 @@ scenarios:
       - run:
           command: sqly --stdin-table weird --output-format csv --sql "SELECT 1 AS x"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "stdin-table"
 
@@ -148,7 +148,7 @@ scenarios:
       - run:
           command: sqly --inspect-sample 0 --output-format csv --sql "SELECT 1 AS x"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "inspect-sample"
 
@@ -158,7 +158,7 @@ scenarios:
       - run:
           command: sqly --inspect --output-format csv user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: inspect
 
@@ -194,7 +194,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1 AS x" --output "outdir/" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: separator
 
@@ -204,7 +204,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT identifier FROM user LIMIT 1" --output out.ach user.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "input-only"
 

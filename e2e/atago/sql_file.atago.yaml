@@ -86,7 +86,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" --sql-file q.sql actor.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--sql-file"
 
@@ -96,7 +96,7 @@ scenarios:
       - run:
           command: sqly --sql-file no_such.sql actor.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: "sql-file"
 
@@ -109,7 +109,7 @@ scenarios:
       - run:
           command: sqly --sql-file empty.sql actor.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: empty
 

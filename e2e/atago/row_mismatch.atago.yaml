@@ -20,7 +20,7 @@ scenarios:
       - run:
           command: sqly --output-format json --sql "SELECT name FROM ragged" ragged.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             empty: true
           stderr:
@@ -66,7 +66,7 @@ scenarios:
       - run:
           command: sqly --row-mismatch pad --sql "SELECT * FROM too_many_fields" too_many_fields.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stdout:
             empty: true
           stderr:
@@ -77,7 +77,7 @@ scenarios:
       - run:
           command: sqly --row-mismatch keep --sql "SELECT 1"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "invalid row-mismatch policy"
 
@@ -124,7 +124,7 @@ scenarios:
       - run:
           command: sqly --row-mismatch skip --sql "SELECT 1" docs.jsonl
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:

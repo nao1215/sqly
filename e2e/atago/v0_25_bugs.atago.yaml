@@ -22,7 +22,7 @@ scenarios:
       - run:
           command: sqly --sql "" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--sql requires a non-empty SQL statement"
 
@@ -33,7 +33,7 @@ scenarios:
           command: sqly
           stdin: "\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "no TTY detected"
 
@@ -45,7 +45,7 @@ scenarios:
           command: sqly user.csv
           stdin: "\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "no TTY detected"
 
@@ -56,7 +56,7 @@ scenarios:
           command: sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
           stdin: "\n"
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: "stdin (--stdin-format csv)"
 
@@ -167,7 +167,7 @@ scenarios:
       - run:
           command: sqly help
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains:
               - "--help"
@@ -182,7 +182,7 @@ scenarios:
       - run:
           command: sqly version
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--version"
       - assert:

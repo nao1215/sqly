@@ -73,6 +73,6 @@ scenarios:
       - run:
           command: sqly --sql "SELECT * FROM payment_entries" --output out.ach payment.ach
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "input-only"

@@ -58,7 +58,7 @@ scenarios:
       - run:
           command: sqly --inspect hosts_alias.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: "system directory not allowed"
 

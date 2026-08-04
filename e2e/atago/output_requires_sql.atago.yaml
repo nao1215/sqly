@@ -25,7 +25,7 @@ scenarios:
       - run:
           command: sqly user.csv --output out.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--output requires --sql"
           file:
@@ -43,7 +43,7 @@ scenarios:
           command: sqly user.csv --output out.csv
           stdin: "SELECT user_name FROM user ORDER BY identifier LIMIT 1\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--output requires --sql"
           file:

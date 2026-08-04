@@ -402,7 +402,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT * FROM user LIMIT 1" --output out.ach.gz.zst user.csv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "ACH/Fedwire"
           file:
@@ -457,6 +457,6 @@ scenarios:
       - run:
           command: sqly --sql "SELECT * FROM dup" dup.ltsv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             empty: false

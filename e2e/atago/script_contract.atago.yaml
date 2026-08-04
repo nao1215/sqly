@@ -36,7 +36,7 @@ scenarios:
       - run:
           command: sqly --sql-file save.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains:
               - "line 2"
@@ -58,7 +58,7 @@ scenarios:
       - run:
           command: sqly --sql-file imp.sql
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains:
               - "line 1"
@@ -77,7 +77,7 @@ scenarios:
       - run:
           command: sqly --sql-file mode.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains:
               - "line 3"
@@ -95,7 +95,7 @@ scenarios:
       - run:
           command: sqly --sql-file mixed.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           file:
             path: out
             exists: false
@@ -223,7 +223,7 @@ scenarios:
           command: sqly user.csv
           stdin: "SELECT 1; .tables\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "must start its own line"
 
@@ -325,7 +325,7 @@ scenarios:
           command: sqly --stdin-format csv
           stdin: "a\n1\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "no script to run"
 
@@ -340,6 +340,6 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" --sql-file q.sql user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "cannot be used together"

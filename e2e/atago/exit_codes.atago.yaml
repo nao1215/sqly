@@ -1,0 +1,227 @@
+# The exit code contract. A wrapper that runs sqly from a shell script or CI has
+# one question when it fails: whose fault was it. Each class below is a different
+# answer and a different next step, so they are checked against the real binary —
+# a unit test on the classifier cannot see the code the process actually returns.
+#
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly exit code contract
+
+scenarios:
+  - name: a run that succeeds exits 0
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --sql "SELECT actor FROM actor" actor.csv
+      - assert:
+          exit_code: 0
+
+  # 2: the command line or the script is not acceptable. Nothing was read and
+  # nothing was written, so the fix is always on the command line.
+  - name: an unknown flag exits 2
+    steps:
+      - run:
+          command: sqly --no-such-flag
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "unknown flag"
+
+  - name: no arguments and no stdin script exits 2
+    steps:
+      - run:
+          command: sqly
+          stdin: ""
+      - assert:
+          exit_code: 2
+
+  - name: two flags that contradict exit 2
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --inspect --sql "SELECT 1" actor.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "--inspect cannot be combined with --sql"
+
+  - name: a binary output format with nowhere to write it exits 2
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --output-format parquet --sql "SELECT 1" actor.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "add --output FILE"
+
+  - name: a helper command in a SQL file exits 2
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT 1;
+            .save --in-place
+      - run:
+          command: sqly --sql-file q.sql actor.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "helper command"
+
+  - name: two results in a format that cannot separate them exits 2
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT 1;
+            SELECT 2;
+      - run:
+          command: sqly --output-format csv --sql-file q.sql actor.csv
+      - assert:
+          exit_code: 2
+
+  # 3: an input could not be read. The command line was fine; a different file,
+  # or a fixed one, is the next step.
+  - name: an input path that does not exist exits 3
+    steps:
+      - run:
+          command: sqly no_such_file.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "path does not exist"
+
+  - name: one missing input among several exits 3
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --sql "SELECT 1" actor.csv no_such_file.csv
+      - assert:
+          exit_code: 3
+
+  - name: a --sql-file that does not exist exits 3
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --sql-file no_such_query.sql actor.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "--sql-file"
+
+  # 4: a destination could not be written. Results may already have been
+  # produced, so a retry has to consider what is on disk.
+  - name: an output destination whose parent is missing exits 4
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --sql "SELECT 1" --output no_such_dir/out.csv actor.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "does not exist"
+
+  - name: saving a table with no file behind it exits 4
+    steps:
+      - run:
+          command: sqly --stdin-format csv --stdin-table piped
+          stdin: |
+            a,b
+            1,2
+      - assert:
+          exit_code: 2
+
+  - name: a save to a source format sqly cannot write exits 4
+    steps:
+      - fixture:
+          file: rows.json
+          content: |
+            {"a": 1}
+      - run:
+          command: sqly rows.json
+          stdin: "UPDATE rows SET data = '{\"a\": 2}';\n.save --in-place\n"
+      - assert:
+          exit_code: 4
+
+  # 1: the invocation and the data were both fine and a statement failed. This
+  # is the only class where the SQL itself is what needs changing.
+  - name: a query against a table that does not exist exits 1
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --sql "SELECT * FROM no_such_table" actor.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such table"
+
+  - name: a syntax error in a piped script exits 1
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly actor.csv
+          stdin: "SELECT FROM WHERE;\n"
+      - assert:
+          exit_code: 1
+
+  # The classes must stay distinct: results go to stdout and every diagnostic to
+  # stderr, so a pipeline that reads stdout never sees an error message.
+  - name: a failing run writes nothing to stdout
+    steps:
+      - fixture:
+          file: actor.csv
+          content: |
+            actor,age
+            Ken,40
+      - run:
+          command: sqly --sql "SELECT * FROM no_such_table" actor.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true

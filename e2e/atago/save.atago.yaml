@@ -173,7 +173,7 @@ scenarios:
           command: sqly
           stdin: ".save --in-place\n"
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains:
               - "no tables to save"

@@ -22,6 +22,6 @@ scenarios:
       - run:
           command: sqly --inspect a-b.csv a_b.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: collision

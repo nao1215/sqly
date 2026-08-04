@@ -42,6 +42,19 @@ func (e *partialImportError) Error() string {
 // Unwrap exposes errPartialImport so errors.Is keeps matching the sentinel.
 func (e *partialImportError) Unwrap() error { return errPartialImport }
 
+// importFailedError is an import where nothing loaded: every requested input
+// failed. It is the same class of problem as a partial import — an input sqly
+// could not read — and is a type for the same reason, so the exit code is
+// decided from what happened rather than from the shape of the message.
+type importFailedError struct {
+	failed  int
+	summary string
+}
+
+func (e *importFailedError) Error() string {
+	return fmt.Sprintf("all %d import(s) failed: %s", e.failed, e.summary)
+}
+
 // importCommand imports files into the in-memory database.
 // Each file/directory is loaded individually so that same-name tables from
 // different directories are overwritten (last-wins) rather than failing.
@@ -115,7 +128,7 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		// drop context already computed here.
 		summary := summarizeImportErrors(errorMessages)
 		if successCount == 0 {
-			return fmt.Errorf("all %d import(s) failed: %s", len(errorMessages), summary)
+			return &importFailedError{failed: len(errorMessages), summary: summary}
 		}
 		// A requested input failed while others succeeded. Return a
 		// partialImportError so non-interactive runs exit non-zero and callers can

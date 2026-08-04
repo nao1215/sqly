@@ -355,10 +355,29 @@ A name that collides with a SQLite keyword is imported and a warning names it; q
 
 ## Exit codes
 
-| Code | Meaning |
-|:--|:--|
-| `0` | success |
-| `1` | an import, a query, a write, or a batch statement failed |
+A failing run says which stage failed, so a script can tell "the command line was
+wrong" from "that file would not load" without reading stderr.
+
+| Code | Meaning | What to change |
+|:--|:--|:--|
+| `0` | success | — |
+| `1` | a statement ran and failed: a SQL error, a missing table, a constraint | the SQL |
+| `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a format that cannot carry the results | the invocation |
+| `3` | an input could not be read: a missing path, an unsupported format, a download that failed or hit a limit, a malformed row under `--row-mismatch error` | the input |
+| `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback | the destination |
+| `130` | SIGINT or SIGTERM stopped the run | — |
+
+Codes `2`, `3`, and `4` are decided before or during the stage they name, so a `2`
+means nothing was read and nothing was written. A `4` means the query may already
+have produced results.
+
+The class is the same whether a failure happens at the top level or inside a
+script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly
+as it does on its own.
+
+An interrupted run cancels the query and returns through the normal cleanup, so
+the temp directories a download or a staged stdin dataset created are removed
+before sqly exits.
 
 Errors go to stderr; query results go to stdout, so a pipeline stays clean.
 

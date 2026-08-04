@@ -119,7 +119,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" blank.xlsx
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: "produced no table"
       - assert:
@@ -136,7 +136,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" broken.xlsx
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: broken.xlsx
 

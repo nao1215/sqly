@@ -44,12 +44,12 @@ var delimitedImportExtensions = map[string]bool{
 // run reads no file and writes nothing.
 func (s *Shell) validateOptionApplicability() error {
 	if s.argument.IsExplicit("encoding") && !s.hasInputMatching(textImportExtensions) {
-		return fmt.Errorf("--encoding %s applies to csv, tsv, ltsv, json, and jsonl inputs, and this run has none; drop the flag",
-			s.argument.Encoding)
+		return &invocationError{Err: fmt.Errorf("--encoding %s applies to csv, tsv, ltsv, json, and jsonl inputs, and this run has none; drop the flag",
+			s.argument.Encoding)}
 	}
 	if s.argument.IsExplicit("row-mismatch") && !s.hasInputMatching(delimitedImportExtensions) {
-		return fmt.Errorf("--row-mismatch %s applies to csv and tsv inputs, and this run has none; drop the flag",
-			s.argument.RowMismatch)
+		return &invocationError{Err: fmt.Errorf("--row-mismatch %s applies to csv and tsv inputs, and this run has none; drop the flag",
+			s.argument.RowMismatch)}
 	}
 	return nil
 }

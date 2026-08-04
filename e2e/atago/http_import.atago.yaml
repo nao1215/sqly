@@ -74,7 +74,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" s3://bucket/data.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains:
               - 's3://bucket/data.csv'
@@ -91,7 +91,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" file:///tmp/user.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains:
               - "file"
@@ -105,7 +105,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" weird:name.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: "path does not exist"
             not_contains: "only http and https URLs"

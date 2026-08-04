@@ -41,7 +41,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1" does_not_exist.csv
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: does not exist
 
@@ -64,7 +64,7 @@ scenarios:
       - run:
           command: sqly --no-such-flag
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "unknown flag"
 
@@ -78,7 +78,7 @@ scenarios:
       - run:
           command: sqly --output-format unsupported --sql "SELECT 1" user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "invalid output format"
 
@@ -152,6 +152,6 @@ scenarios:
       - run:
           command: sqly user.csv --nope
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "unknown flag"

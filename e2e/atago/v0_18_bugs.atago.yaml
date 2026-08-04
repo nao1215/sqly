@@ -12,7 +12,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT 1 AS x" --output ""
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--output"
 
@@ -21,7 +21,7 @@ scenarios:
       - run:
           command: sqly --sql-file ""
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--sql-file"
 
@@ -33,7 +33,7 @@ scenarios:
             id,name
             1,a
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--stdin-format"
 
@@ -42,7 +42,7 @@ scenarios:
       - run:
           command: sqly --output-format unsupported --sql "SELECT 1 AS x"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "invalid output format"
 
@@ -69,7 +69,7 @@ scenarios:
       - run:
           command: sqly --sql "UPDATE u SET first_name='X' WHERE identifier=1" --output out.csv u.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--output"
           file:
@@ -99,7 +99,7 @@ scenarios:
       - run:
           command: sqly --sql-file q.sql
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "no executable"
 
@@ -139,7 +139,7 @@ scenarios:
             id,name
             1,a
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--stdin-format"
 
@@ -174,7 +174,7 @@ scenarios:
       - run:
           command: sqly --inspect dir
       - assert:
-          exit_code: 1
+          exit_code: 3
           stderr:
             contains: collision
 
@@ -215,7 +215,7 @@ scenarios:
             UPDATE user SET first_name='P' WHERE identifier=1;
             .save .
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: source
 
@@ -237,7 +237,7 @@ scenarios:
             UPDATE user SET first_name='Q' WHERE identifier=1;
             .save out
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "already exists"
 
@@ -254,7 +254,7 @@ scenarios:
             UPDATE sample_test_sheet SET name='X' WHERE id=1;
             .save out
       - assert:
-          exit_code: 1
+          exit_code: 4
           stdout:
             not_contains: affected
           stderr:
