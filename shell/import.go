@@ -319,17 +319,35 @@ func (s *Shell) clearDirImported(names []string) {
 	}
 }
 
+// absoluteSource is the one spelling --inspect gives an input: an absolute file
+// path, or the URL a remote input was downloaded from, left exactly as it was.
+//
+// It is a single function because two fields of the report carry it —
+// tables[].source and excel_sheets[].source — and the only way to join them is
+// string equality. While one of them normalized and the other did not,
+// `sqly --inspect book.xlsx` called the same file "/abs/path/book.xlsx" in one
+// field and "book.xlsx" in the other, and a consumer holding both could not tell
+// they were the same workbook.
+//
+// A path that cannot be made absolute is returned as it came. There is nothing
+// better to say about it, and it is not worth failing a report over.
+func absoluteSource(source string) string {
+	if isRemoteURL(source) {
+		return source
+	}
+	if abs, err := filepath.Abs(source); err == nil {
+		return abs
+	}
+	return source
+}
+
 // recordTableSources maps each table to the file it was read from, which is what
 // --inspect reports and what write-back writes to. The path is made absolute so
 // it still names the right file after .cd. A table loaded as part of a directory
 // import records that file too; whether it came from a directory is a separate
 // mark (see markDirImported), because they answer different questions.
 func (s *Shell) recordTableSources(ctx context.Context, tableNames []string, source string) {
-	if !isRemoteURL(source) {
-		if abs, err := filepath.Abs(source); err == nil {
-			source = abs
-		}
-	}
+	source = absoluteSource(source)
 	if s.tableSources == nil {
 		s.tableSources = make(map[string]string)
 	}

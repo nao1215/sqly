@@ -492,9 +492,15 @@ it has sheets, and nothing in `tables` says what is missing.
 `--include-hidden-sheets` turns `imported` true for a sheet whose `visible` stays
 false. `table` is absent for a sheet that was not imported, because there is no
 table to name. The array is absent entirely for a run with no workbook among its
-inputs, so a consumer reading only `tables` sees what it always saw. Sources are
-sorted by name and each workbook's sheets stay in the order the workbook stores
-them, so two runs over the same inputs still produce the same bytes.
+inputs, so a consumer reading only `tables` sees what it always saw.
+
+`source` is the same string here as in the `tables` entries that workbook
+produced — an absolute file path, or the URL that was downloaded — whatever the
+workbook was called on the command line. `sqly --inspect book.xlsx`,
+`sqly --inspect ./book.xlsx`, and `sqly --inspect "$PWD/book.xlsx"` all report the
+same path, so the two arrays can be joined on it. Sources are sorted by that
+value and each workbook's sheets stay in the order the workbook stores them, so
+two runs over the same inputs still produce the same bytes.
 
 Values use the same JSON encoding `--output-format json` uses:
 

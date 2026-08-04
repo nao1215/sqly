@@ -82,7 +82,7 @@
       "required": ["source", "name", "visible", "imported"],
       "properties": {
         "source": {
-          "description": "The workbook the sheet belongs to.",
+          "description": "The workbook the sheet belongs to, spelled exactly as the corresponding tables[].source: an absolute file path, or the URL that was downloaded.",
           "type": "string"
         },
         "name": {

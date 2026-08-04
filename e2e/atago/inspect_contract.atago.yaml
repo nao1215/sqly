@@ -261,3 +261,83 @@ scenarios:
           exit_code: 0
           stdout:
             contains: '"name": "stdin"'
+
+  # A workbook is named twice in the report: once as the source of each table it
+  # produced, and once as the source of each sheet it held. The two have to be
+  # the same string, or nothing can join them. tables[].source was made absolute
+  # and excel_sheets[].source was left as typed, so `sqly --inspect book.xlsx`
+  # answered "/abs/path/book.xlsx" and "book.xlsx" for the same file.
+  #
+  # The invariant is checked rather than the literal path: the workdir is a temp
+  # directory whose name is not known here, and on macOS it is reached through a
+  # symlink, so the absolute path sqly computes is not the one the spec could
+  # spell. What matters is that the two fields agree and that the answer does not
+  # depend on how the workbook was spelled on the command line.
+  - name: spells a workbook the same way in excel_sheets and in tables
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: &workbook
+          file: book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - fixture: &sourcecheck
+          file: check.py
+          content: |
+            import json
+
+            def sources(doc, key):
+                return sorted({row["source"] for row in doc.get(key, [])})
+
+            docs = {label: json.load(open(path)) for label, path in
+                    (("relative", "rel.json"), ("dot", "dot.json"), ("absolute", "abs.json"))}
+            sheets = {label: sources(doc, "excel_sheets") for label, doc in docs.items()}
+            tables = {label: sources(doc, "tables") for label, doc in docs.items()}
+
+            spelled = list(sheets.values())
+            print("identical" if spelled[0] == spelled[1] == spelled[2] else "differ: {}".format(sheets))
+            print("matches-tables" if all(sheets[k] == tables[k] for k in docs) else
+                  "unmatched: {} vs {}".format(sheets, tables))
+            print("absolute" if all(s.startswith("/") for s in spelled[0]) else "not-absolute: {}".format(spelled[0]))
+            print("one-source" if all(len(v) == 1 for v in spelled) else "split: {}".format(sheets))
+      - run:
+          command: sh -c 'sqly --inspect book.xlsx > rel.json; sqly --inspect ./book.xlsx > dot.json; sqly --inspect "$PWD/book.xlsx" > abs.json; python3 check.py'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - identical
+              - matches-tables
+              - absolute
+              - one-source
+
+  # A directory import reaches the same workbook through a path nobody typed, so
+  # it is the case where "as the user wrote it" has no answer at all.
+  - name: spells a workbook found through a directory the same way in both fields
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: xl/book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - fixture:
+          file: check_dir.py
+          content: |
+            import json
+
+            doc = json.load(open("dir.json"))
+            sheets = sorted({row["source"] for row in doc.get("excel_sheets", [])})
+            tables = sorted({row["source"] for row in doc.get("tables", [])})
+            print("matches-tables" if sheets == tables else "unmatched: {} vs {}".format(sheets, tables))
+            print("absolute" if all(s.startswith("/") for s in sheets) else "not-absolute: {}".format(sheets))
+      - run:
+          command: sh -c 'sqly --inspect xl/ > dir.json; python3 check_dir.py'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - matches-tables
+              - absolute
