@@ -15,7 +15,12 @@ import (
 // inspectReportForTest mirrors the JSON contract produced by --inspect so tests
 // can decode and assert it without depending on output formatting.
 type inspectReportForTest struct {
-	Tables []struct {
+	// SchemaVersion is decoded as json.Number so a test can tell the number 1
+	// from the string "1". A plain int would accept neither, and an `any` would
+	// silently accept both.
+	SchemaVersion json.Number `json:"schema_version"`
+	SqlyVersion   string      `json:"sqly_version"`
+	Tables        []struct {
 		Name     string `json:"name"`
 		Source   string `json:"source"`
 		RowCount int64  `json:"row_count"`
@@ -27,6 +32,23 @@ type inspectReportForTest struct {
 		} `json:"columns"`
 		SampleRows []map[string]any `json:"sample_rows"`
 	} `json:"tables"`
+}
+
+// runInspectRaw builds a shell from args, runs it, and returns raw stdout, for a
+// test that asserts on the document rather than on the decoded values.
+func runInspectRaw(t *testing.T, args []string) string {
+	t.Helper()
+	shell, cleanup, err := newShell(t, args)
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanup()
+
+	return captureStdout(t, func() {
+		if err := shell.Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
 }
 
 func TestOutputModeFlagName(t *testing.T) {
@@ -102,7 +124,7 @@ func TestInspect_SingleFile(t *testing.T) {
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\nBob,25\n")
 
-	report := runInspectJSON(t, []string{"sqly", "--inspect", csv})
+	report := runInspectJSON(t, []string{"sqly", "--inspect", "--inspect-sample", "2", csv})
 
 	if len(report.Tables) != 1 {
 		t.Fatalf("expected 1 table, got %d: %+v", len(report.Tables), report.Tables)
@@ -149,7 +171,7 @@ func TestInspect_SampleRowsAreLimited(t *testing.T) {
 	content := "id\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
 	csv := writeCSV(t, dir, "nums.csv", content)
 
-	report := runInspectJSON(t, []string{"sqly", "--inspect", csv})
+	report := runInspectJSON(t, []string{"sqly", "--inspect", "--inspect-sample", "3", csv})
 
 	if len(report.Tables) != 1 {
 		t.Fatalf("expected 1 table, got %d", len(report.Tables))
@@ -158,8 +180,8 @@ func TestInspect_SampleRowsAreLimited(t *testing.T) {
 	if tbl.RowCount != 10 {
 		t.Errorf("row_count = %d, want 10", tbl.RowCount)
 	}
-	if len(tbl.SampleRows) >= 10 {
-		t.Errorf("sample_rows = %d, want a capped subset (< 10)", len(tbl.SampleRows))
+	if len(tbl.SampleRows) != 3 {
+		t.Errorf("sample_rows = %d, want the requested cap of 3", len(tbl.SampleRows))
 	}
 }
 
@@ -202,13 +224,11 @@ func TestInspect_SchemaOnlyWithZeroSample(t *testing.T) {
 func TestInspect_NegativeSampleErrors(t *testing.T) {
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "x.csv", "a\n1\n")
-	shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--inspect-sample", "-1", csv})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	if err := shell.Run(context.Background()); err == nil {
-		t.Fatal("expected an error for a negative --inspect-sample, got nil")
+	// The refusal is now part of parsing the command line, so it happens before a
+	// shell exists at all: no file is read, and the caller sees a usage error
+	// rather than a run that started and then failed.
+	if _, _, err := newShell(t, []string{"sqly", "--inspect", "--inspect-sample", "-1", csv}); err == nil {
+		t.Fatal("expected a usage error for a negative --inspect-sample, got nil")
 	}
 }
 

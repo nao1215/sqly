@@ -1,4 +1,6 @@
 # HTTP import demo: query a remote CSV and then pull the same URL into .import.
+# Both runs pass --allow-remote, which is what sqly needs before it downloads
+# anything; without it a URL is refused before any request is made.
 # Regenerate with: vhs doc/vhs/http.tape  (run from the repository root)
 Output "doc/img/http-demo.gif"
 Set Shell "bash"
@@ -15,10 +17,10 @@ Enter
 Type "until curl -fsS http://127.0.0.1:18080/user.csv >/dev/null; do sleep 0.1; done"
 Enter
 Show
-Type "sqly --output-format csv --sql 'SELECT user_name FROM user ORDER BY identifier LIMIT 2' http://127.0.0.1:18080/user.csv"
+Type "sqly --allow-remote --output-format csv --sql 'SELECT user_name FROM user ORDER BY identifier LIMIT 2' http://127.0.0.1:18080/user.csv"
 Enter
 Sleep 2s
-Type "sqly"
+Type "sqly --allow-remote"
 Enter
 Sleep 1600ms
 Type ".import http://127.0.0.1:18080/user.csv"

@@ -14,15 +14,17 @@ and Fedwire files (test-version)
 [Examples]
   - open the shell with a file loaded
     sqly sample.csv
-  - run one query over a file, a directory, or a URL
+  - run one query over a file or a directory
     sqly --sql 'SELECT * FROM sample' sample.csv
+  - read a URL, which needs the capability to be given explicitly
+    sqly --allow-remote --sql 'SELECT * FROM sample' https://example.com/sample.csv
   - join files of different formats
     sqly --sql 'SELECT * FROM a JOIN b USING (id)' a.csv b.parquet
   - write the result somewhere else, in another format
     sqly --output-format json --output out.json --sql 'SELECT 1' a.csv
   - read the data from a pipe and the query from a file
     cat data.csv | sqly --stdin-format csv --sql-file query.sql
-  - look at a file you have never seen, as JSON
+  - look at a file you have never seen, as JSON (schema only)
     sqly --inspect sample.csv
 
 [Options]
@@ -42,6 +44,10 @@ and Fedwire files (test-version)
                                  (default: error)
         --include-hidden-sheets  import the sheets an excel workbook hides as
                                  well as the ones it shows
+        --allow-remote           allow sqly to download http(s) input explicitly
+                                 named by this session; without it a url is
+                                 refused before any request. this is a
+                                 capability, not a sandbox or an ssrf defense
 
   Query:
     -s, --sql SQL                run one SQL statement, then exit
@@ -67,16 +73,23 @@ and Fedwire files (test-version)
 
   Inspection:
         --inspect                print one JSON report of the imported tables
-                                 (schema, row counts, sample rows) and exit
+                                 (schema, row counts, source) and exit; no row
+                                 data unless --inspect-sample asks for it
         --inspect-sample N       sample rows per table in the --inspect report;
-                                 0 for schema only (default: 5)
+                                 0 keeps the report schema-only (default: 0)
 
   General:
     -h, --help                   print this help and exit
     -v, --version                print the sqly version and exit
 
-Queries are SQLite by default; --dialect translates MySQL, PostgreSQL, or
-GoogleSQL syntax into it.
+Queries are SQLite by default. --dialect translates MySQL, PostgreSQL, or
+GoogleSQL syntax into SQLite syntax; it does not emulate that database.
+Every statement runs on SQLite, with SQLite semantics, types, collation,
+NULL handling, and functions, so a result can differ from the source
+database. Choosing a non-SQLite dialect says so once, on stderr.
+
+A URL is downloaded only with --allow-remote. That flag is an explicit
+network capability, not a sandbox or an SSRF defense.
 
 Documentation:   https://nao1215.github.io/sqly/
 Report an issue: https://github.com/nao1215/sqly/issues

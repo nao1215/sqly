@@ -28,7 +28,7 @@ scenarios:
             jenkins46,2,Mary,Jenkins
             smith79,3,Jamie,Smith
       - run:
-          command: sh -c 'python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/sqly-http-import-cli.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18080)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" http://127.0.0.1:18080/user.csv'
+          command: sh -c 'python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/sqly-http-import-cli.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18080)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" http://127.0.0.1:18080/user.csv'
       - assert:
           exit_code: 0
           stdout:
@@ -54,7 +54,7 @@ scenarios:
             jenkins46,2,Mary,Jenkins
             smith79,3,Jamie,Smith
       - run:
-          command: sh -c 'python3 -m http.server 18081 --bind 127.0.0.1 >/tmp/sqly-http-import-shell.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18081)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; printf ".import http://127.0.0.1:18081/user.csv\nSELECT COUNT(*) AS c FROM user;\n" | sqly --output-format csv'
+          command: sh -c 'python3 -m http.server 18081 --bind 127.0.0.1 >/tmp/sqly-http-import-shell.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18081)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; printf ".import http://127.0.0.1:18081/user.csv\nSELECT COUNT(*) AS c FROM user;\n" | sqly --allow-remote --output-format csv'
       - assert:
           exit_code: 0
           stdout:

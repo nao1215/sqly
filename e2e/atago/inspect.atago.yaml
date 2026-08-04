@@ -106,12 +106,115 @@ scenarios:
           stdout:
             not_contains: jenkins46
 
-  - name: rejects a negative --inspect-sample
+  # A negative count names no report, so it is a malformed command line rather
+  # than a run that failed: exit 2, before any file is read.
+  - name: rejects a negative --inspect-sample as a usage error
     steps:
       - fixture: *user
       - run:
           command: sqly --inspect --inspect-sample -1 user.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "inspect-sample"
+          stdout:
+            equals: ""
+
+  - name: rejects --inspect-sample without --inspect as a usage error
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --inspect-sample 1 user.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "inspect-sample"
+          stdout:
+            equals: ""
+
+  # The default is the contract an agent, a wrapper, or a CI job relies on:
+  # "tell me what this file is" must not answer with what is inside it. The
+  # fixture carries sentinels so a leak is visible as a string that appears
+  # nowhere in the metadata.
+  - name: prints no row data by default
+    steps:
+      - fixture: &secrets
+          file: secrets.csv
+          content: |
+            id,note
+            1,SENTINEL_FIRST_ROW
+            2,SENTINEL_SECOND_ROW
+      - run:
+          command: sqly --inspect secrets.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"row_count": 2'
+              - '"sample_rows": []'
+            not_contains:
+              - SENTINEL_FIRST_ROW
+              - SENTINEL_SECOND_ROW
+
+  - name: prints exactly the rows --inspect-sample asks for
+    steps:
+      - fixture: *secrets
+      - run:
+          command: sqly --inspect --inspect-sample 1 secrets.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: SENTINEL_FIRST_ROW
+            not_contains: SENTINEL_SECOND_ROW
+
+  - name: gives the same document with and without an explicit --inspect-sample 0
+    steps:
+      - fixture: *secrets
+      - run:
+          command: sh -c "sqly --inspect secrets.csv > implicit.json && sqly --inspect --inspect-sample 0 secrets.csv > explicit.json && cmp implicit.json explicit.json"
+          shell: true
+      - assert:
+          exit_code: 0
+
+  - name: opens the report with schema_version 1 and a non-empty sqly_version
+    steps:
+      - fixture: *secrets
+      - run:
+          command: sh -c "sqly --inspect secrets.csv | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"schema_version\"] == 1 and isinstance(d[\"schema_version\"], int), d; assert isinstance(d[\"sqly_version\"], str) and d[\"sqly_version\"], d; assert isinstance(d[\"tables\"], list), d; assert d[\"tables\"][0][\"sample_rows\"] == [], d; print(\"ok\")'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ok
+
+  - name: reports the same sqly version --version prints
+    steps:
+      - fixture: *secrets
+      - run:
+          command: sh -c "sqly --inspect secrets.csv | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"sqly_version\"])' > reported.txt && sqly --version | sed 's/^sqly //' > printed.txt && cmp reported.txt printed.txt"
+          shell: true
+      - assert:
+          exit_code: 0
+
+  - name: keeps the whole of stdout parseable as one JSON document
+    steps:
+      - fixture: *secrets
+      - run:
+          command: sh -c "sqly --inspect secrets.csv | python3 -c 'import json,sys; json.load(sys.stdin); print(\"parsed\")'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: parsed
+
+  - name: leaves stdout empty when the run fails
+    steps:
+      - run:
+          command: sqly --inspect /no/such/file.csv
+      - assert:
+          exit_code: 3
+          stdout:
+            equals: ""
+      - assert:
+          stderr:
+            contains: "/no/such/file.csv"

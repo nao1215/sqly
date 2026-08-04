@@ -127,7 +127,7 @@ func mustEncodeString(t *testing.T, transformer transform.Transformer, content s
 }
 
 func TestImportCommand_DownloadsHTTPURL(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
+	s, cleanup, err := newShell(t, []string{"sqly", "--allow-remote"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestImportCommand_DownloadsHTTPURL(t *testing.T) {
 }
 
 func TestImportCommand_UsesContentDispositionFilenameForHTTPURL(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
+	s, cleanup, err := newShell(t, []string{"sqly", "--allow-remote"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestImportCommand_UsesContentDispositionFilenameForHTTPURL(t *testing.T) {
 }
 
 func TestImportCommand_DecodesShiftJISHTTPURL(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly", "--encoding", "shift-jis"})
+	s, cleanup, err := newShell(t, []string{"sqly", "--allow-remote", "--encoding", "shift-jis"})
 	if err != nil {
 		t.Fatal(err)
 	}

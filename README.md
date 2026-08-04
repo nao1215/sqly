@@ -15,7 +15,7 @@ sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedw
 
 Documentation: **https://nao1215.github.io/sqly/**
 
-This documentation describes `v1.0.0-rc2`, a release candidate. It carries substantial breaking changes over v0.x — classified exit codes, visible-only Excel sheets, SIGTERM `143`, and multiple inputs as one atomic import — and more can land before v1.0.0, so read the [CHANGELOG](./CHANGELOG.md) before upgrading.
+This documentation describes `v1.0.0-rc3`, the next release candidate, which has not been tagged yet; the latest published candidate is `v1.0.0-rc2`. It carries substantial breaking changes over v0.x — classified exit codes, visible-only Excel sheets, SIGTERM `143`, multiple inputs as one atomic import, and now a schema-only `--inspect` and default-deny remote input — and more can land before v1.0.0, so read the [CHANGELOG](./CHANGELOG.md) and the [migration guide](./doc/migration.md) before upgrading.
 
 ![demo](./doc/img/demo.gif)
 
@@ -82,7 +82,7 @@ Prebuilt binaries are on the [release page](https://github.com/nao1215/sqly/rele
 
 ### Look at a file you have never seen
 
-`--inspect` prints the tables a file becomes, their columns, and a few sample rows — as JSON, so `jq` can read it too.
+`--inspect` prints the tables a file becomes, their columns, and their row counts — as JSON, so `jq` can read it too. It is schema-only: it does not print the data.
 
 ```shell
 sqly --inspect user.csv
@@ -90,6 +90,8 @@ sqly --inspect user.csv
 
 ```json
 {
+  "schema_version": 1,
+  "sqly_version": "v1.0.0-rc3",
   "tables": [
     {
       "name": "user",
@@ -99,13 +101,19 @@ sqly --inspect user.csv
         { "name": "user_name",  "type": "TEXT",    "nullable": true, "primary_key": false },
         { "name": "identifier", "type": "INTEGER", "nullable": true, "primary_key": false }
       ],
-      "sample_rows": [
-        { "user_name": "booker12", "identifier": 1 }
-      ]
+      "sample_rows": []
     }
   ]
 }
 ```
+
+Add `--inspect-sample N` when you do want rows, and you get at most `N` per table:
+
+```shell
+sqly --inspect --inspect-sample 1 user.csv
+```
+
+`schema_version` says how to read the document and `sqly_version` says which binary wrote it. The contract, the compatibility policy, and the [JSON Schema](https://nao1215.github.io/sqly/schema/inspect-v1.schema.json) are on the [reference page](https://nao1215.github.io/sqly/reference/#inspect-json-schema).
 
 ![inspect demo](./doc/img/inspect-demo.gif)
 
@@ -202,9 +210,16 @@ sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f
 
 ```shell
 sqly ./data --sql "SELECT * FROM users"
-sqly --sql "SELECT * FROM user" https://example.com/user.csv
+sqly --allow-remote --sql "SELECT * FROM user" https://example.com/user.csv
 cat user.csv | sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
 ```
+
+A URL needs `--allow-remote`: without it sqly refuses the input and makes no HTTP
+request at all, so a wrapper that never passes the flag has turned sqly's
+downloading off. It is a network capability, not a sandbox or an SSRF defense —
+it decides whether a request happens, not where it may go. The download limits,
+and what the capability does not protect against, are on the
+[formats page](https://nao1215.github.io/sqly/formats/#remote-inputs).
 
 ![stdin demo](./doc/img/stdin-demo.gif)
 
@@ -321,9 +336,11 @@ sqly runs each statement in its own transaction on an in-memory database, so a f
 
 ## Benchmark
 
-Importing 100,000 rows and querying them takes about half a second, which is the
-same range as the CSV-focused tools. The numbers, the comparison, and how they
-were measured are on the [about page](https://nao1215.github.io/sqly/about/#benchmark).
+A historical measurement from sqly v0.30.0: importing 100,000 rows and querying
+them took about half a second, which was the same range as the CSV-focused
+tools. It has not been re-measured since and is not a performance guarantee for
+the current release. The numbers, the comparison, and the machine they were
+measured on are on the [about page](https://nao1215.github.io/sqly/about/#benchmark).
 
 ## Contributing
 

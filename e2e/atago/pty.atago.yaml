@@ -275,3 +275,84 @@ scenarios:
             - send: "" # EOF (^D) at an empty prompt exits with status 0
       - assert:
           exit_code: 0
+
+  # A refused .import is a command error, not a fatal one: the prompt prints it
+  # and reads the next line. The URL points at a host that cannot resolve, so a
+  # run that somehow attempted the download would fail differently — the
+  # capability refusal is the only way to reach this text.
+  - name: a refused remote .import leaves the session running
+    steps:
+      - fixture: &capability_people
+          file: people.csv
+          content: |
+            name,age,city
+            Alice,30,Tokyo
+            Bob,25,Osaka
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".import https://sqly-e2e.invalid/users.csv\r"
+            - expect: "allow-remote" # the refusal names the flag that would allow it
+            - expect: '\(table\)\$' # the prompt came back, so the session is alive
+            - send: "SELECT name FROM people WHERE age = 25;\r"
+            - expect: "Bob" # and it still answers over the table it already had
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+
+  # The same session with the capability granted still refuses a scheme sqly
+  # cannot fetch, and still survives it.
+  - name: a session with --allow-remote still refuses a non-http scheme and continues
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly --allow-remote people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".import ftp://sqly-e2e.invalid/users.csv\r"
+            - expect: "only http and https"
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 30;\r"
+            - expect: "Alice"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Alice"
+
+  # Switching to a non-SQLite dialect at the prompt says once what the choice
+  # means. The message goes to stderr, which a pty merges into the same stream a
+  # user sees, so it is visible here and provably absent from a piped stdout in
+  # e2e/atago/dialect_warning.atago.yaml.
+  - name: switching dialect at the prompt warns once about SQLite semantics
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".dialect postgresql\r"
+            - expect: "SQLite semantics"
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 25;\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"

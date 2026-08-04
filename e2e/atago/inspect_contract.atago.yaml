@@ -113,7 +113,7 @@ scenarios:
             a,b
             ,x
       - run:
-          command: sqly --inspect blank.csv
+          command: sqly --inspect --inspect-sample 1 blank.csv
       - assert:
           exit_code: 0
           stdout:
@@ -131,7 +131,7 @@ scenarios:
             n
             9223372036854775807
       - run:
-          command: sqly --inspect big.csv
+          command: sqly --inspect --inspect-sample 1 big.csv
       - assert:
           exit_code: 0
           stdout:
@@ -144,7 +144,7 @@ scenarios:
           file: bad.csv
           base64: "eAr//v0K"
       - run:
-          command: sh -c "sqly --inspect bad.csv | python3 -c 'import json,sys; json.load(sys.stdin)'"
+          command: sh -c "sqly --inspect --inspect-sample 1 bad.csv | python3 -c 'import json,sys; json.load(sys.stdin)'"
           shell: true
       - assert:
           exit_code: 0

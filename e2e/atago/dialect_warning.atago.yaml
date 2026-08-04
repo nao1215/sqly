@@ -1,0 +1,293 @@
+# Choosing a non-SQLite dialect says so once, on stderr.
+#
+# --dialect postgresql looks like choosing PostgreSQL and is not: the syntax is
+# rewritten and the engine underneath is SQLite. A query SQLite accepts runs, and
+# one whose meaning differs between the two engines answers differently with
+# nothing to say so. The warning ends that silence.
+#
+# The assertions below deliberately match on what the message claims —
+# "translated to SQLite" and "SQLite semantics" — rather than on its full
+# punctuation, so the wording can improve without a test failing. What is pinned
+# is that it appears exactly once, on stderr, and never on stdout.
+#
+# Documented at website/content/dialects.md#this-is-translation-not-emulation.
+version: "1"
+
+suite:
+  name: sqly dialect translation warning
+
+scenarios:
+  - name: says nothing for the default SQLite dialect
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &users
+          file: users.csv
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "SQLite semantics"
+
+  - name: says nothing for an explicit --dialect sqlite
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect sqlite --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "SQLite semantics"
+
+  - name: warns once for postgresql
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'sqly --dialect postgresql --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv >/dev/null 2>warn.txt; grep -c "SQLite semantics" warn.txt; grep -c "PostgreSQL" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+      - assert:
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: warns once for mysql
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'sqly --dialect mysql --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv >/dev/null 2>warn.txt; grep -c "SQLite semantics" warn.txt; grep -c "MySQL" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+      - assert:
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: warns once for googlesql
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'sqly --dialect googlesql --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv >/dev/null 2>warn.txt; grep -c "SQLite semantics" warn.txt; grep -c "GoogleSQL" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+      - assert:
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: warns once for a --sql-file holding four statements
+    env: *hist
+    steps:
+      - fixture: *users
+      - fixture:
+          file: many.sql
+          content: |
+            SELECT COUNT(*) FROM users;
+            SELECT COUNT(*) FROM users;
+            SELECT COUNT(*) FROM users;
+            SELECT COUNT(*) FROM users;
+      - run:
+          command: sh -c 'sqly --dialect postgresql --sql-file many.sql users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+
+  - name: warns once for a --script-file
+    env: *hist
+    steps:
+      - fixture: *users
+      - fixture:
+          file: run.sqly
+          content: |
+            .tables
+            SELECT COUNT(*) FROM users;
+            SELECT COUNT(*) FROM users;
+      - run:
+          command: sh -c 'sqly --dialect mysql --script-file run.sqly users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+
+  - name: warns once for a piped script
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'printf "SELECT COUNT(*) FROM users;\nSELECT COUNT(*) FROM users;\n" | sqly --dialect googlesql users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+
+  # A session that switches dialect repeatedly says it once. Repeating it per
+  # switch would train the reader to ignore it, which is the same as not
+  # printing it.
+  - name: warns once across repeated .dialect switches in one session
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'printf ".dialect postgresql\n.dialect sqlite\n.dialect mysql\n.dialect googlesql\nSELECT COUNT(*) FROM users;\n" | sqly users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+
+  - name: keeps JSON stdout parseable while warning on stderr
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'sqly --dialect postgresql --output-format json --sql "SELECT * FROM users" users.csv 2>warn.txt | python3 -c "import json,sys; print(len(json.load(sys.stdin)))"; grep -c "SQLite semantics" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "2"
+      - assert:
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: keeps every NDJSON line parseable
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'sqly --dialect mysql --output-format jsonl --sql "SELECT * FROM users" users.csv 2>/dev/null | python3 -c "import json,sys; [json.loads(l) for l in sys.stdin if l.strip()]; print(\"ok\")"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: ok
+
+  - name: keeps the warning out of CSV stdout
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect googlesql --output-format csv --sql "SELECT * FROM users ORDER BY id" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: "SQLite semantics"
+      - assert:
+          stdout:
+            line: 1
+            equals: "id,name"
+
+  - name: keeps the warning out of the --inspect report
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect postgresql --inspect users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: "SQLite semantics"
+          stderr:
+            not_contains: "SQLite semantics"
+
+  - name: says nothing for --help or --version
+    env: *hist
+    steps:
+      - run:
+          command: sqly --dialect postgresql --help
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "SQLite semantics"
+      - run:
+          command: sqly --dialect mysql --version
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "SQLite semantics"
+
+  - name: says nothing for a command line that was rejected
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect postgresql --inspect --sql "SELECT 1" users.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            not_contains: "SQLite semantics"
+
+  # A script whose every statement fails to translate is where a per-statement
+  # message would flood stderr hardest. DISTINCT ON has no SQLite equivalent, so
+  # each statement is rejected by the translator.
+  - name: does not repeat the warning when every statement fails to translate
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sh -c 'printf "SELECT DISTINCT ON (id) id FROM users;\nSELECT DISTINCT ON (id) id FROM users;\n" | sqly --dialect postgresql users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+
+  # The warning is a claim about the engine, and this is the claim being true:
+  # SQLite's own integer division answers even under a dialect whose division
+  # would not. It is the divergence the dialect suites already document; here it
+  # is checked next to the warning that exists to explain it.
+  - name: explains a real divergence — SQLite semantics decide the answer
+    env: *hist
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --dialect postgresql --output-format csv --sql "SELECT 'x' || 1 AS c" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "x1"
+
+  - name: says the same thing in --help
+    env: *hist
+    steps:
+      - run:
+          command: sqly --help
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "does not emulate that database"
+              - "SQLite semantics"

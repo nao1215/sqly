@@ -43,7 +43,7 @@ func TestShellRun(t *testing.T) {
 		server := newHTTPImportServer(t)
 		defer server.Close()
 
-		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv", "--sql", "SELECT user_name FROM user ORDER BY identifier LIMIT 1", server.URL + "/user.csv"})
+		shell, cleanup, err := newShell(t, []string{"sqly", "--allow-remote", "--output-format", "csv", "--sql", "SELECT user_name FROM user ORDER BY identifier LIMIT 1", server.URL + "/user.csv"})
 		if err != nil {
 			t.Fatal(err)
 		}

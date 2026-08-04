@@ -41,7 +41,8 @@ release:
   header: |
     ## sqly {{ .Tag }}
 
-    Easily execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with a shell.
+    Run SQL over CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire, and
+    supported compressed inputs (.gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4).
 
     Install or upgrade, then see the grouped highlights below. Every artifact is
     signed and ships with an SBOM and build provenance — see
@@ -96,7 +97,7 @@ signs:
     output: true
 nfpms:
   - maintainer: Naohiro CHIKAMATSU <n.chika156@gmail.com>
-    description: sqly - easily execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with shell.
+    description: SQL shell for CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire, and compressed files
     homepage: https://github.com/nao1215/sqly
     license: MIT License
     formats:
@@ -105,7 +106,7 @@ nfpms:
       - apk
 brews:
   - name: sqly
-    description: sqly - easily execute SQL against CSV/TSV/LTSV/JSON and Microsoft Excel™ with shell.
+    description: SQL shell for CSV, JSONL, Parquet, Excel, ACH, Fedwire, and compressed files
     license: MIT
     repository:
       owner: nao1215

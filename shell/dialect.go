@@ -32,7 +32,75 @@ func (c CommandList) dialectCommand(_ context.Context, s *Shell, argv []string) 
 	}
 	s.usecases.query.SetDialect(d)
 	fmt.Fprintf(config.Stdout, "dialect set to %s\n", d)
+	// Say what the choice means, at the moment it is made rather than at the
+	// moment it bites. The switch itself is the answer to "why did my query
+	// behave like SQLite?", and by the time a result looks wrong the connection
+	// between the two is gone.
+	s.warnDialectTranslationOnce(d)
 	return nil
+}
+
+// The dialect names, in both spellings each is used in. The wire value is a
+// lowercase identifier, which is right for parsing a flag and wrong in a
+// sentence; the display name is how the project itself spells it. Both are named
+// here so the flag, the completion list, and the warning cannot drift apart.
+const (
+	dialectMySQL      dialect.Dialect = "mysql"
+	dialectPostgreSQL dialect.Dialect = "postgresql"
+	dialectGoogleSQL  dialect.Dialect = "googlesql"
+
+	displaySQLite     = "SQLite"
+	displayMySQL      = "MySQL"
+	displayPostgreSQL = "PostgreSQL"
+	displayGoogleSQL  = "GoogleSQL"
+)
+
+// dialectDisplayNames spells each dialect the way its own project does, for the
+// one message a user reads about it.
+var dialectDisplayNames = map[dialect.Dialect]string{
+	dialect.SQLite:    displaySQLite,
+	dialectMySQL:      displayMySQL,
+	dialectPostgreSQL: displayPostgreSQL,
+	dialectGoogleSQL:  displayGoogleSQL,
+}
+
+// dialectDisplayName returns the human spelling of a dialect, falling back to
+// the wire value so a dialect added upstream still reads sensibly.
+func dialectDisplayName(d dialect.Dialect) string {
+	if name, ok := dialectDisplayNames[d]; ok {
+		return name
+	}
+	return string(d)
+}
+
+// warnDialectTranslationOnce tells the user, on stderr and at most once per
+// session, that a non-SQLite dialect is translated rather than emulated.
+//
+// Why it exists: choosing --dialect postgresql looks like choosing PostgreSQL,
+// and it is not. The syntax is rewritten; the engine underneath is SQLite, with
+// SQLite's types, collation, NULL handling, and functions. A query that SQLite
+// accepts runs, and a query whose meaning differs between the two engines
+// returns a different answer with nothing to say so. That silence is the danger,
+// and one line of stderr ends it.
+//
+// Why once: the fact is about the session, not about the statement. Repeating it
+// per statement would make a script's stderr unreadable and would train the
+// reader to ignore it, which is the same as not printing it.
+//
+// Why stderr: stdout carries results a program parses. Nothing here may reach
+// it.
+//
+// SQLite is silent because there is nothing to translate: it is the identity
+// translation and the engine's own dialect.
+func (s *Shell) warnDialectTranslationOnce(d dialect.Dialect) {
+	if s.dialectWarned || d == dialect.SQLite {
+		return
+	}
+	s.dialectWarned = true
+	name := dialectDisplayName(d)
+	fmt.Fprintf(config.Stderr,
+		"Warning: %s syntax is translated to SQLite; execution uses SQLite semantics, not %s semantics.\n",
+		name, name)
 }
 
 // dialectNames returns the built-in dialect names in a stable order for help and

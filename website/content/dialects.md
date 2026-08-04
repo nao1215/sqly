@@ -25,6 +25,26 @@ Loading a file always uses SQLite. Only the query text is translated.
 
 ## This is translation, not emulation
 
+Choosing a non-SQLite dialect says so once, on stderr:
+
+```text
+Warning: PostgreSQL syntax is translated to SQLite; execution uses SQLite semantics, not PostgreSQL semantics.
+```
+
+It is printed once per session, not once per statement: on the first run of user
+SQL for a `--dialect` given on the command line, or at the moment `.dialect`
+switches to a non-SQLite dialect in the shell. Switching back to SQLite and out
+again does not repeat it, and `sqlite` never triggers it. It goes to stderr and
+never to stdout, so JSON, NDJSON, CSV, TSV, and the `--inspect` report are
+unaffected and stay parseable. `--help`, `--version`, a rejected command line,
+and `--inspect` say nothing about a dialect they do not use.
+
+The warning is the short form of what this section says: sqly rewrites the
+*syntax* and then runs the result on SQLite. It does not emulate the source
+database's semantics, types, collation, `NULL` behavior, or functions. A query
+SQLite accepts runs as written, and its answer can differ from the source
+dialect's with nothing said about it.
+
 Your query goes through three possible fates, and it is worth knowing which one you are relying on.
 
 | Fate | What happens |

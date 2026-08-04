@@ -73,6 +73,15 @@ target = "layouts"
 source = "assets"
 target = "assets"
 
+# Files published byte-for-byte, with no rendering. The --inspect JSON Schema
+# lives here so there is exactly one canonical copy of that contract: the
+# repository file the drift tests validate against is the same bytes the site
+# serves at /sqly/schema/inspect-v1.schema.json. Declaring any module mount
+# replaces Hugo's implicit static mount, so this has to be named explicitly.
+[[module.mounts]]
+source = "static"
+target = "static"
+
 # Repository docs, mounted so pages can be generated from the committed files.
 [[module.mounts]]
 source = "../doc/cookbook.md"

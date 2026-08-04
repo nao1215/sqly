@@ -101,7 +101,7 @@ scenarios:
     steps:
       - fixture: *user
       - run:
-          command: sh -c 'python3 -m http.server 18082 --bind 127.0.0.1 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18082)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
+          command: sh -c 'python3 -m http.server 18082 --bind 127.0.0.1 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18082)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
       - assert:
           exit_code: 0
           stdout:

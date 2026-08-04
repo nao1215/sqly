@@ -42,7 +42,7 @@ func TestRemoteImportDownloadsAndQueries(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, code := run(t, "",
-		"--output-format", "csv",
+		"--allow-remote", "--output-format", "csv",
 		"--sql", "SELECT user_name FROM user ORDER BY identifier LIMIT 1",
 		server.URL+"/user.csv")
 	if code != 0 {
@@ -74,7 +74,7 @@ func TestRemoteImportFollowsARedirectChain(t *testing.T) {
 	})
 
 	stdout, stderr, code := run(t, "",
-		"--output-format", "csv",
+		"--allow-remote", "--output-format", "csv",
 		"--sql", "SELECT COUNT(*) AS n FROM user",
 		server.URL+"/latest")
 	if code != 0 {
@@ -102,7 +102,7 @@ func TestRemoteImportRefusesAnEndlessRedirectChain(t *testing.T) {
 		})
 	}
 
-	stdout, _, code := run(t, "", "--sql", "SELECT 1", server.URL+"/hop0")
+	stdout, _, code := run(t, "", "--allow-remote", "--sql", "SELECT 1", server.URL+"/hop0")
 	if code != 3 {
 		t.Errorf("exit = %d, want 3 (an input that could not be read)", code)
 	}
@@ -125,7 +125,7 @@ func TestRemoteImportRefusesARedirectToAnotherScheme(t *testing.T) {
 		http.Redirect(w, r, "file:///etc/passwd", http.StatusFound)
 	})
 
-	_, stderr, code := run(t, "", "--sql", "SELECT 1", server.URL+"/bounce")
+	_, stderr, code := run(t, "", "--allow-remote", "--sql", "SELECT 1", server.URL+"/bounce")
 	if code != 3 {
 		t.Errorf("exit = %d, want 3", code)
 	}
@@ -156,7 +156,7 @@ func TestRemoteImportReadsAChunkedResponse(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, code := run(t, "",
-		"--output-format", "csv",
+		"--allow-remote", "--output-format", "csv",
 		"--sql", "SELECT COUNT(*) AS n FROM user",
 		server.URL+"/user.csv")
 	if code != 0 {
@@ -190,7 +190,7 @@ func TestRemoteImportFailsOnATruncatedResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	stdout, _, code := run(t, "", "--sql", "SELECT 1", server.URL+"/user.csv")
+	stdout, _, code := run(t, "", "--allow-remote", "--sql", "SELECT 1", server.URL+"/user.csv")
 	if code != 3 {
 		t.Errorf("exit = %d, want 3", code)
 	}
@@ -213,7 +213,7 @@ func TestRemoteImportRefusesAnOversizedDeclaredBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, stderr, code := run(t, "", "--sql", "SELECT 1", server.URL+"/user.csv")
+	_, stderr, code := run(t, "", "--allow-remote", "--sql", "SELECT 1", server.URL+"/user.csv")
 	if code != 3 {
 		t.Errorf("exit = %d, want 3", code)
 	}
@@ -256,7 +256,7 @@ func TestRemoteImportOfAWorkbookAppliesTheSheetPolicy(t *testing.T) {
 	defer server.Close()
 
 	t.Run("the hidden sheets are left out by default", func(t *testing.T) {
-		stdout, stderr, code := run(t, "", "--output-format", "csv",
+		stdout, stderr, code := run(t, "", "--allow-remote", "--output-format", "csv",
 			"--sql", "SELECT v FROM book_Visible", server.URL+"/book.xlsx")
 		if code != 0 {
 			t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
@@ -273,14 +273,14 @@ func TestRemoteImportOfAWorkbookAppliesTheSheetPolicy(t *testing.T) {
 	})
 
 	t.Run("a hidden sheet has no table", func(t *testing.T) {
-		_, _, code := run(t, "", "--sql", "SELECT v FROM book_Internal", server.URL+"/book.xlsx")
+		_, _, code := run(t, "", "--allow-remote", "--sql", "SELECT v FROM book_Internal", server.URL+"/book.xlsx")
 		if code != 1 {
 			t.Errorf("exit = %d, want 1 (the query failed on a table that was not imported)", code)
 		}
 	})
 
 	t.Run("--include-hidden-sheets imports them", func(t *testing.T) {
-		stdout, stderr, code := run(t, "", "--include-hidden-sheets", "--output-format", "csv",
+		stdout, stderr, code := run(t, "", "--allow-remote", "--include-hidden-sheets", "--output-format", "csv",
 			"--sql", "SELECT v FROM book_Secret", server.URL+"/book.xlsx")
 		if code != 0 {
 			t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
@@ -356,7 +356,7 @@ func TestMixedLocalAndRemoteInputsLoadTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stdout, stderr, code := run(t, "", "--output-format", "csv",
+	stdout, stderr, code := run(t, "", "--allow-remote", "--output-format", "csv",
 		"--sql", "SELECT r.name, l.note FROM remote r JOIN local l ON r.id = l.id",
 		local, server.URL+"/remote.csv")
 	if code != 0 {
@@ -421,7 +421,7 @@ func TestMixedInputFailureRollsBackAndCleansUp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
 			home := t.TempDir()
-			args := append([]string{"--output-format", "csv", "--sql", "SELECT 1 AS n"}, tt.inputs...)
+			args := append([]string{"--allow-remote", "--output-format", "csv", "--sql", "SELECT 1 AS n"}, tt.inputs...)
 			stdout, stderr, code := runWithEnv(t, repoRoot(), home,
 				[]string{"TMPDIR=" + tmp, "TMP=" + tmp, "TEMP=" + tmp}, "", args...)
 
@@ -470,7 +470,7 @@ func TestRemoteInputRollbackLeavesNoTableBehind(t *testing.T) {
 	}
 
 	script := ".import " + good.URL + "/remote.csv " + localBad + "\n.tables\n"
-	stdout, stderr, code := run(t, script)
+	stdout, stderr, code := run(t, script, "--allow-remote")
 
 	if code != 3 {
 		t.Errorf("exit = %d, want 3 (stderr: %s)", code, stderr)

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -11,6 +13,14 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/shell"
+)
+
+// migrationGuideFile is where a user upgrading from one release candidate to the
+// next is sent. It is named once so the drift tests and the CHANGELOG check
+// cannot disagree about where it lives.
+const (
+	migrationGuideFile = "doc/migration.md"
+	migrationGuideLink = "doc/migration.md"
 )
 
 // docSources returns every file that shows a reader how to run sqly: the README,
@@ -785,14 +795,42 @@ func section(body, heading string) string {
 	}
 	rest := body[start+len(heading):]
 	depth := strings.Count(strings.TrimSpace(heading), "#")
-	end := len(rest)
-	for level := 1; level <= depth; level++ {
-		marker := "\n" + strings.Repeat("#", level) + " "
-		if at := strings.Index(rest, marker); at >= 0 && at < end {
-			end = at
+
+	// Fenced code blocks are skipped while looking for the end. A shell comment
+	// is a "#" at the start of a line, so a section whose examples are commented
+	// used to stop at the first one — and every claim after it read as absent.
+	// The failure looked like missing documentation while the documentation was
+	// there, which is the worst way for a drift test to be wrong.
+	var (
+		offset  int
+		inFence bool
+	)
+	for _, line := range strings.SplitAfter(rest, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			offset += len(line)
+			continue
 		}
+		if !inFence && isHeadingAtMostDepth(trimmed, depth) && offset > 0 {
+			return rest[:offset]
+		}
+		offset += len(line)
 	}
-	return rest[:end]
+	return rest
+}
+
+// isHeadingAtMostDepth reports whether a line is a Markdown ATX heading of level
+// depth or shallower, which is where a section of that depth ends.
+func isHeadingAtMostDepth(line string, depth int) bool {
+	hashes := 0
+	for hashes < len(line) && line[hashes] == '#' {
+		hashes++
+	}
+	if hashes == 0 || hashes > depth {
+		return false
+	}
+	return hashes < len(line) && line[hashes] == ' '
 }
 
 // TestREADME_ShowsBothScriptFlags pins the one comparison a reader needs before
@@ -1295,6 +1333,591 @@ func TestE2E_ExercisesTheMultiInputContract(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("%s does not cover: %s", spec, want)
+		}
+	}
+}
+
+// The rc3 agent-safety contracts, guarded against drift.
+//
+// Each of the three — schema-only --inspect, default-deny remote input, and the
+// dialect warning — is a promise made in code and repeated in several documents.
+// A promise repeated in four places drifts in three of them, and the failure
+// mode is the worst kind: a page that reads correctly and describes a tool that
+// no longer behaves that way. The tests below derive the claim from the
+// implementation wherever they can, so the documentation is checked against the
+// code rather than against a copy of itself.
+
+// inspectSchemaFile is the single canonical copy of the --inspect JSON contract.
+// It is published by Hugo as /sqly/schema/inspect-v1.schema.json; nothing else in
+// the repository restates it.
+const inspectSchemaFile = "website/static/schema/inspect-v1.schema.json"
+
+// TestInspect_SchemaVersionAgreesEverywhere ties the three places the contract
+// version is written down to one number.
+func TestInspect_SchemaVersionAgreesEverywhere(t *testing.T) {
+	t.Parallel()
+
+	if shell.InspectSchemaVersion != 1 {
+		t.Fatalf("shell.InspectSchemaVersion = %d, want 1; v1 is the version this release publishes",
+			shell.InspectSchemaVersion)
+	}
+
+	schema := readDoc(t, inspectSchemaFile)
+	var parsed struct {
+		Schema     string `json:"$schema"` //nolint:tagliatelle // a JSON Schema keyword, not a name sqly chooses
+		Properties struct {
+			SchemaVersion struct {
+				Const *int `json:"const"`
+			} `json:"schema_version"`
+		} `json:"properties"`
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal([]byte(schema), &parsed); err != nil {
+		t.Fatalf("%s is not valid JSON: %v", inspectSchemaFile, err)
+	}
+	if parsed.Properties.SchemaVersion.Const == nil {
+		t.Fatalf("%s does not pin schema_version to a constant", inspectSchemaFile)
+	}
+	if *parsed.Properties.SchemaVersion.Const != shell.InspectSchemaVersion {
+		t.Errorf("%s pins schema_version to %d, the implementation emits %d",
+			inspectSchemaFile, *parsed.Properties.SchemaVersion.Const, shell.InspectSchemaVersion)
+	}
+	// The draft has to be stated, or "valid against the schema" means whatever
+	// the validator happened to assume.
+	if !strings.Contains(parsed.Schema, "2020-12") {
+		t.Errorf("%s declares $schema %q; the documented draft is 2020-12", inspectSchemaFile, parsed.Schema)
+	}
+	for _, field := range []string{"schema_version", "sqly_version", "tables"} {
+		if !slices.Contains(parsed.Required, field) {
+			t.Errorf("%s does not require the top-level field %q", inspectSchemaFile, field)
+		}
+	}
+
+	// The reference page states the same number to a reader, in the section that
+	// explains it rather than anywhere in the file.
+	body := readDoc(t, "website/content/reference.md")
+	policy := section(body, "### Inspect JSON schema")
+	if policy == "" {
+		t.Fatal("website/content/reference.md has no \"Inspect JSON schema\" section")
+	}
+	want := "It is `" + strconv.Itoa(shell.InspectSchemaVersion) + "`."
+	if !strings.Contains(flatten(policy), want) {
+		t.Errorf("the reference's schema section does not state %q; it must name the version the implementation emits", want)
+	}
+}
+
+// TestInspectSchema_KeepsSampleRowsRequiredAndTyped guards the two properties
+// the schema exists to hold: sample_rows is a required array, and the objects
+// stay open so an additive field does not force a version bump.
+func TestInspectSchema_KeepsSampleRowsRequiredAndTyped(t *testing.T) {
+	t.Parallel()
+
+	// additionalProperties is decoded as `any` because JSON Schema allows both a
+	// boolean and a subschema there, and the sample-row object legitimately uses
+	// the subschema form to type its values. Only a literal false is a closed
+	// object.
+	var parsed struct {
+		Defs map[string]struct {
+			Required             []string `json:"required"`
+			AdditionalProperties any      `json:"additionalProperties"` //nolint:tagliatelle // a JSON Schema keyword
+			Properties           map[string]struct {
+				Type any `json:"type"`
+			} `json:"properties"`
+		} `json:"$defs"` //nolint:tagliatelle // a JSON Schema keyword
+	}
+	if err := json.Unmarshal([]byte(readDoc(t, inspectSchemaFile)), &parsed); err != nil {
+		t.Fatalf("%s is not valid JSON: %v", inspectSchemaFile, err)
+	}
+
+	table, ok := parsed.Defs["table"]
+	if !ok {
+		t.Fatal("the schema has no table definition")
+	}
+	if !slices.Contains(table.Required, "sample_rows") {
+		t.Error("sample_rows is not required; the contract is that it is always present, empty rather than absent")
+	}
+	if kind, ok := table.Properties["sample_rows"].Type.(string); !ok || kind != "array" {
+		t.Errorf("sample_rows is typed %v, want \"array\" (never null)", table.Properties["sample_rows"].Type)
+	}
+	for name, def := range parsed.Defs {
+		if closed, ok := def.AdditionalProperties.(bool); ok && !closed {
+			t.Errorf("%s closes itself with additionalProperties:false; v1 promises additive fields do not move the version", name)
+		}
+	}
+}
+
+// TestInspect_DefaultSampleIsZeroInCodeHelpAndReference is the drift guard for
+// the "default 5" that used to be true. It derives the number from the parser,
+// so the documentation is compared to the implementation rather than to itself.
+func TestInspect_DefaultSampleIsZeroInCodeHelpAndReference(t *testing.T) {
+	t.Parallel()
+
+	if config.DefaultInspectSample != 0 {
+		t.Fatalf("config.DefaultInspectSample = %d, want 0", config.DefaultInspectSample)
+	}
+
+	arg, err := config.NewArg([]string{"sqly"})
+	if err != nil {
+		t.Fatalf("NewArg: %v", err)
+	}
+	help := flatten(arg.Usage)
+	if !strings.Contains(help, "--inspect-sample N") {
+		t.Fatal("--help does not list --inspect-sample")
+	}
+	if !strings.Contains(help, "(default: 0)") {
+		t.Errorf("--help does not show a flag defaulting to 0; --inspect-sample must advertise its own default:\n%s", arg.Usage)
+	}
+
+	inspection := section(readDoc(t, "website/content/reference.md"), "## Inspection")
+	if inspection == "" {
+		t.Fatal("website/content/reference.md has no Inspection section")
+	}
+	flat := flatten(inspection)
+	if !strings.Contains(flat, "default `0`") {
+		t.Errorf("the reference's Inspection section does not state the default of 0")
+	}
+	// The old default must be gone from the section, not merely outnumbered.
+	for _, stale := range []string{"default 5", "(default 5", "default `5`"} {
+		if strings.Contains(flat, stale) {
+			t.Errorf("the reference's Inspection section still says %q; the default is 0", stale)
+		}
+	}
+	if !strings.Contains(flat, "schema-only by default") {
+		t.Error("the reference's Inspection section does not say --inspect is schema-only by default")
+	}
+	for _, claim := range []string{"`schema_version`", "`sqly_version`"} {
+		if !strings.Contains(flat, claim) {
+			t.Errorf("the reference's Inspection section does not document %s", claim)
+		}
+	}
+}
+
+// TestReference_LinksTheFormalInspectSchema keeps the canonical file reachable
+// from the page that explains it. A schema nobody can find is a schema nobody
+// validates against.
+func TestReference_LinksTheFormalInspectSchema(t *testing.T) {
+	t.Parallel()
+
+	if _, err := os.Stat(inspectSchemaFile); err != nil {
+		t.Fatalf("the canonical schema is missing: %v", err)
+	}
+	body := readDoc(t, "website/content/reference.md")
+	if !strings.Contains(body, "schema/inspect-v1.schema.json") {
+		t.Error("the reference does not link the published JSON Schema")
+	}
+
+	// Hugo replaces its implicit static mount as soon as any module mount is
+	// declared, so the site only publishes the schema if the mount is named.
+	hugo := readDoc(t, "website/hugo.toml")
+	if !strings.Contains(hugo, `source = "static"`) {
+		t.Error("website/hugo.toml does not mount the static directory, so the schema would not be published")
+	}
+}
+
+// TestInspectSchema_CompatibilityPolicyIsStated checks the policy a consumer
+// needs before it can rely on the version number at all: which changes move it
+// and which do not.
+func TestInspectSchema_CompatibilityPolicyIsStated(t *testing.T) {
+	t.Parallel()
+
+	policy := flatten(section(readDoc(t, "website/content/reference.md"), "#### Compatibility policy for schema version 1"))
+	if policy == "" {
+		t.Fatal("the reference has no compatibility policy section for the inspect schema")
+	}
+	for _, claim := range []string{
+		"must ignore fields it does not know",
+		"adding an optional top-level field",
+		"removing a field",
+		"renaming a field",
+		"changing a field's type",
+		"changing whether a field can be `null`",
+		"making `sample_rows` optional again",
+	} {
+		if !strings.Contains(policy, claim) {
+			t.Errorf("the compatibility policy does not state: %s", claim)
+		}
+	}
+}
+
+// TestDocs_EveryRemoteExampleGrantsTheCapability walks every documented sqly
+// command and requires --allow-remote on the ones that name an http(s) input.
+// It is derived from the commands themselves rather than from a list of files,
+// so an example added to any page is covered.
+func TestDocs_EveryRemoteExampleGrantsTheCapability(t *testing.T) {
+	t.Parallel()
+
+	checked := 0
+	counterExamples := 0
+	for _, doc := range docSources(t) {
+		exempt := refusalExampleLines(t, doc)
+		for _, cmd := range shellCommandsIn(t, doc) {
+			args, ok := sqlyInvocation(cmd.text)
+			if !ok {
+				continue
+			}
+			remote := false
+			allowed := false
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
+					remote = true
+				}
+				if arg == "--allow-remote" {
+					allowed = true
+				}
+			}
+			if !remote {
+				continue
+			}
+			if exempt[cmd.line] {
+				// A deliberate counter-example: the documentation is showing the
+				// command that gets refused, next to the one that works.
+				counterExamples++
+				continue
+			}
+			checked++
+			if !allowed {
+				t.Errorf("%s:%d runs sqly against a URL without --allow-remote, which the current CLI refuses:\n  %s",
+					doc, cmd.line, cmd.text)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no documented sqly command names a URL; either the examples were removed or this parser stopped matching them")
+	}
+	if counterExamples == 0 {
+		t.Error("no documentation shows the refused form; a reader who has never seen the refusal cannot recognize it")
+	}
+}
+
+// refusalExampleLines returns the lines of a document holding a command that the
+// prose deliberately shows being refused. Such a command is marked by a shell
+// comment naming the refusal on the line before it, so a counter-example is
+// opt-in and visible in the source rather than inferred.
+func refusalExampleLines(t *testing.T, path string) map[int]bool {
+	t.Helper()
+
+	exempt := make(map[int]bool)
+	inShell := false
+	marked := false
+	for i, raw := range strings.Split(readDoc(t, path), "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "```") {
+			inShell = strings.TrimPrefix(line, "```") == "shell"
+			marked = false
+			continue
+		}
+		if !inShell || line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			marked = strings.Contains(strings.ToLower(line), "refused")
+			continue
+		}
+		if marked {
+			exempt[i+1] = true
+			marked = false
+		}
+	}
+	return exempt
+}
+
+// TestDemoTapes_EveryRemoteInvocationGrantsTheCapability covers the recorded
+// demos, whose commands the parser check above does not see.
+func TestDemoTapes_EveryRemoteInvocationGrantsTheCapability(t *testing.T) {
+	t.Parallel()
+
+	tapes, err := filepath.Glob("doc/vhs/*.tape")
+	if err != nil {
+		t.Fatalf("glob the tapes: %v", err)
+	}
+	for _, tape := range tapes {
+		for _, cmd := range tapeCommands(t, tape) {
+			args, ok := sqlyInvocation(cmd.text)
+			if !ok {
+				continue
+			}
+			remote := false
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
+					remote = true
+				}
+			}
+			if !remote {
+				continue
+			}
+			if !slices.Contains(args, "--allow-remote") {
+				t.Errorf("%s:%d records a URL invocation without --allow-remote, so the GIF would show a refusal:\n  %s",
+					tape, cmd.line, cmd.text)
+			}
+		}
+	}
+}
+
+// TestDocs_StateTheRemoteDefaultDeny checks the claim itself, not only the flag
+// name. A page listing --allow-remote among the flags while still describing a
+// URL as something sqly just fetches teaches the old contract.
+func TestDocs_StateTheRemoteDefaultDeny(t *testing.T) {
+	t.Parallel()
+
+	formats := flatten(section(readDoc(t, "website/content/formats.md"), "## Remote inputs"))
+	if formats == "" {
+		t.Fatal("the formats page has no Remote inputs section")
+	}
+	for _, claim := range []string{
+		"default-deny",
+		"`--allow-remote`",
+		"before any request",
+	} {
+		if !strings.Contains(formats, claim) {
+			t.Errorf("the formats page's Remote inputs section does not state: %s", claim)
+		}
+	}
+
+	// The capability must be described by what it is not, in the same place. A
+	// reader who takes it for an SSRF defense is worse off than one who has never
+	// heard of it.
+	notASandbox := flatten(section(readDoc(t, "website/content/formats.md"), "### What --allow-remote is not"))
+	if notASandbox == "" {
+		t.Fatal("the formats page does not say what --allow-remote is not")
+	}
+	for _, claim := range []string{
+		"not a sandbox",
+		"SSRF",
+		"localhost",
+		"private network",
+		"metadata endpoint",
+		"DNS rebinding",
+	} {
+		if !strings.Contains(notASandbox, claim) {
+			t.Errorf("the capability's limits section does not mention: %s", claim)
+		}
+	}
+
+	// The limits it does not lift stay documented alongside it.
+	remote := flatten(readDoc(t, "website/content/formats.md"))
+	for _, claim := range []string{"2 GiB", "Redirect scheme", "cannot be written back"} {
+		if !strings.Contains(remote, claim) {
+			t.Errorf("the formats page no longer states: %s", claim)
+		}
+	}
+}
+
+// TestREADME_KeepsTheRemoteNoteShortAndCorrect checks the README says the two
+// things a reader needs and links out for the rest, rather than restating the
+// formats page.
+func TestREADME_KeepsTheRemoteNoteShortAndCorrect(t *testing.T) {
+	t.Parallel()
+
+	body := flatten(readDoc(t, "README.md"))
+	for _, claim := range []string{
+		"A URL needs `--allow-remote`",
+		"not a sandbox or an SSRF defense",
+		"formats/#remote-inputs",
+	} {
+		if !strings.Contains(body, claim) {
+			t.Errorf("README does not state: %s", claim)
+		}
+	}
+}
+
+// TestHelp_DocumentsTheRc3Contracts checks --help itself, which is the one
+// document a user reads without a browser.
+func TestHelp_DocumentsTheRc3Contracts(t *testing.T) {
+	t.Parallel()
+
+	arg, err := config.NewArg([]string{"sqly"})
+	if err != nil {
+		t.Fatalf("NewArg: %v", err)
+	}
+	help := flatten(arg.Usage)
+
+	for _, claim := range []string{
+		"--allow-remote",
+		"not a sandbox or an SSRF defense",
+		"downloaded only with --allow-remote",
+		"no row data unless --inspect-sample asks for it",
+		"does not emulate that database",
+		"SQLite semantics",
+		"says so once, on stderr",
+	} {
+		if !strings.Contains(help, claim) {
+			t.Errorf("--help does not state: %s\n\n%s", claim, arg.Usage)
+		}
+	}
+}
+
+// TestDialectDocs_StateSQLiteSemanticsAndTheWarning keeps the dialect page's
+// existing "translation, not emulation" claim and adds the runtime behavior to
+// it, so a reader learns both from the same section.
+func TestDialectDocs_StateSQLiteSemanticsAndTheWarning(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "website/content/dialects.md")
+	if !strings.Contains(body, "## This is translation, not emulation") {
+		t.Fatal("the dialects page lost its \"translation, not emulation\" section")
+	}
+	translation := flatten(section(body, "## This is translation, not emulation"))
+	for _, claim := range []string{
+		"once, on stderr",
+		"SQLite semantics",
+		"does not emulate the source database's semantics",
+		"never to stdout",
+	} {
+		if !strings.Contains(translation, claim) {
+			t.Errorf("the dialects page does not state: %s", claim)
+		}
+	}
+}
+
+// TestGoReleaser_DescriptionsNameTheCurrentFormats catches the release metadata
+// drifting behind what sqly reads. It was advertising four formats and
+// "Microsoft Excel™" while sqly read nine.
+func TestGoReleaser_DescriptionsNameTheCurrentFormats(t *testing.T) {
+	t.Parallel()
+
+	config := readDoc(t, ".goreleaser.yml")
+
+	// The release header is the first thing a visitor to a release page reads.
+	header := flatten(config)
+	for _, format := range []string{"CSV", "TSV", "LTSV", "JSON", "JSONL", "Parquet", "Excel", "ACH", "Fedwire"} {
+		if !strings.Contains(header, format) {
+			t.Errorf(".goreleaser.yml's release header does not name %s", format)
+		}
+	}
+	if !strings.Contains(strings.ToLower(header), "compress") {
+		t.Error(".goreleaser.yml's release header does not mention compressed inputs")
+	}
+
+	// Both package descriptions — nFPM and Homebrew — must have moved off the old
+	// four-format list. They are checked by absence of the stale phrasing and by
+	// presence of the formats that were missing from it.
+	descriptions := regexp.MustCompile(`(?m)^\s*description:\s*(.+)$`).FindAllStringSubmatch(config, -1)
+	if len(descriptions) != 2 {
+		t.Fatalf("found %d description fields in .goreleaser.yml, want 2 (nFPM and Homebrew)", len(descriptions))
+	}
+	for i, match := range descriptions {
+		desc := strings.TrimSpace(match[1])
+		if strings.Contains(desc, "Microsoft Excel") {
+			t.Errorf("description %d still uses the old format list: %q", i+1, desc)
+		}
+		for _, format := range []string{"JSONL", "Parquet", "ACH", "Fedwire", "compressed"} {
+			if !strings.Contains(desc, format) {
+				t.Errorf("description %d does not name %s: %q", i+1, format, desc)
+			}
+		}
+	}
+
+	// Homebrew rejects a formula whose desc runs past 80 characters, so the
+	// shorter of the two has to stay short. The second description is the brews
+	// one; the file's order is asserted above by there being exactly two.
+	brew := strings.TrimSpace(descriptions[1][1])
+	if len(brew) > 80 {
+		t.Errorf("the Homebrew description is %d characters; brew audit caps it at 80: %q", len(brew), brew)
+	}
+}
+
+// TestAbout_BenchmarkIsMarkedHistorical keeps an old measurement from reading as
+// a promise about the current release.
+func TestAbout_BenchmarkIsMarkedHistorical(t *testing.T) {
+	t.Parallel()
+
+	about := flatten(section(readDoc(t, "website/content/about.md"), "## Benchmark"))
+	if about == "" {
+		t.Fatal("the about page has no Benchmark section")
+	}
+	for _, claim := range []string{
+		"Historical measurement",
+		"v0.30.0",
+		"not a performance guarantee",
+	} {
+		if !strings.Contains(about, claim) {
+			t.Errorf("the about page's Benchmark section does not state: %s", claim)
+		}
+	}
+
+	readme := flatten(section(readDoc(t, "README.md"), "## Benchmark"))
+	if readme == "" {
+		t.Fatal("the README has no Benchmark section")
+	}
+	for _, claim := range []string{"historical measurement", "not a performance guarantee"} {
+		if !strings.Contains(readme, claim) {
+			t.Errorf("the README's Benchmark section does not state: %s", claim)
+		}
+	}
+}
+
+// TestMigrationGuide_ExplainsRc2ToRc3 checks the document a user upgrading from
+// the previous candidate actually needs: the before and the after, for both
+// breaking changes, as commands they can copy.
+func TestMigrationGuide_ExplainsRc2ToRc3(t *testing.T) {
+	t.Parallel()
+
+	guide := readDoc(t, migrationGuideFile)
+	flat := flatten(guide)
+
+	for _, claim := range []string{
+		"rc2",
+		"rc3",
+		`sqly --sql "..." https://example.com/data.csv`,
+		`sqly --allow-remote --sql "..." https://example.com/data.csv`,
+		"included five sample rows by default",
+		"schema-only by default",
+		"--inspect-sample N",
+	} {
+		if !strings.Contains(flat, claim) {
+			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
+		}
+	}
+
+	// The dialect warning is not a change a command has to absorb, but a caller
+	// that parses stderr has to know it arrived.
+	if !strings.Contains(flat, "stderr") {
+		t.Errorf("%s does not mention the new stderr output", migrationGuideFile)
+	}
+}
+
+// TestCHANGELOG_ListsTheRc3BreakingChanges keeps the release notes in step with
+// the guide, since the two are read by different people.
+func TestCHANGELOG_ListsTheRc3BreakingChanges(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "CHANGELOG.md")
+	rc3 := section(body, "## [v1.0.0-rc3]")
+	if rc3 == "" {
+		t.Fatal("CHANGELOG.md has no v1.0.0-rc3 section")
+	}
+	breaking := flatten(section(rc3, "### Breaking Changes"))
+	if breaking == "" {
+		t.Fatal("the v1.0.0-rc3 CHANGELOG entry has no Breaking Changes section")
+	}
+	for _, claim := range []string{"--allow-remote", "--inspect-sample", "schema_version"} {
+		if !strings.Contains(breaking, claim) {
+			t.Errorf("the rc3 Breaking Changes section does not mention %s", claim)
+		}
+	}
+	if !strings.Contains(flatten(rc3), migrationGuideLink) {
+		t.Errorf("the rc3 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
+	}
+}
+
+// TestPagesVerification_ChecksTheRc3Contracts guards the deploy check itself.
+// The website workflow verifies the live site against a list of claims; a
+// contract added without being added there is a contract the deploy cannot
+// catch drifting.
+func TestPagesVerification_ChecksTheRc3Contracts(t *testing.T) {
+	t.Parallel()
+
+	workflow := readDoc(t, ".github/workflows/website.yml")
+	for _, claim := range []string{
+		"--allow-remote",
+		"schema-only by default",
+		"default-deny",
+		"not a sandbox or an SSRF defense",
+		"schema/inspect-v1.schema.json",
+		"Historical measurement",
+	} {
+		if !strings.Contains(workflow, claim) {
+			t.Errorf("the Pages verification does not check the deployed site for: %s", claim)
 		}
 	}
 }

@@ -16,6 +16,8 @@ becomes a table named after the file. They are loaded as one operation — see
 shows, and an ACH or Fedwire file becomes its related set of tables; you pick the
 one you want by name in SQL, the same way you pick among a directory's files.
 
+A URL is read only with [`--allow-remote`](#remote-inputs).
+
 | Flag | Does |
 |:--|:--|
 | `--stdin-format FORMAT` | read stdin as a dataset instead of as SQL: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
@@ -23,6 +25,38 @@ one you want by name in SQL, the same way you pick among a directory's files.
 | `--encoding ENCODING` | decode text inputs that have no BOM as this encoding (default `utf-8`) |
 | `--row-mismatch POLICY` | a CSV/TSV row whose field count differs from the header: `error` (fail the import), `skip` (drop the row), `pad` (fill a short row, fail on a long one) |
 | `--include-hidden-sheets` | import the sheets an Excel workbook hides as well as the ones it shows (default: only the shown ones) |
+| `--allow-remote` | allow this session to download `http(s)` input it is given (default: a URL is refused before any request) |
+
+### Remote inputs
+
+**Remote input is default-deny.** Without `--allow-remote`, an `http` or `https`
+URL is refused as a usage error — exit `2` — before any request is made:
+
+```shell
+# refused, and no HTTP request happens
+sqly --sql "SELECT * FROM users" https://example.com/users.csv
+
+# allowed
+sqly --allow-remote \
+  --sql "SELECT * FROM users" \
+  https://example.com/users.csv
+```
+
+The capability covers every way a URL can reach sqly: positional arguments to
+any run mode (a query, `--sql-file`, `--script-file`, `--inspect`, the
+interactive shell), and `.import URL` typed at the prompt, piped in, or read from
+a `--script-file`. A session started with `--allow-remote` keeps the capability
+for the `.import` commands typed later.
+
+Granting the capability without using it is fine: `sqly --allow-remote data.csv`
+runs, and so does `sqly --allow-remote` with no input at all. A wrapper does not
+have to know in advance whether the command line holds a URL.
+
+`--allow-remote` is an explicit network capability, not a sandbox or an SSRF
+defense. It decides *whether* sqly makes a request, not *where* the request may
+go, and it does not lift any of the limits on
+[the download itself](../formats/#remote-inputs). See
+[what it does not protect against](../formats/#what-allow-remote-is-not).
 
 ### What each option applies to
 
@@ -320,28 +354,106 @@ touches a source, so it is accepted with a symlinked source and rejects
 
 | Flag | Does |
 |:--|:--|
-| `--inspect` | print schema, row counts, and sample rows as JSON, then exit |
-| `--inspect-sample N` | sample rows per table in `--inspect` (default 5; `0` for schema only) |
+| `--inspect` | print schema, row counts, and source metadata as JSON, then exit |
+| `--inspect-sample N` | sample rows per table in `--inspect` (default `0`, which is schema only) |
+
+**`--inspect` is schema-only by default.** It describes what a file holds and
+does not print what is in it. Row data arrives only when `--inspect-sample N`
+asks for it, and then at most `N` rows per table:
+
+```shell
+# schema, row counts, sources — and no row data
+sqly --inspect data.csv
+
+# the same, plus at most one row per table
+sqly --inspect --inspect-sample 1 data.csv
+```
+
+This is the default because `--inspect` is the command something reaches for
+when it has been handed a file nobody has read yet — an agent, a wrapper, a CI
+job. "Tell me what this is" must not answer with the contents.
 
 `--inspect` prints a report instead of running a query, so it is rejected together
 with `--sql`, `--sql-file`, `--output`, and `--output-format`: each of those asks
 for a different action or a different shape, and honoring one silently would mean
-ignoring the other.
+ignoring the other. `--inspect-sample` without `--inspect` is rejected too, as is
+a negative count; both exit `2` before anything is read.
 
 The report is one JSON document on stdout and nothing else, so it can be piped
 straight into `jq` or a program. Import progress and warnings go to stderr, and a
-clean run keeps stderr empty.
+clean run keeps stderr empty. A run that fails writes nothing to stdout at all —
+there is no partial document to parse.
 
-Two runs over the same inputs produce the same bytes:
+The same binary, given the same inputs and the same options, produces the same
+bytes:
 
-- `tables` is sorted by table name.
+- top-level fields are in a fixed order: `schema_version`, `sqly_version`,
+  `tables`, then `excel_sheets` when there is one.
+- `tables` is sorted by table name, and is always an array.
 - `columns` is in definition order — the file's column order.
 - `sample_rows` is the *first* rows of the table, in the order they were read
-  from the file, capped at `--inspect-sample` (default 5). `--inspect-sample 0`
-  gives schema only, and `sample_rows` is an empty array rather than absent.
+  from the file, capped at `--inspect-sample`. It is always an array: with no
+  sample requested it is `[]`, never absent and never `null`.
 
-Each table carries its name, its source (a path, or `stdin` for a piped dataset),
-its row count, its columns, and its sample.
+Across sqly versions the bytes do change, because `sqly_version` changes. The
+shape is what `schema_version` promises, not the bytes.
+
+Each table carries its name, its source (a path, a URL, or `stdin` for a piped
+dataset), its row count, its columns, and its sample.
+
+### Inspect JSON schema
+
+Every report opens with two fields that answer different questions:
+
+| Field | Type | Says |
+|:--|:--|:--|
+| `schema_version` | JSON number | how to read this document. It is `1`. |
+| `sqly_version` | JSON string | which binary wrote it — the same string `sqly --version` prints. Never empty. |
+
+```json
+{
+  "schema_version": 1,
+  "sqly_version": "v1.0.0-rc3",
+  "tables": []
+}
+```
+
+Branch on `schema_version`; report `sqly_version`. They are not
+interchangeable: two releases can write the same `schema_version` and different
+`sqly_version` values, which is exactly the case where the shape is stable and
+the bytes are not.
+
+The formal contract is a JSON Schema (Draft 2020-12), published at
+[`/sqly/schema/inspect-v1.schema.json`](../schema/inspect-v1.schema.json). It is
+the single canonical copy — there is no second copy in the repository or in this
+page to drift from it — and sqly's own tests validate real `--inspect` output
+against it.
+
+#### Compatibility policy for schema version 1
+
+**A v1 consumer must ignore fields it does not know.** That is what makes the
+list below possible: everything in the first group can be added without moving
+`schema_version`, and a consumer that fails on an unrecognized key would break
+on a change this policy calls compatible.
+
+These changes keep `schema_version` at `1`:
+
+- adding an optional top-level field
+- adding a field to an existing object
+- adding a value to a set an existing field's description enumerates, as long as
+  no existing value changes meaning
+- any change a consumer that ignores unknown fields absorbs unchanged
+
+These changes raise `schema_version`:
+
+- removing a field
+- renaming a field
+- changing a field's type
+- making a required field optional, or an optional field required
+- changing whether a field can be `null`
+- changing what an existing field means
+- restructuring an array or an object
+- making `sample_rows` optional again
 
 A run whose inputs include an Excel workbook also gets an `excel_sheets` array,
 listing every sheet each workbook holds and which of them became a table. It is
@@ -350,6 +462,8 @@ it has sheets, and nothing in `tables` says what is missing.
 
 ```json
 {
+  "schema_version": 1,
+  "sqly_version": "v1.0.0-rc3",
   "tables": [],
   "excel_sheets": [
     {

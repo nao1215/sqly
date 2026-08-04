@@ -14,6 +14,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
+	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -165,6 +166,19 @@ type Shell struct {
 	// one, rebuilding only when the table set changes (or after an import).
 	completionTableKey  string
 	completionTableCols []Suggest
+	// allowRemote is this session's permission to download http(s) inputs, taken
+	// from --allow-remote when the shell is built. It is session state rather
+	// than a package-level flag so a capability granted to one invocation cannot
+	// leak into another, and so an interactive session started with the flag
+	// keeps it for the .import commands typed later. See remotepolicy.go.
+	allowRemote bool
+	// dialectWarned records that this session has already said a non-SQLite
+	// dialect is translated rather than emulated. The warning is worth saying
+	// once and is noise on every statement, and a session — not the process — is
+	// what a user experiences, so it is a field here rather than a package
+	// variable. Switching back to SQLite and out again does not re-arm it: the
+	// user has been told what the translation means.
+	dialectWarned bool
 	// httpClient downloads remote datasets for HTTP/HTTPS imports. It is
 	// overridable in tests so httptest servers can supply their own transport.
 	httpClient *http.Client
@@ -224,6 +238,7 @@ func NewShell(
 		isTTY:          config.IsInputFromTTY,
 		historyEnabled: true,
 		tableSources:   make(map[string]string),
+		allowRemote:    arg.AllowRemote,
 		httpClient:     newRemoteClient(),
 	}, nil
 }
@@ -309,12 +324,33 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// A URL this session may not download is refused here, before the import and
+	// before the first statement. Both halves are checked together — the inputs
+	// on the command line and the .import lines of the script — so a run that
+	// will be refused makes no HTTP request, imports nothing local, creates no
+	// temporary directory, and writes nothing to stdout. See remotepolicy.go.
+	if err := s.authorizeRemoteInputs(s.argument.FilePaths); err != nil {
+		return err
+	}
+	if err := s.authorizeScriptRemoteInputs(elements); err != nil {
+		return err
+	}
+
 	// A failed import is a failed start, interactive or not. An import loads
 	// every input it was given or none of them, so there is no half-loaded
 	// session left to hand someone: starting a shell here would open a prompt
 	// onto an empty database while claiming the files were read.
 	if err := s.init(ctx); err != nil {
 		return err
+	}
+
+	// A non-SQLite dialect is announced once, here: after the run has proved it
+	// will execute user SQL, and before the first statement of it runs or the
+	// prompt opens. --help, --version, a rejected command line, and --inspect
+	// never reach this point, so none of them says anything about a dialect they
+	// do not use. See warnDialectTranslationOnce.
+	if s.plan.mode != modeInspect {
+		s.warnDialectTranslationOnce(s.usecases.query.Dialect())
 	}
 
 	switch s.plan.mode {
@@ -943,10 +979,10 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "jsonl", Description: "sqly command argument: jsonl (newline-delimited JSON) output format"},
 		{Text: "excel", Description: "sqly command argument: excel output format"},
 		{Text: "parquet", Description: "sqly command argument: parquet export format"},
-		{Text: "sqlite", Description: "sqly command argument: SQLite query dialect (default)"},
-		{Text: "mysql", Description: "sqly command argument: MySQL query dialect"},
-		{Text: "postgresql", Description: "sqly command argument: PostgreSQL query dialect"},
-		{Text: "googlesql", Description: "sqly command argument: GoogleSQL query dialect"},
+		{Text: string(dialect.SQLite), Description: "sqly command argument: SQLite query dialect (default)"},
+		{Text: string(dialectMySQL), Description: "sqly command argument: MySQL query dialect"},
+		{Text: string(dialectPostgreSQL), Description: "sqly command argument: PostgreSQL query dialect"},
+		{Text: string(dialectGoogleSQL), Description: "sqly command argument: GoogleSQL query dialect"},
 	}
 
 	for _, v := range s.commands {
