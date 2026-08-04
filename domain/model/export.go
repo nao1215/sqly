@@ -302,8 +302,8 @@ func BuildOutputPath(path string, format ExportFormat, comp Compression) string 
 // IsInputOnlyExtension reports whether a destination path targets a format the
 // single-table export path cannot produce: ACH (.ach) and Fedwire (.fed). These
 // are reconstructed from a complete, related table set, not from one table, so
-// `--output` and `.dump` (which write a single table) reject them; the whole-set
-// `--save-in-place`/`--save-tables`/`.save` write-back path handles them instead. All
+// `--output` and `.dump` (which write a single table) reject them; `.save`, which
+// writes whole sets, handles them instead. All
 // trailing compression suffixes are stripped first, so a path that hides the
 // extension behind several codecs (".ach.gz.zst", ".fed.gz.zst") is detected too.
 func IsInputOnlyExtension(path string) bool {

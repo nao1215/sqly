@@ -44,8 +44,7 @@ func (e *partialImportError) Unwrap() error { return errPartialImport }
 
 // importCommand imports files into the in-memory database.
 // Each file/directory is loaded individually so that same-name tables from
-// different directories are overwritten (last-wins) rather than failing,
-// and --sheet filtering is scoped to the correct Excel file.
+// different directories are overwritten (last-wins) rather than failing.
 func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		// A missing path argument is a command error so a batch script fails fast
@@ -146,8 +145,7 @@ func summarizeImportErrors(messages []string) string {
 // importDirectory loads every supported file in a directory into the database,
 // one file at a time, so each table can be mapped back to the exact file that
 // produced it. Returns imported=true when at least one table was loaded or
-// overwritten, plus the number of workbooks skipped because they lacked the
-// requested --sheet ().
+// overwritten.
 //
 // Importing per file (rather than handing the whole directory to filesql) lets
 // importDirectory:
@@ -224,8 +222,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath stri
 	}
 
 	if len(importedTables) == 0 {
-		// Every supported file was skipped (e.g. all workbooks lacked the --sheet).
-		// The caller turns an all-skipped run into a clear error via skipped.
+		// The directory held supported files but none of them produced a table.
 		return false, nil
 	}
 
@@ -405,7 +402,8 @@ func (s *Shell) markDirImported(name string) {
 	s.dirImported[name] = true
 }
 
-// importFile loads a single file into the database, applying --sheet filtering for Excel.
+// importFile loads a single file into the database, recording which tables it
+// produced so write-back knows what the file owns.
 // stdinImportErrorMessage renders an import failure for the staged --stdin-format
 // dataset with the random temp staging path replaced by a stable
 // "stdin (--stdin-format FORMAT)" reference. ok is false when displayPath is not the
@@ -527,12 +525,11 @@ func (s *Shell) clearDirImported(names []string) {
 	}
 }
 
-// recordTableSources remembers which source path produced each table name, so
-// the --inspect report and write-back (.save) can map a table back to its
-// source. The source is resolved to an absolute path so write-back still targets
-// the right file after the shell changes directory with .cd. For directory
-// imports the source is the directory; write-back rejects those because it
-// cannot tell which file in the directory owns the table.
+// recordTableSources maps each table to the file it was read from, which is what
+// --inspect reports and what write-back writes to. The path is made absolute so
+// it still names the right file after .cd. A table loaded as part of a directory
+// import records that file too; whether it came from a directory is a separate
+// mark (see markDirImported), because they answer different questions.
 func (s *Shell) recordTableSources(ctx context.Context, tableNames []string, source string) {
 	if !isRemoteURL(source) {
 		if abs, err := filepath.Abs(source); err == nil {
@@ -883,9 +880,9 @@ func isAllDigits(s string) bool {
 // instead of skipping the import and exiting 0.
 func importUsageText() string {
 	return "[Usage]\n" +
-		"  .import FILE_PATH(S)|DIRECTORY_PATH(S) [--sheet NAME | --sheet=NAME]\n" +
+		"  .import FILE_PATH(S)|DIRECTORY_PATH(S)\n" +
 		"\n" +
-		"  - Quote arguments that contain spaces: .import \"my data.csv\" or --sheet \"Q1 Sales\"\n" +
+		"  - Quote arguments that contain spaces: .import \"my data.csv\"\n" +
 		"\n" +
 		"  - Supported file format: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed\n" +
 		"  - Compression (csv/tsv/ltsv/json/jsonl/parquet/xlsx only): .gz, .bz2, .xz, .zst, .z, .snappy, .s2, .lz4\n" +
@@ -893,6 +890,5 @@ func importUsageText() string {
 		"  - Directories are automatically detected and all supported files are imported\n" +
 		"  - If import multiple files/directories, separate them with spaces\n" +
 		"  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)\n" +
-		"  - Use --sheet to import only a specific sheet from Excel files (works with files and directories)\n" +
 		"  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields"
 }

@@ -43,9 +43,8 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 		return errors.New(".save requires a non-empty directory; use .save --in-place to overwrite the sources")
 	}
 	// Anything else beginning with "-" is a flag the user meant, not a directory
-	// they want created. Taking it as a destination made `.save --force` — the
-	// spelling this command used before --in-place — silently write a directory
-	// named "--force" instead of overwriting the sources it was asked to.
+	// they want created. Taking it as a destination would silently write a
+	// directory named after the flag instead of doing what was asked.
 	if argv[0] != inPlaceArg && strings.HasPrefix(argv[0], "-") {
 		return fmt.Errorf(".save does not have a %s option; write to a directory with .save DIR, or overwrite the sources with .save %s", argv[0], inPlaceArg)
 	}
@@ -175,12 +174,11 @@ type writeTarget struct {
 // into that directory, preserving each source's file name, and the original
 // source files are left untouched.
 //
-// Only tables that map 1:1 to a single editable source file are written:
-// CSV, TSV, LTSV, and Parquet, with the source's compression preserved. Tables
-// without a file source (created by SQL), tables from a directory import, tables
-// that share a source with others (Excel sheets, ACH/Fedwire), and unsupported
-// formats are rejected with a clear error before anything is written, so a
-// session is never partially saved.
+// A table backed by its own file — CSV, TSV, LTSV, Parquet — is written back in
+// that format, with the source's compression preserved. The several tables of an
+// ACH or Fedwire source are reconstructed together into the one file they came
+// from. Anything that cannot be written that way is rejected before the first
+// byte is written, so a session is never partially saved.
 func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 	// Both destinations skip a table the session did not change, and they mean
 	// different things by "did not change" — see planWriteBack.
@@ -307,7 +305,10 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 			continue
 		}
 		if tablesPerSource[source] > 1 {
-			problems = append(problems, fmt.Sprintf("%s: shares source %s with other tables (Excel/ACH/Fedwire)", name, source))
+			// An ACH or Fedwire source never reaches here: its tables are written as
+			// one set above. What is left is a workbook, where the sheets are
+			// separate tables of one file and sqly has no Excel writer to rebuild it.
+			problems = append(problems, fmt.Sprintf("%s: shares source %s with the other sheets of that workbook", name, source))
 			continue
 		}
 		format, comp, supported := writableExportTarget(source)
