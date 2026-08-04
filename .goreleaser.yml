@@ -32,6 +32,12 @@ snapshot:
 # Curated release notes: a short human summary first, then changes grouped by
 # user-facing category instead of a raw commit dump.
 release:
+  # A tag carrying a pre-release suffix (-rc1, -beta, -alpha) is published as a
+  # GitHub pre-release, so it does not become the Latest release a visitor to the
+  # repository is offered. Without this, v1.0.0-rc1 was presented as the current
+  # release of sqly. Go's module proxy already excludes such versions from
+  # `@latest`; this is the same rule applied to the release page.
+  prerelease: auto
   header: |
     ## sqly {{ .Tag }}
 
