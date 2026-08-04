@@ -38,7 +38,7 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.help` | show the command list |
-| `.mode MODE` | change the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `ndjson`, `markdown`, `excel`, `parquet` |
+| `.mode MODE` | change the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown`, `excel`, `parquet` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
 | `.clear` | clear the screen |
 | `.exit` | quit (so does `Ctrl-D`) |
@@ -65,10 +65,10 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.import PATH...` | load files, directories, or `http(s)` URLs into the session |
-| `.import-mode POLICY` | how to handle a ragged CSV/TSV row: `stop` aborts, `skip` drops, and `pad` fills short rows with empty values while rejecting long rows without truncation |
+| `.row-mismatch POLICY` | how to handle a CSV/TSV row whose field count differs from the header: `error` fails the import, `skip` drops the row, `pad` fills a short row with empty values and fails on a long one |
 | `.dump TABLE FILE` | export one table; the format follows `.mode`, or the file extension when the mode is `table` |
 | `.save DIR` | write every changed table into `DIR`, leaving the sources alone |
-| `.save --force` | overwrite each table's source file in place |
+| `.save --in-place` | overwrite each table's source file |
 
 ## Batch mode
 
@@ -88,6 +88,17 @@ EOF
 
 A failing statement stops the script and exits non-zero, naming the statement and its line.
 
+A helper command must start its own line; `SELECT 1; .save ./out` is rejected,
+because reading it as two things depends on knowing where the statement ended,
+which is what the line does not show. Leading whitespace is fine, so a script can
+indent. A `.` inside a string, a `--` comment, or a `/* */` block is part of the
+statement, not a command.
+
+This is also the only place a helper command runs. `--sql-file` holds SQL, and a
+dot-command in one is rejected by name and line — a `.sql` file that runs `.save`
+is a shell script wearing a SQL extension. Pipe such a script in instead, exactly
+as written above.
+
 ## Write-back from the shell
 
 ```text
@@ -97,4 +108,6 @@ sqly:~/data(table)$ .save ./out
 Saved user to out/user.csv
 ```
 
-`.save DIR` never touches the sources. `.save --force` overwrites them. A session that changed no row writes no file and says so.
+`.save DIR` never touches the sources. `.save --in-place` overwrites them. A session that changed no row writes no file and says so.
+
+Write-back lives here rather than on the command line: it is the one thing sqly does that cannot be undone, and `.save` puts it after the statements that changed something, where you can look first. The same commands work in a piped script, so a batch job writes back the same way a person does. The [reference](/reference/#write-back) has the full contract — which formats can be written, what happens when several files are saved at once, and what is guaranteed if one of them fails.

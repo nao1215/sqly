@@ -2,10 +2,15 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestDocsMakeCommandsExist is a docs-sync guardrail: every `make <target>`
@@ -181,13 +186,24 @@ func makeCommandTargets(cmd string) []string {
 	return targets
 }
 
-// TestDemoAssetsInSync is a docs-sync guardrail for the demo GIFs. Rendering GIFs
-// needs vhs/ttyd/ffmpeg (via `make demo`) and is too heavy for CI, so this does
-// not render them; it checks that the assets a tape declares and the README
-// references actually exist and line up. That catches the common drift the
-// project cannot otherwise see: a doc/vhs/*.tape added or changed without its GIF
-// regenerated, or a README GIF pointing at an asset no tape produces.
-func TestDemoAssetsInSync(t *testing.T) {
+// TestDemoAssets_TapesAndGIFsStayInStep guards the demo GIFs, within what a test
+// can actually see.
+//
+// What it verifies: every tape declares exactly one Output GIF and that file
+// exists; every GIF the README embeds is produced by a tape; no tape types a
+// dot-command the shell no longer has; and no GIF was committed before the tape
+// it is rendered from was last changed.
+//
+// What it cannot verify: the pixels. Rendering needs vhs, ttyd, and ffmpeg and is
+// far too heavy for CI, and nothing here reads a GIF's frames. A GIF re-rendered
+// from the right tape is the only thing that makes its contents current — the
+// commit-order check below is what makes "someone edited a tape and forgot to run
+// make demo" fail, rather than a claim that the frames were inspected.
+//
+// The flags a tape types are checked separately, by
+// TestDemoTapes_EveryRecordedInvocationParses, which runs them through the real
+// argument parser.
+func TestDemoAssets_TapesAndGIFsStayInStep(t *testing.T) {
 	t.Parallel()
 
 	tapeGIF, err := tapeOutputGIFs("doc/vhs")
@@ -211,6 +227,7 @@ func TestDemoAssetsInSync(t *testing.T) {
 		if _, statErr := os.Stat(gif); statErr != nil {
 			t.Errorf("%s declares Output %q, but that GIF is missing; run `make demo` to render it", tape, gif)
 		}
+		assertGIFNotOlderThanTape(t, tape, gif)
 	}
 
 	// Every GIF the README embeds must exist and be produced by a tape, so a
@@ -230,6 +247,79 @@ func TestDemoAssetsInSync(t *testing.T) {
 			t.Errorf("README.md:%d references %q, but no doc/vhs/*.tape produces it; add a tape or fix the reference", ref.line, ref.path)
 		}
 	}
+}
+
+// removedShellCommandsInTapes are dot-command names the shell no longer
+// registers. A tape typing one renders a demo of sqly printing an error, and
+// nothing else notices: the parser check only sees command-line arguments.
+var removedShellCommandsInTapes = []string{".import-mode", ".ragged-rows", ".compare", ".profile", ".save --force"}
+
+// TestDemoTapes_TypeNoRemovedShellCommand keeps the shell demos off the removed
+// surface. The flags are covered by the parser check; this is the half of a tape
+// that runs inside a session.
+func TestDemoTapes_TypeNoRemovedShellCommand(t *testing.T) {
+	t.Parallel()
+
+	tapes, err := filepath.Glob("doc/vhs/*.tape")
+	if err != nil {
+		t.Fatalf("glob the tapes: %v", err)
+	}
+	for _, tape := range tapes {
+		data, readErr := os.ReadFile(tape) //nolint:gosec // path comes from a glob over the repository's own tapes
+		if readErr != nil {
+			t.Fatalf("read %s: %v", tape, readErr)
+		}
+		for _, removed := range removedShellCommandsInTapes {
+			if strings.Contains(string(data), removed) {
+				t.Errorf("%s types %q, which the shell no longer has; the rendered GIF would show an error", tape, removed)
+			}
+		}
+	}
+}
+
+// assertGIFNotOlderThanTape fails when a tape was committed more recently than
+// the GIF it renders, which is what "edited the tape, forgot `make demo`" looks
+// like in history. It uses commit timestamps rather than file mtimes because a
+// checkout gives every file the same arbitrary mtime. When either path has no
+// commit yet (both are staged in the same change, or this is a shallow clone),
+// there is nothing to compare and the check passes.
+func assertGIFNotOlderThanTape(t *testing.T, tape, gif string) {
+	t.Helper()
+
+	tapeTime, ok := lastCommitUnix(tape)
+	if !ok {
+		return
+	}
+	gifTime, ok := lastCommitUnix(gif)
+	if !ok {
+		return
+	}
+	if gifTime < tapeTime {
+		t.Errorf("%s was last changed after %s was rendered; run `make demo` and commit the GIF", tape, gif)
+	}
+}
+
+// lastCommitUnix returns the Unix time of the last commit touching path. The
+// bool is false when git is unavailable, the repository has no history for the
+// path, or the command fails for any other reason — none of which is something a
+// docs test should fail on.
+func lastCommitUnix(path string) (int64, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	//nolint:gosec // path comes from a glob over the repository's own doc and tape files
+	out, err := exec.CommandContext(ctx, "git", "log", "-1", "--format=%ct", "--", path).Output()
+	if err != nil {
+		return 0, false
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return 0, false
+	}
+	seconds, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return seconds, true
 }
 
 // tapeOutputGIFs maps each doc/vhs/*.tape to the GIF path in its `Output "..."`

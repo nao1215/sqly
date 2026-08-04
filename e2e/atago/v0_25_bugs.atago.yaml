@@ -53,12 +53,12 @@ scenarios:
     env: *hist
     steps:
       - run:
-          command: sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
+          command: sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
           stdin: "\n"
       - assert:
           exit_code: 1
           stderr:
-            contains: "stdin (--stdin csv)"
+            contains: "stdin (--stdin-format csv)"
 
   - name: fails batch mode when .schema is missing its table name
     env: *hist

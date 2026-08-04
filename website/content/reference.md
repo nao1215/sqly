@@ -6,88 +6,338 @@ weight: 60
 
 sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version` — `sqly help` and `sqly version` are read as input paths.
 
-## Output formats
+The groups below are the ones `sqly --help` prints.
 
-| Flag | Format |
+## Input
+
+Positional arguments are the inputs: files, directories, and `http(s)` URLs. Each
+becomes a table named after the file. A workbook becomes one table per sheet, and
+an ACH or Fedwire file becomes its related set of tables; you pick the one you
+want by name in SQL, the same way you pick among a directory's files.
+
+| Flag | Does |
 |:--|:--|
-| `--output-format table` (default) | ASCII table |
-| `--output-format vertical` | one column per line, in a block per record; for rows too wide to read across |
-| `--output-format csv` | CSV |
-| `--output-format tsv` | TSV |
-| `--output-format ltsv` | LTSV |
-| `--output-format json` | JSON array preserving SQLite numeric, text, and NULL types |
-| `--output-format ndjson` | newline-delimited JSON preserving SQLite numeric, text, and NULL types |
-| `--output-format markdown` | Markdown table |
-| `--output-format excel` | Excel workbook (needs `--output` or `.dump`) |
-| `--output-format parquet` | Parquet (needs `--output` or `.dump`) |
+| `--stdin-format FORMAT` | read stdin as a dataset instead of as SQL: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
+| `--stdin-table NAME` | table name for the `--stdin-format` dataset (default `stdin`) |
+| `--encoding ENCODING` | decode text inputs that have no BOM as this encoding (default `utf-8`) |
+| `--row-mismatch POLICY` | a CSV/TSV row whose field count differs from the header: `error` (fail the import), `skip` (drop the row), `pad` (fill a short row, fail on a long one) |
+
+### What each option applies to
+
+`--encoding` and `--row-mismatch` apply to **every** input of the run that they
+can affect — file arguments, the files inside a directory argument, a URL, and
+the `--stdin-format` dataset alike. There is one encoding and one policy per run;
+sqly has no per-file syntax for them.
+
+| Flag | Applies to | Does not apply to |
+|:--|:--|:--|
+| `--encoding` | csv, tsv, ltsv, json, jsonl | Excel and Parquet (they carry their own encoding), ACH and Fedwire (defined as ASCII), and the `--sql-file` script, which is always read as UTF-8 |
+| `--row-mismatch` | csv, tsv | every other format: none of them has a header row a later row can disagree with |
+
+"Does not apply to" means the option has no effect on that input, not that
+typing it is tolerated. A run whose inputs are *all* of the formats an option
+cannot affect is rejected — `--row-mismatch skip data.json` fails rather than
+exiting 0 having done nothing. A run with a CSV and a JSON accepts it and applies
+it to the CSV.
+
+A Unicode BOM wins over `--encoding`: a file that declares its own encoding is
+read the way it declares itself.
+
+**Typing an option that cannot apply is an error.** If you pass `--encoding
+shift-jis` and no input is a text format, or `--row-mismatch skip` and no input is
+CSV or TSV, the run stops before importing anything rather than accepting a flag
+and ignoring it. A directory or a URL counts as applicable, because what it holds
+is not known until it is read. In a mixed run — one CSV and one Parquet — the
+option applies to the inputs it can and the run proceeds.
+
+`--stdin-table` is rejected without `--stdin-format`, for the same reason.
 
 ## Query
 
 | Flag | Does |
 |:--|:--|
-| `-s`, `--sql SQL` | run one statement |
-| `-f`, `--sql-file PATH` | run a script; multi-statement, cannot combine with `--sql` |
-| `-o`, `--output PATH` | write the result to a file instead of stdout |
-| `--dialect NAME` | write `sqlite` (default), `mysql`, `postgresql`, or `googlesql` and have it translated |
+| `-s`, `--sql SQL` | run one statement, then exit |
+| `-f`, `--sql-file FILE` | run every SQL statement in a file, then exit; cannot combine with `--sql` |
+| `--dialect NAME` | write the query in `sqlite` (default), `mysql`, `postgresql`, or `googlesql` and have it translated |
 
-## Input
+Without either query flag, sqly opens the interactive shell on a terminal, and
+reads SQL from stdin when it is piped. `--stdin-format` takes stdin for the data,
+so it needs `--sql`, `--sql-file`, or `--inspect` to say what to run.
+
+### What a `--sql-file` may contain
+
+A `--sql-file` holds SQL. A dot-command in one is rejected by name and line
+before any statement runs:
+
+```text
+$ sqly --sql-file save.sql user.csv
+--sql-file runs SQL only, but line 2 is the helper command ".save"; pipe the
+script to sqly instead: printf '...' | sqly FILE
+```
+
+The flag says SQL, and a `.sql` file that runs `.save` is a shell script wearing
+a SQL extension. A script that mixes both is what stdin is for, and it is the
+same text either way:
+
+```shell
+printf "UPDATE user SET name = 'x' WHERE id = 1;\n.save --in-place\n" | sqly user.csv
+```
+
+### What sqly does with standard input
+
+Standard input is a script, a dataset, or unused, and which one it is never
+depends on what it contains — only on the flags and on what stdin is attached to.
+sqly never reads stdin to find out, so a pipe with a slow writer or a FIFO with
+no writer at all cannot hang it.
+
+| Flags | stdin is | sqly does |
+|:--|:--|:--|
+| none | a terminal | opens the interactive shell |
+| none | a pipe or a redirected file | runs it as a script: SQL and dot-commands |
+| `--stdin-format FORMAT` | anything | imports it as the table `stdin` |
+| `--sql` / `--sql-file` / `--inspect` | a terminal, `/dev/null`, or an empty file | nothing; stdin is unused |
+| `--sql` / `--sql-file` / `--inspect` | a pipe or a non-empty file | nothing, and says so on stderr |
+
+The last row is the one worth knowing. `cat data.csv \| sqly --sql "..." other.csv`
+looks like it feeds `data.csv` in, and it does not — the answer comes from
+`other.csv` alone and looks perfectly correct. sqly warns rather than failing:
+telling an empty pipe from a full one means reading it, and reading it is what
+hangs on a FIFO nobody is writing to. The exit code is unchanged, so a wrapper
+that hands every child an empty pipe keeps working.
+
+Naming standard input as an input file works and is not warned about, because
+nothing is being dropped:
+
+```shell
+cat data.csv | sqly --sql "SELECT COUNT(*) FROM stdin" /dev/stdin
+```
+
+### How many results a run may produce
+
+`--sql` runs exactly one statement. Two would mean discarding a result, so it is
+rejected — the split is quote-, comment-, and trigger-aware, so a semicolon inside
+`'a;b'` or a `-- comment;` does not count as a second statement.
+
+`--sql-file` and a piped script run every statement. How many of them may return
+rows depends on the output format, because only some formats can say where one
+result ends and the next begins:
+
+| Format | Several results |
+|:--|:--|
+| `table`, `vertical`, `markdown` | allowed; results are printed in statement order, separated by a blank line |
+| `csv`, `tsv`, `ltsv` | rejected: a second header row in the middle of the body would parse as data |
+| `json` | rejected: two arrays back to back are not a JSON document |
+| `jsonl` | rejected: the format has no way to mark a result boundary |
+| `excel`, `parquet` | rejected: they need `--output`, which writes one file |
+
+A rejected run writes nothing to stdout and exits non-zero; it never prints the
+first result and then stops. A script that returns no rows at all (only DDL and
+DML) is fine in every format.
+
+`--output` writes one file, so it needs exactly one result whatever the format. A
+script that produces none, or more than one, is rejected and no file is written —
+rather than a file holding whichever result happened to be last.
+
+## Output
 
 | Flag | Does |
 |:--|:--|
-| `-S`, `--sheet NAME` | import one Excel sheet by its original name |
-| `--stdin FORMAT` | treat stdin as a dataset: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
-| `--stdin-name NAME` | table name for `--stdin` (default `stdin`) |
-| `--import-mode POLICY` | ragged CSV/TSV rows: `stop` (abort), `skip` (drop), `pad` (pad short rows with empty values; reject long rows without truncating) |
-| `--encoding NAME` | text encoding for BOM-less input (default `utf-8`) |
-| `--cache PATH` | reuse a SQLite snapshot while the inputs are unchanged (content-hash keyed) |
+| `-o`, `--output FILE` | write the query result to a file instead of stdout |
+| `--output-format FORMAT` | one of the formats below (default `table`) |
 
-## Cache
-
-`--cache PATH` stores the imported tables as a SQLite snapshot, so a repeated run
-skips re-parsing the source files.
-
-```shell
-sqly --cache ./events.cache --sql "SELECT COUNT(*) FROM events" events.csv
-```
-
-The first run builds the snapshot at `PATH`; later runs read it.
-
-| Question | Answer |
+| Format | Result |
 |:--|:--|
-| When is the cache used? | when `--cache PATH` is given and every input still matches the snapshot |
-| When is it rebuilt? | when an input's path, size, or SHA-256 content hash differs — editing a file is enough |
-| Where is it stored? | at `PATH`; sqly writes nothing outside it |
-| How do I disable it? | omit `--cache` |
-| How do I delete it? | delete the file at `PATH` |
+| `table` | ASCII table |
+| `vertical` | one column per line, in a block per record; for rows too wide to read across |
+| `csv` | CSV |
+| `tsv` | TSV |
+| `ltsv` | LTSV |
+| `json` | JSON array preserving SQLite numeric, text, and NULL types |
+| `jsonl` | newline-delimited JSON (`.jsonl`, also written `.ndjson`), same types |
+| `markdown` | Markdown table |
+| `excel` | Excel workbook; needs `--output` or `.dump` |
+| `parquet` | Parquet; needs `--output` or `.dump` |
 
-A cached run answers exactly what a cold run answers: the same rows, the same
-types, the same output bytes. If the snapshot cannot be read, the run falls back
-to importing the sources and still succeeds.
+`excel` and `parquet` are binary files with no on-screen form, so a `--sql` or
+`--sql-file` run that selects one without `--output` is rejected rather than
+printing something else.
 
-A run that fails part-way leaves nothing behind for the next one. Restoring from
-a cache either restores every table or none of them, so a failed run cannot
-leave a half-populated session that a later run trips over.
+### What `--output` guarantees
+
+The result is written to a temporary file beside the destination and moved into
+place only once it is complete. A query that fails, a result count that is wrong,
+a format that cannot represent a value, or a failed write all leave an existing
+destination exactly as it was — never truncated, half-written, or removed.
+
+The checks that can run before the import do: a destination that is a directory,
+ends in a path separator, or whose parent directory does not exist is rejected
+before any input is read. A destination that resolves to one of the input files is
+rejected too — overwriting a source is `.save --in-place`'s job, not a side effect
+of `--output`. Symlinks are resolved before that comparison, so an alias cannot
+get around it.
+
+An existing destination is **overwritten**. `--output` is how you name the file you
+want; it does not ask. The file's permissions are preserved when it already exists,
+and a new file is created with the usual `0600`.
+
+A destination that is a symlink is written *through*: the file it names receives
+the result and the link stays a link. The same holds for `.save --in-place` on a
+symlinked source. A rename would replace the link itself, leaving a regular file
+where the link was and the real file still holding the old rows.
 
 ## Inspection
 
-Each of these prints a report and exits, instead of running a query.
-
 | Flag | Does |
 |:--|:--|
-| `-i`, `--inspect` | schema, row counts, and sample rows as JSON |
-| `--inspect-sample N` | rows per table in `--inspect` (default 5; `0` for schema only) |
+| `--inspect` | print schema, row counts, and sample rows as JSON, then exit |
+| `--inspect-sample N` | sample rows per table in `--inspect` (default 5; `0` for schema only) |
 
-## Write-back
+`--inspect` prints a report instead of running a query, so it is rejected together
+with `--sql`, `--sql-file`, `--output`, and `--output-format`: each of those asks
+for a different action or a different shape, and honoring one silently would mean
+ignoring the other.
 
-| Flag | Does |
+The report is one JSON document on stdout and nothing else, so it can be piped
+straight into `jq` or a program. Import progress and warnings go to stderr, and a
+clean run keeps stderr empty.
+
+Two runs over the same inputs produce the same bytes:
+
+- `tables` is sorted by table name.
+- `columns` is in definition order — the file's column order.
+- `sample_rows` is the *first* rows of the table, in the order they were read
+  from the file, capped at `--inspect-sample` (default 5). `--inspect-sample 0`
+  gives schema only, and `sample_rows` is an empty array rather than absent.
+
+Each table carries its name, its source (a path, or `stdin` for a piped dataset),
+its row count, its columns, and its sample. Values use the same JSON encoding
+`--output-format json` uses:
+
+| Value | In the JSON |
 |:--|:--|
-| `--save-dir DIR` | write each changed table into `DIR`; sources untouched |
-| `--save` | overwrite each source file in place; requires `--force` |
-| `--force` | confirm the destructive in-place write |
+| INTEGER, REAL | a JSON number — a 64-bit integer is emitted in full, and a consumer that parses JSON numbers as doubles will lose digits past 2^53 |
+| TEXT | a JSON string; `"123"` stays a string |
+| NULL | `null`, which is what distinguishes it from `""` |
+| BLOB | a JSON string: the bytes when they are valid UTF-8, base64 otherwise (see below) |
+| Infinity, -Infinity, NaN | the JSON strings `"Infinity"`, `"-Infinity"`, `"NaN"`, because JSON has no way to write them |
+| Bytes that are not valid UTF-8 in a TEXT column | the invalid bytes become U+FFFD, as they already did on import |
 
-Only `INSERT`/`UPDATE`/`DELETE` on an imported table are persisted; a schema change is rejected before anything is written. A run that changes no row writes no file and says so on stderr. A save covering several files is all-or-nothing: if any file cannot be written, none of them is.
+The distinction JSON keeps is number / string / null, and that is the whole of
+it. Three of the rows above land on "a JSON string", and a reader of the output
+cannot tell them apart:
 
-Tables created by SQL, tables from a directory import, and Excel sources are rejected for write-back with an explicit error. CSV, TSV, LTSV, and Parquet sources are written individually, preserving format and compression; an ACH or Fedwire source is reconstructed as a whole from its related tables.
+- a TEXT value that happens to read `"YWJj"`,
+- a BLOB holding the three bytes `abc`, which is valid UTF-8 and is written `"abc"`,
+- a BLOB holding bytes that are not valid UTF-8, which is written base64 and
+  carries no marker saying so.
+
+So **`--inspect` and `--output-format json` do not preserve the BLOB type**, and
+a program that has to distinguish a blob from text must get the type from
+elsewhere — `typeof(col)` in the query is the direct way:
+
+```shell
+sqly --output-format json --sql "SELECT typeof(payload) AS kind, payload FROM t" t.parquet
+```
+
+Base64 for the invalid-UTF-8 case is not a type tag; it is what keeps the bytes
+recoverable at all. Written as a string, every invalid byte would become U+FFFD
+and the value could not be decoded back.
+
+## Write back
+
+Write-back is a shell command, not a flag. `.save` writes the tables a session
+changed back out to files — at the interactive prompt, or in a script piped to
+sqly.
+
+| Command | Does |
+|:--|:--|
+| `.save DIR` | write every table the session changed into `DIR`, in its source format; the sources are untouched |
+| `.save --in-place` | overwrite the source file of every table the session changed |
+
+It is a command rather than a flag on purpose. Writing over the files you are
+reading is the one thing sqly does that cannot be undone, and it belongs at the
+end of a session, after the statements that changed something — where the same
+words describe it interactively and in a script:
+
+```shell
+printf "UPDATE user SET name = 'x' WHERE id = 1;\n.save --in-place\n" | sqly user.csv
+```
+
+Writing a *query result* somewhere is `--output`, a different job with different
+rules: it takes one result, in any format sqly can write.
+
+### What "changed" means
+
+It is measured, not assumed. sqly fingerprints each table's contents at import and
+compares before writing, so a table the session did not modify is not rewritten
+even when a sibling table was, and a session that changed nothing writes no file
+at all and says so on stderr. A net-zero edit — a value changed and changed back —
+counts as unchanged.
+
+The two destinations measure against different things, because they write
+different files:
+
+| Command | Writes a table when |
+|:--|:--|
+| `.save --in-place` | the table differs from what its **source file** holds |
+| `.save DIR` | the table differs from what it held **at import** |
+
+So the two can be used in either order, and each does its own job:
+
+```shell
+printf "UPDATE u SET name='zoe';\n.save out\n.save --in-place\n" | sqly u.csv
+```
+
+The export is written, and the source is written too — the export changed nothing
+about the source, so the source still needs writing. Reversing the two commands
+works the same way: the in-place save brings the source up to date, and the
+export is still written, because it is a different file that does not hold the
+table yet. A second `.save --in-place` in either session reports "nothing to
+save", which by then is true.
+
+Only `INSERT`/`UPDATE`/`DELETE` on an imported table are persisted. A script whose
+statements include a schema change or a maintenance statement is rejected before
+its first statement runs, because `.save` could not represent the result; a
+`CREATE TEMP TABLE` is fine, since scratch space was never going to be written.
+
+### What can and cannot be written
+
+| Source | Write-back |
+|:--|:--|
+| csv, tsv, ltsv | written individually, preserving format and compression |
+| parquet | written individually |
+| ACH, Fedwire | the whole related table set is reconstructed into one file |
+| json, jsonl, Excel | rejected by name: sqly reads them but cannot write them back |
+| a table created by SQL | skipped: it has no source file |
+| a table from a directory import | rejected: it is not a single source the session owns |
+| a `--stdin-format` dataset | rejected: a piped dataset has no source file |
+| an `http(s)` input | rejected: a remote file is not sqly's to modify |
+
+`.save DIR` refuses a destination that already exists, and refuses a directory
+that would resolve back to a source file. Destinations are compared case-folded,
+so two tables that would land on the same file on macOS or Windows are rejected on
+every platform rather than only where it bites.
+
+### How a multi-file save fails
+
+A save covering several files is all-or-nothing. Every table is written to a
+scratch file beside its destination first; only when all of them have been written
+are they moved into place. A failure while encoding the second file therefore
+leaves the first one untouched, and neither the scratch files nor the backups
+survive the run.
+
+If a move fails after an earlier one landed — which a rename can still do, and
+which Windows forces into a copy when another handle holds the destination open —
+the destinations already replaced are restored from backups taken before the first
+move. If a restore fails too, both errors are reported: the one that stopped the
+save, and the file left holding content from a save that did not finish.
+
+An in-place save keeps the source file's permissions. It writes through a
+temporary file, so without this a world-readable CSV would come back owner-only.
+
+**The limit:** replacing several files cannot be atomic on any OS sqly runs on.
+What is guaranteed is that nothing is replaced until everything has been written,
+and that a failure after that point is reported with the exact files affected.
 
 ## Table name rules
 

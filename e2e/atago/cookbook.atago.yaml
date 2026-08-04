@@ -129,7 +129,7 @@ scenarios:
     steps:
       - fixture: *staff
       - run:
-          command: sh -c 'cat staff.csv | sqly --output-format csv --stdin csv --sql "SELECT COUNT(*) AS c FROM stdin"'
+          command: sh -c 'cat staff.csv | sqly --output-format csv --stdin-format csv --sql "SELECT COUNT(*) AS c FROM stdin"'
       - assert:
           exit_code: 0
           stdout:
@@ -182,7 +182,10 @@ scenarios:
             booker12,1,Rachel
             jenkins46,2,Mary
       - run:
-          command: sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save --force user.csv
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;
+            .save --in-place
       - assert:
           exit_code: 0
           file:
@@ -215,7 +218,7 @@ scenarios:
             1,alice
             2,bob,extra
       - run:
-          command: sqly --output-format csv --import-mode skip --sql "SELECT COUNT(*) AS c FROM ragged" ragged.csv
+          command: sqly --output-format csv --row-mismatch skip --sql "SELECT COUNT(*) AS c FROM ragged" ragged.csv
       - assert:
           exit_code: 0
           stdout:
@@ -227,23 +230,6 @@ scenarios:
           exit_code: 1
           stderr:
             contains: column count mismatch
-
-  - name: reuses an import cache while the input is unchanged
-    steps:
-      - fixture: *staff
-      - run:
-          command: sqly --cache staff.cache --output-format csv --sql "SELECT COUNT(*) AS c FROM staff" staff.csv
-      - assert:
-          exit_code: 0
-      - run:
-          command: sqly --cache staff.cache --output-format csv --sql "SELECT COUNT(*) AS c FROM staff" staff.csv
-      - assert:
-          exit_code: 0
-          stderr:
-            contains: "cache: reused"
-          stdout:
-            line: 2
-            equals: "3"
 
   - name: runs a script from a heredoc in batch mode
     # Needs a POSIX shell for the pipeline.

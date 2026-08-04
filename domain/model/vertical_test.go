@@ -168,7 +168,7 @@ func TestPrintModeIsDisplayOnly(t *testing.T) {
 		{mode: PrintModeLTSV, want: false},
 		{mode: PrintModeMarkdownTable, want: false},
 		{mode: PrintModeJSON, want: false},
-		{mode: PrintModeNDJSON, want: false},
+		{mode: PrintModeJSONL, want: false},
 		{mode: PrintModeExcel, want: false},
 		{mode: PrintModeParquet, want: false},
 	}

@@ -206,135 +206,6 @@ func TestDumpTableToParquet_WriteError(t *testing.T) {
 	}
 }
 
-// TestSnapshotToCache_LoadFromCache_RoundTrip snapshots a loaded database to a
-// standalone cache file, then reloads it into a fresh database and asserts the
-// rows survive the round-trip.
-func TestSnapshotToCache_LoadFromCache_RoundTrip(t *testing.T) {
-	t.Parallel()
-
-	src := covFsqlNewAdapter(t)
-	ctx := context.Background()
-	csv := covFsqlWriteCSV(t, "cachedata.csv", "id,name\n1,alice\n2,bob\n3,carol\n")
-	if err := src.LoadFile(ctx, csv); err != nil {
-		t.Fatalf("LoadFile: %v", err)
-	}
-
-	cachePath := filepath.Join(t.TempDir(), "cache.db")
-	// Pre-create the cache file so the stale-cache removal branch runs.
-	if err := os.WriteFile(cachePath, []byte("stale"), 0o600); err != nil {
-		t.Fatalf("seed stale cache: %v", err)
-	}
-	if err := src.SnapshotToCache(ctx, cachePath); err != nil {
-		t.Fatalf("SnapshotToCache: %v", err)
-	}
-	if _, err := os.Stat(cachePath); err != nil {
-		t.Fatalf("cache not written: %v", err)
-	}
-
-	dst := covFsqlNewAdapter(t)
-	if err := dst.LoadFromCache(ctx, cachePath); err != nil {
-		t.Fatalf("LoadFromCache: %v", err)
-	}
-
-	got, err := dst.Query(ctx, "SELECT name FROM cachedata ORDER BY id")
-	if err != nil {
-		t.Fatalf("query reloaded: %v", err)
-	}
-	names := make([]string, 0, len(got.Records()))
-	for _, r := range got.Records() {
-		names = append(names, r[0])
-	}
-	want := []string{"alice", "bob", "carol"}
-	if len(names) != len(want) {
-		t.Fatalf("reloaded names = %v, want %v", names, want)
-	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("reloaded names = %v, want %v", names, want)
-		}
-	}
-}
-
-// TestSnapshotToCache_NilDB checks the guard when the shared database is nil.
-func TestSnapshotToCache_NilDB(t *testing.T) {
-	t.Parallel()
-
-	a := NewFileSQLAdapter(nil)
-	if err := a.SnapshotToCache(context.Background(), filepath.Join(t.TempDir(), "c.db")); err == nil {
-		t.Fatal("SnapshotToCache with nil DB = nil error, want error")
-	}
-}
-
-// TestLoadFromCache_NilDB checks the guard when the shared database is nil.
-func TestLoadFromCache_NilDB(t *testing.T) {
-	t.Parallel()
-
-	a := NewFileSQLAdapter(nil)
-	if err := a.LoadFromCache(context.Background(), filepath.Join(t.TempDir(), "c.db")); err == nil {
-		t.Fatal("LoadFromCache with nil DB = nil error, want error")
-	}
-}
-
-// TestLoadFromCache_Missing checks that loading from a nonexistent cache path
-// returns an unavailable error rather than attaching a bogus database.
-func TestLoadFromCache_Missing(t *testing.T) {
-	t.Parallel()
-
-	a := covFsqlNewAdapter(t)
-	err := a.LoadFromCache(context.Background(), filepath.Join(t.TempDir(), "nope.db"))
-	if err == nil {
-		t.Fatal("LoadFromCache on missing path = nil error, want error")
-	}
-	if !strings.Contains(err.Error(), "unavailable") {
-		t.Errorf("error = %q, want it to mention the cache is unavailable", err.Error())
-	}
-}
-
-// TestLoadFromCache_NoTables checks that a cache holding no user tables reports a
-// clear error instead of silently succeeding. An empty database is snapshotted
-// to produce such a cache.
-func TestLoadFromCache_NoTables(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	empty := covFsqlNewAdapter(t)
-	cachePath := filepath.Join(t.TempDir(), "emptycache.db")
-	if err := empty.SnapshotToCache(ctx, cachePath); err != nil {
-		t.Fatalf("SnapshotToCache(empty): %v", err)
-	}
-
-	dst := covFsqlNewAdapter(t)
-	err := dst.LoadFromCache(ctx, cachePath)
-	if err == nil {
-		t.Fatal("LoadFromCache on empty cache = nil error, want error")
-	}
-	if !strings.Contains(err.Error(), "no tables") {
-		t.Errorf("error = %q, want it to mention there are no tables", err.Error())
-	}
-}
-
-func TestLoadFromCache_RecreateExistingTableError(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	source := covFsqlNewAdapter(t)
-	csv := covFsqlWriteCSV(t, "cache-source.csv", "id\n1\n")
-	if err := source.LoadFile(ctx, csv); err != nil {
-		t.Fatalf("source LoadFile: %v", err)
-	}
-	cachePath := filepath.Join(t.TempDir(), "cache.db")
-	if err := source.SnapshotToCache(ctx, cachePath); err != nil {
-		t.Fatalf("SnapshotToCache: %v", err)
-	}
-	target := covFsqlNewAdapter(t)
-	if err := target.LoadFile(ctx, csv); err != nil {
-		t.Fatalf("target LoadFile: %v", err)
-	}
-	if err := target.LoadFromCache(ctx, cachePath); err == nil || !strings.Contains(err.Error(), "recreate cached table") {
-		t.Fatalf("LoadFromCache error = %v, want recreate error", err)
-	}
-}
-
 // TestDumpACHFile_RoundTrip loads an ACH file and dumps it back out, asserting a
 // non-empty file is produced. It also checks the nil-DB guard.
 //
@@ -368,80 +239,6 @@ func TestDumpACHFile_RoundTrip(t *testing.T) {
 	// nil-DB guard.
 	if err := NewFileSQLAdapter(nil).DumpACHFile(ctx, baseName, out); err == nil {
 		t.Error("DumpACHFile with nil DB = nil error, want error")
-	}
-}
-
-// TestDumpFedWireFile_RoundTrip loads a Fedwire file and dumps it back out,
-// asserting a non-empty file is produced. It also checks the nil-DB guard.
-//
-// This test loads a Fedwire file, which registers a TableSet in filesql's
-// process-global registry, so it must not run in parallel with other FED tests.
-func TestDumpFedWireFile_RoundTrip(t *testing.T) {
-	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
-	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
-		t.Skip("FED test data not available")
-	}
-
-	ctx := context.Background()
-	a := covFsqlNewAdapter(t)
-	if err := a.LoadFile(ctx, fedFile); err != nil {
-		t.Fatalf("LoadFile FED: %v", err)
-	}
-
-	baseName := GetTableNameFromFilePath(fedFile)
-	out := filepath.Join(t.TempDir(), "dumped.fed")
-	if err := a.DumpFedWireFile(ctx, baseName, out); err != nil {
-		t.Fatalf("DumpFedWireFile: %v", err)
-	}
-	info, err := os.Stat(out)
-	if err != nil {
-		t.Fatalf("dumped FED not written: %v", err)
-	}
-	if info.Size() == 0 {
-		t.Error("dumped FED file is empty")
-	}
-
-	// nil-DB guard.
-	if err := NewFileSQLAdapter(nil).DumpFedWireFile(ctx, baseName, out); err == nil {
-		t.Error("DumpFedWireFile with nil DB = nil error, want error")
-	}
-}
-
-// TestSheetNames_Success reads the worksheet list from a real .xlsx workbook.
-func TestSheetNames_Success(t *testing.T) {
-	t.Parallel()
-
-	xlsx := filepath.Join("..", "..", "testdata", "sample.xlsx")
-	if _, err := os.Stat(xlsx); os.IsNotExist(err) {
-		t.Skip("xlsx test data not available")
-	}
-	names, err := SheetNames(xlsx)
-	if err != nil {
-		t.Fatalf("SheetNames: %v", err)
-	}
-	if len(names) == 0 {
-		t.Error("SheetNames returned no sheets, want at least one")
-	}
-}
-
-// TestSheetNames_MissingFile checks the error path when the workbook cannot be
-// opened.
-func TestSheetNames_MissingFile(t *testing.T) {
-	t.Parallel()
-
-	if _, err := SheetNames(filepath.Join(t.TempDir(), "nope.xlsx")); err == nil {
-		t.Fatal("SheetNames on missing file = nil error, want error")
-	}
-}
-
-// TestSheetNames_NotExcel checks the error path when the file exists but is not a
-// valid Excel workbook.
-func TestSheetNames_NotExcel(t *testing.T) {
-	t.Parallel()
-
-	path := covFsqlWriteCSV(t, "not-excel.xlsx", "id,name\n1,alice\n")
-	if _, err := SheetNames(path); err == nil {
-		t.Fatal("SheetNames on non-Excel content = nil error, want error")
 	}
 }
 
@@ -508,5 +305,41 @@ func TestGetTableHeader_ClosedDB(t *testing.T) {
 
 	if _, err := a.GetTableHeader(context.Background(), "some_table"); err == nil {
 		t.Fatal("GetTableHeader on closed DB = nil error, want error")
+	}
+}
+
+// TestDumpFedWireFile_RoundTrip loads a Fedwire file and dumps it back out,
+// asserting a non-empty file is produced. It also checks the nil-DB guard.
+//
+// This test loads a Fedwire file, which registers a TableSet in filesql's
+// process-global registry, so it must not run in parallel with other FED tests.
+func TestDumpFedWireFile_RoundTrip(t *testing.T) {
+	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
+	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
+		t.Skip("FED test data not available")
+	}
+
+	ctx := context.Background()
+	a := covFsqlNewAdapter(t)
+	if err := a.LoadFile(ctx, fedFile); err != nil {
+		t.Fatalf("LoadFile FED: %v", err)
+	}
+
+	baseName := GetTableNameFromFilePath(fedFile)
+	out := filepath.Join(t.TempDir(), "dumped.fed")
+	if err := a.DumpFedWireFile(ctx, baseName, out); err != nil {
+		t.Fatalf("DumpFedWireFile: %v", err)
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("dumped FED not written: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("dumped FED file is empty")
+	}
+
+	// nil-DB guard.
+	if err := NewFileSQLAdapter(nil).DumpFedWireFile(ctx, baseName, out); err == nil {
+		t.Error("DumpFedWireFile with nil DB = nil error, want error")
 	}
 }

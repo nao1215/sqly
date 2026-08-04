@@ -1050,7 +1050,7 @@ func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
 
 // TestGetTableNameFromFilePath_MatchesFilesqlNaming verifies that sqly's table name
 // derivation matches what filesql actually creates in the database. This is a regression
-// test for the naming mismatch bug where --sheet filtering failed on numeric filenames.
+// test for the naming mismatch bug where sheet-table naming failed on numeric filenames.
 func TestGetTableNameFromFilePath_MatchesFilesqlNaming(t *testing.T) {
 	t.Parallel()
 

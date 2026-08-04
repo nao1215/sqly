@@ -48,9 +48,9 @@ func TestRunBatchReaderLineByLine(t *testing.T) {
 
 		// The ".mode csv" is inside the /* ... */ block, so it is a comment, not a
 		// command; only the trailing SELECT runs.
-		_, runErr := shell.runBatchReader(context.Background(), strings.NewReader("/* header\n.mode csv\n*/\nSELECT 1 AS x;\n"))
+		_, runErr := shell.runParsedScript(t, "/* header\n.mode csv\n*/\nSELECT 1 AS x;\n")
 		if runErr != nil {
-			t.Errorf("runBatchReader returned error: %v", runErr)
+			t.Errorf("running the script returned error: %v", runErr)
 		}
 		if strings.Contains(stderr.String(), "mode") || strings.Contains(stderr.String(), "batch statement") {
 			t.Errorf("dot-line inside a block comment was executed: stderr=%q", stderr.String())
@@ -71,12 +71,12 @@ func TestRunBatchReaderLineByLine(t *testing.T) {
 			config.Stderr = &stderr
 			defer func() { config.Stdout, config.Stderr = backout, backerr }()
 
-			ranAny, runErr := shell.runBatchReader(context.Background(), strings.NewReader(tc.input))
+			ranAny, runErr := shell.runParsedScript(t, tc.input)
 			if runErr != nil {
-				t.Errorf("runBatchReader returned error: %v", runErr)
+				t.Errorf("running the script returned error: %v", runErr)
 			}
 			if !ranAny {
-				t.Errorf("runBatchReader did not run any statement")
+				t.Errorf("running the script executed no statement")
 			}
 			// The bug merged ".mode" with the following SQL into one pseudo-command,
 			// surfacing a "got N arguments" error. A clean line-by-line run never does.
@@ -119,7 +119,7 @@ func TestScriptModifiesData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := scriptModifiesData(tt.script); got != tt.want {
+			if got := scriptModifiesData(mustParse(t, tt.script)); got != tt.want {
 				t.Errorf("scriptModifiesData(%q) = %v, want %v", tt.script, got, tt.want)
 			}
 		})
@@ -325,7 +325,7 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	for _, script := range compatible {
 		t.Run("compatible: "+firstLine(script), func(t *testing.T) {
 			t.Parallel()
-			if got := firstSaveIncompatibleStatement(script); got != "" {
+			if got := firstSaveIncompatibleStatement(mustParse(t, script)); got != "" {
 				t.Errorf("firstSaveIncompatibleStatement(%q) = %q, want \"\"", script, got)
 			}
 		})
@@ -351,7 +351,7 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	for _, script := range incompatible {
 		t.Run("incompatible: "+firstLine(script), func(t *testing.T) {
 			t.Parallel()
-			if got := firstSaveIncompatibleStatement(script); got == "" {
+			if got := firstSaveIncompatibleStatement(mustParse(t, script)); got == "" {
 				t.Errorf("firstSaveIncompatibleStatement(%q) = \"\", want a non-empty incompatible statement", script)
 			}
 		})
@@ -378,8 +378,8 @@ func TestScriptImportsInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := scriptImportsInput(tt.script); got != tt.want {
-				t.Errorf("scriptImportsInput(%q) = %v, want %v", tt.script, got, tt.want)
+			if got := scriptRunsImport(t, tt.script); got != tt.want {
+				t.Errorf("script %q imports = %v, want %v", tt.script, got, tt.want)
 			}
 		})
 	}
@@ -391,4 +391,37 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// runParsedScript parses a script the way Run does and executes it, so a test
+// exercises the one path production uses.
+func (s *Shell) runParsedScript(t *testing.T, script string) (bool, error) {
+	t.Helper()
+	elements, err := parseScript(script)
+	if err != nil {
+		t.Fatalf("parseScript(%q): %v", script, err)
+	}
+	return s.runScriptElements(context.Background(), elements)
+}
+
+// scriptRunsImport reports whether a script issues .import, through the same
+// parse the shell uses.
+func scriptRunsImport(t *testing.T, script string) bool {
+	t.Helper()
+	elements, err := parseScript(script)
+	if err != nil {
+		t.Fatalf("parseScript(%q): %v", script, err)
+	}
+	return runsHelper(elements, importCommand)
+}
+
+// mustParse parses a script or fails the test, for the classifiers that take a
+// parsed script.
+func mustParse(t *testing.T, script string) []scriptElement {
+	t.Helper()
+	elements, err := parseScript(script)
+	if err != nil {
+		t.Fatalf("parseScript(%q): %v", script, err)
+	}
+	return elements
 }

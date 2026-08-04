@@ -1,4 +1,4 @@
-# In-place write-back (.save --force) for source formats the save suite does not
+# In-place write-back (.save --in-place) for source formats the save suite does not
 # cover. save.atago.yaml exercises CSV and the ACH/Fedwire native formats; this
 # pins TSV, LTSV, and Parquet. Each scenario updates a row, writes back over the
 # source, then re-imports to confirm the change persisted in that format and the
@@ -16,7 +16,7 @@ scenarios:
           content: "id\tv\n1\ta\n2\tb\n"
       - run:
           command: sqly d.tsv
-          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --in-place\n"
       - assert:
           exit_code: 0
           stderr:
@@ -37,7 +37,7 @@ scenarios:
           content: "id:1\tv:a\nid:2\tv:b\n"
       - run:
           command: sqly d.ltsv
-          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --in-place\n"
       - assert:
           exit_code: 0
           stderr:
@@ -65,7 +65,7 @@ scenarios:
           exit_code: 0
       - run:
           command: sqly d.parquet
-          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --in-place\n"
       - assert:
           exit_code: 0
           stderr:

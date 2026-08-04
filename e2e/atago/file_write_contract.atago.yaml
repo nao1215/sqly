@@ -1,0 +1,364 @@
+# Writing a file is the same problem twice — `--output` writes one query result,
+# `.save` writes the tables a session changed — so both go through the same
+# steps: serialize beside the destination, then move it into place. These
+# scenarios check that from the outside, where the contract is what the user can
+# observe: an existing file is either the old one or the new one, never a
+# truncated one, and its permissions survive.
+#
+# What is *not* here is the failure that only a specific syscall can produce: a
+# rename the platform refuses, falling back to a copy that truncates the
+# destination and then fails on a full disk. An atago scenario cannot choose
+# which syscall fails, so those live in shell/partialwrite_test.go, where the
+# rename and the copy are stubbed to damage the destination before returning an
+# error. The scenarios here pin what a user can see: which file holds which
+# bytes after a run, and what the run said about it.
+#
+# Documented at website/content/reference.md#what---output-guarantees.
+version: "1"
+
+suite:
+  name: sqly file write contract
+
+scenarios:
+  - name: leaves an existing file whole when the format cannot hold a value
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &tabbed
+          file: tabbed.csv
+          content: |
+            a
+            "x	y"
+      - fixture:
+          file: keep.ltsv
+          content: |
+            a:precious
+      - run:
+          command: sqly --output-format ltsv --output keep.ltsv --sql "SELECT a FROM tabbed" tabbed.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: keep.ltsv
+            equals: |
+              a:precious
+
+  - name: names the destination rather than the scratch file when a write fails
+    env: *hist
+    steps:
+      - fixture: *tabbed
+      - fixture:
+          file: keep.ltsv
+          content: |
+            a:precious
+      - run:
+          command: sqly --output-format ltsv --output keep.ltsv --sql "SELECT a FROM tabbed" tabbed.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: '"keep.ltsv"'
+            not_contains: "sqly-out-"
+
+  - name: leaves no scratch file behind after a failed write
+    env: *hist
+    steps:
+      - fixture: *tabbed
+      - fixture:
+          file: keep.ltsv
+          content: |
+            a:precious
+      - run:
+          command: sh -c "sqly --output-format ltsv --output keep.ltsv --sql 'SELECT a FROM tabbed' tabbed.csv; ls -a | grep -c sqly-out || true"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: keeps the destination's permissions when --output overwrites it
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: &rows
+          file: rows.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: out.csv
+          content: |
+            old
+          mode: "0640"
+      - run:
+          command: sh -c "sqly --output-format csv --output out.csv --sql 'SELECT a FROM rows' rows.csv && ls -l out.csv | cut -c1-10"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "-rw-r-----"
+          file:
+            path: out.csv
+            contains: "1"
+
+  - name: keeps the source's permissions when .save --in-place rewrites it
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: perm.csv
+          content: |
+            a
+            1
+          mode: "0640"
+      - run:
+          command: sh -c "printf 'UPDATE perm SET a = 2;\n.save --in-place\n' | sqly perm.csv && ls -l perm.csv | cut -c1-10"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "-rw-r-----"
+          file:
+            path: perm.csv
+            contains: "2"
+
+  - name: writes a workbook that sqly can read back
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format excel --output book.xlsx --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "output mode=excel"
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'" book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: writes a parquet file that sqly can read back
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format parquet --output out.parquet --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT a FROM out" out.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: refuses a binary format with nowhere to put it
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format parquet --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--output"
+
+  - name: refuses to write to a format sqly can only read
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format csv --output out.ach --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: out.ach
+            exists: false
+
+  - name: refuses to write over a file it is reading
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format csv --output rows.csv --sql "SELECT a FROM rows" rows.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: rows.csv
+            contains: "a"
+
+  - name: writes nothing when a session changed no row
+    env: *hist
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly rows.csv
+          stdin: "SELECT a FROM rows;\n.save out\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "nothing to save"
+          file:
+            path: out
+            exists: false
+
+  - name: writes every target of a .save DIR run or none of them
+    env: *hist
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: more.csv
+          content: |
+            b
+            2
+      - run:
+          command: sqly rows.csv more.csv
+          stdin: "UPDATE rows SET a = 9;\nUPDATE more SET b = 8;\n.save out\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out/rows.csv
+            contains: "9"
+      - assert:
+          file:
+            path: out/more.csv
+            contains: "8"
+      - assert:
+          file:
+            path: rows.csv
+            contains: "1"
+
+  - name: leaves every target untouched when one of them cannot be written
+    env: *hist
+    steps:
+      - fixture:
+          file: good.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: bad.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly good.csv bad.ach
+          stdin: "UPDATE good SET a = 9;\nUPDATE bad_entries SET amount = 999999999999;\n.save --in-place\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            not_contains: Saved
+      - assert:
+          file:
+            path: good.csv
+            contains: "1"
+      - assert:
+          file:
+            path: good.csv
+            not_contains: "9"
+
+  - name: leaves no scratch or backup file behind when a save fails
+    env: *hist
+    steps:
+      - fixture:
+          file: good.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: bad.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sh -c "printf 'UPDATE good SET a = 9;\nUPDATE bad_entries SET amount = 999999999999;\n.save --in-place\n' | sqly good.csv bad.ach; ls -a | grep -c 'sqly-save\\|sqly-bak' || true"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: writes every target of a multi-file in-place save when all of them can be written
+    env: *hist
+    steps:
+      - fixture:
+          file: one.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: two.csv
+          content: |
+            b
+            2
+      - run:
+          command: sqly one.csv two.csv
+          stdin: "UPDATE one SET a = 9;\nUPDATE two SET b = 8;\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: one.csv
+            contains: "9"
+      - assert:
+          file:
+            path: two.csv
+            contains: "8"
+
+  - name: writes through a symlinked source instead of replacing the link
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: real/u.csv
+          content: |
+            id,name
+            1,alice
+      - fixture:
+          file: link.csv
+          symlink: real/u.csv
+      - run:
+          command: sqly link.csv
+          stdin: "UPDATE link SET name = 'zoe';\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: real/u.csv
+            contains: zoe
+      - run:
+          command: sh -c "test -L link.csv && echo still-a-link"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: still-a-link
+
+  - name: writes an --output result through a symlink to the file it names
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: rows2.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: real/out.csv
+          content: |
+            old
+      - fixture:
+          file: out-link.csv
+          symlink: real/out.csv
+      - run:
+          command: sqly --output-format csv --output out-link.csv --sql "SELECT a FROM rows2" rows2.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: real/out.csv
+            contains: "1"
+      - run:
+          command: sh -c "test -L out-link.csv && echo still-a-link"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: still-a-link

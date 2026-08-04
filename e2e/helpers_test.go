@@ -15,8 +15,8 @@ import (
 // must never leave behind, and each was reachable before this branch.
 //
 // A run's exit code alone does not catch them. A second run can succeed while
-// still printing "database sqly_cache is already in use" on the way, which is
-// the shape the attachment leak took.
+// still printing "no such table" on the way, which is the shape a partial
+// restore took.
 var residueDiagnostics = []string{
 	"already in use",
 	"unknown database",

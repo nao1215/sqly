@@ -36,7 +36,7 @@ var ErrCleanup = errors.New("cleanup")
 // is when cleanup is most likely to fail and most important to hear about.
 // Joining keeps both reachable through errors.Is and errors.As.
 //
-// what names the cleanup step for the message ("detach cache"). A nil
+// what names the cleanup step for the message ("close the output file"). A nil
 // cleanupErr returns primary unchanged, so callers can call it unconditionally.
 func Join(primary, cleanupErr error, what string) error {
 	if cleanupErr == nil {

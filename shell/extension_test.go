@@ -70,34 +70,6 @@ func TestGetFileTypeFromPath(t *testing.T) {
 	}
 }
 
-func TestExtractSheetNameFromArgs(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		argv     []string
-		expected string
-	}{
-		{"Sheet name found", []string{"file.xlsx", "--sheet=Sheet1"}, "Sheet1"},
-		{"Sheet name with spaces", []string{"file.xlsx", "--sheet=My Sheet"}, "My Sheet"},
-		{"Multiple arguments with sheet", []string{"file1.xlsx", "--sheet=Data", "file2.csv"}, "Data"},
-		{"No sheet argument", []string{"file.xlsx"}, ""},
-		{"Empty sheet name", []string{"file.xlsx", "--sheet="}, ""},
-		{"First sheet argument wins", []string{"--sheet=First", "--sheet=Second"}, "First"},
-		{"Empty arguments", []string{}, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			result := extractSheetNameFromArgs(tt.argv)
-			if result != tt.expected {
-				t.Errorf("extractSheetNameFromArgs(%v) = %s, expected %s", tt.argv, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestValidatePath(t *testing.T) {
 	t.Parallel()
 

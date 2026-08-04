@@ -55,12 +55,12 @@ scenarios:
             line: 2
             equals: a
 
-  - name: .import-mode to the current policy is accepted and changes nothing
+  - name: .row-mismatch to the current policy is accepted and changes nothing
     steps:
       - fixture: *rows
       - run:
           command: sqly t.csv
-          stdin: ".import-mode stop\nSELECT v FROM t;\n"
+          stdin: ".row-mismatch error\nSELECT v FROM t;\n"
       - assert:
           exit_code: 0
           stdout:
@@ -77,8 +77,8 @@ scenarios:
             1,a
             2,b,extra
       - run:
-          command: sqly --output-format csv --import-mode skip ragged.csv
-          stdin: ".import-mode skip\nSELECT COUNT(*) AS c FROM ragged;\n"
+          command: sqly --output-format csv --row-mismatch skip ragged.csv
+          stdin: ".row-mismatch skip\nSELECT COUNT(*) AS c FROM ragged;\n"
       - assert:
           exit_code: 0
           stdout:
@@ -95,13 +95,13 @@ scenarios:
       - assert:
           exit_code: 1
           stderr:
-            contains: "invalid output mode: nope"
+            contains: 'invalid output mode "nope"'
 
-  - name: an unknown import-mode policy is still rejected
+  - name: an unknown row-mismatch policy is still rejected
     steps:
       - fixture: *rows
       - run:
           command: sqly t.csv
-          stdin: ".import-mode nope\n"
+          stdin: ".row-mismatch nope\n"
       - assert:
           exit_code: 1

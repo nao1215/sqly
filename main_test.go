@@ -48,7 +48,7 @@ func Test_run(t *testing.T) {
 	})
 
 	t.Run("import excel, output csv", func(t *testing.T) {
-		args := []string{"sqly", "--sql", "SELECT * FROM sample_test_sheet", "-S", "test_sheet", "--output-format", "csv", "testdata/sample.xlsx"}
+		args := []string{"sqly", "--sql", "SELECT * FROM sample_test_sheet", "--output-format", "csv", "testdata/sample.xlsx"}
 		got := getStdoutForRunFunc(t, run, args)
 		assertMainFixture(t, "excel_to_csv.golden", got)
 	})

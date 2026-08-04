@@ -97,7 +97,7 @@ scenarios:
           file: sample.xlsx
           from: testdata/sample.xlsx
       - run:
-          command: sqly --output-format csv --sql "SELECT * FROM sample_test_sheet" -S test_sheet sample.xlsx
+          command: sqly --output-format csv --sql "SELECT * FROM sample_test_sheet" sample.xlsx
       - assert:
           exit_code: 0
           stdout:

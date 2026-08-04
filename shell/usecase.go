@@ -10,7 +10,7 @@ import "github.com/nao1215/sqly/usecase"
 //   - metadata (MetadataUsecase): table listing, header, and record inspection
 //   - history (HistoryUsecase): command history management
 //   - export (ExportUsecase): table export to various file formats
-//   - persistence (PersistenceUsecase): native ACH/Fedwire write-back and import cache
+//   - persistence (PersistenceUsecase): native ACH/Fedwire write-back
 type Usecases struct {
 	query       usecase.QueryUsecase
 	importer    usecase.ImportUsecase

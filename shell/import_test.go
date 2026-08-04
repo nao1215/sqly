@@ -15,8 +15,6 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/interactor/mock"
-	"go.uber.org/mock/gomock"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 )
@@ -38,7 +36,7 @@ func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
 
 	// filesql returns an error for empty directories (no supported files found),
 	// so importDirectory propagates the error and returns imported=false.
-	imported, _, err := s.importDirectory(context.Background(), emptyDir, emptyDir, "", false)
+	imported, err := s.importDirectory(context.Background(), emptyDir, emptyDir)
 	if err == nil {
 		t.Fatal("expected error for empty directory, got nil")
 	}
@@ -64,7 +62,7 @@ func TestImportDirectory_ReimportSameDir_ReportsOverwrite(t *testing.T) {
 	ctx := context.Background()
 
 	// First import creates the table.
-	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
+	imported, err := s.importDirectory(ctx, dir, dir)
 	if err != nil {
 		t.Fatalf("first import: %v", err)
 	}
@@ -75,7 +73,7 @@ func TestImportDirectory_ReimportSameDir_ReportsOverwrite(t *testing.T) {
 	// Re-importing the same directory overwrites the existing table. The
 	// directory still contains a supported file, so the import is reported as
 	// successful (it overwrote data) rather than as "No supported files". Ref
-	imported, _, err = s.importDirectory(ctx, dir, dir, "", false)
+	imported, err = s.importDirectory(ctx, dir, dir)
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}
@@ -227,7 +225,7 @@ func TestImportDirectory_RecordsPerFileSource(t *testing.T) {
 	copyTestFile(t, "customer-transfer.fed", filepath.Join(dir, "customer-transfer.fed"))
 
 	ctx := context.Background()
-	if _, _, err := s.importDirectory(ctx, dir, dir, "", false); err != nil {
+	if _, err := s.importDirectory(ctx, dir, dir); err != nil {
 		t.Fatalf("importDirectory: %v", err)
 	}
 
@@ -279,7 +277,7 @@ func TestImportDirectory_RejectsDuplicateBasenameCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = s.importDirectory(context.Background(), dir, dir, "", false)
+	_, err = s.importDirectory(context.Background(), dir, dir)
 	if err == nil {
 		t.Fatal("expected a collision error for duplicate basenames, got nil")
 	}
@@ -304,7 +302,7 @@ func TestImportDirectory_RejectsSanitizedCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = s.importDirectory(context.Background(), dir, dir, "", false)
+	_, err = s.importDirectory(context.Background(), dir, dir)
 	if err == nil {
 		t.Fatal("expected a collision error for sanitized-name collision, got nil")
 	}
@@ -316,7 +314,7 @@ func TestImportDirectory_RejectsSanitizedCollision(t *testing.T) {
 func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *testing.T) {
 	// A directory import that overwrites a table previously loaded from a file
 	// argument must update the table's source to the directory file and mark it as
-	// a directory import, so later .save --force cannot write the directory rows
+	// a directory import, so later .save --in-place cannot write the directory rows
 	// back into the original file.
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
@@ -333,7 +331,7 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	if err := os.WriteFile(orig, origData, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.importFile(ctx, orig, orig, ""); err != nil {
+	if err := s.importFile(ctx, orig, orig); err != nil {
 		t.Fatalf("importFile: %v", err)
 	}
 	if s.dirImported["user"] {
@@ -350,7 +348,7 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 		t.Fatal(err)
 	}
 
-	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
+	imported, err := s.importDirectory(ctx, dir, dir)
 	if err != nil {
 		t.Fatalf("importDirectory re-import: %v", err)
 	}
@@ -366,13 +364,13 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	}
 
 	// Change the table so write-back considers it (an unchanged table is skipped),
-	// then .save --force must refuse to write back a directory import, leaving the
+	// then .save --in-place must refuse to write back a directory import, leaving the
 	// original untouched.
 	if err := s.exec(ctx, "INSERT INTO user VALUES ('alt2',2,'ALT','Two')"); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 	if err := s.writeBack(ctx, ""); err == nil {
-		t.Error("expected .save --force to be rejected for a directory-imported table")
+		t.Error("expected .save --in-place to be rejected for a directory-imported table")
 	}
 	after, err := os.ReadFile(orig) //nolint:gosec // test path
 	if err != nil {
@@ -490,7 +488,7 @@ func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
 	var imported bool
 	// Import progress goes to stderr, so capture stderr here.
 	out := captureStderr(t, func() {
-		imported, _, err = s.importDirectory(context.Background(), dir, "fixtures", "", false)
+		imported, err = s.importDirectory(context.Background(), dir, "fixtures")
 	})
 	if err != nil {
 		t.Fatalf("importDirectory returned error: %v", err)
@@ -514,286 +512,6 @@ func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
 	}
 }
 
-func TestShell_importFile_excelSheetFiltering_dependsOnImportAndQueryUsecases(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	importer := mock.NewMockImportUsecase(ctrl)
-	query := mock.NewMockQueryUsecase(ctrl)
-	filePath := "report.xlsx"
-
-	gomock.InOrder(
-		importer.EXPECT().IsSupportedFile(filePath).Return(true),
-		// Source tracking records the table-to-file mapping with a before/after diff.
-		importer.EXPECT().GetTableNames(gomock.Any()).Return(nil, nil),
-		importer.EXPECT().LoadFiles(gomock.Any(), filePath).Return(nil),
-		importer.EXPECT().IsExcelFile(filePath).Return(true),
-		importer.EXPECT().GetTableNameFromFilePath(filePath).Return("report"),
-		importer.EXPECT().GetTableNames(gomock.Any()).Return([]*model.Table{
-			model.NewTable("report_Summary", nil, nil),
-			model.NewTable("report_Details", nil, nil),
-		}, nil),
-		importer.EXPECT().SanitizeForSQL("Summary").Return("Summary"),
-		importer.EXPECT().QuoteIdentifier("report_Details").Return(`"report_Details"`),
-		query.EXPECT().Exec(gomock.Any(), `DROP TABLE IF EXISTS "report_Details"`).Return(int64(0), nil),
-		importer.EXPECT().GetTableNames(gomock.Any()).Return([]*model.Table{
-			model.NewTable("report_Summary", nil, nil),
-		}, nil),
-	)
-
-	s := newBoundaryTestShell(t, Usecases{
-		importer: importer,
-		query:    query,
-	})
-
-	if err := s.importFile(context.Background(), filePath, filePath, "Summary"); err != nil {
-		t.Fatalf("importFile returned error: %v", err)
-	}
-}
-
-func TestFilterExcelSheets_NoCollisionWithSimilarPrefix(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-
-	// Simulate pre-existing tables from sales_q1.xlsx (prefix: sales_q1_)
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE sales_q1_Revenue (id INTEGER, amount REAL)")
-	if err != nil {
-		t.Fatalf("failed to create pre-existing table: %v", err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"INSERT INTO sales_q1_Revenue VALUES (1, 100.0)")
-	if err != nil {
-		t.Fatalf("failed to insert: %v", err)
-	}
-
-	// Simulate tables from sales.xlsx (prefix: sales_)
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE sales_Summary (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE sales_Details (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Filter sales.xlsx to keep only "Summary".
-	// Pass candidates scoped to sales.xlsx tables only, simulating what
-	// importFile/importDirectory would provide from the diff.
-	candidates := map[string]struct{}{
-		"sales_Summary": {},
-		"sales_Details": {},
-	}
-	err = s.filterExcelSheets(ctx, "sales.xlsx", "Summary", candidates)
-	if err != nil {
-		t.Fatalf("filterExcelSheets: %v", err)
-	}
-
-	// sales_q1_Revenue must NOT be dropped (different prefix)
-	table, err := s.usecases.metadata.List(ctx, "sales_q1_Revenue")
-	if err != nil {
-		t.Fatalf("sales_q1_Revenue should still exist: %v", err)
-	}
-	if len(table.Records()) != 1 {
-		t.Errorf("expected 1 record in sales_q1_Revenue, got %d", len(table.Records()))
-	}
-
-	// sales_Summary must be kept
-	_, err = s.usecases.metadata.List(ctx, "sales_Summary")
-	if err != nil {
-		t.Fatalf("sales_Summary should still exist: %v", err)
-	}
-
-	// sales_Details must be dropped
-	_, err = s.usecases.metadata.List(ctx, "sales_Details")
-	if err == nil {
-		t.Error("expected sales_Details to be dropped, but it still exists")
-	}
-}
-
-func TestFilterExcelSheets_UnderscoreInFilename(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-
-	// sales_q1.xlsx produces tables with prefix "sales_q1_"
-	// So sales_q1_Summary has sheet part "Summary" (after stripping "sales_q1_")
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE sales_q1_Summary (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE sales_q1_Details (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = s.filterExcelSheets(ctx, "sales_q1.xlsx", "Summary", nil)
-	if err != nil {
-		t.Fatalf("filterExcelSheets: %v", err)
-	}
-
-	// Summary should be kept
-	_, err = s.usecases.metadata.List(ctx, "sales_q1_Summary")
-	if err != nil {
-		t.Fatalf("sales_q1_Summary should still exist: %v", err)
-	}
-
-	// Details should be dropped
-	_, err = s.usecases.metadata.List(ctx, "sales_q1_Details")
-	if err == nil {
-		t.Error("expected sales_q1_Details to be dropped")
-	}
-}
-
-func TestFilterExcelSheets_SheetNotFound(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE report_Sheet1 (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE report_Sheet2 (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = s.filterExcelSheets(ctx, "report.xlsx", "NonExistent", nil)
-	if err == nil {
-		t.Error("expected error for non-existent sheet, got nil")
-	}
-
-	// Both tables should be dropped
-	_, err = s.usecases.metadata.List(ctx, "report_Sheet1")
-	if err == nil {
-		t.Error("expected report_Sheet1 to be dropped")
-	}
-	_, err = s.usecases.metadata.List(ctx, "report_Sheet2")
-	if err == nil {
-		t.Error("expected report_Sheet2 to be dropped")
-	}
-}
-
-func TestFilterExcelSheets_ReimportWithSheet(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-
-	// Simulate first import of report.xlsx (all sheets loaded)
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE report_Summary (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE report_Details (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Re-import with --sheet=Summary: tables already exist (overwrite case).
-	// filterExcelSheets uses prefix matching on all current tables, not diff,
-	// so it should still find and filter correctly.
-	err = s.filterExcelSheets(ctx, "report.xlsx", "Summary", nil)
-	if err != nil {
-		t.Fatalf("filterExcelSheets on re-import: %v", err)
-	}
-
-	// Summary should be kept
-	_, err = s.usecases.metadata.List(ctx, "report_Summary")
-	if err != nil {
-		t.Fatalf("report_Summary should still exist: %v", err)
-	}
-
-	// Details should be dropped
-	_, err = s.usecases.metadata.List(ctx, "report_Details")
-	if err == nil {
-		t.Error("expected report_Details to be dropped on re-import with --sheet")
-	}
-}
-
-func TestImportDirectory_SheetDoesNotDropNonExcelTables(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-
-	// Pre-load a CSV table that should survive --sheet filtering
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE users (id INTEGER, name TEXT)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"INSERT INTO users VALUES (1, 'Alice')")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Simulate Excel tables that would be imported from a directory
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE workbook_Sheet1 (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.usecases.query.Exec(ctx,
-		"CREATE TABLE workbook_Sheet2 (id INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// filterExcelSheets only touches tables with the exact Excel prefix;
-	// non-Excel tables like "users" must not be affected.
-	err = s.filterExcelSheets(ctx, "workbook.xlsx", "Sheet1", nil)
-	if err != nil {
-		t.Fatalf("filterExcelSheets: %v", err)
-	}
-
-	// users table must still exist
-	table, err := s.usecases.metadata.List(ctx, "users")
-	if err != nil {
-		t.Fatalf("users table should still exist: %v", err)
-	}
-	if len(table.Records()) != 1 {
-		t.Errorf("expected 1 record in users, got %d", len(table.Records()))
-	}
-
-	// workbook_Sheet1 kept, workbook_Sheet2 dropped
-	_, err = s.usecases.metadata.List(ctx, "workbook_Sheet1")
-	if err != nil {
-		t.Fatalf("workbook_Sheet1 should still exist: %v", err)
-	}
-	_, err = s.usecases.metadata.List(ctx, "workbook_Sheet2")
-	if err == nil {
-		t.Error("expected workbook_Sheet2 to be dropped")
-	}
-}
-
 func TestImportFile_UnsupportedFormat(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
@@ -806,7 +524,7 @@ func TestImportFile_UnsupportedFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = s.importFile(context.Background(), tmpFile, tmpFile, "")
+	err = s.importFile(context.Background(), tmpFile, tmpFile)
 	if err == nil {
 		t.Fatal("expected error for unsupported format")
 	}
@@ -828,7 +546,7 @@ func TestImportFile_CSVSuccess(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := s.importFile(ctx, tmpFile, tmpFile, ""); err != nil {
+	if err := s.importFile(ctx, tmpFile, tmpFile); err != nil {
 		t.Fatalf("importFile: %v", err)
 	}
 
@@ -854,108 +572,10 @@ func TestImportFile_NonexistentFile(t *testing.T) {
 	}
 	defer cleanup()
 
-	err = s.importFile(context.Background(), "/nonexistent/file.csv", "/nonexistent/file.csv", "")
+	err = s.importFile(context.Background(), "/nonexistent/file.csv", "/nonexistent/file.csv")
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}
-}
-
-func TestImportFile_ExcelWithSheet(t *testing.T) {
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	// Use the project's test Excel file
-	excelPath := filepath.Join("..", "testdata", "sample.xlsx")
-	if _, err := os.Stat(excelPath); os.IsNotExist(err) {
-		t.Skip("testdata/sample.xlsx not found")
-	}
-
-	ctx := context.Background()
-	err = s.importFile(ctx, excelPath, excelPath, "test_sheet")
-	if err != nil {
-		t.Fatalf("importFile with --sheet: %v", err)
-	}
-
-	// Verify at least one table exists after import
-	tables, err := s.usecases.importer.GetTableNames(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tables) == 0 {
-		t.Error("expected at least one table after Excel import with --sheet")
-	}
-}
-
-func TestSheetMissErrors_AreDiagnostic(t *testing.T) {
-	ctx := context.Background()
-	sample := filepath.Join("..", "testdata", "sample.xlsx")
-	accents := filepath.Join("..", "testdata", "sheet_with_accents.xlsx")
-
-	t.Run("a non-Excel input with --sheet distinguishes validation failure and suggests recovery", func(t *testing.T) {
-		s, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanup()
-
-		var importErr error
-		captureStderr(t, func() {
-			importErr = s.commands.importCommand(ctx, s, []string{filepath.Join("..", "testdata", "user.csv"), "--sheet", "Summary"})
-		})
-		if importErr == nil {
-			t.Fatal("expected --sheet on a non-Excel input to fail")
-		}
-		got := importErr.Error()
-		if !strings.Contains(got, "Excel") || !strings.Contains(got, "remove --sheet") {
-			t.Errorf("error %q should explain --sheet needs an Excel input and how to recover", got)
-		}
-	})
-
-	t.Run("a single-workbook miss names the workbook and suggests recovery", func(t *testing.T) {
-		s, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanup()
-
-		err = s.importFile(ctx, sample, sample, "no_such_sheet")
-		if err == nil {
-			t.Fatal("expected a missing sheet to fail")
-		}
-		got := err.Error()
-		if !strings.Contains(got, "sample.xlsx") {
-			t.Errorf("error %q should name the checked workbook", got)
-		}
-		if !strings.Contains(got, "without --sheet") {
-			t.Errorf("error %q should suggest re-importing without --sheet", got)
-		}
-	})
-
-	t.Run("a multi-workbook miss names every checked workbook and suggests recovery", func(t *testing.T) {
-		s, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanup()
-
-		var importErr error
-		captureStderr(t, func() {
-			importErr = s.commands.importCommand(ctx, s, []string{sample, accents, "--sheet", "no_such_sheet"})
-		})
-		if importErr == nil {
-			t.Fatal("expected a missing sheet across workbooks to fail")
-		}
-		got := importErr.Error()
-		if !strings.Contains(got, "sample.xlsx") || !strings.Contains(got, "sheet_with_accents.xlsx") {
-			t.Errorf("error %q should name every checked workbook", got)
-		}
-		if !strings.Contains(got, "without --sheet") {
-			t.Errorf("error %q should suggest re-importing without --sheet", got)
-		}
-	})
 }
 
 func TestImportDirectory_WithCSVFiles(t *testing.T) {
@@ -974,7 +594,7 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	imported, _, err := s.importDirectory(ctx, dir, dir, "", false)
+	imported, err := s.importDirectory(ctx, dir, dir)
 	if err != nil {
 		t.Fatalf("importDirectory: %v", err)
 	}
@@ -1058,166 +678,6 @@ func TestImportCommand_PartialSuccess(t *testing.T) {
 	err = s.commands.importCommand(ctx, s, []string{csvPath, "missing.csv"})
 	if !errors.Is(err, errPartialImport) {
 		t.Errorf("expected errPartialImport for partial failure, got: %v", err)
-	}
-}
-
-func TestImportCommand_SheetArgExtraction(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		argv []string
-		want string
-	}{
-		{"no sheet", []string{"file.csv"}, ""},
-		{"sheet flag", []string{"file.xlsx", "--sheet=Summary"}, "Summary"},
-		{"sheet flag first", []string{"--sheet=Data", "file.xlsx"}, "Data"},
-		{"separated sheet flag", []string{"file.xlsx", "--sheet", "Summary"}, "Summary"},
-		{"separated sheet flag with space value", []string{"--sheet", "Q1 Sales", "file.xlsx"}, "Q1 Sales"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := extractSheetNameFromArgs(tt.argv)
-			if got != tt.want {
-				t.Errorf("extractSheetNameFromArgs(%v) = %q, want %q", tt.argv, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestImportCommand_MissingSheetValueErrors(t *testing.T) {
-	tests := []struct {
-		name string
-		argv []string
-	}{
-		{"sheet flag alone", []string{"--sheet"}},
-		{"sheet flag at end after file", []string{"file.xlsx", "--sheet"}},
-		{"sheet flag followed by another flag", []string{"--sheet", "--sheet=Data"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, cleanup, err := newShell(t, []string{"sqly"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer cleanup()
-
-			if err := s.commands.importCommand(context.Background(), s, tt.argv); err == nil {
-				t.Errorf("importCommand(%v) = nil error, want missing-value error", tt.argv)
-			}
-		})
-	}
-}
-
-func TestSheetAppliesTo_UnreadableDirectoryDefersToImport(t *testing.T) {
-	// An unreadable directory cannot be proven to lack Excel files, so --sheet
-	// validation must defer to the import step (which reports the real access
-	// error) instead of misclassifying it as a non-Excel input.
-	if runtime.GOOS == "windows" {
-		t.Skip("directory permission bits behave differently on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root can traverse a 0000 directory, so the permission error never occurs")
-	}
-
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	parent := t.TempDir()
-	locked := filepath.Join(parent, "locked")
-	if err := os.Mkdir(locked, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(locked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	// Restore permissions so t.TempDir cleanup can remove the directory.
-	defer func() { _ = os.Chmod(locked, 0o750) }() //nolint:gosec // restore dir perms for cleanup
-
-	if !s.sheetAppliesTo([]string{locked}) {
-		t.Error("sheetAppliesTo(unreadable dir) = false, want true (defer to import for the real error)")
-	}
-}
-
-func TestImportCommand_SheetSkipsWorkbooksMissingSheet(t *testing.T) {
-	// A multi-workbook import with --sheet must skip workbooks that lack the
-	// requested sheet instead of failing the whole import, so matching workbooks
-	// still load.
-	s, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	s.argument.SheetName = "A test"
-
-	ctx := context.Background()
-	paths := []string{
-		filepath.Join("testdata", "sheet_with_spaces.xlsx"),  // contains "A test"
-		filepath.Join("testdata", "sample.xlsx"),             // lacks "A test"
-		filepath.Join("testdata", "sheet_with_accents.xlsx"), // lacks "A test"
-	}
-	if err := s.commands.importCommand(ctx, s, paths); err != nil {
-		t.Fatalf("importCommand with --sheet across multiple workbooks = %v, want nil (skip non-matching)", err)
-	}
-
-	tables, err := s.usecases.importer.GetTableNames(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var kept bool
-	for _, tbl := range tables {
-		if strings.HasPrefix(tbl.Name(), "sheet_with_spaces_") {
-			kept = true
-		}
-		if strings.HasPrefix(tbl.Name(), "sample_") || strings.HasPrefix(tbl.Name(), "sheet_with_accents_") {
-			t.Errorf("table %q from a non-matching workbook should have been dropped", tbl.Name())
-		}
-	}
-	if !kept {
-		t.Errorf("expected a table from sheet_with_spaces.xlsx (the matching workbook), got tables %v", tableNamesOf(tables))
-	}
-}
-
-func tableNamesOf(tables []*model.Table) []string {
-	names := make([]string, 0, len(tables))
-	for _, t := range tables {
-		names = append(names, t.Name())
-	}
-	return names
-}
-
-func TestImportCommand_EmptySheetValueRejected(t *testing.T) {
-	// An explicit empty helper --sheet value (separated "" or joined "--sheet=")
-	// must be rejected instead of silently importing every sheet. The rejection
-	// must happen before file/Excel checks, so it surfaces even for a CSV input.
-	csv := filepath.Join("testdata", "sample.csv")
-	tests := []struct {
-		name string
-		argv []string
-	}{
-		{"separated empty sheet value", []string{"--sheet", "", csv}},
-		{"joined empty sheet value", []string{"--sheet=", csv}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, cleanup, err := newShell(t, []string{"sqly"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer cleanup()
-
-			err = s.commands.importCommand(context.Background(), s, tt.argv)
-			if err == nil {
-				t.Fatalf("importCommand(%v) = nil error, want empty-sheet error", tt.argv)
-			}
-			if !strings.Contains(err.Error(), "sheet") {
-				t.Errorf("importCommand(%v) error = %q, want it to mention the empty sheet value", tt.argv, err)
-			}
-		})
 	}
 }
 
@@ -1361,7 +821,7 @@ func TestStagePseudoFileScopedToPseudoFiles(t *testing.T) {
 	config.Stdout = &bytes.Buffer{}
 	config.Stderr = &bytes.Buffer{}
 	defer func() { config.Stdout, config.Stderr = backout, backerr }()
-	if err := shell.importFile(context.Background(), plain, plain, ""); err == nil {
+	if err := shell.importFile(context.Background(), plain, plain); err == nil {
 		t.Error("importFile accepted a non-pseudo extensionless file, want an unsupported-format error")
 	}
 }

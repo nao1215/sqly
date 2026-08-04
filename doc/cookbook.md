@@ -15,7 +15,7 @@ SQLite can do, sqly can do — the file is just the table.
 | Join files of different formats | [Join across formats](#join-across-formats) |
 | Read a `.gz` / `.zst` / `.xz` file | [Compressed files](#compressed-files) |
 | Pull fields out of JSON or JSONL | [JSON and JSONL](#json-and-jsonl) |
-| Pick one sheet out of a workbook | [Excel workbooks](#excel-workbooks) |
+| Query a sheet of a workbook | [Excel workbooks](#excel-workbooks) |
 | Query a file on a web server | [Files over HTTP](#files-over-http) |
 | Pipe data in from another command | [Pipe data in](#pipe-data-in) |
 | Pipe the result into jq, awk, or sort | [Pipe data out](#pipe-data-out) |
@@ -24,9 +24,8 @@ SQLite can do, sqly can do — the file is just the table.
 | Rank, bucket, or window over rows | [Analytics](#analytics) |
 | Edit a file in place | [Write changes back](#write-changes-back) |
 | Write MySQL / PostgreSQL / BigQuery SQL | [Other SQL dialects](#other-sql-dialects) |
-| Handle rows with the wrong number of fields | [Ragged rows](#ragged-rows) |
+| Handle rows with the wrong number of fields | [Row mismatches](#row-mismatches) |
 | Read Shift-JIS or EUC-JP | [Text encodings](#text-encodings) |
-| Speed up a repeated query | [Cache an import](#cache-an-import) |
 | Query bank files (ACH, Fedwire) | [Financial formats](#financial-formats) |
 | Use it in a script or a pipeline | [Scripting](#scripting) |
 
@@ -69,14 +68,14 @@ sqly:~(table)$ .describe user
 The output flag decides the format; `--output` decides where it goes.
 
 ```shell
-sqly --output-format json   --sql "SELECT * FROM user" --output user.json    user.csv
-sqly --output-format ndjson --sql "SELECT * FROM user" --output user.jsonl   user.csv
-sqly --output-format tsv    --sql "SELECT * FROM user" --output user.tsv     user.csv
-sqly --output-format ltsv   --sql "SELECT * FROM user" --output user.ltsv    user.csv
-sqly --output-format excel  --sql "SELECT * FROM user" --output user.xlsx    user.csv
-sqly --output-format parquet --sql "SELECT * FROM user" --output user.parquet user.csv
-sqly --output-format markdown --sql "SELECT * FROM user" --output user.md    user.csv
-sqly --output-format csv    --sql "SELECT * FROM user" --output user.csv.gz  user.tsv
+sqly --output-format json     --sql "SELECT * FROM user" --output user.json    user.csv
+sqly --output-format jsonl    --sql "SELECT * FROM user" --output user.jsonl   user.csv
+sqly --output-format tsv      --sql "SELECT * FROM user" --output user.tsv     user.csv
+sqly --output-format ltsv     --sql "SELECT * FROM user" --output user.ltsv    user.csv
+sqly --output-format excel    --sql "SELECT * FROM user" --output user.xlsx    user.csv
+sqly --output-format parquet  --sql "SELECT * FROM user" --output user.parquet user.csv
+sqly --output-format markdown --sql "SELECT * FROM user" --output user.md      user.csv
+sqly --output-format csv      --sql "SELECT * FROM user" --output user.csv.gz  user.tsv
 ```
 
 The other direction is the same command with the input swapped:
@@ -204,10 +203,10 @@ sqly --inspect book.xlsx
 sqly --sql "SELECT * FROM book_Sheet1" book.xlsx
 ```
 
-Import one sheet by its original name:
+Every sheet is imported, so pick the one you want by its table name:
 
 ```shell
-sqly --sheet "Q3 actuals" --sql "SELECT * FROM book_Q3_actuals" book.xlsx
+sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
 ```
 
 Write a result back out as a workbook:
@@ -235,21 +234,21 @@ Only `http` and `https` are fetched; any other scheme is rejected by name.
 
 ## Pipe data in
 
-`--stdin` names the format of whatever is on standard input; the table is called
-`stdin` unless `--stdin-name` says otherwise:
+`--stdin-format` names the format of whatever is on standard input; the table is called
+`stdin` unless `--stdin-table` says otherwise:
 
 ```shell
-cat user.csv | sqly --stdin csv --sql "SELECT * FROM stdin"
+cat user.csv | sqly --stdin-format csv --sql "SELECT * FROM stdin"
 ```
 
 ```shell
-curl -s https://example.com/user.csv | sqly --stdin csv --sql "SELECT COUNT(*) FROM stdin"
+curl -s https://example.com/user.csv | sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
 ```
 
 Join a pipe with a file on disk:
 
 ```shell
-cat orders.csv | sqly --stdin csv --stdin-name orders \
+cat orders.csv | sqly --stdin-format csv --stdin-table orders \
   --sql "SELECT o.id, p.name FROM orders o JOIN products p ON o.pid = p.id" products.csv
 ```
 
@@ -262,12 +261,12 @@ printf '.tables\nSELECT COUNT(*) FROM user;\n' | sqly user.csv
 
 ## Pipe data out
 
-sqly's non-table output is meant for the next command in the pipe. `--output-format ndjson`
+sqly's non-table output is meant for the next command in the pipe. `--output-format jsonl`
 gives one object per line, which is what `jq` reads without buffering the whole
 result:
 
 ```shell
-sqly --output-format ndjson --sql "SELECT path, status FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
+sqly --output-format jsonl --sql "SELECT path, status FROM logs WHERE status >= 500" logs.csv | jq -r '.path'
 ```
 
 Filtering in SQL before `jq` shapes means `jq` only sees the rows that matter,
@@ -275,7 +274,7 @@ which is the division of labour worth reaching for on a large file — SQL has t
 `WHERE`, `GROUP BY`, and `JOIN`; `jq` has the string formatting:
 
 ```shell
-sqly --output-format ndjson --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error'" events.jsonl | jq -r '"\(.id):\(.name)"'
+sqly --output-format jsonl --sql "SELECT json_extract(data,'\$.id') AS id, json_extract(data,'\$.user.name') AS name FROM events WHERE json_extract(data,'\$.level') = 'error'" events.jsonl | jq -r '"\(.id):\(.name)"'
 ```
 
 For nested JSON, sqly can replace `jq` outright: `json_extract` reaches into the
@@ -293,7 +292,7 @@ sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | tail -
 sqly reads and writes the same pipe, so it can sit in the middle of one:
 
 ```shell
-cat sales.csv | sqly --output-format csv --stdin csv --stdin-name s --sql "SELECT region FROM s WHERE amount > 75" | sort -u
+cat sales.csv | sqly --output-format csv --stdin-format csv --stdin-table s --sql "SELECT region FROM s WHERE amount > 75" | sort -u
 ```
 
 A compressed source needs no decompression stage in front of it:
@@ -344,8 +343,10 @@ sqly ./data extra.csv --sql "SELECT * FROM extra"
 sqly --sql-file report.sql sales.csv
 ```
 
-The script may hold several statements; each result is printed in turn. Send a
-single-result script straight to a file:
+The script holds SQL, and may hold several statements; each result is printed in
+turn. Dot-commands are not SQL, so a `--sql-file` that runs one is rejected —
+pipe such a script to sqly instead. Send a single-result script straight to a
+file:
 
 ```shell
 sqly --output-format csv --sql-file report.sql --output report.csv sales.csv
@@ -416,37 +417,36 @@ sqly --sql "SELECT * FROM users WHERE TRIM(email) = ''" users.csv
 
 ## Write changes back
 
-A session is in-memory only. `--save-dir` writes each changed table into a
-directory and leaves the originals alone:
+A session is in-memory only until `.save` writes it out. `.save DIR` writes every
+table the session changed into `DIR` and leaves the sources alone:
 
 ```shell
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out user.csv
+printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./out\n" | sqly user.csv
 ```
 
-`--save` overwrites the source files, and requires `--force`:
+`.save --in-place` overwrites the source files instead:
 
 ```shell
-sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
+printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place\n" | sqly user.csv
 ```
 
-Compression and format are preserved, so a `.csv.gz` source is rewritten as
-`.csv.gz`. A run that changes no row writes no file and says so. A save covering
-several files is all-or-nothing.
-
-From the shell:
+The same commands work in the interactive shell, where you can look at the
+result before saving it:
 
 ```shell
+sqly user.csv
 sqly:~(table)$ UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;
-sqly:~(table)$ .save ./out
-sqly:~(table)$ .save --force
+sqly:~(table)$ SELECT * FROM user;
+sqly:~(table)$ .save --in-place
 ```
 
-Dump one table to a file without ending the session:
+csv, tsv, ltsv, and parquet sources are written individually, preserving format,
+compression, and permissions; a whole ACH or Fedwire set is reconstructed into
+one file. A table the session did not change is not rewritten, and a save
+covering several files is all-or-nothing.
 
-```shell
-sqly:~(table)$ .mode json
-sqly:~(table)$ .dump user user.json
-```
+To write a *query result* somewhere — in any format, including json and excel —
+use `--output`, which is a different job with different rules.
 
 ## Other SQL dialects
 
@@ -473,16 +473,20 @@ name, but SQL that SQLite accepts is passed through and can answer differently
 from the source dialect without any error. See the dialects page for what is
 translated, what is rejected, and what diverges.
 
-## Ragged rows
+## Row mismatches
 
-A CSV or TSV row whose field count differs from the header stops the import by
-default. `--import-mode` chooses otherwise:
+A CSV or TSV row whose field count differs from the header fails the import by
+default. `--row-mismatch` chooses otherwise. It applies to CSV and TSV only;
+every other format carries its own field structure.
 
 ```shell
-sqly --import-mode stop --sql "SELECT * FROM data" data.csv   # default: fail
-sqly --import-mode skip --sql "SELECT * FROM data" data.csv   # drop the row
-sqly --import-mode pad --sql "SELECT * FROM data" data.csv    # pad short rows; reject long rows
+sqly --row-mismatch error --sql "SELECT * FROM data" data.csv  # default: fail
+sqly --row-mismatch skip  --sql "SELECT * FROM data" data.csv  # drop the row
+sqly --row-mismatch pad   --sql "SELECT * FROM data" data.csv  # pad short rows; fail on long ones
 ```
+
+The same choice is available inside the shell as `.row-mismatch POLICY`, which
+applies to later `.import` runs in the session.
 
 ## Text encodings
 
@@ -497,19 +501,6 @@ sqly --encoding utf-16le   --sql "SELECT * FROM sales" sales.csv
 Accepted: `utf-8`, `shift-jis` (and the `cp932`/`windows-31j` aliases),
 `euc-jp`, `iso-2022-jp`, `utf-16le`, `utf-16be`. A BOM always wins.
 
-## Cache an import
-
-Loading a large file repeatedly is the slow part. `--cache` keeps a SQLite
-snapshot and reuses it while the inputs are unchanged:
-
-```shell
-sqly --cache ./big.cache --sql "SELECT COUNT(*) FROM big" big.csv
-sqly --cache ./big.cache --sql "SELECT * FROM big LIMIT 10" big.csv   # reused
-```
-
-The cache is keyed by each input's path, size, and content hash, so editing the
-source rebuilds it automatically. There is no manual clear operation.
-
 ## Financial formats
 
 An ACH file becomes several related tables; a Fedwire file becomes one:
@@ -523,8 +514,7 @@ sqly --sql "SELECT amount, beneficiary_name FROM transfer_message" transfer.fed
 Edits are written back into a valid file, with the whole set reconstructed:
 
 ```shell
-sqly --sql "UPDATE payment_entries SET individual_name = 'NEW NAME' WHERE entry_index = 0" \
-     --save --force payment.ach
+printf "UPDATE payment_entries SET individual_name = 'NEW NAME' WHERE entry_index = 0;\n.save --in-place\n" | sqly payment.ach
 ```
 
 ## Scripting

@@ -29,7 +29,7 @@ func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string)
 	}
 
 	// In a structured mode emit one machine-readable {column} object per column so
-	// automation can consume the header after selecting json/ndjson, instead of an
+	// automation can consume the header after selecting json/jsonl, instead of an
 	// ASCII table that ignores the mode.
 	if isStructuredMode(s.state.mode.PrintMode) {
 		records := make([]model.Record, 0, len(table.Header()))

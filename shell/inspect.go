@@ -45,7 +45,7 @@ func outputModeFlagName(o *config.Output) string {
 // validateInspectFlags rejects --inspect combined with other effectful flags.
 // --inspect is a self-contained discovery path that imports inputs, prints a
 // JSON report, and exits, so flags that ask for a different action (--sql,
-// --sql-file) or a side effect (--output, --save, --save-dir) would otherwise be
+// --sql-file) or a side effect (--output) would otherwise be
 // silently discarded. Failing fast keeps the contract explicit for scripts.
 func (s *Shell) validateInspectFlags() error {
 	if !s.argument.InspectFlag {
@@ -58,14 +58,12 @@ func (s *Shell) validateInspectFlags() error {
 		return errors.New("--inspect cannot be combined with --sql-file")
 	case s.argument.Output.FilePath != "":
 		return errors.New("--inspect cannot be combined with --output")
-	case s.argument.SaveInPlace:
-		return errors.New("--inspect cannot be combined with --save")
-	case s.argument.SaveDir != "":
-		return errors.New("--inspect cannot be combined with --save-dir")
 	// --output-format selects a result format, but --inspect always emits its
 	// own JSON report. Reject the conflicting flag instead of silently discarding
-	// it, matching the other --inspect conflict checks.
-	case s.argument.Output != nil && s.argument.Output.Mode != model.PrintModeTable:
+	// it, matching the other --inspect conflict checks. What counts is that the
+	// user wrote it: --output-format table is discarded exactly as much as
+	// --output-format csv is, and only the default nobody asked for is silent.
+	case s.argument.IsExplicit("output-format"):
 		return fmt.Errorf("--inspect cannot be combined with --output-format %s", outputModeFlagName(s.argument.Output))
 	}
 	return nil
@@ -195,8 +193,17 @@ func (s *Shell) inspectSample(ctx context.Context, name string, limit int) (json
 		return json.RawMessage("[]"), nil
 	}
 	quoted := s.usecases.importer.QuoteIdentifier(name)
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", quoted, limit)
-	table, err := s.usecases.query.Query(ctx, query)
+	// The sample is the first rows of the file, and it says so: an unordered
+	// LIMIT is whatever the scan happens to produce, which SQLite is free to
+	// change. rowid is the import order for every table sqly creates from a file,
+	// so ordering by it makes "the first rows" a promise rather than an
+	// observation. A table without a rowid falls back to the plain scan.
+	table, err := s.usecases.query.Query(ctx,
+		fmt.Sprintf("SELECT * FROM %s ORDER BY rowid LIMIT %d", quoted, limit))
+	if err != nil {
+		table, err = s.usecases.query.Query(ctx,
+			fmt.Sprintf("SELECT * FROM %s LIMIT %d", quoted, limit))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to sample rows of %s: %w", name, err)
 	}

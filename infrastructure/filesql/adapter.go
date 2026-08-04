@@ -8,15 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/nao1215/filesql"
-	"github.com/nao1215/sqly/domain/cleanup"
 	"github.com/nao1215/sqly/domain/model"
 	infra "github.com/nao1215/sqly/infrastructure"
-	"github.com/xuri/excelize/v2"
 )
 
 const (
@@ -37,10 +34,11 @@ const (
 //nolint:revive // Name maintained for compatibility with existing wire dependencies and external usage
 type FileSQLAdapter struct {
 	sharedDB *sql.DB // The main sqly application database
-	// malformedRowPolicy controls how a ragged CSV/TSV row is handled on import.
-	// It defaults to MalformedRowStop and is updated by the --import-mode flag and
-	// the .import-mode shell command.
-	malformedRowPolicy model.MalformedRowPolicy
+	// rowMismatchPolicy controls how a CSV/TSV row whose field count differs from
+	// the header is handled on import.
+	// It defaults to RowMismatchError and is updated by the --row-mismatch flag and
+	// the .row-mismatch shell command.
+	rowMismatchPolicy model.RowMismatchPolicy
 }
 
 // NewFileSQLAdapter creates a new adapter for filesql integration
@@ -50,25 +48,25 @@ func NewFileSQLAdapter(sharedDB *sql.DB) *FileSQLAdapter {
 	}
 }
 
-// SetMalformedRowPolicy sets how a ragged CSV/TSV row (one whose field count
+// SetRowMismatchPolicy sets how a CSV/TSV row (one whose field count
 // differs from the header) is handled by subsequent imports.
-func (f *FileSQLAdapter) SetMalformedRowPolicy(policy model.MalformedRowPolicy) {
-	f.malformedRowPolicy = policy
+func (f *FileSQLAdapter) SetRowMismatchPolicy(policy model.RowMismatchPolicy) {
+	f.rowMismatchPolicy = policy
 }
 
-// MalformedRowPolicy returns the policy applied to ragged CSV/TSV rows on import.
-func (f *FileSQLAdapter) MalformedRowPolicy() model.MalformedRowPolicy {
-	return f.malformedRowPolicy
+// RowMismatchPolicy returns the policy applied to mismatched CSV/TSV rows on import.
+func (f *FileSQLAdapter) RowMismatchPolicy() model.RowMismatchPolicy {
+	return f.rowMismatchPolicy
 }
 
-// filesqlMalformedRowPolicy maps sqly's policy to the filesql policy that drives
+// filesqlRowMismatchPolicy maps sqly's policy to the filesql policy that drives
 // the actual import. Both enums share the same three cases; keeping them
 // separate lets sqly's layers stay independent of the filesql type.
-func filesqlMalformedRowPolicy(policy model.MalformedRowPolicy) filesql.MalformedRowPolicy {
+func filesqlRowMismatchPolicy(policy model.RowMismatchPolicy) filesql.MalformedRowPolicy {
 	switch policy {
-	case model.MalformedRowSkip:
+	case model.RowMismatchSkip:
 		return filesql.MalformedRowSkip
-	case model.MalformedRowPad:
+	case model.RowMismatchPad:
 		return filesql.MalformedRowFill
 	default:
 		return filesql.MalformedRowStop
@@ -167,15 +165,15 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string) (registryPublisher, error) {
 	builder := filesql.NewBuilder().
 		AddPath(path).
-		WithMalformedRowPolicy(filesqlMalformedRowPolicy(f.malformedRowPolicy))
+		WithMalformedRowPolicy(filesqlRowMismatchPolicy(f.rowMismatchPolicy))
 	validated, err := builder.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load file %q: %w", path, err)
 	}
 	registry, err := validated.LoadIntoTxWithPending(ctx, tx)
 	if err != nil {
-		if f.malformedRowPolicy == model.MalformedRowPad && errors.Is(err, filesql.ErrColumnMismatch) {
-			return nil, fmt.Errorf("load file %q: --import-mode pad refuses to truncate a long row: %w", path, err)
+		if f.rowMismatchPolicy == model.RowMismatchPad && errors.Is(err, filesql.ErrColumnMismatch) {
+			return nil, fmt.Errorf("load file %q: --row-mismatch pad refuses to truncate a long row: %w", path, err)
 		}
 		return nil, fmt.Errorf("load file %q: %w", path, err)
 	}
@@ -209,193 +207,6 @@ func (f *FileSQLAdapter) DumpFedWireFile(ctx context.Context, baseName, outputPa
 		return errors.New(errDatabaseNotInit)
 	}
 	return filesql.DumpFedWire(ctx, f.sharedDB, baseName, outputPath)
-}
-
-// SnapshotToCache writes the current session tables to cachePath as a standalone
-// SQLite database, so a later run can reload them without re-parsing the source
-// files. It uses SQLite's VACUUM INTO, which requires the destination not to
-// exist, so any previous cache at cachePath is removed first. The schema and
-// data of every table are preserved exactly.
-func (f *FileSQLAdapter) SnapshotToCache(ctx context.Context, cachePath string) error {
-	if f.sharedDB == nil {
-		return errors.New(errDatabaseNotInit)
-	}
-	if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove stale cache %q: %w", cachePath, err)
-	}
-	// VACUUM INTO takes a string literal, not a bind parameter; the path is
-	// single-quote-escaped via escapeSQLiteLiteral so it cannot break out of the
-	// literal.
-	//nolint:gosec // path is escaped into a SQLite string literal; VACUUM INTO has no parameter form
-	if _, err := f.sharedDB.ExecContext(ctx, "VACUUM INTO '"+escapeSQLiteLiteral(cachePath)+"'"); err != nil {
-		return fmt.Errorf("write cache %q: %w", cachePath, err)
-	}
-	return nil
-}
-
-// LoadFromCache populates the session database from a cache previously written by
-// SnapshotToCache. It attaches the cache file, recreates each user table with its
-// stored schema, and bulk-copies the rows from the attached database, which is
-// far faster than re-parsing large source files. The cache is always detached
-// before returning. A failure leaves the caller free to fall back to a cold
-// import.
-func (f *FileSQLAdapter) LoadFromCache(ctx context.Context, cachePath string) error {
-	if f.sharedDB == nil {
-		return errors.New(errDatabaseNotInit)
-	}
-	if _, statErr := os.Stat(cachePath); statErr != nil {
-		return fmt.Errorf("cache %q is unavailable: %w", cachePath, statErr)
-	}
-	return f.withAttachedCache(ctx, cachePath, f.copyAttachedTables)
-}
-
-// cacheAlias is the schema name the import cache is attached under. It is fixed,
-// so two loads cannot use it at once and a load that fails to detach breaks the
-// next one rather than itself.
-const cacheAlias = "sqly_cache"
-
-// withAttachedCache attaches cachePath under cacheAlias on one dedicated
-// connection, runs fn on that same connection, and detaches it.
-//
-// The connection is the point. SQLite's ATTACH is per-connection state, not
-// per-database, and *sql.DB is a pool: running the ATTACH, the schema read, the
-// copy, and the DETACH through the pool lets each land on a different
-// connection. The copy would then fail with "no such database: sqly_cache"
-// because it ran somewhere the cache was never attached, and the DETACH would
-// "succeed" against a connection that had nothing attached while the real
-// attachment stayed behind on another — surfacing later as "database sqly_cache
-// is already in use" in an unrelated run. Taking a *sql.Conn and passing it to
-// fn makes returning to the pool mid-operation impossible rather than merely
-// discouraged.
-//
-// The order is reserve, attach, run, detach, release, and it is meant to stay
-// readable in that order. The detach's error is joined onto fn's rather than
-// replacing it, so "the load failed and the cache is still attached" is not
-// reported as though only one of the two happened. A failed ATTACH is not
-// followed by a DETACH, because there is nothing to detach.
-func (f *FileSQLAdapter) withAttachedCache(
-	ctx context.Context,
-	cachePath string,
-	fn func(ctx context.Context, conn *sql.Conn) error,
-) (err error) {
-	conn, connErr := f.sharedDB.Conn(ctx)
-	if connErr != nil {
-		return fmt.Errorf("reserve a connection for cache %q: %w", cachePath, connErr)
-	}
-	defer func() {
-		err = cleanup.Join(err, conn.Close(), "release the cache connection")
-	}()
-
-	if attachErr := attachCache(ctx, conn, cachePath); attachErr != nil {
-		return attachErr
-	}
-	defer func() {
-		err = cleanup.Join(err, detachCache(ctx, conn), fmt.Sprintf("detach cache %q", cachePath))
-	}()
-
-	return fn(ctx, conn)
-}
-
-// attachCache attaches the cache file to conn under cacheAlias.
-func attachCache(ctx context.Context, conn *sql.Conn, cachePath string) error {
-	// ATTACH takes a string literal, not a bind parameter, so the path is
-	// single-quote-escaped rather than passed as an argument.
-	if _, err := conn.ExecContext(ctx,
-		"ATTACH DATABASE '"+escapeSQLiteLiteral(cachePath)+"' AS "+cacheAlias); err != nil {
-		return fmt.Errorf("attach cache %q: %w", cachePath, err)
-	}
-	return nil
-}
-
-// detachCache releases the alias from conn.
-//
-// It runs under cleanup.Context rather than the caller's context: once that
-// context is done every statement fails immediately, so reusing it would leave
-// the alias attached for the life of the process, and the next cache load would
-// fail with "already in use" while naming the wrong run.
-func detachCache(ctx context.Context, conn *sql.Conn) error {
-	cleanupCtx, cancel := cleanup.Context(ctx)
-	defer cancel()
-
-	_, err := conn.ExecContext(cleanupCtx, "DETACH DATABASE "+cacheAlias)
-	return err
-}
-
-// copyAttachedTables recreates every user table held in the attached cache and
-// bulk-copies its rows into the session database, as one transaction.
-//
-// The transaction is what makes the caller's fallback safe. Copying table by
-// table outside one left a partial session behind when a later table failed:
-// the caller falls back to a cold import, which then collides with the tables
-// the failed restore had already created. Either every table arrives or none
-// does, so the fallback always starts from the state it expects.
-func (f *FileSQLAdapter) copyAttachedTables(ctx context.Context, conn *sql.Conn) error {
-	tables, err := listAttachedTables(ctx, conn)
-	if err != nil {
-		return err
-	}
-	if len(tables) == 0 {
-		return errors.New("cache contains no tables")
-	}
-
-	_, err = infra.WithTransaction(ctx, infra.SQLConnTxBeginner{Conn: conn}, func(tx *sql.Tx) error {
-		for _, table := range tables {
-			if err := copyAttachedTable(ctx, tx, table); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return err
-}
-
-// copyAttachedTable recreates one cached table and copies its rows, inside the
-// caller's transaction.
-func copyAttachedTable(ctx context.Context, tx *sql.Tx, table cachedTable) error {
-	quoted := QuoteIdentifier(table.name)
-	if _, err := tx.ExecContext(ctx, table.ddl); err != nil {
-		return fmt.Errorf("recreate cached table %q: %w", table.name, err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		fmt.Sprintf("INSERT INTO %s SELECT * FROM %s.%s", quoted, cacheAlias, quoted)); err != nil {
-		return fmt.Errorf("copy cached table %q: %w", table.name, err)
-	}
-	return nil
-}
-
-// cachedTable is one table held in the attached cache: its name and the DDL that
-// recreates it.
-type cachedTable struct{ name, ddl string }
-
-// listAttachedTables lists the user tables in the attached cache. It runs on
-// the connection the cache is attached to, so the read sees the attachment.
-func listAttachedTables(ctx context.Context, conn *sql.Conn) (tables []cachedTable, err error) {
-	rows, err := conn.QueryContext(ctx,
-		"SELECT name, sql FROM "+cacheAlias+".sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-	if err != nil {
-		return nil, fmt.Errorf("read cache schema: %w", err)
-	}
-	defer func() {
-		err = cleanup.Join(err, rows.Close(), "close the cache schema cursor")
-	}()
-
-	for rows.Next() {
-		var t cachedTable
-		if scanErr := rows.Scan(&t.name, &t.ddl); scanErr != nil {
-			return nil, fmt.Errorf("scan cache schema: %w", scanErr)
-		}
-		tables = append(tables, t)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, fmt.Errorf("iterate cache schema: %w", rowsErr)
-	}
-	return tables, nil
-}
-
-// escapeSQLiteLiteral doubles single quotes so a path can be embedded safely in a
-// SQLite string literal (VACUUM INTO and ATTACH take a literal, not a parameter).
-func escapeSQLiteLiteral(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
 }
 
 // Query executes SQL query and returns Table model
@@ -701,30 +512,6 @@ func IsExcelFile(filePath string) bool {
 	}
 
 	return strings.HasSuffix(lower, ".xlsx")
-}
-
-// SheetNames returns the worksheet names of an Excel workbook in their
-// in-workbook order. It is used for interactive --sheet completion. The workbook
-// is read through the adapter's decompressing reader, so compressed variants
-// (.xlsx.gz, .xlsx.zst, ...) are supported the same way as a plain .xlsx.
-func SheetNames(filePath string) (names []string, err error) {
-	r, closeReader, err := NewDecompressingReaderForFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open Excel file %s: %w", filePath, err)
-	}
-	defer func() {
-		err = cleanup.Join(err, closeReader(), "close decompressing reader")
-	}()
-
-	f, err := excelize.OpenReader(r)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Excel file %s: %w", filePath, err)
-	}
-	defer func() {
-		err = cleanup.Join(err, f.Close(), "close Excel workbook")
-	}()
-
-	return f.GetSheetList(), nil
 }
 
 // generateRandomName generates a random 4-byte hex string.

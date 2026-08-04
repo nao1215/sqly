@@ -118,7 +118,7 @@ scenarios:
           content: "id:1\tv:a\tnote:first\n"
       - run: &writeback_run
           command: sqly d.ltsv
-          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --force\n"
+          stdin: "UPDATE d SET v='Z' WHERE id=1;\n.save --in-place\n"
       - assert: &writeback_exit
           exit_code: 0
       - assert: &writeback_file

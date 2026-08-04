@@ -13,7 +13,7 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 )
 
-// Column keys for the structured (.mode json/ndjson) .tables listing.
+// Column keys for the structured (.mode json/jsonl) .tables listing.
 const (
 	tablesColumnName   = "name"
 	tablesColumnSchema = "schema"

@@ -75,8 +75,8 @@ func TestWriteBack_ACHRoundTrip(t *testing.T) {
 	}
 
 	withStderr(t, func() {
-		if err := shell.commands.saveCommand(context.Background(), shell, []string{forceArg}); err != nil {
-			t.Fatalf(".save --force on an ACH set returned error: %v", err)
+		if err := shell.commands.saveCommand(context.Background(), shell, []string{inPlaceArg}); err != nil {
+			t.Fatalf(".save --in-place on an ACH set returned error: %v", err)
 		}
 	})
 
@@ -86,7 +86,7 @@ func TestWriteBack_ACHRoundTrip(t *testing.T) {
 	}
 }
 
-func TestWriteBack_ACHSaveDir(t *testing.T) {
+func TestWriteBack_ACHSaveTablesDir(t *testing.T) {
 	// .save DIR writes the reconstructed .ach into a directory, leaving the source
 	// untouched, and the written file re-imports with the change.
 	dir := t.TempDir()
@@ -146,8 +146,8 @@ func TestWriteBack_FedWireRoundTrip(t *testing.T) {
 		t.Fatalf("UPDATE failed: %v", err)
 	}
 	withStderr(t, func() {
-		if err := shell.commands.saveCommand(context.Background(), shell, []string{forceArg}); err != nil {
-			t.Fatalf(".save --force on a Fedwire set returned error: %v", err)
+		if err := shell.commands.saveCommand(context.Background(), shell, []string{inPlaceArg}); err != nil {
+			t.Fatalf(".save --in-place on a Fedwire set returned error: %v", err)
 		}
 	})
 
@@ -189,7 +189,7 @@ func TestWriteBack_ACHFromDirectoryRejected(t *testing.T) {
 
 	var saveErr error
 	withStderr(t, func() {
-		saveErr = shell.commands.saveCommand(context.Background(), shell, []string{forceArg})
+		saveErr = shell.commands.saveCommand(context.Background(), shell, []string{inPlaceArg})
 	})
 	if saveErr == nil {
 		t.Fatal("expected a directory-import write-back rejection, got nil")
@@ -224,7 +224,7 @@ func TestWriteBack_ACHRejectsIncompleteSet(t *testing.T) {
 
 	var saveErr error
 	withStderr(t, func() {
-		saveErr = shell.commands.saveCommand(context.Background(), shell, []string{forceArg})
+		saveErr = shell.commands.saveCommand(context.Background(), shell, []string{inPlaceArg})
 	})
 	if saveErr == nil {
 		t.Fatal("expected an error saving an incomplete ACH set, got nil")

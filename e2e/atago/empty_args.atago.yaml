@@ -23,7 +23,7 @@ scenarios:
       - assert:
           exit_code: 1
           stdout:
-            contains: affected
+            equals: ""
           stderr:
             contains: ".save requires"
       # The in-place save was rejected, so the source file is untouched.

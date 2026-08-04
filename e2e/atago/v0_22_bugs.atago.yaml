@@ -171,7 +171,7 @@ scenarios:
             bob,25
       - run:
           command: sqly temp_only.csv
-          stdin: "CREATE TEMP TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --force\n"
+          stdin: "CREATE TEMP TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --in-place\n"
       - assert:
           exit_code: 0
           stderr:
@@ -192,7 +192,7 @@ scenarios:
             {"id":2}
       - run:
           command: sqly data.jsonl
-          stdin: "CREATE TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --force\n"
+          stdin: "CREATE TEMP TABLE scratch(id INTEGER);\nINSERT INTO scratch VALUES (1);\n.save --in-place\n"
       - assert:
           exit_code: 0
           stdout:
@@ -214,7 +214,7 @@ scenarios:
             bob,25
       - run:
           command: sqly netzero.csv
-          stdin: "UPDATE netzero SET age=99 WHERE name='alice';\nUPDATE netzero SET age=30 WHERE name='alice';\n.save --force\n"
+          stdin: "UPDATE netzero SET age=99 WHERE name='alice';\nUPDATE netzero SET age=30 WHERE name='alice';\n.save --in-place\n"
       - assert:
           exit_code: 0
           stderr:
@@ -225,7 +225,7 @@ scenarios:
             path: netzero.csv
             contains: "alice,30"
 
-  - name: does not rewrite the source after net-zero edits via --sql-file --save --force
+  - name: does not rewrite the source after net-zero edits in a piped script that saves
     env: *hist
     steps:
       - fixture:
@@ -234,13 +234,9 @@ scenarios:
             name,age
             alice,30
             bob,25
-      - fixture:
-          file: netzero.sql
-          content: |
-            UPDATE netzero_file SET age=99 WHERE name='alice';
-            UPDATE netzero_file SET age=30 WHERE name='alice';
       - run:
-          command: sqly --sql-file netzero.sql --save --force netzero_file.csv
+          command: sqly netzero_file.csv
+          stdin: "UPDATE netzero_file SET age=99 WHERE name='alice';\nUPDATE netzero_file SET age=30 WHERE name='alice';\n.save --in-place\n"
       - assert:
           exit_code: 0
           stderr:
@@ -249,7 +245,7 @@ scenarios:
             path: netzero_file.csv
             contains: "alice,30"
 
-  - name: still persists a genuine CSV change with .save --force
+  - name: still persists a genuine CSV change with .save --in-place
     env: *hist
     steps:
       - fixture:
@@ -260,7 +256,7 @@ scenarios:
             bob,25
       - run:
           command: sqly genuine.csv
-          stdin: "UPDATE genuine SET age=999 WHERE name='alice';\n.save --force\n"
+          stdin: "UPDATE genuine SET age=999 WHERE name='alice';\n.save --in-place\n"
       - assert:
           exit_code: 0
           stdout:

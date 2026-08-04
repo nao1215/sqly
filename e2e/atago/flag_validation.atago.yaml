@@ -1,0 +1,289 @@
+# The argument checks the v1.0.0 CLI surface makes before it imports anything or
+# prints a row. Each of these combinations used to either be accepted and then
+# silently do something else, or fail only after output had already been written.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly flag validation
+
+scenarios:
+  - name: rejects a binary output format with nowhere to write it
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --output-format parquet --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains:
+              - "--output-format parquet"
+              - "--output"
+
+  - name: rejects an excel result with nowhere to write it
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format excel --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--output"
+
+  - name: writes parquet when the destination is given
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format parquet --output out.parquet --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.parquet
+            exists: true
+
+  - name: rejects --stdin-table without --stdin-format
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --stdin-table piped --sql "SELECT 1" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--stdin-format"
+
+  - name: rejects a .save flag the command does not have instead of making a directory
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: |
+            UPDATE user SET user_name = 'changed';
+            .save --force
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "--in-place"
+          file:
+            path: "--force"
+            exists: false
+      - assert:
+          file:
+            path: user.csv
+            contains: booker12
+
+  - name: an in-place save keeps the source file's permissions
+    # A staged file is created 0600; a commit that carried that mode across would
+    # quietly make a world-readable CSV owner-only.
+    skip:
+      os: windows
+    steps:
+      - fixture: &perm_user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sh -c 'chmod 644 user.csv && printf "UPDATE user SET identifier = 2;\n.save --in-place\n" | sqly user.csv && ls -l user.csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "-rw-r--r--"
+
+  - name: a script with several results prints them all, in order
+    steps:
+      - fixture: *perm_user
+      - fixture:
+          file: two.sql
+          content: |
+            SELECT user_name FROM user;
+            SELECT identifier FROM user;
+      - run:
+          command: sqly --output-format table --sql-file two.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - user_name
+              - booker12
+              - identifier
+      - assert:
+          stdout:
+            contains: "| user_name |"
+
+  - name: --output rejects a script with several results instead of dropping one
+    steps:
+      - fixture: *perm_user
+      - fixture:
+          file: two.sql
+          content: |
+            SELECT user_name FROM user;
+            SELECT identifier FROM user;
+      - run:
+          command: sqly --output out.csv --sql-file two.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "result sets"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: --output rejects a script that produces no result at all
+    steps:
+      - fixture: *perm_user
+      - fixture:
+          file: none.sql
+          content: |
+            UPDATE user SET identifier = 5;
+      - run:
+          command: sqly --output out.csv --sql-file none.sql user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "one result set"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: rejects a csv result stream that would carry two result sets
+    steps:
+      - fixture: &two_user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - fixture: &two_sql
+          file: two.sql
+          content: |
+            SELECT user_name FROM user;
+            SELECT identifier FROM user;
+      - run:
+          command: sqly --output-format csv --sql-file two.sql user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains:
+              - "--output-format csv"
+              - "one result set"
+
+  - name: rejects a json result stream that would carry two result sets
+    steps:
+      - fixture: *two_user
+      - fixture: *two_sql
+      - run:
+          command: sqly --output-format json --sql-file two.sql user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "one result set"
+
+  - name: rejects a jsonl result stream that would carry two result sets
+    steps:
+      - fixture: *two_user
+      - fixture: *two_sql
+      - run:
+          command: sqly --output-format jsonl --sql-file two.sql user.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            equals: ""
+          stderr:
+            contains: "one result set"
+
+  - name: markdown separates two result sets with a blank line
+    steps:
+      - fixture: *two_user
+      - fixture: *two_sql
+      - run:
+          command: sqly --output-format markdown --sql-file two.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "| user_name |"
+              - "| identifier |"
+
+  - name: a machine-readable format still accepts one result set
+    steps:
+      - fixture: *two_user
+      - fixture:
+          file: one.sql
+          content: |
+            UPDATE user SET identifier = 2;
+            SELECT identifier FROM user;
+      - run:
+          command: sqly --output-format csv --sql-file one.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+
+  - name: --output refuses a destination whose directory does not exist
+    steps:
+      - fixture: *two_user
+      - run:
+          command: sqly --output nodir/out.csv --sql "SELECT 1" user.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "does not exist"
+          file:
+            path: nodir
+            exists: false
+
+  - name: --output leaves an existing destination alone when the query fails
+    steps:
+      - fixture: *two_user
+      - fixture:
+          file: keep.csv
+          content: |
+            PRECIOUS
+      - run:
+          command: sqly --output keep.csv --sql "SELECT nope FROM user" user.csv
+      - assert:
+          exit_code: 1
+          file:
+            path: keep.csv
+            contains: PRECIOUS
+
+  - name: --sql counts statements without being fooled by a quoted semicolon
+    steps:
+      - fixture: *two_user
+      - run:
+          command: sqly --output-format csv --sql "SELECT 'a;b' AS v" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a;b"
+
+  - name: a --sql-file statement is not split by a commented semicolon
+    # The direct --sql form of this is covered by unit tests; a spec cannot pass a
+    # newline inside one argument without a shell.
+    steps:
+      - fixture: *two_user
+      - fixture:
+          file: commented.sql
+          content: |
+            -- note ;
+            SELECT 1 AS v;
+      - run:
+          command: sqly --output-format csv --sql-file commented.sql user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"

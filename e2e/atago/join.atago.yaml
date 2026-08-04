@@ -24,7 +24,7 @@ scenarios:
             1,NYC
             2,LA
       - run:
-          command: sqly --output-format ndjson --sql "SELECT e.name, l.city FROM emp e LEFT JOIN loc l ON e.id = l.id ORDER BY e.id" emp.csv loc.csv
+          command: sqly --output-format jsonl --sql "SELECT e.name, l.city FROM emp e LEFT JOIN loc l ON e.id = l.id ORDER BY e.id" emp.csv loc.csv
       - assert:
           exit_code: 0
           stdout:

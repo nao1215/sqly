@@ -60,8 +60,8 @@ func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format
 		return e.dumpViaPrint(filePath, table, compression, model.PrintModeMarkdownTable)
 	case model.ExportJSON:
 		return e.dumpViaPrint(filePath, table, compression, model.PrintModeJSON)
-	case model.ExportNDJSON:
-		return e.dumpViaPrint(filePath, table, compression, model.PrintModeNDJSON)
+	case model.ExportJSONL:
+		return e.dumpViaPrint(filePath, table, compression, model.PrintModeJSONL)
 	case model.ExportParquet:
 		return filesql.DumpTableToParquet(filepath.Clean(filePath), table)
 	default:

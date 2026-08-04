@@ -178,7 +178,7 @@ func TestTableRecordsMatchCells(t *testing.T) {
 	}
 
 	var nd bytes.Buffer
-	if err := tbl.Print(&nd, PrintModeNDJSON); err != nil {
+	if err := tbl.Print(&nd, PrintModeJSONL); err != nil {
 		t.Fatalf("Print(ndjson): %v", err)
 	}
 	wantNDJSON := "{\"i\":42,\"r\":1.5,\"s\":\"00123\",\"n\":null}\n"
@@ -231,7 +231,7 @@ func TestWithNameDoesNotShareRowStorage(t *testing.T) {
 		t.Error("IsNull = true after rename for a non-NULL INTEGER cell")
 	}
 	var out bytes.Buffer
-	if err := renamed.Print(&out, PrintModeNDJSON); err != nil {
+	if err := renamed.Print(&out, PrintModeJSONL); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 	if !strings.Contains(out.String(), `{"id":1}`) {
@@ -272,7 +272,7 @@ func TestRecordsCannotCorruptTheTable(t *testing.T) {
 	}
 
 	var nd bytes.Buffer
-	if err := table.Print(&nd, PrintModeNDJSON); err != nil {
+	if err := table.Print(&nd, PrintModeJSONL); err != nil {
 		t.Fatalf("Print(ndjson): %v", err)
 	}
 	if strings.Contains(nd.String(), "corrupted") {
@@ -332,7 +332,7 @@ func TestTableWithoutCellsTreatsEveryValueAsText(t *testing.T) {
 		t.Error("IsNull = true for a table with no NULL information")
 	}
 	var out bytes.Buffer
-	if err := tbl.Print(&out, PrintModeNDJSON); err != nil {
+	if err := tbl.Print(&out, PrintModeJSONL); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 	want := "{\"a\":\"123\",\"b\":\"true\",\"c\":\"00123\"}\n"
@@ -548,7 +548,7 @@ func TestWithNameHeaderIsIndependent(t *testing.T) {
 	}
 
 	// Everything except the name renders identically, including the native types.
-	for _, mode := range []PrintMode{PrintModeCSV, PrintModeNDJSON, PrintModeTable} {
+	for _, mode := range []PrintMode{PrintModeCSV, PrintModeJSONL, PrintModeTable} {
 		var a, b bytes.Buffer
 		if err := tbl.Print(&a, mode); err != nil {
 			t.Fatalf("Print(original, %s): %v", mode, err)

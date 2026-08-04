@@ -106,7 +106,7 @@ func TestSmoke_VersionAndHelpFlags(t *testing.T) {
 		t.Errorf("--help stdout = %q, want usage text", out)
 	}
 	for _, want := range []string{
-		"Documentation: https://nao1215.github.io/sqly/",
+		"Documentation:   https://nao1215.github.io/sqly/",
 		"GitHub Sponsors: https://github.com/sponsors/nao1215",
 	} {
 		if !strings.Contains(out, want) {
@@ -194,7 +194,7 @@ func TestSmoke_DumpJSONAndNDJSONPreserveSQLiteTypes(t *testing.T) {
 		nd   bool
 	}{
 		{name: "json", ext: ".json", mode: "json"},
-		{name: "ndjson", ext: ".ndjson", mode: "ndjson", nd: true},
+		{name: "jsonl", ext: ".ndjson", mode: "jsonl", nd: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "typed"+tc.ext)
@@ -256,12 +256,12 @@ func writeSmokeGzip(t *testing.T, path, content string) {
 }
 
 func TestSmoke_StdinDataset(t *testing.T) {
-	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin", "csv", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
+	out, _, code := run(t, "id,name\n1,alice\n2,bob\n", "--stdin-format", "csv", "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM stdin")
 	if code != 0 {
-		t.Fatalf("--stdin csv exit code = %d, want 0 (stdout=%q)", code, out)
+		t.Fatalf("--stdin-format csv exit code = %d, want 0 (stdout=%q)", code, out)
 	}
 	if !strings.Contains(out, "2") {
-		t.Errorf("--stdin csv stdout = %q, want the piped row count", out)
+		t.Errorf("--stdin-format csv stdout = %q, want the piped row count", out)
 	}
 }
 
@@ -349,7 +349,7 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 		{name: "tsv", path: shortTSV, want: "alice"},
 	} {
 		t.Run(tc.name+" short rows are padded", func(t *testing.T) {
-			out, stderr, code := run(t, "", "--import-mode", "pad", "--output-format", "csv", "--sql", "SELECT name FROM short ORDER BY id", tc.path)
+			out, stderr, code := run(t, "", "--row-mismatch", "pad", "--output-format", "csv", "--sql", "SELECT name FROM short ORDER BY id", tc.path)
 			if code != 0 || !strings.Contains(out, tc.want) {
 				t.Fatalf("short %s import: code=%d stdout=%q stderr=%q", tc.name, code, out, stderr)
 			}
@@ -360,11 +360,11 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 	compressedLong := filepath.Join(dir, "compressed-long.csv.gz")
 	writeSmokeGzip(t, compressedShort, "id,name\n1,alice\n2\n")
 	writeSmokeGzip(t, compressedLong, "id,name\n1,alice,unexpected\n")
-	out, stderr, code := run(t, "", "--import-mode", "pad", "--output-format", "csv", "--sql", "SELECT name FROM compressed ORDER BY id", compressedShort)
+	out, stderr, code := run(t, "", "--row-mismatch", "pad", "--output-format", "csv", "--sql", "SELECT name FROM compressed ORDER BY id", compressedShort)
 	if code != 0 || !strings.Contains(out, "alice") {
 		t.Fatalf("gzip short rows: code=%d stdout=%q stderr=%q", code, out, stderr)
 	}
-	_, stderr, code = run(t, "", "--import-mode", "pad", "--output-format", "csv", "--sql", "SELECT 1", compressedLong)
+	_, stderr, code = run(t, "", "--row-mismatch", "pad", "--output-format", "csv", "--sql", "SELECT 1", compressedLong)
 	if code == 0 || !strings.Contains(stderr, "refuses to truncate") {
 		t.Fatalf("gzip long row: code=%d stderr=%q", code, stderr)
 	}
@@ -378,7 +378,7 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 	} {
 		t.Run(tc.name+" long rows rollback", func(t *testing.T) {
 			result := filepath.Join(dir, tc.name+"-result.csv")
-			_, stderr, code := run(t, "", "--import-mode", "pad", "--output", result, "--output-format", "csv", "--sql", "SELECT 1", tc.path)
+			_, stderr, code := run(t, "", "--row-mismatch", "pad", "--output", result, "--output-format", "csv", "--sql", "SELECT 1", tc.path)
 			if code == 0 || !strings.Contains(stderr, "refuses to truncate") {
 				t.Fatalf("long %s import: code=%d stderr=%q", tc.name, code, stderr)
 			}
@@ -395,7 +395,7 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	mixedResult := filepath.Join(dir, "mixed-result.csv")
-	_, stderr, code = run(t, "", "--import-mode", "pad", "--output", mixedResult, "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM valid", validCSV, longCSV)
+	_, stderr, code = run(t, "", "--row-mismatch", "pad", "--output", mixedResult, "--output-format", "csv", "--sql", "SELECT COUNT(*) AS c FROM valid", validCSV, longCSV)
 	if code == 0 || !strings.Contains(stderr, "refuses to truncate") {
 		t.Fatalf("valid + long CSV import: code=%d stderr=%q", code, stderr)
 	}
@@ -444,7 +444,7 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	dirResult := filepath.Join(dir, "directory-result.csv")
-	_, stderr, code = run(t, "", "--import-mode", "pad", "--output", dirResult, "--output-format", "csv", "--sql", "SELECT 1", datasetDir)
+	_, stderr, code = run(t, "", "--row-mismatch", "pad", "--output", dirResult, "--output-format", "csv", "--sql", "SELECT 1", datasetDir)
 	if code == 0 || !strings.Contains(stderr, "failed") {
 		t.Fatalf("directory import: code=%d stderr=%q", code, stderr)
 	}

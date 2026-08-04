@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/nao1215/sqly/domain"
@@ -78,7 +80,7 @@ const (
 	formatMarkdown = "markdown"
 	formatExcel    = "excel"
 	formatJSON     = "json"
-	formatNDJSON   = "ndjson"
+	formatJSONL    = "jsonl"
 	formatParquet  = "parquet"
 	formatVertical = "vertical"
 )
@@ -111,8 +113,8 @@ const (
 	PrintModeExcel
 	// PrintModeJSON print data as a JSON array of objects
 	PrintModeJSON
-	// PrintModeNDJSON print data as newline-delimited JSON (one object per line)
-	PrintModeNDJSON
+	// PrintModeJSONL print data as newline-delimited JSON (one object per line)
+	PrintModeJSONL
 	// PrintModeParquet is an export-only mode; on screen it renders like CSV and
 	// only writes a Parquet file via .dump or --output (same pattern as Excel).
 	PrintModeParquet
@@ -140,8 +142,8 @@ func (p PrintMode) String() string {
 		return formatExcel
 	case PrintModeJSON:
 		return formatJSON
-	case PrintModeNDJSON:
-		return formatNDJSON
+	case PrintModeJSONL:
+		return formatJSONL
 	case PrintModeParquet:
 		return formatParquet
 	case PrintModeVertical:
@@ -160,6 +162,25 @@ func (p PrintMode) String() string {
 // a way of reading a wide row, not a file format anything else can parse back.
 func (p PrintMode) IsDisplayOnly() bool {
 	return p == PrintModeTable || p == PrintModeVertical
+}
+
+// AllowsMultipleResults reports whether this format can carry more than one
+// result set in a single stream.
+//
+// A format a person reads can: two tables, two vertical blocks, or two Markdown
+// tables separated by a blank line are still exactly what they look like. A
+// format a program parses cannot. Two CSV bodies concatenated are one CSV whose
+// third line is a second header row; two JSON arrays back to back are not a JSON
+// document; and JSONL has no way to say "a new result starts here". Emitting
+// those anyway produces a file that parses — into the wrong thing, or not at
+// all — which is worse than refusing, so a run that would need one is rejected.
+func (p PrintMode) AllowsMultipleResults() bool {
+	switch p {
+	case PrintModeTable, PrintModeVertical, PrintModeMarkdownTable:
+		return true
+	default:
+		return false
+	}
 }
 
 // Table is DB table.
@@ -484,7 +505,7 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 		return t.printExcel(out)
 	case PrintModeJSON:
 		return t.printJSON(out)
-	case PrintModeNDJSON:
+	case PrintModeJSONL:
 		return t.printNDJSON(out)
 	case PrintModeParquet:
 		// Export-only: on screen, render like CSV. The Parquet file is written
@@ -831,9 +852,47 @@ func jsonScalarToken(value any) ([]byte, error) {
 		return []byte("null"), nil
 	}
 	if raw, ok := value.([]byte); ok {
-		return json.Marshal(string(raw))
+		// SQLite hands back both TEXT and BLOB as bytes, and JSON has no way to
+		// hold bytes at all. Text passes through as text; anything that is not
+		// valid UTF-8 is binary, and turning it into a string would replace every
+		// invalid byte with U+FFFD — output that looks fine and cannot be decoded
+		// back. Base64 keeps it, at the cost of being base64.
+		if utf8.Valid(raw) {
+			return json.Marshal(string(raw))
+		}
+		return json.Marshal(base64.StdEncoding.EncodeToString(raw))
+	}
+	if token, ok := jsonNonFiniteToken(value); ok {
+		return token, nil
 	}
 	return json.Marshal(value)
+}
+
+// jsonNonFiniteToken renders the three floats JSON cannot express. Without this,
+// a Parquet column holding an infinity fails the whole output with an encoder
+// error after the opening bracket is already on stdout. The strings are the ones
+// PostgreSQL's row_to_json produces, so a consumer that already handles one
+// database's JSON handles sqly's.
+func jsonNonFiniteToken(value any) ([]byte, bool) {
+	var f float64
+	switch v := value.(type) {
+	case float64:
+		f = v
+	case float32:
+		f = float64(v)
+	default:
+		return nil, false
+	}
+	switch {
+	case math.IsNaN(f):
+		return []byte(`"NaN"`), true
+	case math.IsInf(f, 1):
+		return []byte(`"Infinity"`), true
+	case math.IsInf(f, -1):
+		return []byte(`"-Infinity"`), true
+	default:
+		return nil, false
+	}
 }
 
 // duplicateColumnName returns the first column name that appears more than once
@@ -885,7 +944,7 @@ func (t *Table) printJSON(out io.Writer) error {
 // result set prints nothing — the empty NDJSON stream.
 func (t *Table) printNDJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
-		return fmt.Errorf("ndjson output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
+		return fmt.Errorf("jsonl output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
 	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)

@@ -69,7 +69,7 @@ func TestSQLite3RepositoryQueryPreservesSQLTypesForJSON(t *testing.T) {
 
 	t.Run("ndjson", func(t *testing.T) {
 		var out bytes.Buffer
-		if err := table.Print(&out, model.PrintModeNDJSON); err != nil {
+		if err := table.Print(&out, model.PrintModeJSONL); err != nil {
 			t.Fatal(err)
 		}
 		var row map[string]any

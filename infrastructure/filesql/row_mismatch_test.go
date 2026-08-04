@@ -33,16 +33,16 @@ func writeGzipFile(t *testing.T, path, content string) {
 }
 
 // The malformed CSV used across the policy tests: row 3 is missing the zip field.
-const raggedCSV = "id,name,zip\n1,alice,01234\n2,bob,00123\n3,caro\n4,dave,99999\n"
+const mismatchedCSV = "id,name,zip\n1,alice,01234\n2,bob,00123\n3,caro\n4,dave,99999\n"
 
-// newMalformedTestAdapter writes the ragged CSV to a file and returns an adapter
+// newMismatchTestAdapter writes the mismatched CSV to a file and returns an adapter
 // bound to a fresh shared in-memory database. The pool is pinned to a single
 // connection because a bare ":memory:" database is private per connection.
-func newMalformedTestAdapter(t *testing.T) (*FileSQLAdapter, string) {
+func newMismatchTestAdapter(t *testing.T) (*FileSQLAdapter, string) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "malformed.csv")
-	if err := os.WriteFile(path, []byte(raggedCSV), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(mismatchedCSV), 0o600); err != nil {
 		t.Fatalf("write csv: %v", err)
 	}
 	db, err := sql.Open("sqlite", ":memory:")
@@ -56,12 +56,12 @@ func newMalformedTestAdapter(t *testing.T) (*FileSQLAdapter, string) {
 
 func TestFileSQLAdapter_ImportMode_Stop(t *testing.T) {
 	t.Parallel()
-	adapter, path := newMalformedTestAdapter(t)
-	adapter.SetMalformedRowPolicy(model.MalformedRowStop)
+	adapter, path := newMismatchTestAdapter(t)
+	adapter.SetRowMismatchPolicy(model.RowMismatchError)
 
 	err := adapter.LoadFile(context.Background(), path)
 	if err == nil {
-		t.Fatal("expected an error for a ragged row under the stop policy, got nil")
+		t.Fatal("expected an error for a mismatched row under the error policy, got nil")
 	}
 	// The table must not be left behind as an empty stub.
 	if _, qerr := adapter.Query(context.Background(), "SELECT * FROM malformed"); qerr == nil {
@@ -71,8 +71,8 @@ func TestFileSQLAdapter_ImportMode_Stop(t *testing.T) {
 
 func TestFileSQLAdapter_ImportMode_Skip(t *testing.T) {
 	t.Parallel()
-	adapter, path := newMalformedTestAdapter(t)
-	adapter.SetMalformedRowPolicy(model.MalformedRowSkip)
+	adapter, path := newMismatchTestAdapter(t)
+	adapter.SetRowMismatchPolicy(model.RowMismatchSkip)
 
 	if err := adapter.LoadFile(context.Background(), path); err != nil {
 		t.Fatalf("LoadFile: %v", err)
@@ -98,8 +98,8 @@ func TestFileSQLAdapter_ImportMode_Skip(t *testing.T) {
 
 func TestFileSQLAdapter_ImportMode_Pad(t *testing.T) {
 	t.Parallel()
-	adapter, path := newMalformedTestAdapter(t)
-	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+	adapter, path := newMismatchTestAdapter(t)
+	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFile(context.Background(), path); err != nil {
 		t.Fatalf("LoadFile: %v", err)
@@ -131,7 +131,7 @@ func TestFileSQLAdapter_ImportMode_PadRejectsLongRow(t *testing.T) {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	adapter := NewFileSQLAdapter(db)
-	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFile(context.Background(), path); err == nil {
 		t.Fatal("expected pad to reject a long row instead of truncating it")
@@ -154,7 +154,7 @@ func TestFileSQLAdapter_ImportMode_PadStreamsGzipCSV(t *testing.T) {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	adapter := NewFileSQLAdapter(db)
-	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFile(context.Background(), path); err != nil {
 		t.Fatalf("LoadFile: %v", err)
@@ -198,7 +198,7 @@ func TestFileSQLAdapter_ImportMode_PadRejectsBeforeEmptyJSONTable(t *testing.T) 
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	adapter := NewFileSQLAdapter(db)
-	adapter.SetMalformedRowPolicy(model.MalformedRowPad)
+	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFiles(context.Background(), emptyJSON, longCSV); err == nil {
 		t.Fatal("expected pad to reject the mixed import")
@@ -411,10 +411,10 @@ func TestFileSQLAdapter_LoadFilesEmptyJSONViewCollision(t *testing.T) {
 
 func TestFileSQLAdapter_ImportMode_DefaultIsStop(t *testing.T) {
 	t.Parallel()
-	adapter, path := newMalformedTestAdapter(t)
-	// No SetMalformedRowPolicy: the zero value must behave as stop.
-	if adapter.MalformedRowPolicy() != model.MalformedRowStop {
-		t.Fatalf("default policy = %v, want stop", adapter.MalformedRowPolicy())
+	adapter, path := newMismatchTestAdapter(t)
+	// No SetRowMismatchPolicy: the zero value must behave as stop.
+	if adapter.RowMismatchPolicy() != model.RowMismatchError {
+		t.Fatalf("default policy = %v, want stop", adapter.RowMismatchPolicy())
 	}
 	if err := adapter.LoadFile(context.Background(), path); err == nil {
 		t.Fatal("expected an error under the default (stop) policy")

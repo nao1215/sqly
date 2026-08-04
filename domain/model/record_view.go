@@ -41,7 +41,7 @@ func (v RecordView) Len() int {
 //
 // An index outside the row returns the empty string rather than panicking. A
 // Table built from strings may hold rows shorter than its header — an imported
-// file with a ragged tail, a synthesized report — and every formatter already
+// file with an uneven tail, a synthesized report — and every formatter already
 // treats a missing cell as blank. Making that a panic would turn a data problem
 // into a crash.
 func (v RecordView) At(i int) string {

@@ -29,12 +29,12 @@ scenarios:
           stderr:
             contains: "Change output mode from table to json"
 
-  - name: keeps stdout pure NDJSON after .mode ndjson
+  - name: keeps stdout pure JSONL after .mode jsonl
     steps:
       - fixture: *user
       - run:
           command: sqly user.csv
-          stdin: ".mode ndjson\nSELECT user_name FROM user LIMIT 1\n"
+          stdin: ".mode jsonl\nSELECT user_name FROM user LIMIT 1\n"
       - assert:
           exit_code: 0
           stdout:
@@ -44,7 +44,7 @@ scenarios:
           stdout:
             not_contains: "Change output mode"
           stderr:
-            contains: "Change output mode from table to ndjson"
+            contains: "Change output mode from table to jsonl"
 
   - name: emits native JSON output after .mode json
     steps:

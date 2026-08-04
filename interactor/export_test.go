@@ -281,7 +281,7 @@ func TestExportInteractor_DumpTable_NDJSON_Gzip(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson.gz")
-	if err := exp.DumpTable(outputFile, table, model.ExportNDJSON, model.CompressionGzip); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportJSONL, model.CompressionGzip); err != nil {
 		t.Fatalf("DumpTable NDJSON gzip failed: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson")
-	if err := exp.DumpTable(outputFile, table, model.ExportNDJSON, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportJSONL, model.CompressionNone); err != nil {
 		t.Fatalf("DumpTable NDJSON failed: %v", err)
 	}
 

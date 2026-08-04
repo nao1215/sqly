@@ -87,7 +87,7 @@ func TestMainStatementVerbCoverage(t *testing.T) {
 }
 
 // TestSQLite3InteractorMalformedRowPolicy verifies that a policy set with
-// SetMalformedRowPolicy is reported back by MalformedRowPolicy through the
+// SetRowMismatchPolicy is reported back by RowMismatchPolicy through the
 // filesql adapter.
 func TestSQLite3InteractorMalformedRowPolicy(t *testing.T) {
 	t.Parallel()
@@ -95,15 +95,15 @@ func TestSQLite3InteractorMalformedRowPolicy(t *testing.T) {
 	si, cleanup := newTestSQLite3InteractorWithAdapter(t)
 	defer cleanup()
 
-	policies := []model.MalformedRowPolicy{
-		model.MalformedRowStop,
-		model.MalformedRowSkip,
-		model.MalformedRowPad,
+	policies := []model.RowMismatchPolicy{
+		model.RowMismatchError,
+		model.RowMismatchSkip,
+		model.RowMismatchPad,
 	}
 	for _, want := range policies {
-		si.SetMalformedRowPolicy(want)
-		if got := si.MalformedRowPolicy(); got != want {
-			t.Errorf("MalformedRowPolicy() = %v, want %v", got, want)
+		si.SetRowMismatchPolicy(want)
+		if got := si.RowMismatchPolicy(); got != want {
+			t.Errorf("RowMismatchPolicy() = %v, want %v", got, want)
 		}
 	}
 }

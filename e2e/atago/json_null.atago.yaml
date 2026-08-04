@@ -18,10 +18,10 @@ scenarios:
               - '"n":null'
               - '"e":""'
 
-  - name: emits NULL as JSON null in --output-format ndjson
+  - name: emits NULL as JSON null in --output-format jsonl
     steps:
       - run:
-          command: sqly --output-format ndjson --sql "SELECT NULL AS n, '' AS e, 1 AS x"
+          command: sqly --output-format jsonl --sql "SELECT NULL AS n, '' AS e, 1 AS x"
       - assert:
           exit_code: 0
           stdout:

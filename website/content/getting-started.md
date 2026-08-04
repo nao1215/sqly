@@ -93,8 +93,14 @@ the destination's extension, exactly as they do in table mode.
 |:--|:--|
 | Files and directories | `sqly ... file.csv ./dir` |
 | A URL | `sqly ... https://example.com/user.csv` |
-| A pipe | `cat user.csv \| sqly --stdin csv --sql "SELECT * FROM stdin"` |
+| A pipe | `cat user.csv \| sqly --stdin-format csv --sql "SELECT * FROM stdin"` |
 | A script on stdin | `printf '.tables\nSELECT 1;\n' \| sqly user.csv` |
+
+Standard input does one of those jobs, never two. With `--stdin-format` it is the
+data; with none of the query flags it is the script; with `--sql`, `--sql-file`,
+or `--inspect` and no `--stdin-format` it is unused, and sqly says so on stderr
+rather than answering as if nothing had been handed to it. See
+[Reference](/reference/#what-sqly-does-with-standard-input).
 
 ## 5. The interactive shell
 
@@ -115,12 +121,12 @@ See [Shell](/shell/).
 `UPDATE`, `INSERT`, and `DELETE` change the in-memory tables only. To persist them:
 
 ```shell
-sqly --sql "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1" --save-dir ./out user.csv
-sqly --sql "DELETE FROM user WHERE identifier > 100" --save --force user.csv
+printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./out\n" | sqly user.csv
+printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place\n" | sqly user.csv
 ```
 
-`--save-dir` writes into a directory and leaves the sources alone. `--save` overwrites them, and requires `--force`. Either way the format and compression of each source are preserved, a run that changes no row writes no file, and a save covering several files is all-or-nothing.
+`.save DIR` writes into a directory and leaves the sources alone. `.save --in-place` overwrites them. Either way the format, compression, and permissions of each source are preserved, a table the session did not change is not rewritten, and a save covering several files is all-or-nothing. Write-back is a shell command, not a flag, so it works the same interactively and in a piped script.
 
 ## Next
 
-The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, picking Excel sheets, inspecting data, and writing MySQL or BigQuery syntax.
+The [cookbook](/cookbook/) is the fastest way from here: recipes for converting formats, extracting JSON, querying Excel sheets, inspecting data, and writing MySQL or BigQuery syntax.

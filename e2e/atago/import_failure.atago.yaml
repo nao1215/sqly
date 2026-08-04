@@ -67,7 +67,7 @@ scenarios:
   - name: keeps stdout clean when a stdin dataset fails to import
     steps:
       - run:
-          command: sqly --stdin csv --output-format json --sql "SELECT COUNT(*) FROM stdin"
+          command: sqly --stdin-format csv --output-format json --sql "SELECT COUNT(*) FROM stdin"
       - assert:
           exit_code: 1
           stdout:

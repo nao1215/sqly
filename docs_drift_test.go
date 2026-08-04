@@ -60,6 +60,62 @@ func TestDocs_EveryDocumentedInvocationParses(t *testing.T) {
 	}
 }
 
+// TestDemoTapes_EveryRecordedInvocationParses is the same guard for the VHS
+// tapes. A tape is what the README's GIFs are rendered from, so a renamed flag
+// left in one produces a demo of sqly printing an error — and nothing fails
+// until someone runs `make demo` and watches it. The tapes are not Markdown, so
+// the Markdown extractor above does not see them.
+func TestDemoTapes_EveryRecordedInvocationParses(t *testing.T) {
+	t.Parallel()
+
+	tapes, err := filepath.Glob("doc/vhs/*.tape")
+	if err != nil {
+		t.Fatalf("glob the tapes: %v", err)
+	}
+	if len(tapes) == 0 {
+		t.Fatal("no tapes found under doc/vhs")
+	}
+
+	total := 0
+	for _, tape := range tapes {
+		for _, cmd := range tapeCommands(t, tape) {
+			args, ok := sqlyInvocation(cmd.text)
+			if !ok {
+				continue
+			}
+			total++
+			if _, err := config.NewArg(append([]string{"sqly"}, args...)); err != nil {
+				t.Errorf("%s:%d records a command the parser rejects: %s\n  %v", tape, cmd.line, cmd.text, err)
+			}
+		}
+	}
+	if total < 5 {
+		t.Fatalf("only %d sqly invocations found across the tapes; the extractor or the tapes changed", total)
+	}
+}
+
+// tapeCommands returns the shell commands a VHS tape types. Only `Type "..."`
+// directives carry them; the rest of a tape is timing and terminal setup.
+func tapeCommands(t *testing.T, path string) []docCommand {
+	t.Helper()
+
+	data, err := os.ReadFile(path) //nolint:gosec // path comes from a glob over the repository's own tapes
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	typed := regexp.MustCompile(`^Type\s+"(.*)"\s*$`)
+	var cmds []docCommand
+	for i, raw := range strings.Split(string(data), "\n") {
+		m := typed.FindStringSubmatch(strings.TrimSpace(raw))
+		if m == nil {
+			continue
+		}
+		cmds = append(cmds, docCommand{text: m[1], line: i + 1})
+	}
+	return cmds
+}
+
 // TestDocs_EveryDocumentedShellCommandExists checks the helper commands the
 // shell page lists against the ones the shell actually registers. A dot-command
 // that is renamed or removed would otherwise stay documented, and the reference
@@ -108,9 +164,8 @@ var cookbookCoverage = map[string]string{
 	"Analytics":               "e2e/atago/cookbook.atago.yaml",
 	"Write changes back":      "e2e/atago/cookbook.atago.yaml",
 	"Other SQL dialects":      "e2e/atago/cookbook.atago.yaml",
-	"Ragged rows":             "e2e/atago/cookbook.atago.yaml",
+	"Row mismatches":          "e2e/atago/cookbook.atago.yaml",
 	"Text encodings":          "e2e/atago/encoding.atago.yaml",
-	"Cache an import":         "e2e/atago/cookbook.atago.yaml",
 	"Financial formats":       "e2e/atago/ach_fedwire_writeback.atago.yaml",
 	"Scripting":               "e2e/atago/cookbook.atago.yaml",
 }
@@ -454,7 +509,7 @@ func TestSqlyInvocation(t *testing.T) {
 	}{
 		{"plain", `sqly --output-format csv user.csv`, []string{"--output-format", "csv", "user.csv"}, true},
 		{"go run form", `go run github.com/nao1215/sqly@latest --output-format json user.csv`, []string{"--output-format", "json", "user.csv"}, true},
-		{"second stage of a pipeline", `cat user.csv | sqly --stdin csv --sql "SELECT 1"`, []string{"--stdin", "csv", "--sql", "SELECT 1"}, true},
+		{"second stage of a pipeline", `cat user.csv | sqly --stdin-format csv --sql "SELECT 1"`, []string{"--stdin-format", "csv", "--sql", "SELECT 1"}, true},
 		{"first stage of a pipeline", `sqly --output-format json user.csv | jq .`, []string{"--output-format", "json", "user.csv"}, true},
 		{"a pipe inside quotes is not a stage", `sqly --sql "SELECT 'a|b'"`, []string{"--sql", "SELECT 'a|b'"}, true},
 		{"not sqly", `brew install nao1215/tap/sqly`, nil, false},

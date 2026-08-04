@@ -7,15 +7,14 @@ import (
 
 // splitArgs splits a helper-command line into arguments while honoring single
 // quotes, double quotes, and backslash-escaped whitespace. This lets helper
-// commands accept file paths and --sheet values that contain spaces, e.g.
+// commands accept paths that contain spaces, e.g.
 //
 //	.import "my data.csv"
-//	.import --sheet "Q1 Sales" report.xlsx
-//	.import --sheet='Q1 Sales' report.xlsx
+//	.import 'Q1 report.csv'
 //	.import my\ data.csv
 //
 // Adjacent quoted and unquoted segments are concatenated into a single argument
-// (so --sheet="Q1 Sales" yields one token --sheet=Q1 Sales).
+// (so ./"my data".csv yields one token ./my data.csv).
 //
 // A bare backslash is kept literally (e.g. Windows paths like C:\data\x.csv) and
 // only escapes the next character when it is whitespace, a quote, or a backslash.

@@ -1,0 +1,268 @@
+# The Excel import contract, run against the real binary.
+#
+# A workbook is the one input that becomes several tables, so "did every sheet
+# arrive, and under what name?" is a question no other format asks. The fixtures
+# are committed workbooks rather than generated ones: what is being pinned is how
+# sqly reads a file, and a generator would let the file drift with the writer.
+#
+# Documented at website/content/formats.md#excel.
+version: "1"
+
+suite:
+  name: sqly Excel sheet import
+
+scenarios:
+  - name: imports every sheet of a workbook as its own table
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture:
+          file: many.xlsx
+          from: testdata/sheets_many.xlsx
+      - run:
+          command: sqly many.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - many_Sheet1
+              - many_Second
+              - many_Third
+
+  - name: queries a named sheet through its own table
+    env: *hist
+    steps:
+      - fixture:
+          file: many.xlsx
+          from: testdata/sheets_many.xlsx
+      - run:
+          command: sqly --sql "SELECT b FROM many_Second" many.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: s2
+
+  - name: imports a hundred and twenty sheets without dropping any
+    env: *hist
+    steps:
+      - fixture:
+          file: hundred.xlsx
+          from: testdata/sheets_hundred.xlsx
+      - run:
+          command: sqly --sql "SELECT a FROM hundred_S119" hundred.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: v119
+
+  - name: counts every sheet of a large workbook as a table
+    env: *hist
+    steps:
+      - fixture:
+          file: hundred.xlsx
+          from: testdata/sheets_hundred.xlsx
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name LIKE 'hundred_%'" hundred.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "120"
+
+  - name: imports a hidden sheet like any other
+    env: *hist
+    steps:
+      - fixture:
+          file: hidden.xlsx
+          from: testdata/sheets_hidden.xlsx
+      - run:
+          command: sqly --sql "SELECT b FROM hidden_Secret" hidden.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: hidden
+
+  - name: skips a sheet that has no cells instead of making an empty table
+    env: *hist
+    steps:
+      - fixture:
+          file: empty.xlsx
+          from: testdata/sheets_empty.xlsx
+      - run:
+          command: sqly empty.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: empty_Sheet1
+            not_contains: empty_Blank
+
+  - name: imports a header-only sheet as a table with no rows
+    env: *hist
+    steps:
+      - fixture:
+          file: headeronly.xlsx
+          from: testdata/sheets_headeronly.xlsx
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM headeronly_Sheet1" headeronly.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: reports a workbook with no usable sheet as producing no table
+    env: *hist
+    steps:
+      - fixture:
+          file: blank.xlsx
+          from: testdata/sheets_totally_empty.xlsx
+      - run:
+          command: sqly --sql "SELECT 1" blank.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "produced no table"
+      - assert:
+          stderr:
+            not_contains: collision
+
+  - name: fails the whole workbook when the file cannot be read
+    env: *hist
+    steps:
+      - fixture:
+          file: broken.xlsx
+          content: |
+            this is not a zip archive
+      - run:
+          command: sqly --sql "SELECT 1" broken.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: broken.xlsx
+
+  - name: turns spaces in a sheet name into underscores
+    env: *hist
+    steps:
+      - fixture:
+          file: odd.xlsx
+          from: testdata/sheets_odd_names.xlsx
+      - run:
+          command: sqly --sql "SELECT a FROM odd_with_space" odd.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: space
+
+  - name: prefixes a sheet name that starts with a digit
+    env: *hist
+    steps:
+      - fixture:
+          file: odd.xlsx
+          from: testdata/sheets_odd_names.xlsx
+      - run:
+          command: sqly --sql "SELECT a FROM odd_sheet_1numeric" odd.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: num
+
+  - name: keeps a non-ASCII sheet name and quotes it in .tables
+    env: *hist
+    steps:
+      - fixture:
+          file: odd.xlsx
+          from: testdata/sheets_odd_names.xlsx
+      - run:
+          command: sqly odd.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"odd_日本語"'
+
+  - name: queries a non-ASCII sheet through the quoted name .tables printed
+    env: *hist
+    steps:
+      - fixture:
+          file: odd.xlsx
+          from: testdata/sheets_odd_names.xlsx
+      - run:
+          command: sqly --sql 'SELECT a FROM "odd_日本語"' odd.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: jp
+
+  - name: keeps a sheet named after a SQLite keyword queryable unquoted
+    env: *hist
+    steps:
+      - fixture:
+          file: odd.xlsx
+          from: testdata/sheets_odd_names.xlsx
+      - run:
+          command: sqly --sql "SELECT a FROM odd_select" odd.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: kw
+
+  - name: drops punctuation that cannot appear in an identifier
+    env: *hist
+    steps:
+      - fixture:
+          file: names.xlsx
+          from: testdata/sheets_names.xlsx
+      - run:
+          command: sqly --sql "SELECT a FROM names_x1" names.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: v
+
+  - name: keeps two workbooks apart when they share a sheet name
+    env: *hist
+    steps:
+      - fixture:
+          file: a.xlsx
+          from: testdata/sheets_many.xlsx
+      - fixture:
+          file: b.xlsx
+          from: testdata/sheets_many.xlsx
+      - run:
+          command: sqly a.xlsx b.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - a_Sheet1
+              - b_Sheet1
+
+  - name: joins two sheets of the same workbook in one query
+    env: *hist
+    steps:
+      - fixture:
+          file: many.xlsx
+          from: testdata/sheets_many.xlsx
+      - run:
+          command: sqly --output-format csv --sql "SELECT s.a, t.b FROM many_Sheet1 s CROSS JOIN many_Second t" many.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "s1,s2"
+
+  - name: reports every sheet of a workbook in --inspect
+    env: *hist
+    steps:
+      - fixture:
+          file: many.xlsx
+          from: testdata/sheets_many.xlsx
+      - run:
+          command: sqly --inspect many.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - many_Sheet1
+              - many_Second
+              - many_Third

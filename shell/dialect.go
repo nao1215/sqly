@@ -12,7 +12,7 @@ import (
 // dialectCommand shows or changes the SQL dialect applied to user queries.
 //
 //	.dialect            print the current dialect and the available choices
-//	.dialect NAME       switch the dialect (sqlite|mysql|postgresql|googlesql)
+//	.dialect NAME       switch the dialect (sqlite, mysql, postgresql, googlesql)
 //
 // Loading always uses SQLite; only queries typed at the prompt (or run via
 // --sql/--sql-file/batch) are translated.

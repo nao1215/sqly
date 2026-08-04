@@ -22,7 +22,7 @@ Type "sqly --output-format json --sql 'SELECT user_name, identifier FROM user LI
 Sleep 600ms
 Enter
 Sleep 1800ms
-Type "sqly --output-format ndjson --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
+Type "sqly --output-format jsonl --sql 'SELECT user_name, identifier FROM user LIMIT 2' testdata/user.csv"
 Sleep 600ms
 Enter
 Sleep 2500ms

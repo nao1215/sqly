@@ -336,7 +336,7 @@ func TestCommunicate_PromptSessionCreationFails(t *testing.T) {
 }
 
 // TestStageStdinDataset_UnsupportedFormat covers the guard that rejects an
-// unknown --stdin format before touching the filesystem.
+// unknown --stdin-format value before touching the filesystem.
 func TestStageStdinDataset_UnsupportedFormat(t *testing.T) {
 	t.Parallel()
 
@@ -350,7 +350,7 @@ func TestStageStdinDataset_UnsupportedFormat(t *testing.T) {
 	shell.argument.StdinTableName = "stdin"
 
 	_, _, err = shell.stageStdinDataset()
-	if err == nil || !strings.Contains(err.Error(), "unsupported --stdin format") {
+	if err == nil || !strings.Contains(err.Error(), "unsupported --stdin-format value") {
 		t.Fatalf("stageStdinDataset unsupported format error = %v, want format error", err)
 	}
 }
@@ -441,7 +441,7 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		defer cleanup()
 		shell.argument.Output.FilePath = filepath.Join(t.TempDir(), "out.csv")
 
-		err = shell.runSQLFileToOutput(context.Background(), "CREATE TABLE t (a INTEGER);")
+		err = shell.runSQLFileToOutput(context.Background(), mustParse(t, "CREATE TABLE t (a INTEGER);"))
 		if err == nil || !strings.Contains(err.Error(), "produced none") {
 			t.Fatalf("runSQLFileToOutput no-result error = %v, want none-produced error", err)
 		}
@@ -461,7 +461,7 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		defer func() { config.Stderr = backupStderr }()
 		config.Stderr = &strings.Builder{}
 
-		if err := shell.runSQLFileToOutput(context.Background(), "SELECT 1 AS a;"); err != nil {
+		if err := shell.runSQLFileToOutput(context.Background(), mustParse(t, "SELECT 1 AS a;")); err != nil {
 			t.Fatalf("runSQLFileToOutput single-result error: %v", err)
 		}
 		data, err := os.ReadFile(out) //nolint:gosec // out is a test temp path
@@ -481,55 +481,11 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		defer cleanup()
 		shell.argument.Output.FilePath = filepath.Join(t.TempDir(), "out.csv")
 
-		err = shell.runSQLFileToOutput(context.Background(), "SELECT 1 AS a;\nSELECT 2 AS b;")
-		if err == nil || !strings.Contains(err.Error(), "single result set") {
+		err = shell.runSQLFileToOutput(context.Background(), mustParse(t, "SELECT 1 AS a;\nSELECT 2 AS b;"))
+		if err == nil || !strings.Contains(err.Error(), "result sets") {
 			t.Fatalf("runSQLFileToOutput two-result error = %v, want single-result error", err)
 		}
 	})
-}
-
-// TestGetCompletions_SheetContextNoWorkbook covers the sheetCompletionContext
-// branch where the --sheet flag is present but no workbook precedes it, so no
-// sheet suggestions are produced and completion falls through.
-func TestGetCompletions_SheetContextNoWorkbook(t *testing.T) {
-	t.Parallel()
-
-	shell, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	// No workbook token before "--sheet", so sheetCompletionContext returns false
-	// and getCompletions does not offer sheet names.
-	got := shell.getCompletions(context.Background(), ".import --sheet Sh")
-	for _, s := range got {
-		if s.Description == msgExcelSheet {
-			t.Fatalf("unexpected sheet suggestion %q when no workbook was given", s.Text)
-		}
-	}
-}
-
-// TestGetCompletions_SheetContextJoinedForm covers the joined "--sheet=" branch of
-// sheetCompletionContext with a real workbook argument.
-func TestGetCompletions_SheetContextJoinedForm(t *testing.T) {
-	t.Parallel()
-
-	shell, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	// The joined form routes through sheetCompletionContext and getSheetCompletions.
-	// We only require that it does not panic and returns cleanly; any suggestions
-	// carry the Excel-sheet description.
-	got := shell.getCompletions(context.Background(), ".import testdata/sample.xlsx --sheet=")
-	for _, s := range got {
-		if s.Description != "" && s.Description != msgExcelSheet {
-			t.Errorf("unexpected non-sheet suggestion %q with description %q", s.Text, s.Description)
-		}
-	}
 }
 
 // TestGetQuotedFilePathCompletions_DirAndBadDir covers a directory suggestion

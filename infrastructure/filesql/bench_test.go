@@ -215,7 +215,7 @@ func BenchmarkPrintCSV(b *testing.B) { benchPrint(b, model.PrintModeCSV) }
 func BenchmarkPrintJSON(b *testing.B) { benchPrint(b, model.PrintModeJSON) }
 
 // BenchmarkPrintNDJSON measures NDJSON output of a 100,000-row result.
-func BenchmarkPrintNDJSON(b *testing.B) { benchPrint(b, model.PrintModeNDJSON) }
+func BenchmarkPrintNDJSON(b *testing.B) { benchPrint(b, model.PrintModeJSONL) }
 
 // BenchmarkPrintTable measures table output. It uses a smaller result because
 // the table renderer measures every cell's display width, which is quadratic in

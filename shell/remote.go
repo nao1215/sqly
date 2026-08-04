@@ -86,8 +86,8 @@ func normalizeRemoteURL(raw string) string {
 	return u.String()
 }
 
-// remoteFilenameHint returns the filename-like hint from the URL path. It is
-// used for pre-download checks like --sheet validation and workbook counting.
+// remoteFilenameHint returns the filename-like hint from the URL path, which is
+// what a check that needs the format has to go on before the download.
 func remoteFilenameHint(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -98,12 +98,6 @@ func remoteFilenameHint(raw string) string {
 		return ""
 	}
 	return base
-}
-
-// isRemoteExcelURL reports whether the URL path hints an Excel workbook.
-func isRemoteExcelURL(raw string) bool {
-	name := remoteFilenameHint(raw)
-	return name != "" && strings.HasSuffix(strings.ToLower(name), ".xlsx")
 }
 
 // downloadRemoteInput fetches a supported remote file to a temp path and

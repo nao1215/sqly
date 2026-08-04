@@ -175,12 +175,15 @@ scenarios:
             path: out.csv
             exists: false
 
-  - name: "rejects under --save --force: PRAGMA user_version=1"
+  - name: "rejects under .save --in-place: PRAGMA user_version=1"
     env: *hist
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "PRAGMA user_version=1" --save --force user.csv
+          command: sqly user.csv
+          stdin: |
+            PRAGMA user_version=1;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -188,12 +191,15 @@ scenarios:
           stdout:
             not_contains: journal_mode
 
-  - name: "rejects under --save --force: PRAGMA incremental_vacuum"
+  - name: "rejects under .save --in-place: PRAGMA incremental_vacuum"
     env: *hist
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "PRAGMA incremental_vacuum" --save --force user.csv
+          command: sqly user.csv
+          stdin: |
+            PRAGMA incremental_vacuum;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -201,12 +207,15 @@ scenarios:
           stdout:
             not_contains: journal_mode
 
-  - name: "rejects under --save --force: PRAGMA journal_mode=OFF"
+  - name: "rejects under .save --in-place: PRAGMA journal_mode=OFF"
     env: *hist
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "PRAGMA journal_mode=OFF" --save --force user.csv
+          command: sqly user.csv
+          stdin: |
+            PRAGMA journal_mode=OFF;
+            .save --in-place
       - assert:
           exit_code: 1
           stderr:
@@ -214,12 +223,15 @@ scenarios:
           stdout:
             not_contains: journal_mode
 
-  - name: rejects a setter PRAGMA under --save-dir and writes nothing
+  - name: rejects a setter PRAGMA under .save DIR and writes nothing
     env: *hist
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "PRAGMA user_version=1" --save-dir out user.csv
+          command: sqly user.csv
+          stdin: |
+            PRAGMA user_version=1;
+            .save out
       - assert:
           exit_code: 1
           stderr:
@@ -228,12 +240,15 @@ scenarios:
             path: out
             exists: false
 
-  - name: rejects a command PRAGMA under --save-dir and writes nothing
+  - name: rejects a command PRAGMA under .save DIR and writes nothing
     env: *hist
     steps:
       - fixture: *user
       - run:
-          command: sqly --sql "PRAGMA incremental_vacuum" --save-dir out user.csv
+          command: sqly user.csv
+          stdin: |
+            PRAGMA incremental_vacuum;
+            .save out
       - assert:
           exit_code: 1
           stderr:
@@ -339,13 +354,13 @@ scenarios:
               - '"name"'
               - '"schema"'
 
-  - name: emits structured .header output under .mode ndjson
+  - name: emits structured .header output under .mode jsonl
     env: *hist
     steps:
       - fixture: *user
       - run:
           command: sqly user.csv
-          stdin: ".mode ndjson\n.header user\n"
+          stdin: ".mode jsonl\n.header user\n"
       - assert:
           exit_code: 0
           stderr:
@@ -355,7 +370,7 @@ scenarios:
               - '"column"'
               - first_name
 
-  - name: does not rewrite an unchanged source on .save --force
+  - name: does not rewrite an unchanged source on .save --in-place
     env: *hist
     steps:
       - fixture:
@@ -365,7 +380,7 @@ scenarios:
             alice,1
       - run:
           command: sqly ro.csv
-          stdin: ".save --force\n"
+          stdin: ".save --in-place\n"
       - assert:
           exit_code: 0
           stderr:

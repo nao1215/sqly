@@ -217,6 +217,9 @@ func TestShellInspectSampleBoundaries(t *testing.T) {
 	query := mock.NewMockQueryUsecase(ctrl)
 	importer := mock.NewMockImportUsecase(ctrl)
 	importer.EXPECT().QuoteIdentifier("t").Return("t").AnyTimes()
+	// The sample is ordered by rowid; a table with no rowid falls back to a plain
+	// scan, so both spellings are attempted and both fail here.
+	query.EXPECT().Query(gomock.Any(), "SELECT * FROM t ORDER BY rowid LIMIT 2").Return(nil, errors.New("sample failed"))
 	query.EXPECT().Query(gomock.Any(), "SELECT * FROM t LIMIT 2").Return(nil, errors.New("sample failed"))
 	s = newBoundaryTestShell(t, Usecases{query: query, importer: importer})
 	if _, err := s.inspectSample(context.Background(), "t", 2); err == nil {
