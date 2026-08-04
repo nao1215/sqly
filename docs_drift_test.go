@@ -1900,6 +1900,106 @@ func TestCHANGELOG_ListsTheRc3BreakingChanges(t *testing.T) {
 	}
 }
 
+// pagesVerifyRequire matches the `require "${page}" "claim" "where"` lines the
+// website workflow checks the live site with.
+var pagesVerifyRequire = regexp.MustCompile(`(?m)^\s*require "\$\{(\w+)\}" "([^"]*)" "(\w+)"`)
+
+// pagesVerifySources maps the page name the workflow uses to the Markdown it is
+// rendered from, so a claim can be checked against the source before a deploy
+// has to check it against the live site.
+var pagesVerifySources = map[string]string{
+	"reference": "website/content/reference.md",
+	"formats":   "website/content/formats.md",
+	"dialects":  "website/content/dialects.md",
+	"about":     "website/content/about.md",
+}
+
+// TestPagesVerification_EveryClaimIsInTheSourceItChecks runs the deploy check's
+// own claim list against the Markdown those pages are built from.
+//
+// It exists because the deploy check is the one test that cannot run before a
+// deploy: a claim reworded out of a page, or a needle typed slightly wrong,
+// only fails after the site is already live. Comparing the list to the source
+// moves that failure to `go test`.
+func TestPagesVerification_EveryClaimIsInTheSourceItChecks(t *testing.T) {
+	t.Parallel()
+
+	workflow := readDoc(t, ".github/workflows/website.yml")
+	matches := pagesVerifyRequire.FindAllStringSubmatch(workflow, -1)
+	if len(matches) == 0 {
+		t.Fatal("no require lines parsed from the website workflow; the parser or the workflow changed")
+	}
+
+	flattened := make(map[string]string, len(pagesVerifySources))
+	for page, path := range pagesVerifySources {
+		flattened[page] = flatten(readDoc(t, path))
+	}
+
+	for _, m := range matches {
+		page, claim := m[1], m[2]
+		source, known := flattened[page]
+		if !known {
+			t.Errorf("the workflow checks a page %q this test cannot map to a Markdown source; add it to pagesVerifySources", page)
+			continue
+		}
+		if !strings.Contains(source, claim) {
+			t.Errorf("%s no longer states %q, which the Pages verification requires of the deployed page",
+				pagesVerifySources[page], claim)
+		}
+	}
+}
+
+// TestPagesVerification_NormalizesWhitespaceBeforeMatching keeps the workflow
+// from going back to a raw substring match on the fetched HTML.
+//
+// Every step that searches a page for prose must squeeze whitespace first.
+// Without it, a claim that happens to wrap in the Markdown source is absent
+// from the string being searched, and the deploy fails on a page that says
+// exactly the right thing — which is what happened the first time this check
+// ran.
+//
+// The steps are named rather than every curl being matched, because the
+// workflow fetches for two other reasons that are unaffected: the homepage is
+// read to pull a 40-hex build commit out of a meta tag, and the schema is
+// fetched to a file and parsed as JSON. Neither searches prose.
+func TestPagesVerification_NormalizesWhitespaceBeforeMatching(t *testing.T) {
+	t.Parallel()
+
+	const squeeze = `tr -s '[:space:]' ' '`
+	workflow := readDoc(t, ".github/workflows/website.yml")
+
+	for _, step := range []string{
+		"Check the reference page shows the current flags",
+		"Check the deployed pages state the contracts a wrong page would break",
+	} {
+		body := workflowStep(t, workflow, step)
+		if body == "" {
+			t.Errorf("the website workflow has no step named %q", step)
+			continue
+		}
+		if !strings.Contains(body, squeeze) {
+			t.Errorf("the %q step does not normalize whitespace with %s, so a claim that wraps in the source would not match",
+				step, squeeze)
+		}
+	}
+}
+
+// workflowStep returns the body of a named workflow step, or "" when there is
+// none. A step ends where the next one begins.
+func workflowStep(t *testing.T, workflow, name string) string {
+	t.Helper()
+
+	start := strings.Index(workflow, "- name: "+name)
+	if start < 0 {
+		return ""
+	}
+	rest := workflow[start+len("- name: "+name):]
+	if end := strings.Index(rest, "\n      - name: "); end >= 0 {
+		return rest[:end]
+	}
+	return rest
+}
+
 // TestPagesVerification_ChecksTheRc3Contracts guards the deploy check itself.
 // The website workflow verifies the live site against a list of claims; a
 // contract added without being added there is a contract the deploy cannot
