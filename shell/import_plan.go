@@ -95,6 +95,16 @@ func (p *importPlan) loadPaths() []string {
 // missing path, a directory with nothing supported in it — ends the import with
 // the session exactly as it was, which is the first half of "all or nothing".
 func (s *Shell) resolveImportPlan(ctx context.Context, argv, labels []string) (*importPlan, error) {
+	// The remote capability is checked across every input before the first one is
+	// resolved, so a mix of local files and a URL this session may not download
+	// refuses without staging the local half. It is checked here rather than only
+	// at startup because this is the funnel every import passes through: the
+	// positional arguments, `.import` at the prompt, and `.import` inside a
+	// script all arrive at this function.
+	if err := s.authorizeRemoteInputs(argv); err != nil {
+		return nil, err
+	}
+
 	plan := &importPlan{}
 	for i, input := range argv {
 		// The label is what the user wrote, which is not always the path being

@@ -391,7 +391,7 @@ scenarios:
           # seconds — and a signal has to cover now. The temp directory the
           # download staged has to be gone afterwards. python3 serves it because
           # the rest of this suite's HTTP fixtures already do.
-          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; python3 -c "import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind((\"127.0.0.1\", 45917)); s.listen(5); time.sleep(60)" >/dev/null 2>&1 & server=$!; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",45917)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the stalling fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --sql "SELECT 1" http://127.0.0.1:45917/data.csv > /dev/null 2>/dev/null & child=$!; sleep 2; start=$(date +%s); kill -TERM $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $server 2>/dev/null; wait $server 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"; ls tmp 2>/dev/null | grep -c sqly-http || echo 0'
+          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; python3 -c "import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind((\"127.0.0.1\", 45917)); s.listen(5); time.sleep(60)" >/dev/null 2>&1 & server=$!; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",45917)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the stalling fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --sql "SELECT 1" http://127.0.0.1:45917/data.csv > /dev/null 2>/dev/null & child=$!; sleep 2; start=$(date +%s); kill -TERM $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $server 2>/dev/null; wait $server 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"; ls tmp 2>/dev/null | grep -c sqly-http || echo 0'
           shell: true
       - assert:
           exit_code: 0
@@ -406,7 +406,7 @@ scenarios:
       - run:
           # sqly's only deadlines are on the HTTP client. Reporting a timeout as
           # 130 or 143 would send a wrapper looking for a signal nobody sent.
-          command: sqly --sql "SELECT 1" http://127.0.0.1:1/data.csv
+          command: sqly --allow-remote --sql "SELECT 1" http://127.0.0.1:1/data.csv
       - assert:
           exit_code: 3
       - assert:

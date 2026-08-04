@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nao1215.github.io/sqly/schema/inspect-v1.schema.json",
+  "title": "sqly --inspect report, schema version 1",
+  "description": "The JSON document `sqly --inspect` writes to stdout. This file is the single canonical copy of the contract; the prose that explains it lives at https://nao1215.github.io/sqly/reference/#inspect-json-schema. Additive change is expected: a v1 consumer must ignore fields it does not know, so objects here do not close themselves with additionalProperties:false.",
+  "type": "object",
+  "required": ["schema_version", "sqly_version", "tables"],
+  "properties": {
+    "schema_version": {
+      "description": "The version of this contract, as a JSON number. It is 1 for every document this schema describes, and changes only for a change a consumer cannot absorb by ignoring unknown fields.",
+      "type": "integer",
+      "const": 1
+    },
+    "sqly_version": {
+      "description": "The version of the sqly binary that produced the report, as `--version` prints it. A release binary reports its tag (\"v1.0.0-rc3\"); a build from source reports the module version or \"(devel)\". It is never empty. It is not the contract version: two binaries can write the same schema_version and different sqly_version values, so the same input produces the same shape but not the same bytes across releases.",
+      "type": "string",
+      "minLength": 1
+    },
+    "tables": {
+      "description": "Every table the run imported, sorted by name. Always present and always an array; a run that imported nothing fails instead of reporting an empty list.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/table" }
+    },
+    "excel_sheets": {
+      "description": "Every sheet of every workbook among the inputs, in import order. Absent when no workbook was read, which is why a consumer must treat it as optional rather than as an empty array.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/excelSheet" }
+    }
+  },
+  "$defs": {
+    "table": {
+      "type": "object",
+      "required": ["name", "row_count", "columns", "sample_rows"],
+      "properties": {
+        "name": {
+          "description": "The queryable table name.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where the table was read from: an absolute file path, the URL that was downloaded, or \"stdin\" for a --stdin-format dataset. Absent for a table with no recorded source.",
+          "type": "string"
+        },
+        "row_count": {
+          "description": "The number of rows in the table. This is the whole table, not the sample.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "columns": {
+          "description": "The columns in definition order.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/column" }
+        },
+        "sample_rows": {
+          "description": "The first rows of the table, in the order they were read, capped at --inspect-sample. It is an empty array by default, because --inspect is schema-only unless --inspect-sample asks for row data. It is never absent and never null.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/sampleRow" }
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "required": ["name", "type", "nullable", "primary_key"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": {
+          "description": "The SQLite declared type, as PRAGMA table_info reports it (\"TEXT\", \"INTEGER\", \"REAL\", ...). It may be the empty string for a column with no declared type.",
+          "type": "string"
+        },
+        "nullable": { "type": "boolean" },
+        "primary_key": { "type": "boolean" }
+      }
+    },
+    "sampleRow": {
+      "description": "One row, as an object keyed by column name in column order. Values carry the type SQLite returned: a TEXT column is a JSON string even when it holds \"123\", an INTEGER or REAL column is a JSON number, SQL NULL is JSON null, and a BLOB that is not valid UTF-8 is a base64 string. The three floats JSON cannot express arrive as the strings \"NaN\", \"Infinity\", and \"-Infinity\".",
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      }
+    },
+    "excelSheet": {
+      "type": "object",
+      "required": ["source", "name", "visible", "imported"],
+      "properties": {
+        "source": {
+          "description": "The workbook the sheet belongs to.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The sheet name as the workbook spells it.",
+          "type": "string"
+        },
+        "visible": {
+          "description": "Whether the workbook shows the sheet.",
+          "type": "boolean"
+        },
+        "imported": {
+          "description": "Whether this run turned the sheet into a table. A hidden sheet is imported only with --include-hidden-sheets.",
+          "type": "boolean"
+        },
+        "table": {
+          "description": "The table the sheet became. Absent when the sheet was not imported, because there is no table to name.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

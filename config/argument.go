@@ -22,9 +22,15 @@ var (
 	Stderr = colorable.NewColorableStderr()
 )
 
-// defaultInspectSample is the number of sample rows --inspect includes per
+// DefaultInspectSample is the number of sample rows --inspect includes per
 // table unless --inspect-sample overrides it.
-const defaultInspectSample = 5
+//
+// It is 0: --inspect describes what a file holds, and row data is what the file
+// holds. A discovery command run by an agent, a wrapper, or a CI job over a file
+// nobody has read yet must not print its contents to stdout as a side effect of
+// asking for its schema. Row data is opt-in, one flag away, and the flag says a
+// number rather than "yes", so the caller states how much it wants.
+const DefaultInspectSample = 0
 
 // defaultStdinTable is the table name a --stdin-format dataset gets when
 // --stdin-table does not name one.
@@ -63,9 +69,16 @@ type Arg struct {
 	// .sql file that silently ran .save would be a shell script wearing a SQL
 	// extension.
 	ScriptFilePath string
+	// AllowRemote lets this session download the http(s) URLs it is given. It is
+	// an explicit capability rather than a default: without it sqly makes no HTTP
+	// request at all, so a wrapper that never passes the flag has turned sqly's
+	// own network access off. It is not a sandbox — see the note on the flag in
+	// newArg.
+	AllowRemote bool
 	// InspectFlag, when true, prints a machine-readable JSON report of the
-	// imported tables (names, source mapping, columns, row counts, and sample
-	// rows) and exits without starting the shell.
+	// imported tables (names, source mapping, columns, row counts, and, when
+	// --inspect-sample asks for them, sample rows) and exits without starting the
+	// shell.
 	InspectFlag bool
 	// InspectSample caps how many sample rows each --inspect table includes.
 	// 0 means schema-only (no sample rows), which keeps the report small for
@@ -176,6 +189,13 @@ func newArg(args []string) (*Arg, error) {
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "decode every csv, tsv, ltsv, json, and jsonl input that has no BOM as one of: "+strings.ReplaceAll(model.TextEncodingHelp(), "|", ", "))
 	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "for csv and tsv, what to do with a row whose field count differs from the header: error (fail the import), skip (drop the row), pad (fill a short row, fail on a long one)")
 	flag.BoolVar(&arg.IncludeHiddenSheets, "include-hidden-sheets", false, "import the sheets an excel workbook hides as well as the ones it shows")
+	// --allow-remote is a capability, not a security boundary. It decides whether
+	// sqly performs an HTTP request at all; it decides nothing about where that
+	// request may go. A caller that can add flags can add this one, so what it
+	// protects is the case where the caller cannot: a wrapper, a sandbox policy,
+	// or a CI job that fixes sqly's argument list. Said plainly in the help so
+	// nobody reads it as an SSRF defense.
+	flag.BoolVar(&arg.AllowRemote, "allow-remote", false, "allow sqly to download http(s) input explicitly named by this session; without it a url is refused before any request. this is a capability, not a sandbox or an ssrf defense")
 	// Query.
 	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
 	sqlFile := flag.StringP("sql-file", "f", "", "run every SQL statement in this file, then exit; a dot-command is rejected, so use --script-file for those; printing several results needs --output-format table, vertical, or markdown")
@@ -185,8 +205,8 @@ func newArg(args []string) (*Arg, error) {
 	output := flag.StringP("output", "o", "", "write the one query result to this file instead of stdout")
 	outputFormat := flag.String("output-format", outputFormatTable, "print the query result as one of: "+outputFormatHelp+"; excel and parquet need --output")
 	// Inspection.
-	flag.BoolVar(&arg.InspectFlag, "inspect", false, "print one JSON report of the imported tables (schema, row counts, sample rows) and exit")
-	inspectSample := flag.Int("inspect-sample", defaultInspectSample, "sample rows per table in the --inspect report; 0 for schema only")
+	flag.BoolVar(&arg.InspectFlag, "inspect", false, "print one JSON report of the imported tables (schema, row counts, source) and exit; no row data unless --inspect-sample asks for it")
+	inspectSample := flag.Int("inspect-sample", DefaultInspectSample, "sample rows per table in the --inspect report; 0 keeps the report schema-only")
 	// General.
 	flag.BoolVarP(&arg.HelpFlag, "help", "h", false, "print this help and exit")
 	flag.BoolVarP(&arg.VersionFlag, "version", "v", false, "print the sqly version and exit")
@@ -240,6 +260,14 @@ func newArg(args []string) (*Arg, error) {
 	// without --inspect instead of silently ignoring it.
 	if flag.Changed("inspect-sample") && !arg.InspectFlag {
 		return nil, errInspectSampleWithoutInspect
+	}
+
+	// A negative count is a malformed value, not a run that fails: it is caught
+	// here so the exit code says "fix the command line" and nothing has been read
+	// by the time it is reported. There is no upper bound — a caller that asks for
+	// more rows than the table holds gets the table, which is what it asked for.
+	if *inspectSample < 0 {
+		return nil, fmt.Errorf("%w, got %d", errNegativeInspectSample, *inspectSample)
 	}
 
 	// Validate --stdin-table so it cannot be empty or contain path separators.
@@ -402,7 +430,7 @@ type optionGroup struct {
 // newArg appears in exactly one group; helpUsage fails loudly if that stops
 // being true, so a flag added later cannot silently vanish from --help.
 var optionGroups = []optionGroup{
-	{title: "Input", options: []string{"stdin-format", "stdin-table", "encoding", "row-mismatch", "include-hidden-sheets"}},
+	{title: "Input", options: []string{"stdin-format", "stdin-table", "encoding", "row-mismatch", "include-hidden-sheets", "allow-remote"}},
 	{title: "Query", options: []string{"sql", "sql-file", "script-file", "dialect"}},
 	{title: "Output", options: []string{"output", "output-format"}},
 	{title: "Inspection", options: []string{"inspect", "inspect-sample"}},
@@ -460,21 +488,29 @@ func usage(flag pflag.FlagSet) string {
 	s += "[Examples]\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("open the shell with a file loaded"))
 	s += "    sqly sample.csv\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run one query over a file, a directory, or a URL"))
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("run one query over a file or a directory"))
 	s += "    sqly --sql 'SELECT * FROM sample' sample.csv\n"
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("read a URL, which needs the capability to be given explicitly"))
+	s += "    sqly --allow-remote --sql 'SELECT * FROM sample' https://example.com/sample.csv\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("join files of different formats"))
 	s += "    sqly --sql 'SELECT * FROM a JOIN b USING (id)' a.csv b.parquet\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("write the result somewhere else, in another format"))
 	s += "    sqly --output-format json --output out.json --sql 'SELECT 1' a.csv\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("read the data from a pipe and the query from a file"))
 	s += "    cat data.csv | sqly --stdin-format csv --sql-file query.sql\n"
-	s += fmt.Sprintf("  - %s\n", color.HiYellowString("look at a file you have never seen, as JSON"))
+	s += fmt.Sprintf("  - %s\n", color.HiYellowString("look at a file you have never seen, as JSON (schema only)"))
 	s += "    sqly --inspect sample.csv\n"
 	s += "\n"
 	s += helpOptions(&flag)
 	s += "\n"
-	s += "Queries are SQLite by default; --dialect translates MySQL, PostgreSQL, or\n"
-	s += "GoogleSQL syntax into it.\n"
+	s += "Queries are SQLite by default. --dialect translates MySQL, PostgreSQL, or\n"
+	s += "GoogleSQL syntax into SQLite syntax; it does not emulate that database.\n"
+	s += "Every statement runs on SQLite, with SQLite semantics, types, collation,\n"
+	s += "NULL handling, and functions, so a result can differ from the source\n"
+	s += "database. Choosing a non-SQLite dialect says so once, on stderr.\n"
+	s += "\n"
+	s += "A URL is downloaded only with --allow-remote. That flag is an explicit\n"
+	s += "network capability, not a sandbox or an SSRF defense.\n"
 	s += "\n"
 	s += "Documentation:   https://nao1215.github.io/sqly/\n"
 	s += "Report an issue: https://github.com/nao1215/sqly/issues\n"

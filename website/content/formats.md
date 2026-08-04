@@ -199,9 +199,67 @@ An Excel source cannot be written back in place, because several tables share on
 
 ## Remote inputs
 
-A positional argument may be an `http` or `https` URL. sqly downloads it to a
-temporary file, imports that, and removes it when the run ends — including when
-the run fails or is interrupted.
+A positional argument may be an `http` or `https` URL, and so may the argument to
+`.import`. sqly downloads it to a temporary file, imports that, and removes it
+when the run ends — including when the run fails or is interrupted.
+
+**Downloading is default-deny.** sqly makes no HTTP request unless the session
+was given `--allow-remote`:
+
+```shell
+# refused before any request is made; exit 2
+sqly --sql "SELECT * FROM users" https://example.com/users.csv
+
+# allowed
+sqly --allow-remote \
+  --sql "SELECT * FROM users" \
+  https://example.com/users.csv
+```
+
+The refusal happens before anything is resolved, so a command line mixing a
+local file and a URL imports neither, creates no temporary directory, and leaves
+stdout empty. The same applies to `.import URL` — typed at the prompt, piped in,
+or read from a `--script-file`. In a script the whole script is checked before
+its first statement runs, so a refused run has executed nothing. At the
+interactive prompt the command fails, the session continues, and no table,
+source record, or baseline changes.
+
+A session started with `--allow-remote` keeps the capability for the `.import`
+commands typed later in it. Granting it and not using it is not an error:
+`sqly --allow-remote data.csv` runs, and a bare `sqly --allow-remote` opens the
+interactive shell on a terminal. The flag grants a capability and nothing else,
+so it supplies no input of its own: a bare `sqly --allow-remote` with empty
+non-interactive stdin still exits `2` for having nothing to run, exactly as a
+bare `sqly` does.
+
+`--allow-remote` covers `http` and `https` only. `ftp://`, `file://`, `ssh://`,
+`gopher://` and every other scheme are refused before any connection, with or
+without the flag. A Windows drive path such as `C:\data\sales.csv` and a local
+file name containing a colon are not URLs and are unaffected.
+
+### What --allow-remote is not
+
+`--allow-remote` is an explicit network capability, not a sandbox or an SSRF
+defense.
+
+It decides *whether* sqly makes an HTTP request. It decides nothing about where
+that request may go. With the flag given, sqly fetches the URL it was handed,
+and it does **not**:
+
+- sandbox the process,
+- prevent requests to `localhost` or to a private network range,
+- prevent requests to a cloud metadata endpoint,
+- defend against DNS rebinding, or re-resolve a name to check it did not move,
+- prevent access through a configured proxy.
+
+What it is for: an agent harness, a wrapper, or a CI job that fixes sqly's
+argument list can leave the flag out and thereby turn sqly's own downloading
+off. That is a real property, and it is the only one claimed. It is **not** a
+defense against a caller who can add flags — anything that can write sqly's
+command line can write `--allow-remote` onto it.
+
+The flag is a switch on making the request, not a relaxation of anything. Every
+limit below still applies with it given.
 
 A URL is the one input nobody local vouched for: the server chooses the size and
 where a redirect leads. These bounds apply to it and to nothing else.
@@ -250,6 +308,9 @@ is taken from the first of these that gives a supported filename:
 named after its redirect target.
 
 `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` are honored.
+
+A remote source cannot be written back to. `.save --in-place` refuses a table
+whose source is a URL; export it to a local file instead.
 
 ## Text encodings
 

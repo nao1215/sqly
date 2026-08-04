@@ -4,7 +4,7 @@ title: sqly
 
 sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It loads them into an in-memory SQLite database, so joins, CTEs, window functions, and aggregates all work — across formats, in one query.
 
-This site describes `v1.0.0-rc2`, a release candidate. It carries substantial breaking changes over v0.x — classified exit codes, visible-only Excel sheets, SIGTERM `143`, and multiple inputs as one atomic import — and more can land before v1.0.0, so read the [CHANGELOG](https://github.com/nao1215/sqly/blob/main/CHANGELOG.md) before upgrading.
+This site describes `v1.0.0-rc3`, the next release candidate, which has not been tagged yet; the latest published candidate is `v1.0.0-rc2`. It carries substantial breaking changes over v0.x — classified exit codes, visible-only Excel sheets, SIGTERM `143`, multiple inputs as one atomic import, and now a schema-only `--inspect` and default-deny remote input — and more can land before v1.0.0, so read the [CHANGELOG](https://github.com/nao1215/sqly/blob/main/CHANGELOG.md) and the [migration guide](https://github.com/nao1215/sqly/blob/main/doc/migration.md) before upgrading.
 
 ![sqly running a query against a CSV file](/img/demo.gif)
 

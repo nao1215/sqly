@@ -38,7 +38,7 @@ scenarios:
 
             http.server.HTTPServer(("127.0.0.1", 18091), Handler).serve_forever()
       - run:
-          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18091)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --sql "SELECT 1" http://127.0.0.1:18091/data.csv'
+          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18091)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --sql "SELECT 1" http://127.0.0.1:18091/data.csv'
       - assert:
           exit_code: 3
           stdout:
@@ -66,7 +66,7 @@ scenarios:
 
             http.server.HTTPServer(("127.0.0.1", 18092), Handler).serve_forever()
       - run:
-          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18092)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --sql "SELECT 1" http://127.0.0.1:18092/start.csv'
+          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18092)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --sql "SELECT 1" http://127.0.0.1:18092/start.csv'
       - assert:
           exit_code: 3
           stdout:
@@ -104,7 +104,7 @@ scenarios:
 
             http.server.HTTPServer(("127.0.0.1", 18093), Handler).serve_forever()
       - run:
-          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18093)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --output-format csv --sql "SELECT user_name FROM user" http://127.0.0.1:18093/go'
+          command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18093)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT user_name FROM user" http://127.0.0.1:18093/go'
       - assert:
           exit_code: 0
           stdout:

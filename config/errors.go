@@ -63,3 +63,10 @@ var (
 	errStdinTableWithoutFormat     = errors.New("--stdin-table has no effect without --stdin-format FORMAT")
 	errInspectSampleWithoutInspect = errors.New("--inspect-sample has no effect without --inspect")
 )
+
+// errNegativeInspectSample is returned when --inspect-sample is given a negative
+// count. "Minus one sample rows" names no report, so it is a malformed
+// invocation rather than a run that failed: rejecting it here means the run
+// exits 2 having read no file, instead of exiting 1 after the import had already
+// happened.
+var errNegativeInspectSample = errors.New("--inspect-sample must be 0 or greater")

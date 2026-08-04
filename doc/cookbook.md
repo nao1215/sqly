@@ -288,21 +288,33 @@ sqly --output-format excel --output summary.xlsx \
 
 ## Files over HTTP
 
-An `http://` or `https://` argument is downloaded and then imported:
+Downloading is off unless you ask for it. An `http://` or `https://` argument is
+fetched only with `--allow-remote`; without it the run is refused as a usage
+error (exit `2`) before any request is made:
 
 ```shell
-sqly --sql "SELECT * FROM user" https://example.com/data/user.csv
+sqly --allow-remote \
+  --sql "SELECT * FROM user" \
+  https://example.com/data/user.csv
 ```
 
-The same URL works from the shell:
+The same URL works from the shell, in a session started with the capability:
 
 ```shell
+sqly --allow-remote
 sqly:~(table)$ .import https://example.com/data/user.csv
 ```
 
-Only `http` and `https` are fetched; any other scheme is rejected by name. sqly
-follows at most five redirects, and a redirect to another scheme is refused.
-`HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` are honored.
+`--allow-remote` is an explicit network capability, not a sandbox or an SSRF
+defense: it decides whether sqly makes a request, not where the request may go.
+Leaving it out of a wrapper's argument list turns sqly's own downloading off;
+it is no defense against something that can add flags itself. It does not lift
+any of the limits below.
+
+Only `http` and `https` are fetched; any other scheme is rejected by name, with
+or without the flag. sqly follows at most five redirects, and a redirect to
+another scheme is refused. `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` are
+honored. A remote source cannot be written back to.
 
 The downloaded response body is capped at 2 GiB. That cap is on the bytes that
 arrive over the network and on nothing else: a compressed input expands after it

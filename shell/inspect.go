@@ -48,13 +48,34 @@ type inspectExcelSheet struct {
 	Table    string `json:"table,omitempty"`
 }
 
+// InspectSchemaVersion is the version of the --inspect JSON contract. It is the
+// document's own version, not sqly's: it changes when the shape of the JSON
+// changes in a way a consumer cannot absorb, and stays put for a change a
+// consumer that ignores unknown fields already handles.
+//
+// The policy that decides which is which is documented at
+// https://nao1215.github.io/sqly/reference/#inspect-json-schema and is checked
+// against this constant, against the published JSON Schema, and against the
+// reference page by TestInspect_SchemaVersionAgreesEverywhere.
+const InspectSchemaVersion = 1
+
 // inspectReport is the top-level JSON contract produced by --inspect.
+//
+// Field order here is the order the JSON document carries, because
+// encoding/json writes struct fields in declaration order. It is fixed so the
+// same binary given the same inputs and options produces the same bytes.
+//
+// SchemaVersion and SqlyVersion answer two different questions and are easy to
+// confuse. SchemaVersion says how to read this document; SqlyVersion says which
+// binary wrote it. A consumer branches on the first and reports the second.
 //
 // ExcelSheets is additive: it is absent for a run with no workbook among its
 // inputs, so a consumer reading only Tables sees exactly what it saw before.
 type inspectReport struct {
-	Tables      []inspectTable      `json:"tables"`
-	ExcelSheets []inspectExcelSheet `json:"excel_sheets,omitempty"`
+	SchemaVersion int                 `json:"schema_version"`
+	SqlyVersion   string              `json:"sqly_version"`
+	Tables        []inspectTable      `json:"tables"`
+	ExcelSheets   []inspectExcelSheet `json:"excel_sheets,omitempty"`
 }
 
 func outputModeFlagName(o *config.Output) string {
@@ -92,14 +113,17 @@ func (s *Shell) validateInspectFlags() error {
 }
 
 // runInspect prints a machine-readable JSON report of the imported tables:
-// names, source mapping, columns, row counts, and a small sample of rows. It is
-// the non-interactive discovery path for scripts and LLMs, so JSON is the
-// primary contract and the report is written to stdout.
+// names, source mapping, columns, row counts, and — only when asked — a small
+// sample of rows. It is the non-interactive discovery path for scripts and LLMs,
+// so JSON is the primary contract and the report is written to stdout.
+//
+// The report is built whole and written in one call. Nothing reaches stdout
+// until every table has been read, so a failure part-way leaves stdout empty
+// rather than holding half a JSON document a consumer would have to guess at.
 func (s *Shell) runInspect(ctx context.Context) error {
+	// A negative count cannot reach here: config rejects it while parsing, as a
+	// usage error, before any input is read.
 	sampleLimit := s.argument.InspectSample
-	if sampleLimit < 0 {
-		return fmt.Errorf("--inspect-sample must be 0 or greater, got %d", sampleLimit)
-	}
 
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
@@ -116,7 +140,16 @@ func (s *Shell) runInspect(ctx context.Context) error {
 	// Sort by name so the report is deterministic regardless of import order.
 	sort.Strings(names)
 
-	report := inspectReport{Tables: make([]inspectTable, 0, len(names))}
+	report := inspectReport{
+		SchemaVersion: InspectSchemaVersion,
+		// The same version --version prints, from the same accessor: a release
+		// binary reports the tag its ldflags carried, a `go install` build reports
+		// the module version, and a local build reports "(devel)". Nothing here
+		// substitutes a fixed string, so a report can always be traced to the
+		// binary that wrote it.
+		SqlyVersion: config.GetVersion(),
+		Tables:      make([]inspectTable, 0, len(names)),
+	}
 	for _, name := range names {
 		entry, err := s.inspectTable(ctx, name, sampleLimit)
 		if err != nil {

@@ -134,8 +134,9 @@ jobs:
           # Present: flags v1.0.0 commits to. A page that lost one is a page a
           # reader cannot use to write a working command.
           for flag in --stdin-format --stdin-table --encoding --row-mismatch \
-                      --include-hidden-sheets --sql --sql-file --script-file \
-                      --dialect --output --output-format --inspect --inspect-sample; do
+                      --include-hidden-sheets --allow-remote --sql --sql-file \
+                      --script-file --dialect --output --output-format \
+                      --inspect --inspect-sample; do
             case "${page}" in
               *"${flag}"*) ;;
               *) echo "::error::${flag} is missing from the deployed reference page" >&2; exit 1 ;;
@@ -180,4 +181,53 @@ jobs:
           require "${formats}" "very hidden" "formats"
           require "${formats}" "2 GiB" "formats"
           require "${formats}" "What the download limit does not bound" "formats"
+
+          # The rc3 agent-safety contracts. A page that lost one of these reads
+          # correctly and describes a tool that no longer behaves that way,
+          # which is the drift that misleads a reader worst: a script written
+          # against a URL sqly will refuse, or an --inspect believed to be
+          # schema-only when it is not.
+          require "${reference}" "schema-only by default" "reference"
+          require "${reference}" "schema_version" "reference"
+          require "${reference}" "sqly_version" "reference"
+          require "${reference}" "schema/inspect-v1.schema.json" "reference"
+          require "${formats}" "default-deny" "formats"
+          require "${formats}" "not a sandbox or an SSRF defense" "formats"
+          require "${formats}" "--allow-remote" "formats"
+
+          dialects=$(curl -fsSL --max-time 30 "${SITE}dialects/?cachebust=${GITHUB_RUN_ID}")
+          require "${dialects}" "translation, not emulation" "dialects"
+          require "${dialects}" "SQLite semantics" "dialects"
+
+          about=$(curl -fsSL --max-time 30 "${SITE}about/?cachebust=${GITHUB_RUN_ID}")
+          require "${about}" "Historical measurement" "about"
+          require "${about}" "not a performance guarantee" "about"
           echo "the deployed pages state the v1.0.0 contracts"
+
+      # The formal --inspect schema is a file, not a page, and it is the one
+      # thing on the site a program fetches rather than a person. A deploy that
+      # published the pages and dropped the schema would leave every consumer
+      # validating against a 404.
+      - name: Check the deployed site serves the inspect JSON Schema
+        run: |
+          url="${SITE}schema/inspect-v1.schema.json?cachebust=${GITHUB_RUN_ID}"
+          curl -fsSL --max-time 30 "${url}" -o deployed-schema.json || {
+            echo "::error::${url} is not being served" >&2; exit 1;
+          }
+          # Parsed rather than grepped. A substring check passes on a truncated
+          # response, on HTML served by a 404 handler that happens to mention
+          # the words, and on a document whose keys sit at the wrong depth —
+          # all of which would leave a consumer validating against nothing.
+          python3 - deployed-schema.json <<'PY'
+          import json, sys
+
+          schema = json.load(open(sys.argv[1]))
+          assert "2020-12" in schema["$schema"], schema["$schema"]
+          assert schema["properties"]["schema_version"]["const"] == 1, schema["properties"]["schema_version"]
+          for field in ("schema_version", "sqly_version", "tables"):
+              assert field in schema["required"], schema["required"]
+          table = schema["$defs"]["table"]
+          assert "sample_rows" in table["required"], table["required"]
+          assert table["properties"]["sample_rows"]["type"] == "array", table["properties"]["sample_rows"]
+          print("the deployed inspect schema parses and states the v1 contract")
+          PY

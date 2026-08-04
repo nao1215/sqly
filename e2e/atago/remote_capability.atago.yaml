@@ -1,0 +1,193 @@
+# Remote input is default-deny: sqly downloads an http(s) URL only when the
+# session was given --allow-remote.
+#
+# These scenarios cover the refusals, which is the half that needs no server at
+# all — a refused run makes no request, so a URL pointing at a host that does
+# not exist is the strongest possible fixture: if the run somehow tried to fetch
+# it, the failure would be a connection error rather than the usage error
+# asserted here.
+#
+# The counting proof — that a running server sees zero requests on a denial —
+# lives in e2e/remote_capability_test.go, which drives the same binary over a Go
+# httptest server and therefore also runs on Windows. What is here is the exit
+# code, the message, and the stdout purity, on every platform.
+#
+# Documented at website/content/formats.md#remote-inputs.
+version: "1"
+
+suite:
+  name: sqly remote capability
+
+scenarios:
+  - name: refuses a positional URL without --allow-remote
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - run:
+          command: sqly --sql "SELECT * FROM users" https://sqly-e2e.invalid/users.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+
+  - name: refuses a URL given to --inspect
+    env: *hist
+    steps:
+      - run:
+          command: sqly --inspect https://sqly-e2e.invalid/users.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+
+  - name: refuses a URL alongside --sql-file
+    env: *hist
+    steps:
+      - fixture:
+          file: report.sql
+          content: |
+            SELECT * FROM users;
+      - run:
+          command: sqly --sql-file report.sql https://sqly-e2e.invalid/users.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+
+  - name: refuses a URL alongside --script-file
+    env: *hist
+    steps:
+      - fixture:
+          file: update.sqly
+          content: |
+            SELECT * FROM users;
+      - run:
+          command: sqly --script-file update.sqly https://sqly-e2e.invalid/users.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+
+  # The whole script is checked before its first statement runs, so the SELECT
+  # before the .import produces nothing. That is what makes the refusal clean:
+  # there is no half-run script to reason about.
+  - name: refuses .import URL in a piped script before running anything
+    env: *hist
+    steps:
+      - run:
+          command: sqly --output-format csv
+          stdin: |
+            SELECT 1 AS before_the_import;
+            .import https://sqly-e2e.invalid/users.csv
+            SELECT 2 AS after_the_import;
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+      - assert:
+          stdout:
+            not_contains:
+              - before_the_import
+              - after_the_import
+
+  - name: refuses .import URL inside a --script-file
+    env: *hist
+    steps:
+      - fixture:
+          file: fetch.sqly
+          content: |
+            SELECT 1 AS before_the_import;
+            .import https://sqly-e2e.invalid/users.csv
+      - run:
+          command: sqly --output-format csv --script-file fetch.sqly
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+
+  # A mixed command line is one import, so the refusal takes the local half with
+  # it. If the local file had been imported, the query would have answered.
+  - name: refuses a mix of a local file and a URL without importing the local one
+    env: *hist
+    steps:
+      - fixture:
+          file: local.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --output-format csv --sql "SELECT * FROM local" local.csv https://sqly-e2e.invalid/users.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+          stderr:
+            contains: "--allow-remote"
+
+  # A capability granted and not used is not an error. A wrapper that always
+  # passes the flag must not have to know whether this run holds a URL.
+  - name: accepts --allow-remote on a run with only local input
+    env: *hist
+    steps:
+      - fixture:
+          file: local.csv
+          content: |
+            a
+            1
+      - run:
+          command: sqly --allow-remote --output-format csv --sql "SELECT * FROM local" local.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  # http and https only. Every other scheme is refused before any connection,
+  # with the capability exactly as without it.
+  - name: refuses a non-http scheme with the capability given
+    env: *hist
+    steps:
+      - run:
+          command: sqly --allow-remote --sql "SELECT 1" ftp://sqly-e2e.invalid/data.csv
+      - assert:
+          exit_code: 3
+          stdout:
+            equals: ""
+          stderr:
+            contains: "only http and https URLs are downloaded"
+
+  - name: refuses a file:// URL with the capability given
+    env: *hist
+    steps:
+      - run:
+          command: sqly --allow-remote --sql "SELECT 1" file:///etc/passwd
+      - assert:
+          exit_code: 3
+          stdout:
+            equals: ""
+          stderr:
+            contains: "only http and https URLs are downloaded"
+
+  - name: names --allow-remote in the help text
+    env: *hist
+    steps:
+      - run:
+          command: sqly --help
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "--allow-remote"
+              - "not a sandbox"

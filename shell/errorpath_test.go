@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/interactor/mock"
 	"go.uber.org/mock/gomock"
@@ -168,12 +169,24 @@ func TestShell_runInspect_reportsNoTables(t *testing.T) {
 	}
 }
 
-func TestShell_runInspect_rejectsNegativeSample(t *testing.T) {
-	s := newBoundaryTestShell(t, Usecases{})
-	s.argument.InspectSample = -1
-	err := s.runInspect(context.Background())
+// TestShell_negativeInspectSample_isRejectedBeforeTheRun records where the
+// negative-count refusal lives now: in argument parsing, so the run exits 2 as a
+// usage error having read nothing, rather than exiting 1 from runInspect after
+// the import had already happened. runInspect itself can no longer see a
+// negative value, which is why it no longer checks for one.
+func TestShell_negativeInspectSample_isRejectedBeforeTheRun(t *testing.T) {
+	t.Parallel()
+
+	arg, err := config.NewArg([]string{"sqly", "--inspect", "--inspect-sample", "-1", "data.csv"})
 	if err == nil {
-		t.Fatal("want error for a negative --inspect-sample, got nil")
+		t.Fatalf("want a usage error for a negative --inspect-sample, got arg = %+v", arg)
+	}
+	var argErr *config.ArgError
+	if !errors.As(err, &argErr) {
+		t.Fatalf("error %v is not a config.ArgError, so it would not exit %d", err, ExitUsage)
+	}
+	if code := ExitCode(err); code != ExitUsage {
+		t.Errorf("exit code = %d, want %d", code, ExitUsage)
 	}
 }
 

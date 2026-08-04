@@ -2,7 +2,7 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc2` is a release candidate, not the final contract. Breaking changes are
+`v1.0.0-rc3` is the next release candidate, and it is not the final contract either. Breaking changes are
 still being made, and they are being made now rather than after v1.0.0.
 
 * Breaking changes land before the final release candidate.
@@ -13,9 +13,54 @@ still being made, and they are being made now rather than after v1.0.0.
   Changes below.
 
 The final RC is announced as the final one in its release notes. That is the
-point to pin a version against; rc2 is not it.
+point to pin a version against; neither rc2 nor rc3 is it.
+
+Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ## [Unreleased]
+
+## [v1.0.0-rc3](https://github.com/nao1215/sqly/compare/v1.0.0-rc2...v1.0.0-rc3) (unreleased)
+
+A release candidate for v1.0.0, not the final one. Everything below is a change
+from rc2. **This tag has not been published yet**; the documentation on `main`
+describes it as the next candidate.
+
+Upgrading from rc2: [doc/migration.md](doc/migration.md).
+
+The theme is the same in all four changes. sqly is run by wrappers, CI jobs, and
+LLM agents at least as often as by people, and three of its defaults did
+something the caller had not asked for: `--inspect` printed the data when it was
+asked for the schema, a URL on the command line was fetched because it was
+written there, and a non-SQLite dialect ran on SQLite without saying so. None of
+the three is a silent change now — the old command either fails loudly or says
+one line on stderr.
+
+### Breaking Changes
+
+* `--inspect` is schema-only by default. `--inspect-sample` now defaults to `0` instead of `5`, so a report describes what a file holds without printing what is in it. `--inspect` is the command something reaches for when it has been handed a file nobody has read yet, and "tell me what this is" answering with the contents is a leak nobody asked for. Row data comes back with `--inspect-sample N`, capped at `N` rows per table. `sample_rows` is still present and still an array — `[]` rather than absent or `null` — so a consumer that iterates it sees zero rows instead of failing on a missing key. `--inspect` and `--inspect-sample 0` now produce byte-identical documents.
+* A negative `--inspect-sample` is rejected while the command line is parsed rather than when the report is built, so it exits `2` having read nothing instead of exiting `1` after the import had already happened. There is no new upper bound: a count larger than the table is the table.
+* Remote input is default-deny. An `http` or `https` URL is downloaded only when the session was given `--allow-remote`; without it the run exits `2` before any HTTP request is made, having imported nothing, created no temporary directory, and written nothing to stdout. The capability covers every entry point — positional arguments to a query, `--sql-file`, `--script-file`, `--inspect`, and the interactive shell, plus `.import URL` typed at the prompt, piped in, or read from a `--script-file`. A script is checked whole before its first statement runs, so a refused script has executed nothing; at the prompt the command fails and the session continues unchanged. A session started with the flag keeps the capability for the `.import` commands typed later in it, and passing it on a run with no URL is not an error. `--allow-remote` is an explicit network capability, **not a sandbox and not an SSRF defense**: it decides whether sqly makes a request, not where the request may go, and it lifts none of the existing limits (http/https only, five redirects, the redirect-scheme check, the header and transfer timeouts, the 2 GiB body cap). What it gives a wrapper that fixes sqly's argument list is a way to turn sqly's own downloading off; it is no defense against a caller that can add flags itself.
+* The `--inspect` report gained two top-level fields, `schema_version` (the JSON number `1`) and `sqly_version` (the string `sqly --version` prints). They are additive, so a consumer reading only `tables` is unaffected, but the document a program parses is no longer the same shape it was. Branch on `schema_version`; report `sqly_version`. Because `sqly_version` moves between releases, the report's bytes are not stable across versions — what is stable is that the same binary, the same inputs, and the same options produce the same bytes.
+
+### New Features
+
+* `--allow-remote` grants this session permission to download the `http(s)` input it is given. It is session state seeded from the flag, not a package-level switch or an environment variable, so a capability granted to one invocation cannot leak into another.
+* Choosing a non-SQLite `--dialect` now says what that means, once, on stderr: `Warning: PostgreSQL syntax is translated to SQLite; execution uses SQLite semantics, not PostgreSQL semantics.` Choosing `--dialect postgresql` looks like choosing PostgreSQL and is not — the syntax is rewritten and the engine underneath is SQLite, so a query SQLite accepts runs and one whose meaning differs between the engines answers differently with nothing to say so. It is printed at most once per session: before the first statement of a `--dialect` run, or at the moment `.dialect` switches in the shell. Switching back to SQLite and out again does not repeat it. `sqlite`, `--help`, `--version`, `--inspect`, and a rejected command line print nothing, stdout is never touched, and no exit code changes. A wrapper that treats any stderr output as a failure is the one thing to check.
+* The `--inspect` contract has a formal JSON Schema (Draft 2020-12), published at [`/sqly/schema/inspect-v1.schema.json`](https://nao1215.github.io/sqly/schema/inspect-v1.schema.json). It is the single canonical copy — there is no second copy in the repository or in the documentation to drift from it — and sqly's own tests validate real `--inspect` output against it, at the unit level and against the shipped binary. The compatibility policy that decides when `schema_version` moves is stated on the reference page: additive fields do not move it, and a v1 consumer must ignore fields it does not know.
+
+### Documentation
+
+* A migration guide, `doc/migration.md`, gives the before and after for each breaking change as commands to copy, and says what happens to a caller that changes nothing.
+* The reference documents the inspect report's two version fields, the schema-only default, the compatibility policy, and the link to the formal schema, and no longer says the sample defaults to five anywhere.
+* The formats page documents remote input as default-deny and gains "What `--allow-remote` is not", which names the six things the capability does not protect against — sandboxing, localhost, private ranges, cloud metadata endpoints, DNS rebinding, and proxies — because a reader who takes it for an SSRF defense is worse off than one who has never heard of it.
+* The dialects page keeps "This is translation, not emulation" and now states the runtime warning alongside it: once per session, on stderr, never on stdout.
+* Every documented `http(s)` example in the README, the reference, the formats page, the getting-started page, and the cookbook passes `--allow-remote`, and the recorded HTTP demo was re-rendered with it. A drift test walks every documented sqly command and fails on a URL invocation that omits the flag, so a stale example cannot be added later.
+* The GoReleaser release header and the nFPM and Homebrew package descriptions name the formats sqly actually reads. They advertised CSV, TSV, LTSV, JSON, and "Microsoft Excel™" while sqly had read JSONL, Parquet, ACH, Fedwire, and eight compression wrappers for several releases.
+* The v0.30.0 benchmark on the about page and in the README is marked as a historical measurement rather than a performance guarantee for the current release. It has not been re-measured; saying so is more honest than a number nobody has checked since.
+
+### Maintenance
+
+* Drift tests derive each new claim from the implementation rather than from a copy of the documentation: the schema version is compared across the code, the JSON Schema, and the reference page; the inspect default is compared across the parser, `--help`, and the reference; and the Pages deploy verification checks the live site for the new contracts.
 
 ## [v1.0.0-rc2](https://github.com/nao1215/sqly/compare/v1.0.0-rc1...v1.0.0-rc2) (2026-08-04)
 

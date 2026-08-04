@@ -92,7 +92,7 @@ the destination's extension, exactly as they do in table mode.
 | Input | How |
 |:--|:--|
 | Files and directories | `sqly ... file.csv ./dir` |
-| A URL | `sqly ... https://example.com/user.csv` |
+| A URL | `sqly --allow-remote ... https://example.com/user.csv` (a URL is refused without the flag) |
 | A pipe | `cat user.csv \| sqly --stdin-format csv --sql "SELECT * FROM stdin"` |
 | A script on stdin | `printf '.tables\nSELECT 1;\n' \| sqly user.csv` |
 

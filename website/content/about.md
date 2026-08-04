@@ -41,6 +41,11 @@ Issues and pull requests are welcome; see [CONTRIBUTING.md](https://github.com/n
 
 ## Benchmark
 
+**Historical measurement from sqly v0.30.0 on the environment shown below. It is
+not a performance guarantee for the current release.** The figures have not been
+re-measured since; treat them as a rough sense of scale rather than as a number
+to plan against, and run `make bench` on your own machine if the answer matters.
+
 `make bench` measures one full run (import the CSV into the in-memory DB, then run the query) over `testdata/benchmark/customers100000.csv` (100,000 rows, 12 columns):
 
 | Records | Columns | Time per op | Memory per op | Allocations per op |
