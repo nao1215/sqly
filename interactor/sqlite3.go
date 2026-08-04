@@ -202,6 +202,29 @@ func (si *SQLite3Interactor) RowMismatchPolicy() model.RowMismatchPolicy {
 	return si.adapter.RowMismatchPolicy()
 }
 
+// SetIncludeHiddenSheets decides whether subsequent Excel imports load the
+// sheets a workbook hides as well as the ones it shows.
+func (si *SQLite3Interactor) SetIncludeHiddenSheets(include bool) {
+	si.adapter.SetIncludeHiddenSheets(include)
+}
+
+// IncludeHiddenSheets reports whether Excel imports load hidden sheets.
+func (si *SQLite3Interactor) IncludeHiddenSheets() bool {
+	return si.adapter.IncludeHiddenSheets()
+}
+
+// ExcelSheets reports every sheet of the workbook at path, in workbook order,
+// and whether the workbook shows it.
+func (si *SQLite3Interactor) ExcelSheets(path string) ([]model.ExcelSheet, error) {
+	return si.adapter.ExcelSheets(path)
+}
+
+// ExcelSheetTableNames maps each named sheet of a workbook to the table it is
+// loaded as.
+func (si *SQLite3Interactor) ExcelSheetTableNames(path string, sheetNames []string) ([]string, error) {
+	return si.adapter.ExcelSheetTableNames(path, sheetNames)
+}
+
 // GetTableNames returns the list of tables currently available in the database.
 func (si *SQLite3Interactor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
 	return si.adapter.GetTableNames(ctx)

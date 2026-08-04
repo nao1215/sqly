@@ -39,6 +39,12 @@ type FileSQLAdapter struct {
 	// It defaults to RowMismatchError and is updated by the --row-mismatch flag and
 	// the .row-mismatch shell command.
 	rowMismatchPolicy model.RowMismatchPolicy
+	// includeHiddenSheets makes an Excel import load the sheets a workbook hides
+	// as well as the ones it shows. It defaults to false — sqly's default is the
+	// opposite of filesql's, because sqly presents workbooks to someone who did
+	// not build them — and is set by the --include-hidden-sheets flag for the
+	// whole session, so a later .import applies it too.
+	includeHiddenSheets bool
 }
 
 // NewFileSQLAdapter creates a new adapter for filesql integration
@@ -57,6 +63,59 @@ func (f *FileSQLAdapter) SetRowMismatchPolicy(policy model.RowMismatchPolicy) {
 // RowMismatchPolicy returns the policy applied to mismatched CSV/TSV rows on import.
 func (f *FileSQLAdapter) RowMismatchPolicy() model.RowMismatchPolicy {
 	return f.rowMismatchPolicy
+}
+
+// SetIncludeHiddenSheets decides whether subsequent Excel imports load the
+// sheets a workbook hides as well as the ones it shows.
+func (f *FileSQLAdapter) SetIncludeHiddenSheets(include bool) {
+	f.includeHiddenSheets = include
+}
+
+// IncludeHiddenSheets reports whether Excel imports load hidden sheets.
+func (f *FileSQLAdapter) IncludeHiddenSheets() bool {
+	return f.includeHiddenSheets
+}
+
+// ExcelSheets reports every sheet of the workbook at path, in workbook order,
+// with whether the workbook shows it.
+//
+// It asks filesql rather than opening the workbook here. The rule that decides
+// which sheets an import loads lives there, and a second reader in sqly would
+// be free to disagree with it — which is exactly the thing --inspect exists to
+// rule out.
+func (f *FileSQLAdapter) ExcelSheets(path string) ([]model.ExcelSheet, error) {
+	sheets, err := filesql.ExcelSheetsInFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read the sheets of %q: %w", path, err)
+	}
+	result := make([]model.ExcelSheet, 0, len(sheets))
+	for _, sheet := range sheets {
+		result = append(result, model.ExcelSheet{Name: sheet.Name, Visible: sheet.Visible})
+	}
+	return result, nil
+}
+
+// ExcelSheetTableNames maps each named sheet of a workbook to the table it is
+// loaded as. It defers to filesql for the same reason ExcelSheets does: the
+// sheet-to-table rule is filesql's, and a copy here would be free to drift from
+// the names an import actually creates.
+func (f *FileSQLAdapter) ExcelSheetTableNames(path string, sheetNames []string) ([]string, error) {
+	tables, err := filesql.ExcelSheetTableNames(path, sheetNames)
+	if err != nil {
+		return nil, fmt.Errorf("map the sheets of %q to tables: %w", path, err)
+	}
+	return tables, nil
+}
+
+// filesqlExcelSheetPolicy maps sqly's setting onto the filesql policy that
+// drives the import. sqly's default is visible-only and filesql's is all, so
+// the mapping is where the two defaults are reconciled — deliberately, in one
+// place, rather than by changing filesql's default under its other callers.
+func filesqlExcelSheetPolicy(includeHidden bool) filesql.ExcelSheetPolicy {
+	if includeHidden {
+		return filesql.ExcelSheetPolicyAll
+	}
+	return filesql.ExcelSheetPolicyVisibleOnly
 }
 
 // filesqlRowMismatchPolicy maps sqly's policy to the filesql policy that drives
@@ -165,7 +224,8 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string) (registryPublisher, error) {
 	builder := filesql.NewBuilder().
 		AddPath(path).
-		WithMalformedRowPolicy(filesqlRowMismatchPolicy(f.rowMismatchPolicy))
+		WithMalformedRowPolicy(filesqlRowMismatchPolicy(f.rowMismatchPolicy)).
+		WithExcelSheetPolicy(filesqlExcelSheetPolicy(f.includeHiddenSheets))
 	validated, err := builder.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load file %q: %w", path, err)

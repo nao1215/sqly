@@ -87,6 +87,12 @@ type Arg struct {
 	// Encoding selects how a text import without a Unicode BOM is decoded before
 	// parsing. It applies to CSV, TSV, LTSV, JSON, and JSONL inputs.
 	Encoding model.TextEncoding
+	// IncludeHiddenSheets imports the sheets an Excel workbook does not show
+	// alongside the ones it does. It is off by default, because a hidden sheet
+	// usually holds the spreadsheet's own working-out rather than data anyone
+	// meant to publish. It sets the policy for the whole session, so a later
+	// .import applies it too.
+	IncludeHiddenSheets bool
 	// ExplicitFlags names the flags the user actually typed, as opposed to the
 	// ones sitting at their default. A flag that was typed but can never apply to
 	// any of this run's inputs is an error, and only the user's intent — not the
@@ -169,6 +175,7 @@ func newArg(args []string) (*Arg, error) {
 	stdinTable := flag.String("stdin-table", defaultStdinTable, "table name for the --stdin-format dataset")
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "decode every csv, tsv, ltsv, json, and jsonl input that has no BOM as one of: "+strings.ReplaceAll(model.TextEncodingHelp(), "|", ", "))
 	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "for csv and tsv, what to do with a row whose field count differs from the header: error (fail the import), skip (drop the row), pad (fill a short row, fail on a long one)")
+	flag.BoolVar(&arg.IncludeHiddenSheets, "include-hidden-sheets", false, "import the sheets an excel workbook hides as well as the ones it shows")
 	// Query.
 	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
 	sqlFile := flag.StringP("sql-file", "f", "", "run every SQL statement in this file, then exit; a dot-command is rejected, so use --script-file for those; printing several results needs --output-format table, vertical, or markdown")
@@ -395,7 +402,7 @@ type optionGroup struct {
 // newArg appears in exactly one group; helpUsage fails loudly if that stops
 // being true, so a flag added later cannot silently vanish from --help.
 var optionGroups = []optionGroup{
-	{title: "Input", options: []string{"stdin-format", "stdin-table", "encoding", "row-mismatch"}},
+	{title: "Input", options: []string{"stdin-format", "stdin-table", "encoding", "row-mismatch", "include-hidden-sheets"}},
 	{title: "Query", options: []string{"sql", "sql-file", "script-file", "dialect"}},
 	{title: "Output", options: []string{"output", "output-format"}},
 	{title: "Inspection", options: []string{"inspect", "inspect-sample"}},

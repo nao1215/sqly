@@ -280,6 +280,115 @@ scenarios:
             path: err.log
             contains: "context canceled"
 
+  # SIGTERM is the other half of the contract, and the one a wrapper cares about:
+  # 130 says a person pressed Ctrl-C, 143 says the surrounding system took the run
+  # away. sqly used to report both as 130, which made them indistinguishable to
+  # everything downstream. The two scenarios below are identical apart from the
+  # signal, so a regression that collapses them back onto one code fails here.
+  - name: a terminated run exits 143, not the interrupt code
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          command: sh -c 'mkfifo pipe; (exec 3> pipe; touch writer-ready; exec sleep 30) >/dev/null 2>&1 & holder=$!; sqly rows.csv < pipe > /dev/null 2> err.log & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; sleep 2; start=$(date +%s); kill -TERM $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $holder 2>/dev/null; wait $holder 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "exit=143"
+              - "prompt"
+          # 130 would mean the signal was classified as an interrupt, which is
+          # the regression this scenario exists for.
+      - assert:
+          stdout:
+            not_contains: "exit=130"
+      - assert:
+          # A process killed outright by the default handler never gets here.
+          file:
+            path: err.log
+            contains: "context canceled"
+
+  - name: a terminated run leaves no staged temp directory behind
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          # The cleanup is what trapping the signal buys. A SIGTERM that killed
+          # the process outright would leave the staging directory on disk, so
+          # this is the same check the SIGINT scenario makes, for the code path
+          # that now exits differently.
+          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; mkfifo pipe; (exec 3> pipe; touch writer-ready; exec sleep 30) >/dev/null 2>&1 & holder=$!; sqly --stdin-format csv --sql "SELECT 1" < pipe > /dev/null 2>/dev/null & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; sleep 2; kill -TERM $child; wait $child; kill $holder 2>/dev/null; wait $holder 2>/dev/null; ls tmp | grep -c sqly- || echo 0'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
+
+  - name: a second signal ends the run immediately
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          # Trapping a signal takes away the guarantee that it always kills the
+          # process, so the first one cancels and the second restores that. The
+          # FIFO writer is left in place here on purpose: nothing else will end
+          # the read, so a run that ignored the second signal would hang until
+          # the timeout rather than exit.
+          command: sh -c 'mkfifo pipe; (exec 3> pipe; touch writer-ready; exec sleep 30) >/dev/null 2>&1 & holder=$!; sqly rows.csv < pipe > /dev/null 2>/dev/null & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; sleep 2; kill -INT $child; sleep 0.2; kill -INT $child 2>/dev/null; start=$(date +%s); wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $holder 2>/dev/null; wait $holder 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "prompt"
+
+  - name: a signal during a download ends the run and removes what it staged
+    skip:
+      os: windows
+    steps:
+      - run:
+          # A server that accepts the connection and then never answers is the
+          # case a timeout would eventually cover — sqly's header deadline is 30
+          # seconds — and a signal has to cover now. The temp directory the
+          # download staged has to be gone afterwards. python3 serves it because
+          # the rest of this suite's HTTP fixtures already do.
+          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; python3 -c "import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind((\"127.0.0.1\", 45917)); s.listen(5); time.sleep(60)" >/dev/null 2>&1 & server=$!; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",45917)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the stalling fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --sql "SELECT 1" http://127.0.0.1:45917/data.csv > /dev/null 2>/dev/null & child=$!; sleep 2; start=$(date +%s); kill -TERM $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $server 2>/dev/null; wait $server 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"; ls tmp 2>/dev/null | grep -c sqly-http || echo 0'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "exit=143"
+              - "prompt"
+              - "0"
+
+  - name: a run that timed out is an input failure, not a signal
+    steps:
+      - run:
+          # sqly's only deadlines are on the HTTP client. Reporting a timeout as
+          # 130 or 143 would send a wrapper looking for a signal nobody sent.
+          command: sqly --sql "SELECT 1" http://127.0.0.1:1/data.csv
+      - assert:
+          exit_code: 3
+      - assert:
+          stdout:
+            empty: true
+
   - name: an interrupted run leaves no staged temp directory behind
     skip:
       os: windows

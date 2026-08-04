@@ -64,7 +64,16 @@ func run(t *testing.T, stdin string, args ...string) (stdout, stderr string, cod
 // sqly leaves behind in a directory it owns (temporary files, stray databases).
 func runIn(t *testing.T, dir, stdin string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
-	home := t.TempDir()
+	return runWithEnv(t, dir, t.TempDir(), nil, stdin, args...)
+}
+
+// runWithEnv is runIn with the home directory named and extra environment
+// entries appended, for a test that has to point sqly's temporary files
+// somewhere it can then look. The variable names differ by platform (TMPDIR on
+// Unix, TMP and TEMP on Windows), so the caller supplies whichever it needs
+// rather than this helper guessing.
+func runWithEnv(t *testing.T, dir, home string, extraEnv []string, stdin string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
 	cmd := exec.Command(sqlyBin, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(stdin)
@@ -76,6 +85,7 @@ func runIn(t *testing.T, dir, stdin string, args ...string) (stdout, stderr stri
 		"USERPROFILE="+home,
 		"SQLY_HISTORY_DB_PATH="+filepath.Join(home, "history.db"),
 	)
+	cmd.Env = append(cmd.Env, extraEnv...)
 	err := cmd.Run()
 	code = 0
 	if err != nil {

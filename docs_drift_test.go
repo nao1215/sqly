@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -150,25 +151,25 @@ func TestDocs_EveryDocumentedShellCommandExists(t *testing.T) {
 // exercised fails TestCookbook_EverySectionIsExercised, so the decision cannot
 // be skipped.
 var cookbookCoverage = map[string]string{
-	"First look at a file":    "e2e/atago/cookbook.atago.yaml",
-	"Convert between formats": "e2e/atago/cookbook.atago.yaml",
-	"Join across files":       "e2e/atago/join.atago.yaml",
-	"Join across formats":     "e2e/atago/cookbook.atago.yaml",
-	"Compressed files":        "e2e/atago/compression_roundtrip.atago.yaml",
-	"JSON and JSONL":          "e2e/atago/cookbook.atago.yaml",
-	"Excel workbooks":         "e2e/atago/excel_export.atago.yaml",
-	"Files over HTTP":         "e2e/atago/http_import.atago.yaml",
-	"Pipe data in":            "e2e/atago/cookbook.atago.yaml",
-	"Pipe data out":           "e2e/atago/pipelines.atago.yaml",
-	"Load a directory":        "e2e/atago/cookbook.atago.yaml",
-	"Run SQL from a file":     "e2e/atago/sql_file.atago.yaml",
-	"Analytics":               "e2e/atago/cookbook.atago.yaml",
-	"Write changes back":      "e2e/atago/cookbook.atago.yaml",
-	"Other SQL dialects":      "e2e/atago/cookbook.atago.yaml",
-	"Row mismatches":          "e2e/atago/cookbook.atago.yaml",
-	"Text encodings":          "e2e/atago/encoding.atago.yaml",
-	"Financial formats":       "e2e/atago/ach_fedwire_writeback.atago.yaml",
-	"Scripting":               "e2e/atago/cookbook.atago.yaml",
+	"First look at a file":                 "e2e/atago/cookbook.atago.yaml",
+	"Convert between formats":              "e2e/atago/cookbook.atago.yaml",
+	"Join across files":                    "e2e/atago/join.atago.yaml",
+	"Join across formats":                  "e2e/atago/cookbook.atago.yaml",
+	"Compressed files":                     "e2e/atago/compression_roundtrip.atago.yaml",
+	"JSON and JSONL":                       "e2e/atago/cookbook.atago.yaml",
+	"Excel workbooks":                      "e2e/atago/excel_sheets.atago.yaml",
+	"Files over HTTP":                      "e2e/atago/http_import.atago.yaml",
+	"Pipe data in":                         "e2e/atago/cookbook.atago.yaml",
+	"Pipe data out":                        "e2e/atago/pipelines.atago.yaml",
+	"Load a directory":                     "e2e/atago/cookbook.atago.yaml",
+	"Run SQL or a sqly script from a file": "e2e/atago/sql_file.atago.yaml",
+	"Analytics":                            "e2e/atago/cookbook.atago.yaml",
+	"Write changes back":                   "e2e/atago/cookbook.atago.yaml",
+	"Other SQL dialects":                   "e2e/atago/cookbook.atago.yaml",
+	"Row mismatches":                       "e2e/atago/cookbook.atago.yaml",
+	"Text encodings":                       "e2e/atago/encoding.atago.yaml",
+	"Financial formats":                    "e2e/atago/ach_fedwire_writeback.atago.yaml",
+	"Scripting":                            "e2e/atago/cookbook.atago.yaml",
 }
 
 // TestCookbook_EverySectionIsExercised keeps doc/cookbook.md and the E2E suite in
@@ -622,12 +623,13 @@ func TestExitCodes_DocumentedTableMatchesTheConstants(t *testing.T) {
 	}
 
 	defined := map[string]string{
-		strconv.Itoa(shell.ExitOK):        "ExitOK",
-		strconv.Itoa(shell.ExitFailure):   "ExitFailure",
-		strconv.Itoa(shell.ExitUsage):     "ExitUsage",
-		strconv.Itoa(shell.ExitInput):     "ExitInput",
-		strconv.Itoa(shell.ExitOutput):    "ExitOutput",
-		strconv.Itoa(shell.ExitInterrupt): "ExitInterrupt",
+		strconv.Itoa(shell.ExitOK):         "ExitOK",
+		strconv.Itoa(shell.ExitFailure):    "ExitFailure",
+		strconv.Itoa(shell.ExitUsage):      "ExitUsage",
+		strconv.Itoa(shell.ExitInput):      "ExitInput",
+		strconv.Itoa(shell.ExitOutput):     "ExitOutput",
+		strconv.Itoa(shell.ExitInterrupt):  "ExitInterrupt",
+		strconv.Itoa(shell.ExitTerminated): "ExitTerminated",
 	}
 
 	for code, name := range defined {
@@ -732,4 +734,269 @@ func definedFlags(t *testing.T) []string {
 		names = append(names, m[1])
 	}
 	return names
+}
+
+// flagToken matches a flag name as a whole token: followed by something that
+// cannot continue a flag name, or by the end of the text. A plain substring
+// search does not do this, and the difference is not academic — `--sql-file`
+// contains `--sql`, so a README that had lost its `--sql` example once passed a
+// drift test that only asked whether the string appeared.
+func flagToken(flag string) *regexp.Regexp {
+	return regexp.MustCompile(regexp.QuoteMeta("--"+flag) + `($|[^a-z0-9-])`)
+}
+
+// mentionsFlag reports whether body uses the flag as its own token.
+func mentionsFlag(body, flag string) bool {
+	return flagToken(flag).MatchString(body)
+}
+
+// readDoc returns a documentation file's contents, failing the test if it is
+// missing — a renamed page is drift too.
+func readDoc(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path) //nolint:gosec // fixed, in-repo documentation paths
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
+// section returns the body of a Markdown section by heading text, or "" when the
+// heading is absent. Checking inside a section rather than across a whole file
+// is what keeps a claim from being satisfied by an unrelated mention elsewhere.
+func section(body, heading string) string {
+	start := strings.Index(body, heading)
+	if start < 0 {
+		return ""
+	}
+	rest := body[start+len(heading):]
+	depth := strings.Count(strings.TrimSpace(heading), "#")
+	marker := "\n" + strings.Repeat("#", depth) + " "
+	if end := strings.Index(rest, marker); end >= 0 {
+		rest = rest[:end]
+	}
+	return rest
+}
+
+// TestREADME_ShowsBothScriptFlags pins the one comparison a reader needs before
+// choosing between them. They differ in what the file may contain, so an example
+// of one without the other teaches half the rule.
+func TestREADME_ShowsBothScriptFlags(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "README.md")
+	for _, flag := range []string{"sql-file", "script-file"} {
+		if !mentionsFlag(body, flag) {
+			t.Errorf("README.md no longer shows --%s; the two flags are only useful explained together", flag)
+		}
+	}
+
+	const heading = "### Run SQL or a sqly script from a file"
+	recipe := section(body, heading)
+	if recipe == "" {
+		t.Fatalf("README.md no longer has the %q section", heading)
+	}
+	for _, flag := range []string{"sql-file", "script-file"} {
+		if !mentionsFlag(recipe, flag) {
+			t.Errorf("the README %q section does not show --%s", heading, flag)
+		}
+	}
+	if !strings.Contains(recipe, "examples/") {
+		t.Error("the README script section does not point at examples/, so the commands it shows are not runnable from a clone")
+	}
+}
+
+// TestReference_DocumentsTheHiddenSheetFlag checks the page that promises to
+// list every flag actually explains this one, rather than only naming it in a
+// table row.
+func TestReference_DocumentsTheHiddenSheetFlag(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "website/content/reference.md")
+	if !mentionsFlag(body, "include-hidden-sheets") {
+		t.Fatal("website/content/reference.md does not document --include-hidden-sheets")
+	}
+
+	const heading = "### Excel sheets"
+	sheets := section(body, heading)
+	if sheets == "" {
+		t.Fatalf("website/content/reference.md no longer has the %q section", heading)
+	}
+	if !mentionsFlag(sheets, "include-hidden-sheets") {
+		t.Errorf("the reference %q section does not name --include-hidden-sheets", heading)
+	}
+	if !strings.Contains(sheets, "only the sheets a workbook shows") {
+		t.Errorf("the reference %q section does not state the default", heading)
+	}
+}
+
+// TestFormats_StatesTheVisibleOnlyDefault is the check that the old contract
+// cannot come back. "every sheet is imported" was true and is not, and a page
+// still saying it sends a reader looking for a table that does not exist.
+func TestFormats_StatesTheVisibleOnlyDefault(t *testing.T) {
+	t.Parallel()
+
+	pages := map[string]string{
+		"website/content/formats.md": "",
+		"doc/cookbook.md":            "",
+		"README.md":                  "",
+	}
+	stale := []string{
+		"every sheet is imported",
+		"Every sheet is imported",
+		"imports every one; a hundred sheets",
+		"hidden ones included",
+		"imports it like any other",
+	}
+	for page := range pages {
+		body := readDoc(t, page)
+		for _, phrase := range stale {
+			if strings.Contains(body, phrase) {
+				t.Errorf("%s still says %q, which sqly no longer does", page, phrase)
+			}
+		}
+	}
+
+	formats := readDoc(t, "website/content/formats.md")
+	const heading = "### Hidden sheets"
+	hidden := section(formats, heading)
+	if hidden == "" {
+		t.Fatalf("website/content/formats.md no longer has the %q section", heading)
+	}
+	if !strings.Contains(hidden, "only the sheets a workbook shows") {
+		t.Errorf("the formats %q section does not state the visible-only default", heading)
+	}
+	if !mentionsFlag(hidden, "include-hidden-sheets") {
+		t.Errorf("the formats %q section does not name the flag that opts in", heading)
+	}
+	if !strings.Contains(hidden, "very hidden") {
+		t.Errorf("the formats %q section does not say what happens to a very hidden sheet", heading)
+	}
+}
+
+// TestCookbook_ShowsTheScriptFileFlag keeps the recipe that changed honest: it
+// used to tell the reader to pipe a script in, which is no longer the only way.
+func TestCookbook_ShowsTheScriptFileFlag(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "doc/cookbook.md")
+	const heading = "## Run SQL or a sqly script from a file"
+	recipe := section(body, heading)
+	if recipe == "" {
+		t.Fatalf("doc/cookbook.md no longer has the %q section", heading)
+	}
+	for _, flag := range []string{"sql-file", "script-file"} {
+		if !mentionsFlag(recipe, flag) {
+			t.Errorf("the cookbook %q section does not show --%s", heading, flag)
+		}
+	}
+	if !strings.Contains(recipe, ".save") {
+		t.Errorf("the cookbook %q section does not show what a script can do that SQL cannot", heading)
+	}
+
+	excel := section(body, "## Excel workbooks")
+	if excel == "" {
+		t.Fatal("doc/cookbook.md no longer has the \"## Excel workbooks\" section")
+	}
+	if !mentionsFlag(excel, "include-hidden-sheets") {
+		t.Error("the cookbook Excel section does not show --include-hidden-sheets")
+	}
+	if !mentionsFlag(excel, "inspect") {
+		t.Error("the cookbook Excel section does not point at --inspect, which is where hidden sheet names are")
+	}
+}
+
+// TestDocs_SignalExitCodesAgreeWithTheImplementation ties the documented codes
+// to the constants and to the arithmetic they come from, in the pages a reader
+// would consult. A page saying 130 for SIGTERM would send a wrapper after the
+// wrong condition.
+func TestDocs_SignalExitCodesAgreeWithTheImplementation(t *testing.T) {
+	t.Parallel()
+
+	if shell.ExitInterrupt != 128+int(syscall.SIGINT) {
+		t.Fatalf("ExitInterrupt = %d, want 128+SIGINT", shell.ExitInterrupt)
+	}
+	if shell.ExitTerminated != 128+int(syscall.SIGTERM) {
+		t.Fatalf("ExitTerminated = %d, want 128+SIGTERM", shell.ExitTerminated)
+	}
+
+	pages := []string{"website/content/reference.md", "doc/cookbook.md"}
+	for _, page := range pages {
+		body := readDoc(t, page)
+		for _, want := range []struct{ code, signal string }{
+			{strconv.Itoa(shell.ExitInterrupt), "SIGINT"},
+			{strconv.Itoa(shell.ExitTerminated), "SIGTERM"},
+		} {
+			// The code and its signal have to appear on the same line, so a page
+			// that keeps the number but attaches it to the other signal fails.
+			row := regexp.MustCompile("(?m)^.*`" + want.code + "`.*" + want.signal + ".*$")
+			if !row.MatchString(body) {
+				t.Errorf("%s does not document exit code %s as %s", page, want.code, want.signal)
+			}
+		}
+	}
+}
+
+// TestDocs_DescribeTheDownloadLimitAsABodyLimit is the wording check that
+// matters most for safety. 2 GiB bounds the bytes that arrive; it does not bound
+// what importing them costs, and a page that implies otherwise invites someone
+// to run an untrusted URL believing they are covered.
+func TestDocs_DescribeTheDownloadLimitAsABodyLimit(t *testing.T) {
+	t.Parallel()
+
+	pages := []string{"website/content/formats.md", "doc/cookbook.md"}
+	for _, page := range pages {
+		body := readDoc(t, page)
+		if !strings.Contains(body, "2 GiB") {
+			t.Errorf("%s no longer states the 2 GiB download limit", page)
+			continue
+		}
+		// Naming what the cap does not cover is the point; a page that only
+		// states the number has said the easy half.
+		for _, want := range []string{"expand", "memory"} {
+			if !strings.Contains(strings.ToLower(body), want) {
+				t.Errorf("%s states the 2 GiB limit without saying that %s costs are separate", page, want)
+			}
+		}
+	}
+}
+
+// TestExamples_ExistAndAreReachable checks the runnable examples are present and
+// that a reader can find them from the two documents that promise them.
+func TestExamples_ExistAndAreReachable(t *testing.T) {
+	t.Parallel()
+
+	required := []string{
+		"examples/README.md",
+		"examples/data/sales.csv",
+		"examples/report.sql",
+		"examples/update.sqly",
+	}
+	for _, path := range required {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s is missing; the documented example cannot be run from a clone: %v", path, err)
+		}
+	}
+
+	if !strings.Contains(readDoc(t, "README.md"), "examples/") {
+		t.Error("README.md does not link to examples/")
+	}
+	if !strings.Contains(readDoc(t, "doc/cookbook.md"), "/examples") {
+		t.Error("doc/cookbook.md does not link to examples/")
+	}
+}
+
+// TestExamples_AreRunByTheE2ESuite closes the loop the other checks leave open:
+// the files exist and are linked, but only a spec that runs them proves they
+// still work. Naming them in a spec is what stops examples/ becoming a museum.
+func TestExamples_AreRunByTheE2ESuite(t *testing.T) {
+	t.Parallel()
+
+	const spec = "e2e/atago/examples.atago.yaml"
+	body := readDoc(t, spec)
+	for _, file := range []string{"report.sql", "update.sqly", "sales.csv"} {
+		if !strings.Contains(body, file) {
+			t.Errorf("%s does not run examples/%s against the real binary", spec, file)
+		}
+	}
 }

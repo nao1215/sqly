@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -144,20 +146,115 @@ func TestExitCodes_AreDistinct(t *testing.T) {
 	t.Parallel()
 
 	codes := map[int]string{
-		ExitOK:        "ExitOK",
-		ExitFailure:   "ExitFailure",
-		ExitUsage:     "ExitUsage",
-		ExitInput:     "ExitInput",
-		ExitOutput:    "ExitOutput",
-		ExitInterrupt: "ExitInterrupt",
+		ExitOK:         "ExitOK",
+		ExitFailure:    "ExitFailure",
+		ExitUsage:      "ExitUsage",
+		ExitInput:      "ExitInput",
+		ExitOutput:     "ExitOutput",
+		ExitInterrupt:  "ExitInterrupt",
+		ExitTerminated: "ExitTerminated",
 	}
-	if len(codes) != 6 {
-		t.Errorf("the six exit codes collapse to %d distinct values: %v", len(codes), codes)
+	if len(codes) != 7 {
+		t.Errorf("the seven exit codes collapse to %d distinct values: %v", len(codes), codes)
 	}
+	signalCodes := map[int]bool{ExitInterrupt: true, ExitTerminated: true}
 	for code := range codes {
-		if code < 0 || code > 125 && code != ExitInterrupt {
+		if code < 0 || code > 125 && !signalCodes[code] {
 			t.Errorf("%s = %d is outside the range a shell reports unambiguously", codes[code], code)
 		}
+	}
+}
+
+// TestExitCodeForSignal pins the two signal codes to the convention a shell,
+// a CI runner, and a service manager already use: 128 plus the signal number.
+// A caller that reads 143 knows something took the run away; one that reads 130
+// knows a person pressed Ctrl-C. Collapsing them onto one code, which is what
+// sqly used to do, makes that undecidable.
+func TestExitCodeForSignal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sig  os.Signal
+		want int
+	}{
+		{
+			name: "SIGINT is 128 plus SIGINT",
+			sig:  os.Interrupt,
+			want: 130,
+		},
+		{
+			name: "SIGTERM is 128 plus SIGTERM",
+			sig:  syscall.SIGTERM,
+			want: 143,
+		},
+		{
+			name: "a signal sqly does not trap still reports as a stopped run",
+			sig:  syscall.Signal(0),
+			want: ExitInterrupt,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ExitCodeForSignal(tt.sig); got != tt.want {
+				t.Errorf("ExitCodeForSignal(%v) = %d, want %d", tt.sig, got, tt.want)
+			}
+		})
+	}
+
+	// The arithmetic itself, stated once, so a code edited to a nearby number
+	// fails here rather than in whatever script depended on it.
+	if ExitInterrupt != 128+int(syscall.SIGINT) {
+		t.Errorf("ExitInterrupt = %d, want 128+SIGINT = %d", ExitInterrupt, 128+int(syscall.SIGINT))
+	}
+	if ExitTerminated != 128+int(syscall.SIGTERM) {
+		t.Errorf("ExitTerminated = %d, want 128+SIGTERM = %d", ExitTerminated, 128+int(syscall.SIGTERM))
+	}
+}
+
+// TestExitCode_DoesNotInventASignal is the other half of the contract. An error
+// that reached the top level without a signal behind it must not be reported as
+// one, and a deadline must not be reported as a stop anyone asked for: a
+// download that timed out is an input failure, and calling it 130 would send a
+// retry loop after the wrong thing.
+func TestExitCode_DoesNotInventASignal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "a timed-out download is not a signal",
+			err:  context.DeadlineExceeded,
+		},
+		{
+			name: "a timed-out download wrapped by the import that hit it is not a signal",
+			err:  fmt.Errorf("download: %w", context.DeadlineExceeded),
+		},
+		{
+			name: "an ordinary query failure is not a signal",
+			err:  errors.New("no such table: nope"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := ExitCode(tt.err)
+			if got == ExitInterrupt || got == ExitTerminated {
+				t.Errorf("ExitCode(%v) = %d, which is a signal code", tt.err, got)
+			}
+		})
+	}
+
+	// A cancellation with no signal behind it is a stopped run, but it is never
+	// reported as SIGTERM: which signal arrived is main's record to keep, and
+	// ExitCode has no way to know one did.
+	if got := ExitCode(context.Canceled); got == ExitTerminated {
+		t.Errorf("ExitCode(context.Canceled) = %d; a bare cancellation must not claim to be SIGTERM", got)
 	}
 }
 

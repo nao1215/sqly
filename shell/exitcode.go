@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"syscall"
 
 	"github.com/nao1215/sqly/config"
 )
@@ -36,11 +38,43 @@ const (
 	// directory, a source with no writable form, a collision, a failed commit or
 	// rollback. Query results may already have been produced.
 	ExitOutput = 4
-	// ExitInterrupt is a run cut short by SIGINT or SIGTERM. 128+SIGINT is what
-	// a shell reports for a process killed by that signal, so a wrapper that
-	// already special-cases 130 keeps working.
+	// ExitInterrupt is a run stopped by SIGINT — someone pressed Ctrl-C. It is
+	// 128+SIGINT, which is what a shell reports for a process killed by that
+	// signal.
 	ExitInterrupt = 130
+	// ExitTerminated is a run stopped by SIGTERM — something else asked it to
+	// stop: a CI job being cancelled, a service manager shutting down, a
+	// `timeout` command giving up. It is 128+SIGTERM, for the same reason.
+	//
+	// The two are separate codes because the caller's next move differs. A
+	// Ctrl-C is a person changing their mind and needs nothing done about it; a
+	// SIGTERM is the surrounding system taking the run away, and a wrapper that
+	// retries, alerts, or reports partial work wants to know which happened.
+	// Reporting both as 130 made that undecidable.
+	ExitTerminated = 143
 )
+
+// ExitCodeForSignal is the code a run stopped by sig exits with.
+//
+// It is a function on the signal rather than a guess made from the error,
+// because by the time a cancellation surfaces it has usually been rewritten by
+// whatever noticed it first — a driver reporting a closed connection says
+// nothing about a signal. The signal itself is the only record of which one
+// arrived, so it is what decides.
+//
+// A signal sqly does not trap cannot reach here; the default is ExitInterrupt
+// so an added trap that forgets to name its code still reports a signal rather
+// than a plain failure.
+func ExitCodeForSignal(sig os.Signal) int {
+	switch sig {
+	case syscall.SIGTERM:
+		return ExitTerminated
+	case os.Interrupt:
+		return ExitInterrupt
+	default:
+		return ExitInterrupt
+	}
+}
 
 // ExitCode maps a run's error to the code sqly exits with. A nil error is
 // ExitOK.
@@ -54,14 +88,20 @@ func ExitCode(err error) int {
 		return ExitOK
 	}
 
-	// An interrupt is checked first because it is not a stage: it can arrive
-	// during any of them, and what it means — the user stopped this — does not
+	// A cancellation is checked first because it is not a stage: it can arrive
+	// during any of them, and what it means — this run was stopped — does not
 	// depend on where the run had got to.
 	//
-	// Only context.Canceled. A context.DeadlineExceeded is a timeout, not a user
-	// signal, and sqly's only deadlines are on the HTTP client: treating one as an
-	// interrupt would report a download that timed out as 130 instead of as the
-	// input failure it is.
+	// This says the run was canceled, not which signal did it. A cancellation is
+	// several rewrites away from its cause by the time it surfaces, so it cannot
+	// tell SIGINT from SIGTERM and does not try; main.go records the signal it
+	// trapped and reports that code instead (see ExitCodeForSignal). ExitInterrupt
+	// is the answer left for a cancellation with no signal behind it.
+	//
+	// Only context.Canceled. A context.DeadlineExceeded is a timeout, not a stop
+	// anyone asked for, and sqly's only deadlines are on the HTTP client: treating
+	// one as a cancellation would report a download that timed out as 130 instead
+	// of as the input failure it is.
 	if errors.Is(err, context.Canceled) {
 		return ExitInterrupt
 	}

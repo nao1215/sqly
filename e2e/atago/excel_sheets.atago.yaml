@@ -1,9 +1,15 @@
 # The Excel import contract, run against the real binary.
 #
 # A workbook is the one input that becomes several tables, so "did every sheet
-# arrive, and under what name?" is a question no other format asks. The fixtures
-# are committed workbooks rather than generated ones: what is being pinned is how
-# sqly reads a file, and a generator would let the file drift with the writer.
+# arrive, and under what name?" is a question no other format asks.
+#
+# Most fixtures are committed workbooks: what is being pinned is how sqly reads a
+# file, and a generator would let the file drift with the writer. The visibility
+# fixtures are the exception, because a committed workbook cannot testify to its
+# own hidden sheets — a file named hidden.xlsx could hold none and every scenario
+# would keep passing. Those two are declared and checked in
+# e2e/excel_fixtures_test.go, which reads each one back and fails if it no longer
+# holds what it claims.
 #
 # Documented at website/content/formats.md#excel.
 version: "1"
@@ -69,18 +75,277 @@ scenarios:
           stdout:
             contains: "120"
 
-  - name: imports a hidden sheet like any other
+  # Sheet visibility. sqly imports only the sheets a workbook shows, and these
+  # scenarios are the ones that fail if that default, its opt-in, or the way it
+  # is reported ever moves.
+  #
+  # sheets_visibility.xlsx holds, in order: Visible (shown), Internal (hidden),
+  # Secret (very hidden), Summary (shown). Both ways of hiding a sheet are in it
+  # on purpose: sqly claims not to tell them apart, and a fixture with only one
+  # kind would let that claim go untested.
+  - name: a workbook contributes only the tables its shown sheets make
+    env: *hist
+    steps:
+      - fixture: &visibility
+          file: book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - run:
+          command: sqly book.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - book_Visible
+              - book_Summary
+            not_contains:
+              - book_Internal
+              - book_Secret
+
+  - name: a hidden sheet has no table to query
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly --sql "SELECT v FROM book_Internal" book.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: book_Internal
+
+  - name: a very hidden sheet has no table either
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly --sql "SELECT v FROM book_Secret" book.xlsx
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: book_Secret
+
+  - name: an import that skipped sheets says how many, on stderr
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly --output-format csv --sql "SELECT v FROM book_Visible" book.xlsx
+      - assert:
+          exit_code: 0
+          stderr:
+            contains:
+              - "Skipped 2 hidden sheets"
+              - "book.xlsx"
+              - "--include-hidden-sheets"
+      - assert:
+          # The notice is a count, not a list: the names of hidden sheets are
+          # what --inspect is for. And it must not reach stdout, which carries
+          # the query result a pipeline reads.
+          stdout:
+            not_contains:
+              - "Skipped"
+              - "Internal"
+              - "Secret"
+
+  - name: a workbook with nothing hidden produces no notice
     env: *hist
     steps:
       - fixture:
-          file: hidden.xlsx
-          from: testdata/sheets_hidden.xlsx
+          file: many.xlsx
+          from: testdata/sheets_many.xlsx
       - run:
-          command: sqly --sql "SELECT b FROM hidden_Secret" hidden.xlsx
+          command: sqly --output-format csv --sql "SELECT a FROM many_Sheet1" many.xlsx
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "Skipped"
+
+  - name: --include-hidden-sheets imports the hidden and very hidden sheets too
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly --include-hidden-sheets book.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - book_Visible
+              - book_Internal
+              - book_Secret
+              - book_Summary
+      - assert:
+          stderr:
+            not_contains: "Skipped"
+
+  - name: --include-hidden-sheets makes a hidden sheet queryable
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly --include-hidden-sheets --output-format csv --sql "SELECT v FROM book_Internal" book.xlsx
       - assert:
           exit_code: 0
           stdout:
             contains: hidden
+
+  - name: --include-hidden-sheets makes a very hidden sheet queryable
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly --include-hidden-sheets --output-format csv --sql "SELECT v FROM book_Secret" book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: very-hidden
+
+  - name: --include-hidden-sheets stays in force for a later .import
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          # The flag is the session's policy, not the initial import's. A shell
+          # started with it and then handed a workbook has to read that workbook
+          # the same way.
+          command: sqly --include-hidden-sheets
+          stdin: ".import book.xlsx\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - book_Internal
+              - book_Secret
+
+  - name: a later .import without the flag still leaves hidden sheets out
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          command: sqly
+          stdin: ".import book.xlsx\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: book_Visible
+            not_contains: book_Internal
+      - assert:
+          stderr:
+            contains: "Skipped 2 hidden sheets"
+
+  - name: the sheet policy applies to a workbook found in a directory
+    env: *hist
+    steps:
+      - fixture:
+          file: books/book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - run:
+          command: sqly books
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: book_Visible
+            not_contains: book_Internal
+
+  - name: the sheet policy applies to a compressed workbook
+    env: *hist
+    # Needs a POSIX shell for gzip and a here-string.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - run:
+          command: sh -c 'gzip -c book.xlsx > packed.xlsx.gz && printf ".tables\n" | sqly packed.xlsx.gz'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: packed_Visible
+            not_contains: packed_Internal
+
+  # Collision after filtering. sheets_hidden_collision.xlsx holds "Q1 sales"
+  # (shown) and "Q1.sales" (hidden), which sanitize to the same table name. The
+  # pair is the whole point: whether the workbook loads depends on which sheets
+  # the policy admits, so this is what proves the collision check runs after the
+  # filter rather than over the raw sheet list.
+  - name: a hidden sheet does not collide with a shown one it would share a table with
+    env: *hist
+    steps:
+      - fixture: &collide
+          file: clash.xlsx
+          from: testdata/sheets_hidden_collision.xlsx
+      - run:
+          command: sqly --output-format csv --sql "SELECT v FROM clash_Q1_sales" clash.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: shown
+
+  - name: --include-hidden-sheets turns that same pair into a refused workbook
+    env: *hist
+    steps:
+      - fixture: *collide
+      - run:
+          command: sqly --include-hidden-sheets --sql "SELECT 1" clash.xlsx
+      - assert:
+          exit_code: 3
+          stderr:
+            contains:
+              - "Q1 sales"
+              - "Q1.sales"
+              - clash_Q1_sales
+
+  # Applicability. A flag that was typed, accepted, and then had no effect is
+  # indistinguishable from one that worked, so a run that can prove it useless
+  # refuses instead.
+  - name: --include-hidden-sheets is refused when no input could be a workbook
+    env: *hist
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --include-hidden-sheets --sql "SELECT * FROM rows" rows.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "--include-hidden-sheets"
+
+  - name: --include-hidden-sheets is accepted in a mixed run that has a workbook
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --include-hidden-sheets --output-format csv --sql "SELECT v FROM book_Internal" rows.csv book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: hidden
+
+  - name: --include-hidden-sheets is accepted with no input at all, for a later .import
+    env: *hist
+    steps:
+      - fixture: *visibility
+      - run:
+          # Nothing has been named yet, so nothing proves the flag useless; the
+          # .import that follows is exactly what it is for.
+          command: sqly --include-hidden-sheets
+          stdin: ".import book.xlsx\n.tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: book_Secret
 
   - name: skips a sheet that has no cells instead of making an empty table
     env: *hist
@@ -266,3 +531,183 @@ scenarios:
               - many_Sheet1
               - many_Second
               - many_Third
+
+  # --inspect is the only place a hidden sheet is named. The ordinary import
+  # notice counts them and stops there, so without this the names of sheets that
+  # did not become tables would be unreachable from the CLI.
+  - name: --inspect names the sheets that did not become tables
+    env: *hist
+    steps:
+      - fixture: &visibility_inspect
+          file: book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - excel_sheets
+              - '"name": "Visible"'
+              - '"name": "Internal"'
+              - '"name": "Secret"'
+              - '"name": "Summary"'
+
+  - name: --inspect marks a shown sheet visible and imported, with its table
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.excel_sheets[0].name"
+              equals: Visible
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[0].visible"
+              equals: true
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[0].imported"
+              equals: true
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[0].table"
+              equals: book_Visible
+
+  - name: --inspect marks a hidden sheet not visible and not imported
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.excel_sheets[1].name"
+              equals: Internal
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[1].visible"
+              equals: false
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[1].imported"
+              equals: false
+
+  - name: --inspect names no table for a sheet it did not import
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            # An empty string would read as a table name; the field is omitted
+            # instead, so there is nothing to mistake for one.
+            not_contains: '"table": ""'
+
+  - name: --inspect marks a very hidden sheet the same way as a hidden one
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.excel_sheets[2].name"
+              equals: Secret
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[2].visible"
+              equals: false
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[2].imported"
+              equals: false
+
+  - name: --inspect --include-hidden-sheets flips imported without flipping visible
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          # visible is what the workbook says and imported is what this run did.
+          # A report that conflated them would have nothing to say about why a
+          # sheet became a table.
+          command: sqly --inspect --include-hidden-sheets book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.excel_sheets[1].visible"
+              equals: false
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[1].imported"
+              equals: true
+      - assert:
+          stdout:
+            json:
+              path: "$.excel_sheets[1].table"
+              equals: book_Internal
+
+  - name: --inspect keeps the workbook sheet order
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: '(?s)"name": "Visible".*"name": "Internal".*"name": "Secret".*"name": "Summary"'
+
+  - name: --inspect omits excel_sheets for a run with no workbook
+    env: *hist
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --inspect rows.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            # The field is additive: a consumer that only reads tables must see
+            # exactly what it saw before workbooks were reported at all.
+            not_contains: excel_sheets
+
+  - name: --inspect keeps stdout to the report alone when sheets were skipped
+    env: *hist
+    steps:
+      - fixture: *visibility_inspect
+      - run:
+          command: sqly --inspect book.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            # A skip notice on stdout would break every program that parses this.
+            not_contains: Skipped
+      - assert:
+          stderr:
+            # And it is not repeated on stderr either: the report already lists
+            # every sheet, so the notice would only be noise.
+            not_contains: Skipped
+

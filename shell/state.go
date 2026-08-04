@@ -21,6 +21,11 @@ type state struct {
 	// importEncoding is the current text-import decoding for CSV, TSV, LTSV,
 	// JSON, and JSONL inputs. It is seeded from --encoding.
 	importEncoding model.TextEncoding
+	// includeHiddenSheets is the session's Excel sheet policy: false imports
+	// only the sheets a workbook shows, true imports the hidden ones too. It is
+	// seeded from --include-hidden-sheets and does not change during a session,
+	// so every .import reads workbooks the same way the initial import did.
+	includeHiddenSheets bool
 }
 
 // newState return *state.
@@ -34,10 +39,11 @@ func newState(arg *config.Arg) (*state, error) {
 		importEncoding = model.TextEncodingUTF8
 	}
 	return &state{
-		cwd:            dir,
-		mode:           newMode(config.Stdout, arg.Output.Mode),
-		rowMismatch:    arg.RowMismatch,
-		importEncoding: importEncoding,
+		cwd:                 dir,
+		mode:                newMode(config.Stdout, arg.Output.Mode),
+		rowMismatch:         arg.RowMismatch,
+		importEncoding:      importEncoding,
+		includeHiddenSheets: arg.IncludeHiddenSheets,
 	}, nil
 }
 

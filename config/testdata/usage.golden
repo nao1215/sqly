@@ -27,49 +27,53 @@ and Fedwire files (test-version)
 
 [Options]
   Input:
-        --stdin-format FORMAT   read stdin as a dataset instead of as SQL; one
-                                of: csv, tsv, ltsv, json, jsonl
-        --stdin-table NAME      table name for the --stdin-format dataset
-                                (default: stdin)
-        --encoding ENCODING     decode every csv, tsv, ltsv, json, and jsonl
-                                input that has no BOM as one of: utf-8,
-                                shift-jis, euc-jp, iso-2022-jp, utf-16le,
-                                utf-16be (default: utf-8)
-        --row-mismatch POLICY   for csv and tsv, what to do with a row whose
-                                field count differs from the header: error (fail
-                                the import), skip (drop the row), pad (fill a
-                                short row, fail on a long one) (default: error)
+        --stdin-format FORMAT    read stdin as a dataset instead of as SQL; one
+                                 of: csv, tsv, ltsv, json, jsonl
+        --stdin-table NAME       table name for the --stdin-format dataset
+                                 (default: stdin)
+        --encoding ENCODING      decode every csv, tsv, ltsv, json, and jsonl
+                                 input that has no BOM as one of: utf-8,
+                                 shift-jis, euc-jp, iso-2022-jp, utf-16le,
+                                 utf-16be (default: utf-8)
+        --row-mismatch POLICY    for csv and tsv, what to do with a row whose
+                                 field count differs from the header: error
+                                 (fail the import), skip (drop the row), pad
+                                 (fill a short row, fail on a long one)
+                                 (default: error)
+        --include-hidden-sheets  import the sheets an excel workbook hides as
+                                 well as the ones it shows
 
   Query:
-    -s, --sql SQL               run one SQL statement, then exit
-    -f, --sql-file FILE         run every SQL statement in this file, then exit;
-                                a dot-command is rejected, so use --script-file
-                                for those; printing several results needs
-                                --output-format table, vertical, or markdown
-        --script-file FILE      run this sqly script, then exit: SQL statements
-                                and dot-commands, exactly as when piped in; use
-                                it to script .save and .import from a file
-        --dialect NAME          write the query in one of: sqlite, mysql,
-                                postgresql, googlesql; sqly translates it to
-                                SQLite (default: sqlite)
+    -s, --sql SQL                run one SQL statement, then exit
+    -f, --sql-file FILE          run every SQL statement in this file, then
+                                 exit; a dot-command is rejected, so use
+                                 --script-file for those; printing several
+                                 results needs --output-format table, vertical,
+                                 or markdown
+        --script-file FILE       run this sqly script, then exit: SQL statements
+                                 and dot-commands, exactly as when piped in; use
+                                 it to script .save and .import from a file
+        --dialect NAME           write the query in one of: sqlite, mysql,
+                                 postgresql, googlesql; sqly translates it to
+                                 SQLite (default: sqlite)
 
   Output:
-    -o, --output FILE           write the one query result to this file instead
-                                of stdout
-        --output-format FORMAT  print the query result as one of: table,
-                                vertical, csv, tsv, ltsv, json, jsonl, markdown,
-                                excel, parquet; excel and parquet need --output
-                                (default: table)
+    -o, --output FILE            write the one query result to this file instead
+                                 of stdout
+        --output-format FORMAT   print the query result as one of: table,
+                                 vertical, csv, tsv, ltsv, json, jsonl,
+                                 markdown, excel, parquet; excel and parquet
+                                 need --output (default: table)
 
   Inspection:
-        --inspect               print one JSON report of the imported tables
-                                (schema, row counts, sample rows) and exit
-        --inspect-sample N      sample rows per table in the --inspect report; 0
-                                for schema only (default: 5)
+        --inspect                print one JSON report of the imported tables
+                                 (schema, row counts, sample rows) and exit
+        --inspect-sample N       sample rows per table in the --inspect report;
+                                 0 for schema only (default: 5)
 
   General:
-    -h, --help                  print this help and exit
-    -v, --version               print the sqly version and exit
+    -h, --help                   print this help and exit
+    -v, --version                print the sqly version and exit
 
 Queries are SQLite by default; --dialect translates MySQL, PostgreSQL, or
 GoogleSQL syntax into it.

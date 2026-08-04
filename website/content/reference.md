@@ -11,9 +11,9 @@ The groups below are the ones `sqly --help` prints.
 ## Input
 
 Positional arguments are the inputs: files, directories, and `http(s)` URLs. Each
-becomes a table named after the file. A workbook becomes one table per sheet, and
-an ACH or Fedwire file becomes its related set of tables; you pick the one you
-want by name in SQL, the same way you pick among a directory's files.
+becomes a table named after the file. A workbook becomes one table per sheet it
+shows, and an ACH or Fedwire file becomes its related set of tables; you pick the
+one you want by name in SQL, the same way you pick among a directory's files.
 
 | Flag | Does |
 |:--|:--|
@@ -21,11 +21,12 @@ want by name in SQL, the same way you pick among a directory's files.
 | `--stdin-table NAME` | table name for the `--stdin-format` dataset (default `stdin`) |
 | `--encoding ENCODING` | decode text inputs that have no BOM as this encoding (default `utf-8`) |
 | `--row-mismatch POLICY` | a CSV/TSV row whose field count differs from the header: `error` (fail the import), `skip` (drop the row), `pad` (fill a short row, fail on a long one) |
+| `--include-hidden-sheets` | import the sheets an Excel workbook hides as well as the ones it shows (default: only the shown ones) |
 
 ### What each option applies to
 
-`--encoding` and `--row-mismatch` apply to **every** input of the run that they
-can affect — file arguments, the files inside a directory argument, a URL, and
+`--encoding`, `--row-mismatch`, and `--include-hidden-sheets` apply to **every**
+input of the run that they can affect — file arguments, the files inside a directory argument, a URL, and
 the `--stdin-format` dataset alike. There is one encoding and one policy per run;
 sqly has no per-file syntax for them.
 
@@ -33,6 +34,7 @@ sqly has no per-file syntax for them.
 |:--|:--|:--|
 | `--encoding` | csv, tsv, ltsv, json, jsonl | Excel and Parquet (they carry their own encoding), ACH and Fedwire (defined as ASCII), and the `--sql-file` script, which is always read as UTF-8 |
 | `--row-mismatch` | csv, tsv | every other format: none of them has a header row a later row can disagree with |
+| `--include-hidden-sheets` | xlsx | every other format: none of them has sheets |
 
 "Does not apply to" means the option has no effect on that input, not that
 typing it is tolerated. A run whose inputs are *all* of the formats an option
@@ -51,6 +53,41 @@ is not known until it is read. In a mixed run — one CSV and one Parquet — th
 option applies to the inputs it can and the run proceeds.
 
 `--stdin-table` is rejected without `--stdin-format`, for the same reason.
+
+`--include-hidden-sheets` is the one exception to the "reject a flag that cannot
+apply" rule, and only in one case: a shell started with no inputs at all accepts
+it, because the flag is the session's sheet policy and a later `.import` can name
+a workbook. A batch run whose inputs are all known and none is a workbook is
+still rejected.
+
+### Excel sheets
+
+sqly imports only the sheets a workbook shows. A hidden sheet usually holds the
+spreadsheet's own working-out — intermediate calculations, lookup tables, an old
+draft — and turning that into a queryable table surprises the reader of a file
+they did not build.
+
+An import that leaves sheets behind says so on stderr, as a count:
+
+```text
+Skipped 2 hidden sheets in book.xlsx; use --include-hidden-sheets to import them.
+```
+
+It is a count and not a list. The names of hidden sheets are the part of a
+workbook its author chose not to present, so an ordinary query does not print
+them; [`--inspect`](#inspect) names them, because a report of what a file holds
+is exactly what it was asked for.
+
+`--include-hidden-sheets` imports them too, and it is a session setting: a shell
+started with it keeps that policy for every later `.import`.
+
+Excel separates *hidden*, which a reader can undo from the sheet tabs, from *very
+hidden*, which only the VBA editor can. sqly does not tell the two apart — the
+library it reads workbooks with reports one flag covering both — so neither kind
+is imported by default and both are imported with the flag.
+
+There is no way to select individual sheets on the command line. Import the
+workbook and pick the table you want in SQL.
 
 ## Query
 
@@ -281,8 +318,43 @@ Two runs over the same inputs produce the same bytes:
   gives schema only, and `sample_rows` is an empty array rather than absent.
 
 Each table carries its name, its source (a path, or `stdin` for a piped dataset),
-its row count, its columns, and its sample. Values use the same JSON encoding
-`--output-format json` uses:
+its row count, its columns, and its sample.
+
+A run whose inputs include an Excel workbook also gets an `excel_sheets` array,
+listing every sheet each workbook holds and which of them became a table. It is
+the only place a hidden sheet is named: a workbook contributes fewer tables than
+it has sheets, and nothing in `tables` says what is missing.
+
+```json
+{
+  "tables": [],
+  "excel_sheets": [
+    {
+      "source": "/data/book.xlsx",
+      "name": "Sales",
+      "visible": true,
+      "imported": true,
+      "table": "book_Sales"
+    },
+    {
+      "source": "/data/book.xlsx",
+      "name": "Scratch",
+      "visible": false,
+      "imported": false
+    }
+  ]
+}
+```
+
+`visible` is what the workbook says; `imported` is what this run did, so
+`--include-hidden-sheets` turns `imported` true for a sheet whose `visible` stays
+false. `table` is absent for a sheet that was not imported, because there is no
+table to name. The array is absent entirely for a run with no workbook among its
+inputs, so a consumer reading only `tables` sees what it always saw. Sources are
+sorted by name and each workbook's sheets stay in the order the workbook stores
+them, so two runs over the same inputs still produce the same bytes.
+
+Values use the same JSON encoding `--output-format json` uses:
 
 | Value | In the JSON |
 |:--|:--|
@@ -447,7 +519,8 @@ wrong" from "that file would not load" without reading stderr.
 | `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a format that cannot carry the results | the invocation |
 | `3` | an input could not be read: a missing path, an unsupported format, a download that failed or hit a limit, a malformed row under `--row-mismatch error` | the input |
 | `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback | the destination |
-| `130` | SIGINT or SIGTERM stopped the run | — |
+| `130` | SIGINT stopped the run — someone pressed Ctrl-C | — |
+| `143` | SIGTERM stopped the run — something else asked it to stop | — |
 
 Most code-`2` failures are decided before anything is read or written. The
 exception is a script whose result sets the chosen format cannot separate: that
@@ -458,9 +531,19 @@ The class is the same whether a failure happens at the top level or inside a
 script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly
 as it does on its own.
 
+`130` and `143` are `128` plus the signal number, which is what a shell reports
+for a process a signal killed. They are separate codes because the next move
+differs: a Ctrl-C is a person changing their mind, while a SIGTERM is the
+surrounding system — a cancelled CI job, a service manager shutting down, a
+`timeout` giving up — taking the run away, which is the case a wrapper may want
+to retry or report.
+
 An interrupted run cancels the query and returns through the normal cleanup, so
 the temp directories a download or a staged stdin dataset created are removed
-before sqly exits.
+before sqly exits. A second signal skips that and kills the process outright.
+
+A timeout inside sqly is not a signal: a download that ran out of time exits `3`,
+as the input failure it is.
 
 Errors go to stderr; query results go to stdout, so a pipeline stays clean.
 

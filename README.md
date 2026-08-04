@@ -234,17 +234,23 @@ sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\
 
 `--dialect` is translation, not emulation: constructs with no SQLite equivalent are rejected by name, and SQL that SQLite accepts is passed through, where the answer can differ from the source dialect. The [dialects page](https://nao1215.github.io/sqly/dialects/) lists both, with the divergences sqly knows about.
 
-### Run a script from a file
-
-`--sql-file` runs the statements in a `.sql` file, in order.
+### Run SQL or a sqly script from a file
 
 ```shell
 sqly --sql-file report.sql sales.csv
+sqly --script-file update.sqly sales.csv
 ```
+
+`--sql-file` takes SQL only; a dot-command in it is a usage error. `--script-file`
+takes what the shell takes — SQL and dot-commands alike — so it is the one to use
+when the script has a side effect such as `.save`. `--script-file` rejects
+`--output`; use `.dump` inside the script instead.
 
 ![sql-file demo](./doc/img/sql-file-demo.gif)
 
-The [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
+Both are runnable in [`examples/`](./examples/). The
+[reference](https://nao1215.github.io/sqly/reference/) compares them in full and
+the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
 
 ## The shell
 
@@ -289,7 +295,7 @@ Writing a *query result* somewhere is a different job, and that one is a flag:
 | CSV / TSV / LTSV | `.csv` `.tsv` `.ltsv` | one table, columns from the header |
 | JSON / JSONL | `.json` `.jsonl` | one table with a `data` column; query with `json_extract()` |
 | Parquet | `.parquet` | one table |
-| Excel | `.xlsx` | one table per sheet, named `file_sheet` — every sheet, hidden ones included |
+| Excel | `.xlsx` | one table per sheet, named `file_sheet`; only the sheets the workbook shows, unless `--include-hidden-sheets` |
 | ACH | `.ach` | several tables (`_file_header`, `_batches`, `_entries`, `_addenda`) |
 | Fedwire | `.fed` | one `_message` table |
 
