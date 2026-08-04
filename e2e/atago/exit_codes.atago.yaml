@@ -235,6 +235,11 @@ scenarios:
   # so the ready marker cannot appear before sqly has the FIFO open. A sleep
   # would only be a guess about how long that takes.
   #
+  # The FIFO writer runs with its stdio on /dev/null and `exec`s the sleep, so it
+  # is one process that `kill` reaches directly and that never holds the test
+  # runner's capture pipes open. Backgrounding a subshell that keeps them was
+  # enough to error these scenarios on macOS while passing on Linux.
+  #
   # Second, the exit status alone proves nothing here, for two reasons. A process
   # killed by the default SIGINT handler is also reported as 130 by the shell —
   # so stderr is asserted, and a process killed outright never gets to write it.
@@ -254,7 +259,7 @@ scenarios:
             id
             1
       - run:
-          command: sh -c 'mkfifo pipe; (exec 3> pipe; touch writer-ready; sleep 30) & holder=$!; sqly rows.csv < pipe > /dev/null 2> err.log & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; start=$(date +%s); kill -INT $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $holder 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"'
+          command: sh -c 'mkfifo pipe; (exec 3> pipe; touch writer-ready; exec sleep 30) >/dev/null 2>&1 & holder=$!; sqly rows.csv < pipe > /dev/null 2> err.log & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; start=$(date +%s); kill -INT $child; wait $child; code=$?; elapsed=$(( $(date +%s) - start )); kill $holder 2>/dev/null; wait $holder 2>/dev/null; echo "exit=$code"; [ "$elapsed" -le 5 ] && echo prompt || echo "slow after ${elapsed}s"'
           shell: true
       - assert:
           exit_code: 0
@@ -282,7 +287,7 @@ scenarios:
           # run created. The staging directory is made before the read blocks, so
           # by the time the signal arrives there is something to clean up: a
           # process killed outright would leave it behind.
-          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; mkfifo pipe; (exec 3> pipe; touch writer-ready; sleep 30) & holder=$!; sqly --stdin-format csv --sql "SELECT 1" < pipe > /dev/null 2>/dev/null & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; kill -INT $child; wait $child; kill $holder 2>/dev/null; ls tmp | grep -c sqly- || echo 0'
+          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; mkfifo pipe; (exec 3> pipe; touch writer-ready; exec sleep 30) >/dev/null 2>&1 & holder=$!; sqly --stdin-format csv --sql "SELECT 1" < pipe > /dev/null 2>/dev/null & child=$!; i=0; until [ -f writer-ready ]; do i=$((i+1)); [ $i -ge 100 ] && { echo "sqly never opened the FIFO" >&2; exit 1; }; sleep 0.1; done; kill -INT $child; wait $child; kill $holder 2>/dev/null; wait $holder 2>/dev/null; ls tmp | grep -c sqly- || echo 0'
           shell: true
       - assert:
           exit_code: 0
