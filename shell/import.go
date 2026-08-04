@@ -133,10 +133,20 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) e
 // user typed. A staged download or a re-encoded copy has a temp path filesql
 // quotes, and a user cannot act on a path they never wrote.
 func (s *Shell) describeLoadFailure(plan *importPlan, err error) error {
-	for _, target := range plan.targets {
+	// The longest matching path wins. Containment alone is not exclusive: one
+	// input's path can be a prefix of another's ("/data/x" inside "/data/xy"),
+	// and the first match would then name a file that imported perfectly well.
+	best := -1
+	for i, target := range plan.targets {
 		if !strings.Contains(err.Error(), target.loadPath) {
 			continue
 		}
+		if best < 0 || len(target.loadPath) > len(plan.targets[best].loadPath) {
+			best = i
+		}
+	}
+	if best >= 0 {
+		target := plan.targets[best]
 		if msg, ok := s.stdinImportErrorMessage(target.displayPath, err, target.loadPath); ok {
 			return errors.New(msg)
 		}

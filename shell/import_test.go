@@ -957,3 +957,31 @@ func TestLocalImportAccessError_PlainPathsKeepTheirMessage(t *testing.T) {
 		t.Errorf("permission error = %q, want the permission message", got)
 	}
 }
+
+// TestDescribeLoadFailure_NamesTheLongestMatchingInput pins which input a load
+// failure is attributed to when one input's path is a prefix of another's.
+// Containment alone is not exclusive: "/data/x" is inside "/data/xy", so the
+// first match could name a file that imported perfectly well.
+func TestDescribeLoadFailure_NamesTheLongestMatchingInput(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	plan := &importPlan{targets: []importTarget{
+		{loadPath: "/data/x.csv", displayPath: "/data/x.csv"},
+		{loadPath: "/data/x.csv.long.csv", displayPath: "/data/x.csv.long.csv"},
+	}}
+	loadErr := errors.New("failed to stream file /data/x.csv.long.csv: bad row")
+
+	got := s.describeLoadFailure(plan, loadErr).Error()
+	if !strings.Contains(got, "/data/x.csv.long.csv") {
+		t.Errorf("error %q should name the input that actually failed", got)
+	}
+	if strings.Contains(got, "failed to import file /data/x.csv:") {
+		t.Errorf("error %q names the shorter path, which imported fine", got)
+	}
+}

@@ -125,6 +125,7 @@ one are never read, and the session is left exactly as it was.
 $ sqly --sql "SELECT * FROM users" users.csv broken.xlsx orders.csv
 Import failed; no table was created or changed:
   - failed to read file broken.xlsx: ...
+import failed, and no table was created or changed: failed to read file broken.xlsx: ...
 $ echo $?
 3
 ```

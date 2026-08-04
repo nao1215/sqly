@@ -129,7 +129,7 @@ func writeGoodCSV(t *testing.T, dir, name, value string) string {
 
 // TestImportAtomicity_OneBrokenInputRollsBackTheWhole is the core of the
 // contract, run for every way a file can be broken and every position it can
-// take among its readable neighbours.
+// take among its readable neighbors.
 func TestImportAtomicity_OneBrokenInputRollsBackTheWhole(t *testing.T) {
 	kinds := []testutil.CorruptKind{
 		testutil.CorruptNotAZip,
