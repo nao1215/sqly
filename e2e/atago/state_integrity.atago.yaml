@@ -115,6 +115,46 @@ scenarios:
             path: out
             exists: false
 
+  # A financial set is one file rebuilt from several tables, planned by its own
+  # code path. It has to answer the same two questions the same way.
+  - name: saves an ACH set to a directory after an in-place save has written the source
+    env: *hist
+    steps:
+      - fixture:
+          file: pay.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly pay.ach
+          stdin: "UPDATE pay_entries SET individual_name = 'RENAMED';\n.save --in-place\n.save out\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out/pay.ach
+            contains: RENAMED
+      - assert:
+          file:
+            path: pay.ach
+            contains: RENAMED
+
+  - name: saves an ACH set in place after a directory export has been written
+    env: *hist
+    steps:
+      - fixture:
+          file: pay.ach
+          from: testdata/ppd-debit.ach
+      - run:
+          command: sqly pay.ach
+          stdin: "UPDATE pay_entries SET individual_name = 'RENAMED';\n.save out\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: pay.ach
+            contains: RENAMED
+      - assert:
+          file:
+            path: out/pay.ach
+            contains: RENAMED
+
   # --- a re-import owns its own tables, and only those ----------------------
   #
   # Regression: ownership was guessed from the table name — the file's base name
