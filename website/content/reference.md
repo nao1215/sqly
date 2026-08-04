@@ -180,10 +180,41 @@ An existing destination is **overwritten**. `--output` is how you name the file 
 want; it does not ask. The file's permissions are preserved when it already exists,
 and a new file is created with the usual `0600`.
 
-A destination that is a symlink is written *through*: the file it names receives
-the result and the link stays a link. The same holds for `.save --in-place` on a
-symlinked source. A rename would replace the link itself, leaving a regular file
-where the link was and the real file still holding the old rows.
+A `--output` destination that is a symlink is written *through*: the file it names
+receives the result and the link stays a link. A rename would replace the link
+itself, leaving a regular file where the link was and the real file still holding
+the old rows.
+
+`.save --in-place` follows a symlinked source the same way, but only when asked.
+By default it refuses and names both the link and what it resolves to:
+
+```shell
+sqly link.csv <<'EOF'
+UPDATE link SET n = 2;
+.save --in-place
+EOF
+# cannot save session:
+#   - link: link.csv is a symlink to /srv/shared/real.csv; an in-place save would
+#     overwrite that file, which you did not name. Add --follow-symlinks to do it
+#     anyway, or save to a directory with .save DIR
+```
+
+The reason is not that following the link is wrong — it is the only correct way
+to write through one. It is that an in-place save overwrites a path the user
+never typed, which can sit outside the directory they are working in and can be
+shared with something that did not expect sqly to rewrite it.
+
+`.save --in-place --follow-symlinks` does it, and prints the resolved path to
+stderr so the destination is visible:
+
+```text
+following the symlink link.csv to /srv/shared/real.csv
+Saved link to link.csv
+```
+
+The option applies to `--in-place` only. `.save DIR` writes elsewhere and never
+touches a source, so it is accepted with a symlinked source and rejects
+`--follow-symlinks` as meaningless there.
 
 ## Inspection
 

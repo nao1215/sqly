@@ -237,7 +237,7 @@ func TestWriteBack_PartialCopyOnTheSecondTargetRestoresBoth(t *testing.T) {
 	// fallback (3) — which truncates places.csv and fails.
 	shell.files.Copy = truncatingCopy(ops.Copy, 3, "id,ci", copyFailure)
 
-	err := shell.writeBack(context.Background(), "")
+	err := shell.writeBack(context.Background(), "", false)
 	if err == nil {
 		t.Fatal("writeBack succeeded although the second commit failed")
 	}
@@ -272,7 +272,7 @@ func TestWriteBack_FallbackCopyOnEveryTargetStillSaves(t *testing.T) {
 	shell.files = ops
 	shell.files.Rename = alwaysFailRename(errors.New("rename refused, as on Windows"))
 
-	if err := shell.writeBack(context.Background(), ""); err != nil {
+	if err := shell.writeBack(context.Background(), "", false); err != nil {
 		t.Fatalf("writeBack through the fallback copy: %v", err)
 	}
 	if got := readFile(t, first); !strings.Contains(got, "alice") {
@@ -325,6 +325,10 @@ func TestOutputWrite_SuccessfulRenameCopiesNothing(t *testing.T) {
 // used to leave a regular file where the link had been, with the file it pointed
 // at still holding the old rows — and "Saved" on stderr. Everything the user
 // could see said the edit had landed.
+//
+// Following a link now has to be asked for (see applySymlinkPolicy), so the
+// script says so. What is being checked is unchanged: once sqly agrees to write
+// through a link, it must write through it correctly.
 func TestWriteBack_InPlaceSaveFollowsASymlink(t *testing.T) {
 	dir := t.TempDir()
 	realDir := filepath.Join(dir, "real")
@@ -337,7 +341,7 @@ func TestWriteBack_InPlaceSaveFollowsASymlink(t *testing.T) {
 		t.Skipf("symlinks not supported here: %v", err)
 	}
 
-	if _, err := runScript(t, "UPDATE link SET name = 'zoe';\n.save --in-place\n", link); err != nil {
+	if _, err := runScript(t, "UPDATE link SET name = 'zoe';\n.save --in-place --follow-symlinks\n", link); err != nil {
 		t.Fatalf("save through a symlink: %v", err)
 	}
 

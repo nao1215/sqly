@@ -369,7 +369,7 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	if err := s.exec(ctx, "INSERT INTO user VALUES ('alt2',2,'ALT','Two')"); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := s.writeBack(ctx, ""); err == nil {
+	if err := s.writeBack(ctx, "", false); err == nil {
 		t.Error("expected .save --in-place to be rejected for a directory-imported table")
 	}
 	after, err := os.ReadFile(orig) //nolint:gosec // test path
