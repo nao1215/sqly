@@ -34,6 +34,11 @@ scenarios:
             contains: "9"
 
   - name: gives the same result as the same script piped in
+    # The second half pipes through `sh -c`, which Windows quotes differently;
+    # the equivalence itself is not platform-specific and is asserted
+    # deterministically by shell.TestScriptFile_IsTheSameTextAPipeWouldRun.
+    skip:
+      os: windows
     steps:
       - fixture: &rows
           file: t.csv
