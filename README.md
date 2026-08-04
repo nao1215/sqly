@@ -5,7 +5,7 @@
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
 [![Build](https://github.com/nao1215/sqly/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/build.yml)
 [![reviewdog](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/sqly/actions/workflows/reviewdog.yml)
-![GitHub](https://img.shields.io/github/license/nao1215/sqly)  
+![GitHub](https://img.shields.io/github/license/nao1215/sqly)
 [![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nao1215/sqly/total)](https://github.com/nao1215/sqly/releases)
 
 
