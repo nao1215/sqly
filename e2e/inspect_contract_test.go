@@ -157,6 +157,9 @@ func TestInspectBinary_TopLevelFieldsAndTypes(t *testing.T) {
 	if !ok {
 		t.Fatalf("tables is %T, want an array", raw["tables"])
 	}
+	if len(tables) == 0 {
+		t.Fatalf("tables is empty, want the one table the fixture produces:\n%s", stdout)
+	}
 	table, ok := tables[0].(map[string]any)
 	if !ok {
 		t.Fatalf("tables[0] is %T, want an object", tables[0])

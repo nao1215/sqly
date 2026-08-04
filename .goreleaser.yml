@@ -106,7 +106,7 @@ nfpms:
       - apk
 brews:
   - name: sqly
-    description: SQL shell for CSV, JSONL, Parquet, Excel, ACH, Fedwire, and compressed files
+    description: SQL shell for CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire + compressed
     license: MIT
     repository:
       owner: nao1215

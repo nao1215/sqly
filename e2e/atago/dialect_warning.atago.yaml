@@ -50,7 +50,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c "sqly --dialect postgresql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt; grep -c 'SQLite semantics' warn.txt; grep -c PostgreSQL warn.txt"
+          command: sh -c "sqly --dialect postgresql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt && grep -c 'SQLite semantics' warn.txt; grep -c PostgreSQL warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -67,7 +67,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c "sqly --dialect mysql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt; grep -c 'SQLite semantics' warn.txt; grep -c MySQL warn.txt"
+          command: sh -c "sqly --dialect mysql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt && grep -c 'SQLite semantics' warn.txt; grep -c MySQL warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -84,7 +84,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c "sqly --dialect googlesql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt; grep -c 'SQLite semantics' warn.txt; grep -c GoogleSQL warn.txt"
+          command: sh -c "sqly --dialect googlesql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt && grep -c 'SQLite semantics' warn.txt; grep -c GoogleSQL warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -108,7 +108,7 @@ scenarios:
             SELECT COUNT(*) FROM users;
             SELECT COUNT(*) FROM users;
       - run:
-          command: sh -c "sqly --dialect postgresql --sql-file many.sql users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
+          command: sh -c "sqly --dialect postgresql --sql-file many.sql users.csv 2>warn.txt >result.txt && grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -127,7 +127,7 @@ scenarios:
             SELECT COUNT(*) FROM users;
             SELECT COUNT(*) FROM users;
       - run:
-          command: sh -c "sqly --dialect mysql --script-file run.sqly users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
+          command: sh -c "sqly --dialect mysql --script-file run.sqly users.csv 2>warn.txt >result.txt && grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -140,7 +140,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c "printf 'SELECT COUNT(*) FROM users;\nSELECT COUNT(*) FROM users;\n' | sqly --dialect googlesql users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
+          command: sh -c "printf 'SELECT COUNT(*) FROM users;\nSELECT COUNT(*) FROM users;\n' | sqly --dialect googlesql users.csv 2>warn.txt >result.txt && grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -156,7 +156,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c "printf '.dialect postgresql\n.dialect sqlite\n.dialect mysql\n.dialect googlesql\nSELECT COUNT(*) FROM users;\n' | sqly users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
+          command: sh -c "printf '.dialect postgresql\n.dialect sqlite\n.dialect mysql\n.dialect googlesql\nSELECT COUNT(*) FROM users;\n' | sqly users.csv 2>warn.txt >result.txt && grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -169,7 +169,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c "sqly --dialect postgresql --output-format json --sql 'SELECT * FROM users' users.csv 2>warn.txt | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; grep -c 'SQLite semantics' warn.txt"
+          command: sh -c "sqly --dialect postgresql --output-format json --sql 'SELECT * FROM users' users.csv 2>warn.txt | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' && grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -256,6 +256,9 @@ scenarios:
     steps:
       - fixture: *users
       - run:
+          # The ";" here is deliberate, and the only one left in this file: this
+          # is the scenario where sqly is meant to fail, so chaining with "&&"
+          # would skip the count that is the whole point of it.
           command: sh -c "printf 'SELECT DISTINCT ON (id) id FROM users;\nSELECT DISTINCT ON (id) id FROM users;\n' | sqly --dialect postgresql users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
@@ -264,21 +267,22 @@ scenarios:
             line: 1
             equals: "1"
 
-  # The warning is a claim about the engine, and this is the claim being true:
-  # SQLite's own integer division answers even under a dialect whose division
-  # would not. It is the divergence the dialect suites already document; here it
-  # is checked next to the warning that exists to explain it.
+  # The warning is a claim about the engine, and this is the claim being true.
+  # PostgreSQL rejects a select column that is neither aggregated nor grouped
+  # ("column users.name must appear in the GROUP BY clause"); SQLite picks an
+  # arbitrary row from each group and answers. sqly answers, because SQLite is
+  # what runs the query — which is exactly what the warning says.
   - name: explains a real divergence — SQLite semantics decide the answer
     env: *hist
     steps:
       - fixture: *users
       - run:
-          command: sqly --dialect postgresql --output-format csv --sql "SELECT 'x' || 1 AS c" users.csv
+          command: sqly --dialect postgresql --output-format csv --sql "SELECT name, COUNT(*) AS n FROM users GROUP BY name IS NOT NULL" users.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: "x1"
+            matches: '^(Alice|Bob),2$'
 
   - name: says the same thing in --help
     env: *hist

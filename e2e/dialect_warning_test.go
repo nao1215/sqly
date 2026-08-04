@@ -243,20 +243,30 @@ func TestDialectWarningBinary_ARejectedCommandLineIsSilent(t *testing.T) {
 }
 
 // TestDialectWarningBinary_SQLiteSemanticsDecideTheAnswer is the claim behind
-// the warning, checked rather than asserted: PostgreSQL's `||` on a number is a
-// type error there and a string concatenation in SQLite, and SQLite is what
-// answers.
+// the warning, checked rather than asserted.
+//
+// PostgreSQL rejects a select column that is neither aggregated nor named in
+// GROUP BY — "column users.name must appear in the GROUP BY clause". SQLite
+// picks an arbitrary row from each group and answers. sqly answers, because
+// SQLite is what runs the query once the syntax has been translated, which is
+// exactly what the warning says.
+//
+// The query has to actually diverge for this test to mean anything: `'x' || 1`
+// was here first and concatenates in both engines, so it demonstrated nothing.
 func TestDialectWarningBinary_SQLiteSemanticsDecideTheAnswer(t *testing.T) {
 	t.Parallel()
 	csv := writeDialectFixture(t)
 
 	stdout, stderr, code := run(t, "",
-		"--dialect", "postgresql", "--output-format", "csv", "--sql", "SELECT 'x' || 1 AS c", csv)
+		"--dialect", "postgresql", "--output-format", "csv",
+		"--sql", "SELECT name, COUNT(*) AS n FROM users GROUP BY name IS NOT NULL", csv)
 	if code != 0 {
-		t.Fatalf("exit = %d (stderr: %s)", code, stderr)
+		t.Fatalf("exit = %d, want 0: PostgreSQL would reject this query and SQLite answers it (stderr: %s)", code, stderr)
 	}
-	if !strings.Contains(stdout, "x1") {
-		t.Errorf("stdout = %q, want SQLite's concatenation result", stdout)
+	// Which of the two names SQLite picks from the group is its own business —
+	// what matters is that one row came back rather than an error.
+	if !strings.Contains(stdout, ",2") {
+		t.Errorf("stdout = %q, want SQLite's one grouped row", stdout)
 	}
 	if countDialectWarnings(stderr) != 1 {
 		t.Errorf("the run that shows the divergence did not carry the warning that explains it:\n%s", stderr)

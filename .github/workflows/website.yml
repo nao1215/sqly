@@ -211,16 +211,23 @@ jobs:
       - name: Check the deployed site serves the inspect JSON Schema
         run: |
           url="${SITE}schema/inspect-v1.schema.json?cachebust=${GITHUB_RUN_ID}"
-          schema=$(curl -fsSL --max-time 30 "${url}") || {
+          curl -fsSL --max-time 30 "${url}" -o deployed-schema.json || {
             echo "::error::${url} is not being served" >&2; exit 1;
           }
-          # The draft URL is only ever the value of the "$schema" keyword, so
-          # matching it covers the keyword too — and avoids writing a literal
-          # $schema that shellcheck reads as an unexpanded variable.
-          for needle in 'json-schema.org/draft/2020-12/schema' '"schema_version"' '"sample_rows"'; do
-            case "${schema}" in
-              *"${needle}"*) ;;
-              *) echo "::error::the deployed inspect schema does not contain ${needle}" >&2; exit 1 ;;
-            esac
-          done
-          echo "the deployed site serves the inspect JSON Schema"
+          # Parsed rather than grepped. A substring check passes on a truncated
+          # response, on HTML served by a 404 handler that happens to mention
+          # the words, and on a document whose keys sit at the wrong depth —
+          # all of which would leave a consumer validating against nothing.
+          python3 - deployed-schema.json <<'PY'
+          import json, sys
+
+          schema = json.load(open(sys.argv[1]))
+          assert "2020-12" in schema["$schema"], schema["$schema"]
+          assert schema["properties"]["schema_version"]["const"] == 1, schema["properties"]["schema_version"]
+          for field in ("schema_version", "sqly_version", "tables"):
+              assert field in schema["required"], schema["required"]
+          table = schema["$defs"]["table"]
+          assert "sample_rows" in table["required"], table["required"]
+          assert table["properties"]["sample_rows"]["type"] == "array", table["properties"]["sample_rows"]
+          print("the deployed inspect schema parses and states the v1 contract")
+          PY

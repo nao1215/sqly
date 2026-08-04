@@ -226,7 +226,11 @@ source record, or baseline changes.
 
 A session started with `--allow-remote` keeps the capability for the `.import`
 commands typed later in it. Granting it and not using it is not an error:
-`sqly --allow-remote data.csv` and a bare `sqly --allow-remote` both run.
+`sqly --allow-remote data.csv` runs, and a bare `sqly --allow-remote` opens the
+interactive shell on a terminal. The flag grants a capability and nothing else,
+so it supplies no input of its own: a bare `sqly --allow-remote` with empty
+non-interactive stdin still exits `2` for having nothing to run, exactly as a
+bare `sqly` does.
 
 `--allow-remote` covers `http` and `https` only. `ftp://`, `file://`, `ssh://`,
 `gopher://` and every other scheme are refused before any connection, with or

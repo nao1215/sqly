@@ -187,14 +187,30 @@ scenarios:
           stdout:
             contains: ok
 
+  # The comparison is done inside Python rather than by piping through sed and
+  # cmp: Python's print() ends a line with CRLF on Windows while sed writes LF,
+  # so two files holding the same version compared unequal there. Reading both
+  # files and stripping the whitespace compares the versions rather than the
+  # platform's line ending.
   - name: reports the same sqly version --version prints
     steps:
       - fixture: *secrets
+      - fixture:
+          file: same_version.py
+          content: |
+            import json
+
+            reported = json.load(open("report.json"))["sqly_version"]
+            printed = open("printed.txt").read().strip()
+            assert printed == "sqly " + reported, (printed, reported)
+            print("same")
       - run:
-          command: sh -c "sqly --inspect secrets.csv | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"sqly_version\"])' > reported.txt && sqly --version | sed 's/^sqly //' > printed.txt && cmp reported.txt printed.txt"
+          command: sh -c "sqly --inspect secrets.csv > report.json && sqly --version > printed.txt && python3 same_version.py"
           shell: true
       - assert:
           exit_code: 0
+          stdout:
+            contains: same
 
   - name: keeps the whole of stdout parseable as one JSON document
     steps:
