@@ -30,8 +30,9 @@ import (
 // leaves the flag out has turned sqly's own downloading off, and can then say so
 // about the tool it runs.
 
-// errRemoteNotAllowed is the refusal text, kept in one place because the startup
-// path, the script path, and the interactive path all say it.
+// remoteCapabilityFlag is the flag that grants the capability, named once
+// because the refusal has to point at it from the startup path, the script
+// path, and the interactive path alike.
 const remoteCapabilityFlag = "--allow-remote"
 
 // remoteCapabilityError builds the refusal for a URL this session may not

@@ -50,7 +50,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'sqly --dialect postgresql --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv >/dev/null 2>warn.txt; grep -c "SQLite semantics" warn.txt; grep -c "PostgreSQL" warn.txt'
+          command: sh -c "sqly --dialect postgresql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt; grep -c 'SQLite semantics' warn.txt; grep -c PostgreSQL warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -67,7 +67,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'sqly --dialect mysql --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv >/dev/null 2>warn.txt; grep -c "SQLite semantics" warn.txt; grep -c "MySQL" warn.txt'
+          command: sh -c "sqly --dialect mysql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt; grep -c 'SQLite semantics' warn.txt; grep -c MySQL warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -84,7 +84,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'sqly --dialect googlesql --output-format csv --sql "SELECT COUNT(*) AS c FROM users" users.csv >/dev/null 2>warn.txt; grep -c "SQLite semantics" warn.txt; grep -c "GoogleSQL" warn.txt'
+          command: sh -c "sqly --dialect googlesql --output-format csv --sql 'SELECT COUNT(*) AS c FROM users' users.csv >result.txt 2>warn.txt; grep -c 'SQLite semantics' warn.txt; grep -c GoogleSQL warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -108,7 +108,7 @@ scenarios:
             SELECT COUNT(*) FROM users;
             SELECT COUNT(*) FROM users;
       - run:
-          command: sh -c 'sqly --dialect postgresql --sql-file many.sql users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          command: sh -c "sqly --dialect postgresql --sql-file many.sql users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -127,7 +127,7 @@ scenarios:
             SELECT COUNT(*) FROM users;
             SELECT COUNT(*) FROM users;
       - run:
-          command: sh -c 'sqly --dialect mysql --script-file run.sqly users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          command: sh -c "sqly --dialect mysql --script-file run.sqly users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -140,7 +140,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'printf "SELECT COUNT(*) FROM users;\nSELECT COUNT(*) FROM users;\n" | sqly --dialect googlesql users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          command: sh -c "printf 'SELECT COUNT(*) FROM users;\nSELECT COUNT(*) FROM users;\n' | sqly --dialect googlesql users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -156,7 +156,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'printf ".dialect postgresql\n.dialect sqlite\n.dialect mysql\n.dialect googlesql\nSELECT COUNT(*) FROM users;\n" | sqly users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          command: sh -c "printf '.dialect postgresql\n.dialect sqlite\n.dialect mysql\n.dialect googlesql\nSELECT COUNT(*) FROM users;\n' | sqly users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -169,7 +169,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'sqly --dialect postgresql --output-format json --sql "SELECT * FROM users" users.csv 2>warn.txt | python3 -c "import json,sys; print(len(json.load(sys.stdin)))"; grep -c "SQLite semantics" warn.txt'
+          command: sh -c "sqly --dialect postgresql --output-format json --sql 'SELECT * FROM users' users.csv 2>warn.txt | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
@@ -186,7 +186,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'sqly --dialect mysql --output-format jsonl --sql "SELECT * FROM users" users.csv 2>/dev/null | python3 -c "import json,sys; [json.loads(l) for l in sys.stdin if l.strip()]; print(\"ok\")"'
+          command: sh -c "sqly --dialect mysql --output-format jsonl --sql 'SELECT * FROM users' users.csv 2>warn.txt | python3 -c 'import json,sys; [json.loads(l) for l in sys.stdin if l.strip()]' && echo ok"
           shell: true
       - assert:
           exit_code: 0
@@ -256,7 +256,7 @@ scenarios:
     steps:
       - fixture: *users
       - run:
-          command: sh -c 'printf "SELECT DISTINCT ON (id) id FROM users;\nSELECT DISTINCT ON (id) id FROM users;\n" | sqly --dialect postgresql users.csv 2>warn.txt >/dev/null; grep -c "SQLite semantics" warn.txt'
+          command: sh -c "printf 'SELECT DISTINCT ON (id) id FROM users;\nSELECT DISTINCT ON (id) id FROM users;\n' | sqly --dialect postgresql users.csv 2>warn.txt >result.txt; grep -c 'SQLite semantics' warn.txt"
           shell: true
       - assert:
           exit_code: 0
