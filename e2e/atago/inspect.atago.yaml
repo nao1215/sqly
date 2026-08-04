@@ -76,7 +76,7 @@ scenarios:
       - run:
           command: sqly --inspect
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "no tables to inspect"
 

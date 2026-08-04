@@ -434,7 +434,7 @@ scenarios:
       - run:
           command: sqly --output-format ltsv --sql 'SELECT 1 AS "foo:bar"' --output out.ltsv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             empty: false
 
@@ -444,7 +444,7 @@ scenarios:
       - run:
           command: sqly --output-format ltsv --sql "SELECT 1 AS x, 2 AS x" --output out.ltsv
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             empty: false
 

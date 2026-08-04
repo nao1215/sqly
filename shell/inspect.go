@@ -130,7 +130,11 @@ func (s *Shell) runInspect(ctx context.Context) error {
 		return fmt.Errorf("failed to list tables: %w", err)
 	}
 	if len(tables) == 0 {
-		return errors.New("no tables to inspect: provide input files or directories")
+		// Nothing was inspected because nothing was given to inspect, so the fix is
+		// on the command line. Reporting this as a failed statement told a wrapper
+		// to look at SQL that never ran — the case an agent lands in when it
+		// expands an empty file list into `sqly --inspect $FILES`.
+		return &invocationError{Err: errors.New("no tables to inspect: provide input files or directories")}
 	}
 
 	names := make([]string, 0, len(tables))

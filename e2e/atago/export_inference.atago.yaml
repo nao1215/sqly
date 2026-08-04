@@ -117,7 +117,7 @@ scenarios:
       - run:
           command: sqly --output-format json --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "conflicts with destination path"
 
