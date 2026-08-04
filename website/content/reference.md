@@ -11,7 +11,8 @@ The groups below are the ones `sqly --help` prints.
 ## Input
 
 Positional arguments are the inputs: files, directories, and `http(s)` URLs. Each
-becomes a table named after the file. A workbook becomes one table per sheet it
+becomes a table named after the file. They are loaded as one operation — see
+[Multiple inputs](#multiple-inputs). A workbook becomes one table per sheet it
 shows, and an ACH or Fedwire file becomes its related set of tables; you pick the
 one you want by name in SQL, the same way you pick among a directory's files.
 
@@ -59,6 +60,28 @@ apply" rule, and only in one case: a shell started with no inputs at all accepts
 it, because the flag is the session's sheet policy and a later `.import` can name
 a workbook. A batch run whose inputs are all known and none is a workbook is
 still rejected.
+
+### Multiple inputs
+
+Several inputs are one import, not a sequence of them.
+Either every file loads or none of them does: if any input is unreadable or malformed, the tables from the
+inputs already read are rolled back, the inputs after it are never opened, and
+the run exits `3` having changed nothing. There is no half-loaded state to clear
+before trying again.
+
+This applies to file arguments, a directory argument, `.import` inside a session,
+and a mix of local files and URLs alike. A download that succeeded before a later
+failure is rolled back with the rest, and its temporary file is removed.
+
+Two inputs that would create the same table are
+refused before anything is loaded, naming both sources and the table they share. Picking one would leave the
+other's rows missing with nothing said about it. Files in different directories
+are different inputs even when they share a base name; a file named twice, or
+named alongside the directory holding it, is one input and is read once.
+
+Explicit arguments are processed in the order given. The files inside a directory
+argument are processed in a fixed order that does not vary by platform, so which
+input a failure names is the same on every run and every machine.
 
 ### Excel sheets
 

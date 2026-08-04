@@ -895,12 +895,12 @@ func TestSanitizeForSQL(t *testing.T) {
 		{
 			name:     "name with accented character e",
 			input:    "Café",
-			expected: "Caf",
+			expected: "Café",
 		},
 		{
 			name:     "name with accented character n",
 			input:    "Español",
-			expected: "Espaol",
+			expected: "Español",
 		},
 		{
 			name:     "name with hyphen",
@@ -933,9 +933,14 @@ func TestSanitizeForSQL(t *testing.T) {
 			expected: "___",
 		},
 		{
-			name:     "unicode characters",
+			// These three used to expect the non-Latin characters to be dropped,
+			// which is not what filesql does: it names the table after the file.
+			// sqly works out table names in advance to detect collisions, so a
+			// rule that disagreed reported two Japanese-named files as colliding
+			// on the fallback name "sheet" while filesql was loading both.
+			name:     "unicode characters are kept, as filesql keeps them",
 			input:    "日本語シート",
-			expected: "sheet",
+			expected: "日本語シート",
 		},
 		{
 			name:     "mixed alphanumeric and special",

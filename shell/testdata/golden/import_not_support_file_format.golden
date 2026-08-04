@@ -1,1 +1,1 @@
-all 1 import(s) failed: unsupported file format: sample.not_support (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)
+import failed, and no table was created or changed: unsupported file format: sample.not_support (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)

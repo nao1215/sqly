@@ -8,8 +8,17 @@ import (
 )
 
 // sanitizedPattern is the contract SanitizeForSQL output must satisfy: a
-// non-empty identifier of word characters that does not start with a digit.
-var sanitizedPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+// non-empty identifier that does not start with a digit.
+//
+// Letters and digits are matched by Unicode category rather than by ASCII range,
+// because that is what filesql does: a file named 売上.csv becomes the table
+// 売上, and a rule that dropped it would make every non-Latin name collapse to
+// the same fallback.
+// \p{Nd} and not \p{N}: SanitizeForSQL keeps a digit when unicode.IsDigit says
+// so, and that is decimal digits only. A pattern allowing every numeric
+// category would accept output the sanitizer cannot produce, which is a
+// contract that describes something looser than the code.
+var sanitizedPattern = regexp.MustCompile(`^[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*$`)
 
 func sanitizeQuickConfig() *quick.Config {
 	return &quick.Config{

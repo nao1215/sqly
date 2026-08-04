@@ -334,3 +334,148 @@ func TestRemoteImportLeavesNoTemporaryFileBehind(t *testing.T) {
 		})
 	}
 }
+
+// A remote input mixed with local ones is where the atomicity contract and the
+// download path meet. A failure anywhere in the set has to leave no table and no
+// staged temp file, whichever kind of input failed and wherever it sat in the
+// list.
+
+// TestMixedLocalAndRemoteInputsLoadTogether is the baseline the failures below
+// are read against.
+func TestMixedLocalAndRemoteInputsLoadTogether(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("id,name\n1,remote\n"))
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	local := filepath.Join(dir, "local.csv")
+	if err := os.WriteFile(local, []byte("id,note\n1,here\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "--output-format", "csv",
+		"--sql", "SELECT r.name, l.note FROM remote r JOIN local l ON r.id = l.id",
+		local, server.URL+"/remote.csv")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stdout, "remote,here") {
+		t.Errorf("stdout = %q, want the joined row", stdout)
+	}
+}
+
+// TestMixedInputFailureRollsBackAndCleansUp covers every arrangement of a
+// failure across local and remote inputs, and checks the two things a caller
+// cannot see from the exit code: that no query ran, and that the temp directory
+// a download staged is gone.
+func TestMixedInputFailureRollsBackAndCleansUp(t *testing.T) {
+	t.Parallel()
+
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("id,name\n1,remote\n"))
+	}))
+	defer good.Close()
+
+	// A server that answers with a supported name and unusable bytes: the
+	// download succeeds and the import of what arrived does not.
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		_, _ = w.Write([]byte("this is not a workbook"))
+	}))
+	defer bad.Close()
+
+	dir := t.TempDir()
+	localGood := filepath.Join(dir, "localgood.csv")
+	if err := os.WriteFile(localGood, []byte("id,note\n1,here\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	localBad := filepath.Join(dir, "localbad.xlsx")
+	if err := os.WriteFile(localBad, []byte("not a zip archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		name   string
+		inputs []string
+	}{
+		{
+			name:   "a good local file and a broken remote one",
+			inputs: []string{localGood, bad.URL + "/broken.xlsx"},
+		},
+		{
+			name:   "a good remote file and a broken local one",
+			inputs: []string{good.URL + "/remote.csv", localBad},
+		},
+		{
+			name:   "a good remote file, a broken remote one, and a good local one",
+			inputs: []string{good.URL + "/remote.csv", bad.URL + "/broken.xlsx", localGood},
+		},
+		{
+			name:   "the broken input last, after two that downloaded and read fine",
+			inputs: []string{good.URL + "/remote.csv", localGood, bad.URL + "/broken.xlsx"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			home := t.TempDir()
+			args := append([]string{"--output-format", "csv", "--sql", "SELECT 1 AS n"}, tt.inputs...)
+			stdout, stderr, code := runWithEnv(t, repoRoot(), home,
+				[]string{"TMPDIR=" + tmp, "TMP=" + tmp, "TEMP=" + tmp}, "", args...)
+
+			if code != 3 {
+				t.Errorf("exit = %d, want 3 (stderr: %s)", code, stderr)
+			}
+			if strings.TrimSpace(stdout) != "" {
+				t.Errorf("stdout = %q; a failed import must not print a query result", stdout)
+			}
+			if !strings.Contains(stderr, "no table was created or changed") {
+				t.Errorf("stderr = %q, want it to say the import left nothing behind", stderr)
+			}
+
+			// Every download in the set staged into a temp directory, including
+			// the ones that succeeded before the failure. All of them are owed a
+			// cleanup.
+			entries, err := os.ReadDir(tmp)
+			if err != nil {
+				t.Fatalf("read the temp directory: %v", err)
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), "sqly-") {
+					t.Errorf("a failed import left %q behind in the temp directory", entry.Name())
+				}
+			}
+		})
+	}
+}
+
+// TestRemoteInputRollbackLeavesNoTableBehind checks the database rather than the
+// filesystem: a readable remote input that loaded before a later failure must
+// not be queryable afterwards. It is driven through a script so the session
+// outlives the import.
+func TestRemoteInputRollbackLeavesNoTableBehind(t *testing.T) {
+	t.Parallel()
+
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("id,name\n1,remote\n"))
+	}))
+	defer good.Close()
+
+	dir := t.TempDir()
+	localBad := filepath.Join(dir, "localbad.xlsx")
+	if err := os.WriteFile(localBad, []byte("not a zip archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	script := ".import " + good.URL + "/remote.csv " + localBad + "\n.tables\n"
+	stdout, stderr, code := run(t, script)
+
+	if code != 3 {
+		t.Errorf("exit = %d, want 3 (stderr: %s)", code, stderr)
+	}
+	if strings.Contains(stdout, "remote") {
+		t.Errorf("stdout = %q; the remote table survived a failed import", stdout)
+	}
+}

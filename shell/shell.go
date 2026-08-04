@@ -309,20 +309,12 @@ func (s *Shell) Run(ctx context.Context) error {
 		return err
 	}
 
+	// A failed import is a failed start, interactive or not. An import loads
+	// every input it was given or none of them, so there is no half-loaded
+	// session left to hand someone: starting a shell here would open a prompt
+	// onto an empty database while claiming the files were read.
 	if err := s.init(ctx); err != nil {
-		// A partial import (some inputs loaded, some failed) keeps the loaded
-		// tables usable, so the interactive shell still starts after a warning.
-		// Non-interactive modes (--sql, --sql-file, --inspect, batch) treat it as
-		// a hard failure so automation sees a non-zero exit.
-		var partial *partialImportError
-		if errors.As(err, &partial) && s.startsInteractiveShell() {
-			// Explain the shell state instead of the bare partial-import error, so a
-			// working session does not look broken. The failing inputs were already
-			// listed above by init.
-			fmt.Fprintln(config.Stderr, partialImportStartupMessage(partial.succeeded, partial.failed))
-		} else {
-			return err
-		}
+		return err
 	}
 
 	switch s.plan.mode {
@@ -539,13 +531,6 @@ func (s *Shell) disableHistory(err error) {
 	fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_DB_PATH to a writable path to enable it.\n", err)
 }
 
-// startsInteractiveShell reports whether this run will open the interactive
-// prompt: a terminal with no non-interactive action requested (--inspect,
-// --sql, --sql-file). Batch mode (non-TTY) and those flags are non-interactive.
-func (s *Shell) startsInteractiveShell() bool {
-	return s.isTTY() && !s.argument.InspectFlag && s.argument.Query == "" && s.argument.SQLFilePath == ""
-}
-
 // validateBinaryOutputFormat rejects an --output-format that writes a binary
 // file when the run has nowhere to write it. Excel and Parquet cannot be
 // rendered to a terminal, so a query run without --output silently fell back to
@@ -566,15 +551,6 @@ func (s *Shell) validateBinaryOutputFormat() error {
 	default:
 		return nil
 	}
-}
-
-// partialImportStartupMessage explains the shell state after a partial startup
-// import: the shell did start, some inputs loaded and are queryable now, and the
-// failing inputs were already listed above. It replaces the bare "one or more
-// inputs failed to import", which made a working session look broken.
-func partialImportStartupMessage(succeeded, failed int) string {
-	total := succeeded + failed
-	return fmt.Sprintf("sqly started with partial data: %d of %d inputs imported, %d failed (listed above). The imported tables are ready to query.", succeeded, total, failed)
 }
 
 // positionalSubcommandHint reports whether the first positional argument is the

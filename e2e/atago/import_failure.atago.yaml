@@ -1,13 +1,18 @@
 # Migrated from sqly's ShellSpec spec/import_failure_spec.sh.
-# When an explicitly requested input fails to import, non-interactive runs exit
-# non-zero and keep diagnostics on stderr so stdout stays clean. make test-e2e
+# When an input fails to import, the whole import fails: no table from a
+# readable input is left behind, the run exits 3, and diagnostics stay on stderr
+# so stdout stays clean. make test-e2e
+#
+# The rollback scenarios put the unreadable file first, in the middle, and last.
+# Middle and last are the ones that prove anything: they are the positions where
+# readable files were already loaded when the failure happened.
 version: "1"
 
 suite:
   name: sqly import failure handling
 
 scenarios:
-  - name: fails query mode on a partial import and keeps stdout clean
+  - name: fails query mode when one input cannot be read, and keeps stdout clean
     steps:
       - fixture: &user
           file: user.csv
@@ -22,10 +27,10 @@ scenarios:
             empty: true
           stderr:
             contains:
-              - "failed to import"
-              - "inputs failed to import: path does not exist"
+              - "no table was created or changed"
+              - "path does not exist"
 
-  - name: names the failed count and first path when every input fails
+  - name: stops at the first unreadable path and names it
     steps:
       - run:
           command: sqly --sql "SELECT 1" /no/such/a.csv /no/such/b.csv
@@ -35,11 +40,15 @@ scenarios:
             empty: true
           stderr:
             contains:
-              - "all 2 import(s) failed"
+              - "no table was created or changed"
               - "/no/such/a.csv"
-              - "+1 more"
+      - assert:
+          # The import stops at the first input it cannot read, so the second is
+          # never opened and has nothing to report.
+          stderr:
+            not_contains: "/no/such/b.csv"
 
-  - name: fails --inspect on a partial import
+  - name: fails --inspect when one input cannot be read
     steps:
       - fixture: *user
       - run:
@@ -49,9 +58,9 @@ scenarios:
           stdout:
             empty: true
           stderr:
-            contains: "failed to import"
+            contains: "no table was created or changed"
 
-  - name: fails batch .import on a partial import and stops later commands
+  - name: a failed batch .import leaves no table and stops later commands
     steps:
       - fixture: *user
       - run:
@@ -62,7 +71,7 @@ scenarios:
           stdout:
             not_contains: "TABLE NAME"
           stderr:
-            contains: "failed to import"
+            contains: "no table was created or changed"
 
   - name: keeps stdout clean when a stdin dataset fails to import
     steps:

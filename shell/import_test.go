@@ -399,25 +399,36 @@ func TestImportCommand_EmptyDirDoesNotMaskFileError(t *testing.T) {
 	}
 }
 
-func TestSummarizeImportErrors(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		messages []string
-		want     string
-	}{
-		{"no messages yields an empty summary", nil, ""},
-		{"a single message is returned unchanged", []string{"path does not exist: a.csv"}, "path does not exist: a.csv"},
-		{"multiple messages report the first and a remaining count", []string{"path does not exist: a.csv", "path does not exist: b.csv", "permission denied accessing path: c.csv"}, "path does not exist: a.csv (+2 more)"},
+// TestImportCommand_StopsAtTheFirstUnreadableInput replaces a test of the
+// helper that condensed a list of per-input failures into one line. There is no
+// list any more: an import stops at the first input it cannot read, so the
+// message names that one and the inputs after it are never opened.
+func TestImportCommand_StopsAtTheFirstUnreadableInput(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := summarizeImportErrors(tt.messages); got != tt.want {
-				t.Errorf("summarizeImportErrors(%v) = %q, want %q", tt.messages, got, tt.want)
-			}
-		})
+	defer cleanup()
+
+	dir := t.TempDir()
+	good := filepath.Join(dir, "good.csv")
+	if err := os.WriteFile(good, []byte("v\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.commands.importCommand(context.Background(), s,
+		[]string{good, filepath.Join(dir, "first-missing.csv"), filepath.Join(dir, "second-missing.csv")})
+	if err == nil {
+		t.Fatal("importCommand succeeded with two unreadable inputs")
+	}
+	if !strings.Contains(err.Error(), "first-missing.csv") {
+		t.Errorf("error %q should name the first input it could not read", err)
+	}
+	if strings.Contains(err.Error(), "second-missing.csv") {
+		t.Errorf("error %q reports an input after the failure; the import stops at the first", err)
+	}
+	if got := ExitCode(err); got != ExitInput {
+		t.Errorf("ExitCode = %d, want %d", got, ExitInput)
 	}
 }
 
@@ -439,18 +450,18 @@ func TestImportCommand_TopLevelErrorCarriesDetail(t *testing.T) {
 			t.Fatal("expected an error when all imports fail")
 		}
 		got := importErr.Error()
-		if !strings.Contains(got, "all 2 import(s) failed") {
-			t.Errorf("error %q should report the failed count", got)
+		if !strings.Contains(got, "no table was created or changed") {
+			t.Errorf("error %q should say the import left nothing behind", got)
 		}
 		if !strings.Contains(got, "missing_a.csv") {
 			t.Errorf("error %q should name the first failing path", got)
 		}
-		if !strings.Contains(got, "+1 more") {
-			t.Errorf("error %q should summarize the remaining failures", got)
-		}
 	})
 
-	t.Run("partial-failed error keeps the sentinel and names the failing path", func(t *testing.T) {
+	// One good input and one bad one used to be a "partial" import that kept the
+	// good table. It is now a failure that keeps nothing, and the error still has
+	// to name the input that caused it.
+	t.Run("one unreadable input fails the whole import and names it", func(t *testing.T) {
 		s, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {
 			t.Fatal(err)
@@ -464,11 +475,25 @@ func TestImportCommand_TopLevelErrorCarriesDetail(t *testing.T) {
 		if importErr == nil {
 			t.Fatal("expected an error when one input fails")
 		}
-		if !errors.Is(importErr, errPartialImport) {
-			t.Errorf("partial import error must remain detectable via errPartialImport: %v", importErr)
+		var failed *importFailedError
+		if !errors.As(importErr, &failed) {
+			t.Errorf("a failed import must stay detectable as one: %v", importErr)
+		}
+		if got := ExitCode(importErr); got != ExitInput {
+			t.Errorf("ExitCode = %d, want %d", got, ExitInput)
 		}
 		if !strings.Contains(importErr.Error(), "missing_b.csv") {
 			t.Errorf("error %q should name the failing path", importErr.Error())
+		}
+		// The good input must not have survived the failure.
+		tables, err := s.usecases.importer.GetTableNames(ctx)
+		if err != nil {
+			t.Fatalf("list tables: %v", err)
+		}
+		for _, table := range tables {
+			if table.Name() == "user" {
+				t.Error("the table from the readable input survived a failed import")
+			}
 		}
 	})
 }
@@ -658,7 +683,12 @@ func TestImportCommand_ReimportSameFileIsNotACollision(t *testing.T) {
 	}
 }
 
-func TestImportCommand_PartialSuccess(t *testing.T) {
+// TestImportCommand_NoPartialSuccess is the inversion of a test that asserted
+// the opposite. One valid file and one missing file used to leave the valid
+// table loaded and report a partial failure; it now leaves nothing at all,
+// which is what makes a failed import something a caller can act on rather than
+// something they have to inspect the database to understand.
+func TestImportCommand_NoPartialSuccess(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -672,12 +702,29 @@ func TestImportCommand_PartialSuccess(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// One valid file + one missing file → partial failure. The valid table is
-	// still loaded, but importCommand returns errPartialImport so non-interactive
-	// runs exit non-zero. The loaded table remains queryable.
 	err = s.commands.importCommand(ctx, s, []string{csvPath, "missing.csv"})
-	if !errors.Is(err, errPartialImport) {
-		t.Errorf("expected errPartialImport for partial failure, got: %v", err)
+	if err == nil {
+		t.Fatal("importCommand succeeded with a missing input")
+	}
+	var failed *importFailedError
+	if !errors.As(err, &failed) {
+		t.Errorf("error = %v, want an importFailedError", err)
+	}
+
+	tables, err := s.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	for _, table := range tables {
+		if table.Name() == "ok" {
+			t.Fatal("the readable input's table survived a failed import")
+		}
+	}
+	if _, recorded := s.tableSources["ok"]; recorded {
+		t.Error("a failed import left a source recorded for a table that does not exist")
+	}
+	if _, baseline := s.importBaseline["ok"]; baseline {
+		t.Error("a failed import left a content baseline behind")
 	}
 }
 
@@ -908,5 +955,33 @@ func TestLocalImportAccessError_PlainPathsKeepTheirMessage(t *testing.T) {
 	}
 	if got := localImportAccessError("data.csv", os.ErrPermission).Error(); !strings.Contains(got, "permission denied") {
 		t.Errorf("permission error = %q, want the permission message", got)
+	}
+}
+
+// TestDescribeLoadFailure_NamesTheLongestMatchingInput pins which input a load
+// failure is attributed to when one input's path is a prefix of another's.
+// Containment alone is not exclusive: "/data/x" is inside "/data/xy", so the
+// first match could name a file that imported perfectly well.
+func TestDescribeLoadFailure_NamesTheLongestMatchingInput(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	plan := &importPlan{targets: []importTarget{
+		{loadPath: "/data/x.csv", displayPath: "/data/x.csv"},
+		{loadPath: "/data/x.csv.long.csv", displayPath: "/data/x.csv.long.csv"},
+	}}
+	loadErr := errors.New("failed to stream file /data/x.csv.long.csv: bad row")
+
+	got := s.describeLoadFailure(plan, loadErr).Error()
+	if !strings.Contains(got, "/data/x.csv.long.csv") {
+		t.Errorf("error %q should name the input that actually failed", got)
+	}
+	if strings.Contains(got, "failed to import file /data/x.csv:") {
+		t.Errorf("error %q names the shorter path, which imported fine", got)
 	}
 }
