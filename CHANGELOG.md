@@ -2,8 +2,9 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc3` is the next release candidate, and it is not the final contract either. Breaking changes are
-still being made, and they are being made now rather than after v1.0.0.
+`v1.0.0-rc3` is the current release candidate, and it is not the final contract
+either. Breaking changes are still being made, and they are being made now
+rather than after v1.0.0.
 
 * Breaking changes land before the final release candidate.
 * From the final RC onward, only bug fixes and documentation changes.
@@ -19,11 +20,10 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ## [Unreleased]
 
-## [v1.0.0-rc3](https://github.com/nao1215/sqly/compare/v1.0.0-rc2...v1.0.0-rc3) (unreleased)
+## [v1.0.0-rc3](https://github.com/nao1215/sqly/compare/v1.0.0-rc2...v1.0.0-rc3) (2026-08-05)
 
 A release candidate for v1.0.0, not the final one. Everything below is a change
-from rc2. **This tag has not been published yet**; the documentation on `main`
-describes it as the next candidate.
+from rc2.
 
 Upgrading from rc2: [doc/migration.md](doc/migration.md).
 
