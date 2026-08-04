@@ -75,7 +75,8 @@ func TestOutputWrite_FallbackCopyFailurePreservesTheDestination(t *testing.T) {
 	s := &Shell{files: ops}
 	s.files.Rename = alwaysFailRename(errors.New("rename refused, as on Windows"))
 	copyFailure := errors.New("no space left on device")
-	// Call 1 is the backup, call 2 is the commit's fallback: the one that damages.
+	// The backup is taken only once the rename has been refused, so call 1 is the
+	// backup and call 2 is the fallback: the one that damages.
 	s.files.Copy = truncatingCopy(ops.Copy, 2, "id,na", copyFailure)
 
 	err := s.writeFileAtomically(dest, func(staging string) error {
@@ -282,5 +283,39 @@ func TestWriteBack_FallbackCopyOnEveryTargetStillSaves(t *testing.T) {
 	}
 	if extra := leftoverFiles(t, dir, "people.csv", "places.csv"); len(extra) > 0 {
 		t.Errorf("staging or backup files left behind: %v", extra)
+	}
+}
+
+// TestOutputWrite_SuccessfulRenameCopiesNothing pins the cost of the safety
+// added above. A rename replaces the destination without reading it, so copying
+// the old file aside first would double the work of every export for a case a
+// successful rename never reaches. The backup is taken only once the rename has
+// been refused.
+func TestOutputWrite_SuccessfulRenameCopiesNothing(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "report.csv")
+	if err := os.WriteFile(dest, []byte("id\n1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := defaultFileOps()
+	s := &Shell{files: ops}
+	copies := 0
+	s.files.Copy = func(src, dst string) error {
+		copies++
+		return ops.Copy(src, dst)
+	}
+
+	const updated = "id\n2\n"
+	if err := s.writeFileAtomically(dest, func(staging string) error {
+		return os.WriteFile(staging, []byte(updated), 0o600)
+	}); err != nil {
+		t.Fatalf("writeFileAtomically: %v", err)
+	}
+	if copies != 0 {
+		t.Errorf("a write that renamed cleanly copied %d time(s); the backup should be lazy", copies)
+	}
+	if got := readFile(t, dest); got != updated {
+		t.Errorf("destination = %q, want %q", got, updated)
 	}
 }

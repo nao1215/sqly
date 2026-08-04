@@ -493,7 +493,9 @@ func (s *Shell) executeWriteBack(ctx context.Context, destDir string, targets []
 	}
 
 	for i, w := range staged {
-		touched, err := s.commitStagedFile(w.staging, w.target.dest)
+		// Every destination was copied aside before this loop began, so the
+		// fallback needs no further preparation here.
+		touched, err := s.commitStagedFile(w.staging, w.target.dest, nil)
 		if err == nil {
 			continue
 		}
@@ -594,7 +596,7 @@ func (s *Shell) backupExisting(path string) (string, error) {
 // caller of this function must hold a backup of the destination and restore it
 // when touched is true — which is why the return value exists rather than a
 // comment saying "be careful here".
-func (s *Shell) commitStagedFile(staging, dest string) (touched bool, err error) {
+func (s *Shell) commitStagedFile(staging, dest string, beforeFallback func() error) (touched bool, err error) {
 	// A rename carries the staging file's own mode onto the destination, and the
 	// staging file was created 0600. Left alone, saving a world-readable CSV in
 	// place would quietly make it owner-only. Take the destination's mode first
@@ -611,6 +613,14 @@ func (s *Shell) commitStagedFile(staging, dest string) (touched bool, err error)
 		// Nothing was in the way, so the copy cannot help either, and nothing was
 		// written: a rename that fails does not create its destination.
 		return false, err
+	}
+	// The rename was refused and the destination exists, so the fallback is about
+	// to overwrite it. beforeFallback is the caller's last chance to hold a copy;
+	// a caller that already has one passes nil.
+	if beforeFallback != nil {
+		if prepErr := beforeFallback(); prepErr != nil {
+			return false, prepErr
+		}
 	}
 	// From here the destination may end up truncated, partly written, or whole.
 	// The caller restores it from its backup either way.

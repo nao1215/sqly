@@ -654,7 +654,7 @@ func TestCommitStagedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := (&Shell{}).commitStagedFile(staging, dest); err != nil {
+		if _, err := (&Shell{}).commitStagedFile(staging, dest, nil); err != nil {
 			t.Fatalf("(&Shell{}).commitStagedFile() error = %v", err)
 		}
 		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
@@ -676,7 +676,7 @@ func TestCommitStagedFile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := (&Shell{}).commitStagedFile(staging, dest); err != nil {
+		if _, err := (&Shell{}).commitStagedFile(staging, dest, nil); err != nil {
 			t.Fatalf("(&Shell{}).commitStagedFile() error = %v", err)
 		}
 		got, err := os.ReadFile(dest) //nolint:gosec // Test path from t.TempDir()
@@ -692,7 +692,7 @@ func TestCommitStagedFile(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		if _, err := (&Shell{}).commitStagedFile(filepath.Join(dir, "missing"), filepath.Join(dir, "dest")); err == nil {
+		if _, err := (&Shell{}).commitStagedFile(filepath.Join(dir, "missing"), filepath.Join(dir, "dest"), nil); err == nil {
 			t.Error("(&Shell{}).commitStagedFile() succeeded with no staged file, want an error")
 		}
 	})

@@ -55,17 +55,28 @@ func (s *Shell) writeFileAtomically(dest string, write func(path string) error) 
 		return errors.New(renamePathInMessage(err.Error(), staging, dest))
 	}
 
-	backup, err := s.backupExisting(dest)
-	if err != nil {
-		return &fileOpError{Op: opBackup, Path: dest, Err: err}
-	}
-	if backup != "" {
-		defer func() {
-			err = cleanup.Join(err, s.fs().Remove(backup), fmt.Sprintf("remove the backup file %q", backup))
-		}()
+	// The backup is taken only if it is about to be needed. A rename replaces the
+	// destination without ever reading it, so copying the old file aside first
+	// would double the cost of every export for a case that a successful rename
+	// never reaches. commitStagedFile calls this the moment it decides to fall
+	// back to a copy, which is the only path that can damage what is there.
+	backup := ""
+	defer func() {
+		if backup == "" {
+			return
+		}
+		err = cleanup.Join(err, s.fs().Remove(backup), fmt.Sprintf("remove the backup file %q", backup))
+	}()
+	takeBackup := func() error {
+		saved, backupErr := s.backupExisting(dest)
+		if backupErr != nil {
+			return &fileOpError{Op: opBackup, Path: dest, Err: backupErr}
+		}
+		backup = saved
+		return nil
 	}
 
-	touched, commitErr := s.commitStagedFile(staging, dest)
+	touched, commitErr := s.commitStagedFile(staging, dest, takeBackup)
 	if commitErr == nil {
 		return nil
 	}
