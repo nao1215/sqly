@@ -56,6 +56,13 @@ type Arg struct {
 	// multiline statements with the same splitting rules as batch stdin mode and
 	// cannot be combined with --sql.
 	SQLFilePath string
+	// ScriptFilePath is the path to a sqly script to execute (for --script-file).
+	// A script is what the shell reads: SQL statements and dot-commands alike.
+	// It is a separate flag from --sql-file rather than a relaxation of it,
+	// because the two make different promises about what the file may do — a
+	// .sql file that silently ran .save would be a shell script wearing a SQL
+	// extension.
+	ScriptFilePath string
 	// InspectFlag, when true, prints a machine-readable JSON report of the
 	// imported tables (names, source mapping, columns, row counts, and sample
 	// rows) and exits without starting the shell.
@@ -91,6 +98,17 @@ type Arg struct {
 	Dialect dialect.Dialect
 	// Version print version message
 	Version func()
+}
+
+// validStdinFormats is the set --stdin-format accepts. It mirrors the shell's
+// stdinFormatExtensions; a value that parses here but has no extension there
+// would stage a file the importer cannot classify.
+var validStdinFormats = map[string]bool{
+	outputFormatCSV:   true,
+	outputFormatTSV:   true,
+	outputFormatLTSV:  true,
+	outputFormatJSON:  true,
+	outputFormatJSONL: true,
 }
 
 const (
@@ -153,7 +171,8 @@ func newArg(args []string) (*Arg, error) {
 	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "for csv and tsv, what to do with a row whose field count differs from the header: error (fail the import), skip (drop the row), pad (fill a short row, fail on a long one)")
 	// Query.
 	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
-	sqlFile := flag.StringP("sql-file", "f", "", "run every SQL statement in this file, then exit; a dot-command is rejected, so pipe such a script in instead; printing several results needs --output-format table, vertical, or markdown")
+	sqlFile := flag.StringP("sql-file", "f", "", "run every SQL statement in this file, then exit; a dot-command is rejected, so use --script-file for those; printing several results needs --output-format table, vertical, or markdown")
+	scriptFile := flag.String("script-file", "", "run this sqly script, then exit: SQL statements and dot-commands, exactly as when piped in; use it to script .save and .import from a file")
 	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: sqlite, mysql, postgresql, googlesql; sqly translates it to SQLite")
 	// Output.
 	output := flag.StringP("output", "o", "", "write the one query result to this file instead of stdout")
@@ -180,8 +199,27 @@ func newArg(args []string) (*Arg, error) {
 	if flag.Changed("sql-file") && *sqlFile == "" {
 		return nil, errEmptySQLFile
 	}
+	if flag.Changed("script-file") && *scriptFile == "" {
+		return nil, errEmptyScriptFile
+	}
 	if flag.Changed("stdin-format") && *stdinFormat == "" {
 		return nil, errEmptyStdinFormat
+	}
+
+	// Reject an unknown --stdin-format here rather than when stdin is staged. It
+	// is a flag value like --row-mismatch or --dialect, so a typo should fail the
+	// same way they do: before anything is read, as a usage error naming the
+	// values that exist.
+	if *stdinFormat != "" {
+		normalized := strings.ToLower(strings.TrimSpace(*stdinFormat))
+		if !validStdinFormats[normalized] {
+			return nil, fmt.Errorf("unsupported --stdin-format value %q: want %s", *stdinFormat, stdinFormatHelp)
+		}
+		// Store what was validated, not what was typed. Accepting " CSV " here and
+		// passing the raw string on left the staging step looking it up in a map
+		// keyed by the canonical names and failing there instead — a value that
+		// passed validation and then failed anyway.
+		*stdinFormat = normalized
 	}
 
 	// --stdin-table only names the --stdin-format dataset, so it has no effect
@@ -240,6 +278,7 @@ func newArg(args []string) (*Arg, error) {
 	arg.Dialect = sqlDialectValue
 	arg.Query = *query
 	arg.SQLFilePath = *sqlFile
+	arg.ScriptFilePath = *scriptFile
 	arg.InspectSample = *inspectSample
 
 	return arg, nil
@@ -357,7 +396,7 @@ type optionGroup struct {
 // being true, so a flag added later cannot silently vanish from --help.
 var optionGroups = []optionGroup{
 	{title: "Input", options: []string{"stdin-format", "stdin-table", "encoding", "row-mismatch"}},
-	{title: "Query", options: []string{"sql", "sql-file", "dialect"}},
+	{title: "Query", options: []string{"sql", "sql-file", "script-file", "dialect"}},
 	{title: "Output", options: []string{"output", "output-format"}},
 	{title: "Inspection", options: []string{"inspect", "inspect-sample"}},
 	{title: "General", options: []string{"help", "version"}},
@@ -385,6 +424,7 @@ var optionArgNames = map[string]string{
 	"row-mismatch":   argPolicy,
 	"sql":            argSQL,
 	"sql-file":       argFile,
+	"script-file":    argFile,
 	"dialect":        argName,
 	"output":         argFile,
 	"output-format":  argFormat,
@@ -404,10 +444,11 @@ func usage(flag pflag.FlagSet) string {
 	s += fmt.Sprintf("  %s [OPTIONS] [FILE|DIRECTORY|URL ...]\n", color.GreenString("sqly"))
 	s += "\n"
 	s += "  Each input is loaded into an in-memory SQLite database as a table named\n"
-	s += "  after the file. With --sql or --sql-file, sqly runs the query and exits;\n"
-	s += "  with neither, it opens an interactive shell, or runs SQL piped into it.\n"
-	s += "  sqly has no subcommands. Dot-commands run inside the shell, including\n"
-	s += "  .save, which writes changed tables back to their files.\n"
+	s += "  after the file. With --sql, --sql-file, or --script-file, sqly runs the\n"
+	s += "  work and exits; with none of them, it opens an interactive shell, or runs\n"
+	s += "  a script piped into it. sqly has no subcommands. Dot-commands run inside\n"
+	s += "  the shell, in a piped script, and in a --script-file — including .save,\n"
+	s += "  which writes changed tables back to their files.\n"
 	s += "\n"
 	s += "[Examples]\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("open the shell with a file loaded"))

@@ -26,6 +26,7 @@ import (
 const (
 	flagSQL      = "--sql"
 	flagSQLFile  = "--sql-file"
+	flagScript   = "--script-file"
 	flagInspect  = "--inspect"
 	devStdinPath = "/dev/stdin"
 )
@@ -43,6 +44,9 @@ const (
 	modeInlineSQL
 	// modeSQLFile runs the statements in a --sql-file. SQL only.
 	modeSQLFile
+	// modeScriptFile runs a --script-file: the shell's own language, SQL
+	// statements and dot-commands alike, from a file instead of a pipe.
+	modeScriptFile
 	// modeInspect prints the JSON report and exits.
 	modeInspect
 )
@@ -58,6 +62,8 @@ func (m runMode) String() string {
 		return flagSQL
 	case modeSQLFile:
 		return flagSQLFile
+	case modeScriptFile:
+		return flagScript
 	case modeInspect:
 		return flagInspect
 	default:
@@ -69,8 +75,10 @@ func (m runMode) String() string {
 // commands. A script typed at the prompt or piped in is the shell's own
 // language, so it may; a file named by --sql-file is a SQL file, and the flag
 // says so.
+// A --script-file is the same language, chosen deliberately by a flag that says
+// script rather than sql, so it may too.
 func (m runMode) allowsHelperCommands() bool {
-	return m == modeInteractiveShell || m == modeStdinScript
+	return m == modeInteractiveShell || m == modeStdinScript || m == modeScriptFile
 }
 
 // runPlan is the decided shape of one invocation: the mode, and where stdin
@@ -89,10 +97,10 @@ func (s *Shell) planRun() (runPlan, error) {
 	arg := s.argument
 	stdinIsDataset := arg.StdinFormat != ""
 
-	// --sql and --sql-file both name the statements to run; two answers to one
-	// question is a mistake, not a merge.
-	if arg.Query != "" && arg.SQLFilePath != "" {
-		return runPlan{}, &invocationError{Err: errors.New("--sql and --sql-file cannot be used together")}
+	// --sql, --sql-file, and --script-file all name the work to run; two answers
+	// to one question is a mistake, not a merge.
+	if err := rejectConflictingQuerySources(arg.Query, arg.SQLFilePath, arg.ScriptFilePath); err != nil {
+		return runPlan{}, err
 	}
 
 	switch {
@@ -102,13 +110,15 @@ func (s *Shell) planRun() (runPlan, error) {
 		return s.planWithQuerySource(runPlan{mode: modeInlineSQL, stdinIsDataset: stdinIsDataset})
 	case arg.SQLFilePath != "":
 		return s.planWithQuerySource(runPlan{mode: modeSQLFile, stdinIsDataset: stdinIsDataset})
+	case arg.ScriptFilePath != "":
+		return s.planWithQuerySource(runPlan{mode: modeScriptFile, stdinIsDataset: stdinIsDataset})
 	}
 
 	// No query flag: the script comes from stdin, or from the prompt.
 	if stdinIsDataset {
 		// stdin is the data, so nothing is left to carry the statements.
 		return runPlan{}, &invocationError{Err: errors.New(
-			"--stdin-format takes stdin as data, so there is no script to run; add --sql, --sql-file, or --inspect")}
+			"--stdin-format takes stdin as data, so there is no script to run; add --sql, --sql-file, --script-file, or --inspect")}
 	}
 	if s.stdinKind() == stdinTerminal {
 		return runPlan{mode: modeInteractiveShell}, nil
@@ -168,6 +178,8 @@ func (m runMode) source() string {
 	switch m {
 	case modeSQLFile:
 		return "the statements in the file"
+	case modeScriptFile:
+		return "the script in the file"
 	case modeInspect:
 		return "the files named on the command line"
 	default:
@@ -242,4 +254,25 @@ func (s *Shell) probeStdin() stdinKind {
 		// Sockets, and anything a platform reports that does not fit above.
 		return stdinPipe
 	}
+}
+
+// rejectConflictingQuerySources refuses more than one source for the work to
+// run. Each pair is named explicitly so the message says which two flags
+// collided rather than listing all three at a user who typed two.
+func rejectConflictingQuerySources(query, sqlFile, scriptFile string) error {
+	given := make([]string, 0, 3)
+	if query != "" {
+		given = append(given, flagSQL)
+	}
+	if sqlFile != "" {
+		given = append(given, flagSQLFile)
+	}
+	if scriptFile != "" {
+		given = append(given, flagScript)
+	}
+	if len(given) < 2 {
+		return nil
+	}
+	return &invocationError{Err: fmt.Errorf("%s and %s cannot be used together; each names the work to run, and sqly runs one",
+		given[0], given[1])}
 }

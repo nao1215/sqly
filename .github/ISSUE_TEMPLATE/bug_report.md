@@ -11,22 +11,25 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 **To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+The exact command you ran, and the input it ran against:
+
+```shell
+sqly ...
+```
+
+If the input matters, a few lines of it are more useful than a description of it.
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**What happened**
+The output, including anything on stderr, and the exit code — `echo $?` in a
+POSIX shell, `$LASTEXITCODE` in PowerShell, `%ERRORLEVEL%` in cmd.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. Ubuntu]
- - Go Version [e.g. 1.17]
- - Application Version [e.g. 1.0.1]
+**Environment**
+ - sqly version (`sqly --version`):
+ - OS and architecture:
+ - Input file format(s):
 
 **Additional context**
-Add any other context about the problem here.
+Anything else worth knowing.

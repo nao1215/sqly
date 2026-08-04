@@ -297,7 +297,7 @@ All except ACH and Fedwire also read the compression extensions above. Text inpu
 
 ## Flags
 
-sqly has no subcommands: `sqly --help`, not `sqly help`. Twelve flags, in five groups — input, query, output, inspection, and the two meta ones. Everything else, including writing changes back, is a dot-command inside the shell.
+sqly has no subcommands: `sqly --help`, not `sqly help`. The flags fall into five groups — input, query, output, inspection, and the two meta ones — and `sqly --help` lists them that way. Everything else, including writing changes back, is a dot-command inside the shell, run at the prompt, from a piped script, or from a `--script-file`.
 
 The [reference](https://nao1215.github.io/sqly/reference/) lists every flag and what it applies to, the multi-result rules, the table name rules, and the exit codes.
 

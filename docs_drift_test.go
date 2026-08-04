@@ -641,3 +641,95 @@ func TestExitCodes_DocumentedTableMatchesTheConstants(t *testing.T) {
 		}
 	}
 }
+
+// TestFlags_EveryOneIsDocumentedInTheReference derives the flag list from the
+// parser instead of trusting any document to keep its own copy. A flag that
+// exists and is documented nowhere is one nobody can find; a flag documented
+// after it has been removed sends a reader to write a command that fails.
+//
+// The reference is the page that promises to list every flag, so it is the one
+// checked. The README deliberately does not enumerate them — it used to say
+// "Twelve flags" while there were thirteen, which is exactly the drift a
+// hand-maintained count produces.
+func TestFlags_EveryOneIsDocumentedInTheReference(t *testing.T) {
+	t.Parallel()
+
+	const page = "website/content/reference.md"
+	data, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("read %s: %v", page, err)
+	}
+	body := string(data)
+
+	// The names the page documents, as whole words. A prefix test would let
+	// `--sql-file` stand in for `--sql`, so a flag could go undocumented and the
+	// test would still pass.
+	documented := make(map[string]bool)
+	for _, m := range regexp.MustCompile("`--([a-z][a-z0-9-]*)").FindAllStringSubmatch(body, -1) {
+		documented[m[1]] = true
+	}
+
+	flags := definedFlags(t)
+	if len(flags) < 10 {
+		t.Fatalf("only %d flags found; the extractor or the parser changed", len(flags))
+	}
+	for _, name := range flags {
+		if !documented[name] {
+			t.Errorf("--%s is a real flag that %s does not document", name, page)
+		}
+	}
+
+	// And the reverse: a long flag the page mentions must still exist. The
+	// exceptions are the options of dot-commands, which are the shell's language
+	// rather than the CLI's and so are not in the FlagSet at all.
+	dotCommandOptions := map[string]bool{
+		"in-place":        true, // .save --in-place
+		"follow-symlinks": true, // .save --in-place --follow-symlinks
+	}
+	defined := make(map[string]bool, len(flags))
+	for _, name := range flags {
+		defined[name] = true
+	}
+	for name := range documented {
+		if !defined[name] && !dotCommandOptions[name] {
+			t.Errorf("%s documents --%s, which the parser does not define", page, name)
+		}
+	}
+}
+
+// TestREADME_DoesNotHandCountTheFlags keeps the count from coming back. A number
+// spelled out in prose has no way to notice a flag being added.
+func TestREADME_DoesNotHandCountTheFlags(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	counted := regexp.MustCompile(`(?i)\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)\s+flags\b`)
+	if m := counted.FindString(string(data)); m != "" {
+		t.Errorf("README.md states a flag count (%q); the number goes stale the next time a flag is added. Describe the groups instead.", m)
+	}
+}
+
+// definedFlags returns every long flag name the parser defines, read from the
+// usage the parser itself renders. Going through the real output is what makes
+// this a check on sqly rather than on a second list kept beside it.
+func definedFlags(t *testing.T) []string {
+	t.Helper()
+
+	arg, err := config.NewArg([]string{"sqly"})
+	if err != nil {
+		t.Fatalf("build the usage: %v", err)
+	}
+	seen := make(map[string]bool)
+	var names []string
+	for _, m := range regexp.MustCompile(`--([a-z][a-z0-9-]*)`).FindAllStringSubmatch(arg.Usage, -1) {
+		if seen[m[1]] {
+			continue
+		}
+		seen[m[1]] = true
+		names = append(names, m[1])
+	}
+	return names
+}

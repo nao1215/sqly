@@ -649,3 +649,55 @@ func TestNewArgDependentFlagValidation(t *testing.T) {
 		}
 	})
 }
+
+// TestNewArg_NormalizesStdinFormat pins the fix for a value that passed
+// validation and then failed anyway. --stdin-format is validated trimmed and
+// lowercased, so " CSV " is accepted; storing the raw string meant the staging
+// step looked it up in a map keyed by the canonical names, missed, and failed
+// mid-run. What is validated is what is stored.
+func TestNewArg_NormalizesStdinFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		given string
+		want  string
+	}{
+		{name: "an already canonical value is unchanged", given: "csv", want: "csv"},
+		{name: "surrounding whitespace is trimmed", given: " csv ", want: "csv"},
+		{name: "an uppercase value is lowered", given: "CSV", want: "csv"},
+		{name: "both at once", given: "  JSONL\t", want: "jsonl"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			arg, err := NewArg([]string{"sqly", "--stdin-format", tt.given, "--sql", "SELECT 1"})
+			if err != nil {
+				t.Fatalf("NewArg(--stdin-format %q): %v", tt.given, err)
+			}
+			if arg.StdinFormat != tt.want {
+				t.Errorf("StdinFormat = %q, want %q", arg.StdinFormat, tt.want)
+			}
+		})
+	}
+}
+
+// TestNewArg_RejectsAnUnknownStdinFormat is the other half: a value that is not
+// one of the five is refused while parsing, so it exits as a usage error rather
+// than after the run has started.
+func TestNewArg_RejectsAnUnknownStdinFormat(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewArg([]string{"sqly", "--stdin-format", "xml", "--sql", "SELECT 1"})
+	if err == nil {
+		t.Fatal("an unknown --stdin-format value was accepted")
+	}
+	var argErr *ArgError
+	if !errors.As(err, &argErr) {
+		t.Errorf("error is %T, want a *ArgError so it exits as a usage error", err)
+	}
+	if !strings.Contains(err.Error(), "want csv, tsv, ltsv, json, jsonl") {
+		t.Errorf("error should list the values that exist, got: %v", err)
+	}
+}

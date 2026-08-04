@@ -95,10 +95,17 @@ which is what the line does not show. Leading whitespace is fine, so a script ca
 indent. A `.` inside a string, a `--` comment, or a `/* */` block is part of the
 statement, not a command.
 
-This is also the only place a helper command runs. `--sql-file` holds SQL, and a
-dot-command in one is rejected by name and line — a `.sql` file that runs `.save`
-is a shell script wearing a SQL extension. Pipe such a script in instead, exactly
-as written above.
+A helper command runs here and in a `--script-file`, which is the same script
+read from a file instead of a pipe:
+
+```shell
+sqly --script-file monthly.sqly user.csv
+```
+
+`--sql-file` holds SQL, and a dot-command in one is rejected by name and line — a
+`.sql` file that runs `.save` is a shell script wearing a SQL extension. The flag
+that permits side effects says `script` in its name. See the
+[reference](/reference/#sql-file-or-script-file) for what each one accepts.
 
 ## Write-back from the shell
 

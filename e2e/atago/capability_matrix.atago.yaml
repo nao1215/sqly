@@ -1,0 +1,165 @@
+# The capability matrix on website/content/formats.md claims a specific thing
+# about each format: whether it can come from stdin, whether it can be written
+# back, whether a compressed form reads. Those are the claims a reader plans
+# around, and the ones that go stale silently — a doc table has no way to notice
+# that a format gained or lost an ability.
+#
+# One scenario per claim that is a boundary. The "yes" cases for CSV are already
+# covered thoroughly elsewhere; what is here is each "no", because a refusal that
+# quietly becomes an acceptance (or the reverse) is what makes the table wrong.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly format capability matrix
+
+scenarios:
+  # stdin: only the five text formats. The others have no filename to name the
+  # table after, and are binary or multi-table besides.
+  - name: refuses a stdin dataset in a format that cannot be piped
+    steps:
+      - run:
+          command: sqly --stdin-format parquet --sql "SELECT 1"
+          stdin: "ignored"
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "want csv, tsv, ltsv, json, jsonl"
+
+  # Write back: JSON and JSONL cannot. The document lives whole in one column,
+  # so there is nothing to reconstruct the file from.
+  - name: refuses to write a json source back
+    steps:
+      - fixture:
+          file: rows.json
+          content: |
+            {"a": 1}
+      - run:
+          command: sqly rows.json
+          stdin: "UPDATE rows SET data = '{\"a\": 2}';\n.save --in-place\n"
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "write-back to rows.json is not supported"
+
+  - name: refuses to write an excel source back
+    steps:
+      - fixture:
+          file: book.xlsx
+          from: testdata/sample.xlsx
+      - run:
+          command: sqly book.xlsx
+          stdin: "UPDATE book_test_sheet SET name = 'x';\n.save --in-place\n"
+      - assert:
+          exit_code: 4
+
+  # Write back: CSV, TSV, LTSV, and Parquet can, and compression is preserved.
+  - name: writes a compressed csv source back in the same compression
+    # Needs gzip(1)/bzip2(1) and a POSIX shell; the compression handling
+    # itself is not platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sh -c 'gzip t.csv && printf "UPDATE t SET b = 9;\n.save --in-place\n" | sqly t.csv.gz && gzip -dc t.csv.gz'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "9"
+
+  - name: writes a parquet source back
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sqly --output-format parquet --output t.parquet --sql "SELECT * FROM t" t.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly t.parquet
+          stdin: "UPDATE t SET b = 9;\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT b FROM t" t.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "9"
+
+  # Compressed Parquet reads but cannot be written back: Parquet already
+  # compresses internally, and .save will not produce a doubly compressed file.
+  - name: reads a compressed parquet source but refuses to write it back
+    # Needs gzip(1)/bzip2(1) and a POSIX shell; the compression handling
+    # itself is not platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sh -c 'sqly --output-format parquet --output t.parquet --sql "SELECT * FROM t" t.csv && gzip t.parquet && sqly --output-format csv --sql "SELECT b FROM t" t.parquet.gz'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+      - run:
+          command: sqly t.parquet.gz
+          stdin: "UPDATE t SET b = 9;\n.save --in-place\n"
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "not supported"
+
+  # A bzip2 source cannot be written back at all: there is no bzip2 writer, and
+  # the refusal comes before anything is touched.
+  - name: refuses a bzip2 source before touching it
+    # Needs gzip(1)/bzip2(1) and a POSIX shell; the compression handling
+    # itself is not platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sh -c 'bzip2 t.csv && printf "UPDATE t SET b = 9;\n.save --in-place\n" | sqly t.csv.bz2'
+          shell: true
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "not supported"
+
+  # Binary result formats have no on-screen form and say so rather than printing
+  # something else.
+  - name: refuses a binary result format with nowhere to write it
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sqly --output-format excel --sql "SELECT * FROM t" t.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "--output"

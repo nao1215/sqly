@@ -46,6 +46,7 @@ var (
 	errEmptyQuery       = errors.New("--sql requires a non-empty SQL statement")
 	errEmptyOutput      = errors.New("--output requires a non-empty destination path")
 	errEmptySQLFile     = errors.New("--sql-file requires a non-empty file path")
+	errEmptyScriptFile  = errors.New("--script-file requires a non-empty file path")
 	errEmptyStdinFormat = errors.New("--stdin-format requires a non-empty format: csv, tsv, ltsv, json, or jsonl")
 )
 

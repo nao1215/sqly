@@ -153,6 +153,8 @@ scenarios:
             path: escaped.csv
             exists: false
 
+  # A flag value, so it is rejected while parsing like every other enum flag:
+  # before stdin is read, as a usage error naming the values that exist.
   - name: reports a clear error for an unsupported stdin format
     steps:
       - run:
@@ -161,7 +163,7 @@ scenarios:
             a,b
             1,2
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "unsupported --stdin-format value"
 

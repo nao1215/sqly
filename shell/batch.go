@@ -553,6 +553,24 @@ func withMainVerb(stmt string) string {
 // error for a missing or unreadable file (wrapping the OS error so callers can
 // inspect it with errors.Is) and rejects a file with no SQL, so an empty or
 // whitespace-only script fails loudly instead of running nothing.
+// readScriptFile reads a --script-file. It is the sibling of readSQLFile and
+// differs in what counts as empty: a script whose only content is dot-commands
+// has no SQL statement and is perfectly valid, so the "no executable SQL" check
+// does not apply here. A file with nothing in it at all is still rejected, for
+// the same reason as a --sql-file: a run that does nothing and exits 0 is
+// indistinguishable from one that worked.
+func readScriptFile(path string) (string, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // path is the user-specified --script-file
+	if err != nil {
+		return "", &scriptSourceError{Err: fmt.Errorf("failed to read --script-file %q: %w", path, err)}
+	}
+	content := strings.TrimPrefix(string(data), "\ufeff")
+	if strings.TrimSpace(content) == "" {
+		return "", &scriptError{Err: fmt.Errorf("--script-file %q is empty", path)}
+	}
+	return content, nil
+}
+
 func readSQLFile(path string) (string, error) {
 	// The two kinds of failure below are told apart deliberately. A path that
 	// cannot be read is a problem with the file, like any other input; a file that

@@ -1,14 +1,45 @@
 # CHANGELOG
 
+## Release candidates and what v1.0.0 freezes
+
+`v1.0.0-rc1` is a broad candidate, not the final contract. Breaking changes are
+still being made, and they are being made now rather than after v1.0.0.
+
+* Breaking changes land before the final release candidate.
+* From the final RC onward, only bug fixes and documentation changes.
+* Nothing user-visible changes between the final RC and v1.0.0 — same flags,
+  same output, same exit codes.
+* Every change to what rc1 promised is listed under Breaking Changes below.
+
+The final RC is announced as the final one in its release notes. That is the
+point to pin a version against.
+
 ## [Unreleased]
 
 ### Breaking Changes
+* Added `--script-file FILE`, and `--sql-file` now points at it when it rejects a dot-command. `--sql-file` still holds SQL only; a script that mixes SQL and dot-commands has an entry point of its own instead of only working when piped. `--sql`, `--sql-file`, and `--script-file` are mutually exclusive, and `--output` does not apply to `--script-file` — a script writes files with `.dump`, where the destination means something.
+* An unsupported `--stdin-format` value is rejected while parsing rather than when stdin is staged, so it exits `2` as a usage error instead of `1` after the run had started.
 * Exit codes now classify the failure instead of reporting every one as `1`. A bad command line or an unrunnable script exits `2`, an input that could not be read exits `3`, a destination that could not be written exits `4`, and a statement that ran and failed still exits `1`. A wrapper that only checks for non-zero is unaffected; one that checks for `1` specifically has to widen the check. The class is decided from the failure itself, so a `.save` that cannot write exits `4` inside a script exactly as it does on its own.
-
 * `.save --in-place` refuses a symlinked source unless `--follow-symlinks` is given. Following a link is still the only correct way to write through one — a rename would replace the link and leave the real file holding the old rows — but it overwrites a path the user never typed, which can sit outside the directory they are working in. The refusal names the link and what it resolves to; the opt-in prints the resolved path to stderr before writing. `.save DIR` is unaffected and rejects the option as meaningless there.
 
 ### New Features
 * SIGINT and SIGTERM cancel the run and exit `130` instead of killing the process. The query is canceled, the deferred cleanup runs, and the temp directories a download or a staged stdin dataset created are removed. The interactive shell is unaffected: the prompt reads Ctrl-C as a keystroke.
+
+### Documentation
+* The formats page opens with a capability matrix: what each format can do for reading, stdin, URLs, compression, tables per file, query results, write-back, and types. The formats differ in all of those, and the page previously described them one at a time.
+* The reference documents `--help` and `--version`, which it had never listed despite promising every flag, and gained a section comparing `--sql-file`, `--script-file`, and a piped script.
+* CONTRIBUTING points at `website/content/` instead of the mkdocs tree that was replaced by Hugo, and the bug report template asks for the command, the exit code, and `sqly --version` instead of browser steps and a Go version.
+* A drift test derives the flag list from the parser and fails when the reference documents a flag that does not exist, or omits one that does. Another fails if the README goes back to stating a flag count; it said twelve while there were thirteen.
+
+### v1.0.0 CLI Surface
+This supersedes the list under v1.0.0-rc1, which is left as the record of what that tag promised.
+
+* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`.
+* Query: `--sql/-s SQL`, `--sql-file/-f FILE`, `--script-file FILE`, `--dialect sqlite|mysql|postgresql|googlesql`.
+* Output: `--output/-o FILE`, `--output-format table|vertical|csv|tsv|ltsv|json|jsonl|markdown|excel|parquet`.
+* Inspection: `--inspect`, `--inspect-sample N`.
+* General: `--help/-h`, `--version/-v`.
+* Exit codes: `0` success, `1` a statement failed, `2` usage, `3` input, `4` output, `130` interrupted.
 
 ## [v1.0.0-rc1](https://github.com/nao1215/sqly/compare/v0.31.0...v1.0.0-rc1) (2026-08-04)
 
