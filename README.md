@@ -327,14 +327,15 @@ were measured are on the [about page](https://nao1215.github.io/sqly/about/#benc
 
 Thanks for taking the time to contribute; see [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). Contributions are not only about code: a GitHub Star also motivates development.
 
-When adding features or fixing bugs, please write unit tests. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`), and their commands are exercised end-to-end by the atago suite in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
+When adding features or fixing bugs, please write unit tests. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`); the commands they show are separately asserted against the real binary by the atago specs in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
 
 Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/issues).
 
-## Libraries used
+## Libraries and tools used
 
 - [filesql](https://github.com/nao1215/filesql) — the `database/sql` driver that loads and writes back every supported file format, and the dialect translation behind `--dialect`
 - [prompt](https://github.com/nao1215/prompt) — the line editor behind the interactive shell
+- [atago](https://github.com/nao1215/atago) — the end-to-end test runner: it drives the real `sqly` binary, not a mock, from the plain-YAML specs in `e2e/atago/`. `make test-e2e` runs that suite locally, and CI runs it on Linux, macOS, and Windows after installing atago with [setup-atago](https://github.com/nao1215/setup-atago)
 
 ## LICENSE
 

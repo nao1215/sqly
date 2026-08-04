@@ -762,6 +762,14 @@ func readDoc(t *testing.T, path string) string {
 	return string(data)
 }
 
+// flatten collapses every run of whitespace to a single space, so a claim that
+// documentation wraps across two lines is still one string to search for. A
+// check that breaks when a paragraph is rewrapped teaches contributors to
+// reflow around the test rather than to keep the claim.
+func flatten(body string) string {
+	return strings.Join(strings.Fields(body), " ")
+}
+
 // section returns the body of a Markdown section by heading text, or "" when the
 // heading is absent. Checking inside a section rather than across a whole file
 // is what keeps a claim from being satisfied by an unrelated mention elsewhere.
@@ -1030,12 +1038,15 @@ func TestDocs_StateTheAtomicMultiInputContract(t *testing.T) {
 	if recipe == "" {
 		t.Fatalf("doc/cookbook.md no longer has the %q section", cookbookHeading)
 	}
+	// Matched against the reflowed text, so a claim that spans a line wrap is
+	// still found and rewrapping the paragraph is not a test failure.
 	for _, want := range []string{
-		"none of the files in that import are committed",
+		"no session metadata from that import is committed",
+		"temporary resources it produced are cleaned up",
 		"table-name collision",
 		"in the order you wrote them",
 	} {
-		if !strings.Contains(recipe, want) {
+		if !strings.Contains(flatten(recipe), want) {
 			t.Errorf("the cookbook %q section does not state: %s", cookbookHeading, want)
 		}
 	}
@@ -1069,6 +1080,201 @@ func TestDocs_StateTheAtomicMultiInputContract(t *testing.T) {
 	}
 	if !strings.Contains(readme, "multiple-files-are-one-import") {
 		t.Error("README.md does not link to the cookbook recipe for it")
+	}
+}
+
+// overreachingAtomicityClaims are ways of describing a failed import that
+// promise more than sqly does. The guarantee is about what gets committed, not
+// about what gets touched: inputs are resolved before the load, so a later URL
+// may already have been downloaded and a later directory already expanded when
+// an earlier input turns out to be unreadable. What holds is that nothing is
+// committed and the temporary resources are released.
+//
+// The phrasing matters because it changes what a reader does next. "The files
+// after the bad one are never read" invites them to conclude a failed import
+// costs no bandwidth and leaves no temp files, and to be surprised on both
+// counts. Both claims lived in the cookbook, which is why they are pinned here.
+var overreachingAtomicityClaims = []string{
+	"are never read",
+	"is never read",
+	"never reads the files after",
+	"the files after the bad one",
+	"later files are not read",
+}
+
+// TestREADME_CreditsTheE2ERunnerInItsOwnSection checks the README says what
+// atago is and where it runs, inside the section that lists what sqly is built
+// with. Two things make it worth pinning.
+//
+// The first is that atago is not a library sqly links: it is a test runner that
+// starts the shipped binary. A heading that says "Libraries used" describes it
+// wrongly, so the heading itself is part of the claim.
+//
+// The second is that the README mentions atago twice, here and under
+// Contributing, and a whole-file search for the word cannot tell the two apart.
+// Every check below reads only the section, so deleting this entry and leaving
+// the Contributing mention fails.
+func TestREADME_CreditsTheE2ERunnerInItsOwnSection(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "README.md")
+
+	const oldHeading = "## Libraries used"
+	if strings.Contains(body, oldHeading+"\n") {
+		t.Errorf("README.md still has the %q heading; it also lists development tools, and calling atago a library misdescribes it", oldHeading)
+	}
+
+	const heading = "## Libraries and tools used"
+	credits := section(body, heading)
+	if credits == "" {
+		t.Fatalf("README.md no longer has the %q section", heading)
+	}
+	if strings.Contains(credits, "## ") {
+		t.Fatalf("the %q section ran past its own heading depth; the section helper is picking up the next section and every check below would pass on it", heading)
+	}
+
+	flat := flatten(credits)
+	for _, want := range []struct {
+		claim, why string
+	}{
+		{"https://github.com/nao1215/atago", "links to atago"},
+		{"real `sqly` binary", "says the suite drives the shipped binary rather than a mock"},
+		{"plain-YAML specs in `e2e/atago/`", "says where the specs live and what they are written in"},
+		{"end-to-end", "says what kind of tests they are"},
+		{"`make test-e2e`", "gives the command that runs them locally"},
+		{"Linux, macOS, and Windows", "names the operating systems CI runs them on"},
+		{"https://github.com/nao1215/setup-atago", "links to the action CI installs atago with"},
+	} {
+		if !strings.Contains(flat, want.claim) {
+			t.Errorf("the README %q section does not contain %q, so it never %s", heading, want.claim, want.why)
+		}
+	}
+
+	// It is a credit, not an advertisement. Two sentences was the budget.
+	for _, line := range strings.Split(credits, "\n") {
+		if !strings.Contains(line, "nao1215/atago") {
+			continue
+		}
+		if got := strings.Count(line, ". ") + 1; got > 3 {
+			t.Errorf("the atago entry runs to about %d sentences; keep it to a short credit and leave the details to CONTRIBUTING.md", got)
+		}
+	}
+}
+
+// TestREADME_E2EClaimsMatchTheWorkflow checks the README's claim about where the
+// suite runs against the workflow that runs it. A README that names an OS CI
+// dropped is worse than one that names none.
+func TestREADME_E2EClaimsMatchTheWorkflow(t *testing.T) {
+	t.Parallel()
+
+	workflow := readDoc(t, ".github/workflows/e2e_test.yml")
+	for _, runner := range []string{"ubuntu-latest", "macos-latest", "windows-latest"} {
+		if !strings.Contains(workflow, runner) {
+			t.Errorf("the E2E workflow no longer runs on %s, but README.md says the suite runs on Linux, macOS, and Windows", runner)
+		}
+	}
+	if !strings.Contains(workflow, "nao1215/setup-atago") {
+		t.Error("the E2E workflow no longer installs atago with setup-atago, which README.md says it does")
+	}
+	if !strings.Contains(workflow, "make test-e2e") {
+		t.Error("the E2E workflow no longer runs `make test-e2e`, which README.md and CONTRIBUTING.md both give as the local command")
+	}
+}
+
+// TestDocs_PinTheAtagoVersionCIInstalls keeps the install command contributors
+// copy from lagging behind the one CI proves works. They drifted by seven
+// releases before this check existed, and a contributor following the docs then
+// ran the suite on a runner older than the specs it was reading.
+//
+// The version is written in three places — the workflow and two pages — so the
+// workflow is treated as the source of truth and every `atago@vX.Y.Z` in the
+// documentation is compared against it.
+func TestDocs_PinTheAtagoVersionCIInstalls(t *testing.T) {
+	t.Parallel()
+
+	workflow := readDoc(t, ".github/workflows/e2e_test.yml")
+	versions := regexp.MustCompile(`version:\s*(v[0-9]+\.[0-9]+\.[0-9]+)`).FindAllStringSubmatch(workflow, -1)
+	if len(versions) == 0 {
+		t.Fatal("no atago version is pinned in .github/workflows/e2e_test.yml; the check below has nothing to compare against")
+	}
+	want := versions[0][1]
+	for _, v := range versions {
+		if v[1] != want {
+			t.Errorf("the E2E workflow installs both %s and %s; the documentation can only name one", want, v[1])
+		}
+	}
+
+	installed := regexp.MustCompile(`atago@(v[0-9]+\.[0-9]+\.[0-9]+)`)
+	for _, page := range []string{"CONTRIBUTING.md", "doc/build_and_test.md", "README.md"} {
+		found := installed.FindAllStringSubmatch(readDoc(t, page), -1)
+		for _, m := range found {
+			if m[1] != want {
+				t.Errorf("%s tells contributors to install atago@%s, but CI runs the suite with %s", page, m[1], want)
+			}
+		}
+		if page != "README.md" && len(found) == 0 {
+			t.Errorf("%s no longer shows how to install atago; it is not part of `make tools`, so a contributor has no other way to learn the version", page)
+		}
+	}
+}
+
+// TestBuild_DoesNotDependOnGoogleWire keeps an archived dependency from coming
+// back one file at a time.
+//
+// sqly's application wiring is a hand-written composition root (`di/di.go`).
+// Google Wire generated it until v1.0.0-rc2, and the pieces that made it work
+// were spread across the build: a module requirement, a tool import, an install
+// line, and an architecture vendor. Restoring any one of them alone builds
+// fine — `tools.go` is behind a build tag, an unused vendor is not an error —
+// so nothing else in the tree would notice a partial return.
+//
+// `github.com/moov-io/wire` is a different project entirely: it is Fedwire
+// support, it arrives through filesql, and sqly reads `.fed` files with it. The
+// checks below name Google's module in full so a search-and-destroy for "wire"
+// cannot take it out.
+func TestBuild_DoesNotDependOnGoogleWire(t *testing.T) {
+	t.Parallel()
+
+	const googleWire = "github.com/google/wire"
+	for _, file := range []string{"go.mod", "go.sum", "tools.go", "Makefile", ".go-arch-lint.yml"} {
+		body := readDoc(t, file)
+		for _, line := range strings.Split(body, "\n") {
+			if strings.Contains(line, googleWire) {
+				t.Errorf("%s still references %s:\n\t%s\nApplication wiring is hand-written in di/di.go; Wire's repository is archived.", file, googleWire, strings.TrimSpace(line))
+			}
+		}
+	}
+
+	// The Fedwire library shares a name and must survive. It reaches sqly through
+	// filesql, so it is an indirect requirement rather than a direct one.
+	if !strings.Contains(readDoc(t, "go.sum"), "github.com/moov-io/wire") {
+		t.Error("github.com/moov-io/wire is gone from go.sum; that is the Fedwire library behind .fed support, not Google Wire")
+	}
+}
+
+// TestDocs_DoNotDescribeAtomicityAsAvoidedIO fails when any documentation page
+// describes the import contract as I/O that does not happen.
+func TestDocs_DoNotDescribeAtomicityAsAvoidedIO(t *testing.T) {
+	t.Parallel()
+
+	pages := []string{"README.md", "doc/cookbook.md", "CHANGELOG.md"}
+	entries, err := os.ReadDir("website/content")
+	if err != nil {
+		t.Fatalf("read website/content: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+			pages = append(pages, filepath.Join("website", "content", entry.Name()))
+		}
+	}
+
+	for _, page := range pages {
+		body := strings.ToLower(readDoc(t, page))
+		for _, claim := range overreachingAtomicityClaims {
+			if strings.Contains(body, claim) {
+				t.Errorf("%s says %q; atomicity is a promise about what is committed and cleaned up, not about which inputs are touched — inputs are resolved before the load, so a later one may already have been downloaded", page, claim)
+			}
+		}
 	}
 }
 

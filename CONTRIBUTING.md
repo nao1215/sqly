@@ -36,12 +36,16 @@ specs (`e2e/atago/`) that exercises the real `sqly` binary. It runs in CI
 (`.github/workflows/e2e_test.yml`).
 
 ```shell
-# Install atago once
-go install github.com/nao1215/atago@v0.11.0
+# Install atago once. CI pins the same version in .github/workflows/e2e_test.yml,
+# and TestContributing_PinsTheAtagoVersionCIInstalls fails when the two drift.
+go install github.com/nao1215/atago@v0.18.0
 
 # Build the binary and run the suite
 make test-e2e
 ```
+
+atago is not part of `make tools`, because the suite runs the shipped binary
+rather than building against a library; install it with the command above.
 
 There is also a pure-Go binary smoke harness that runs the same way on Linux,
 macOS, and Windows (handy when a change affects path handling or startup):
@@ -50,9 +54,16 @@ macOS, and Windows (handy when a change affects path handling or startup):
 make smoke
 ```
 
-### 5. Regenerate code when you touch DI or templates
-sqly uses Google Wire for dependency injection. After changing `di/wire.go` or
-anything covered by `go:generate`, regenerate and verify:
+### 5. Wiring the application together
+`di/di.go` is sqly's composition root, written by hand: it calls each
+constructor in dependency order and returns the shell together with the function
+that closes the databases it opened. There is no code generation behind it, so a
+new constructor is added by editing `di.NewShell` — and, if it opens something,
+by releasing it on the failure paths as well as in the returned cleanup.
+
+`make generate` is unrelated to that. It regenerates the gomock doubles declared
+by the `//go:generate mockgen` lines in `domain/repository/` and `usecase/`, so
+run it after changing one of those interfaces:
 
 ```shell
 make generate

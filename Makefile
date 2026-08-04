@@ -52,12 +52,11 @@ smoke: ## Run Go binary smoke tests (portable; runs on Linux, macOS, Windows)
 changelog: ## Generate changelog
 	ghch --all --format markdown > CHANGELOG.md
 
-generate: ## Generate code from templates
+generate: ## Regenerate the gomock doubles declared by go:generate (requires mockgen)
 	$(GO) generate ./...
 
 tools: ## Install dependency tools 
 	$(GO_INSTALL) github.com/Songmu/ghch/cmd/ghch@latest
-	$(GO_INSTALL) github.com/google/wire/cmd/wire@latest
 	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
 	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	$(GO_INSTALL) go.uber.org/mock/mockgen@latest

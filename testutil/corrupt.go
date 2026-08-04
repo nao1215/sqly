@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,6 +26,15 @@ import (
 // the damaged one does not, and the layer that is supposed to fail is the one
 // that does. A generator that stopped corrupting would fail here rather than
 // somewhere far away.
+
+// reporter is the part of *testing.T the builders below use. It is an interface
+// so testutil's own tests can drive a generator into its failure branches and
+// observe them, instead of failing the test that is checking the check.
+type reporter interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+}
 
 // CorruptKind names how a fixture is broken, and — just as importantly — which
 // layer is expected to notice.
@@ -55,9 +65,16 @@ const (
 	CorruptTruncatedJSONL
 	// CorruptTrailingGarbageJSON is a valid JSON document with junk after it.
 	CorruptTrailingGarbageJSON
-	// CorruptInvalidParquet is a .parquet file whose magic footer is wrong.
+	// CorruptInvalidParquet is a .parquet file that starts with the parquet
+	// magic and ends with something else. Parquet is recognized by "PAR1" at
+	// both ends, and everything that says what is in the file lives at the end,
+	// so a good header over a bad footer is the case a reader that only sniffs
+	// the first four bytes would accept.
 	CorruptInvalidParquet
 )
+
+// parquetMagic bookends a real parquet file, at the front and at the back.
+const parquetMagic = "PAR1"
 
 func (k CorruptKind) String() string {
 	switch k {
@@ -78,14 +95,19 @@ func (k CorruptKind) String() string {
 	case CorruptInvalidParquet:
 		return "parquet with a bad footer"
 	default:
-		return "unknown"
+		// Naming the number rather than saying "unknown" is what makes a failure
+		// message from a kind nobody wrote a case for point at the kind.
+		return fmt.Sprintf("unknown corrupt kind %d", int(k))
 	}
 }
 
 // Extension is the name a fixture of this kind must carry, because the format
-// is chosen from it.
+// is chosen from it. A kind nobody has written a case for gets "", so it cannot
+// be written out under a plausible-looking name; WriteCorruptFixture refuses it.
 func (k CorruptKind) Extension() string {
 	switch k {
+	case CorruptNotAZip, CorruptTruncatedZip:
+		return ".xlsx"
 	case CorruptInnerXLSX, CorruptOuterCompression:
 		return ".xlsx.gz"
 	case CorruptOuterZstd:
@@ -97,7 +119,7 @@ func (k CorruptKind) Extension() string {
 	case CorruptInvalidParquet:
 		return ".parquet"
 	default:
-		return ".xlsx"
+		return ""
 	}
 }
 
@@ -106,8 +128,22 @@ func (k CorruptKind) Extension() string {
 // actually broken.
 func WriteCorruptFixture(t *testing.T, dir, name string, kind CorruptKind) string {
 	t.Helper()
+	return writeCorruptFixture(t, dir, name, kind)
+}
 
-	path := filepath.Join(dir, name+kind.Extension())
+// writeCorruptFixture is WriteCorruptFixture's body, reporting through the
+// narrower interface so testutil's own tests can watch a generator fail rather
+// than take the failure.
+func writeCorruptFixture(t reporter, dir, name string, kind CorruptKind) string {
+	t.Helper()
+
+	ext := kind.Extension()
+	if ext == "" {
+		t.Fatalf("no extension is defined for %s; a fixture of a kind nobody has written a case for would be named after a format it is not", kind)
+		return ""
+	}
+
+	path := filepath.Join(dir, name+ext)
 	if err := os.WriteFile(path, corruptBytes(t, kind), 0o600); err != nil {
 		t.Fatalf("write the %s fixture: %v", kind, err)
 	}
@@ -116,7 +152,7 @@ func WriteCorruptFixture(t *testing.T, dir, name string, kind CorruptKind) strin
 }
 
 // corruptBytes builds the damaged content for a kind.
-func corruptBytes(t *testing.T, kind CorruptKind) []byte {
+func corruptBytes(t reporter, kind CorruptKind) []byte {
 	t.Helper()
 
 	switch kind {
@@ -144,8 +180,12 @@ func corruptBytes(t *testing.T, kind CorruptKind) []byte {
 		return []byte("[{\"id\":1}] not json any more {{{")
 
 	case CorruptInvalidParquet:
-		// Parquet is recognized by a "PAR1" magic at both ends. This has neither.
-		return []byte("PAR0 definitely not a parquet file PAR0")
+		// A good header over a bad footer, which is what "bad footer" says. The
+		// front magic is left intact on purpose: the footer is where a parquet
+		// file keeps its schema and row groups, so breaking only the end is both
+		// the realistic damage and the case a reader that sniffs the first four
+		// bytes and stops would wave through.
+		return []byte(parquetMagic + " definitely not a parquet file PAR0")
 
 	default:
 		t.Fatalf("unknown corrupt kind %d", int(kind))
@@ -155,7 +195,7 @@ func corruptBytes(t *testing.T, kind CorruptKind) []byte {
 
 // verifyCorrupt is the part that makes these fixtures worth having: it checks
 // the file is broken, and broken in the way the kind claims.
-func verifyCorrupt(t *testing.T, path string, kind CorruptKind) {
+func verifyCorrupt(t reporter, path string, kind CorruptKind) {
 	t.Helper()
 
 	data, err := os.ReadFile(path) //nolint:gosec // a path this helper just wrote
@@ -189,23 +229,67 @@ func verifyCorrupt(t *testing.T, path string, kind CorruptKind) {
 			t.Fatalf("the %s fixture at %s decompresses; its outer codec was supposed to be truncated", kind, path)
 		}
 
-	case CorruptTruncatedJSONL, CorruptTrailingGarbageJSON:
+	case CorruptTruncatedJSONL:
+		// json.Valid over the whole file proves nothing here: JSONL is one
+		// document per line, so a perfectly good two-line file is invalid read as
+		// a single document. The damage is specifically that the last line stops
+		// mid-document while every line before it is complete, and that is what
+		// has to be checked — otherwise a generator that started emitting valid
+		// JSONL would still pass.
+		lines := nonEmptyLines(data)
+		if len(lines) < 2 {
+			t.Fatalf("the %s fixture at %s has %d non-empty line(s); it needs a complete line before the truncated one, or it is not testing a partial read", kind, path, len(lines))
+		}
+		for i, line := range lines[:len(lines)-1] {
+			if !json.Valid(line) {
+				t.Fatalf("line %d of the %s fixture at %s is not valid JSON: %q; only the last line is supposed to be broken", i+1, kind, path, line)
+			}
+		}
+		if last := lines[len(lines)-1]; json.Valid(last) {
+			t.Fatalf("the last line of the %s fixture at %s is valid JSON: %q; the generator stopped truncating it", kind, path, last)
+		}
+
+	case CorruptTrailingGarbageJSON:
 		if json.Valid(data) {
 			t.Fatalf("the %s fixture at %s is valid JSON; the generator stopped corrupting it", kind, path)
 		}
 
 	case CorruptInvalidParquet:
-		if len(data) >= 4 && bytes.Equal(data[:4], []byte("PAR1")) {
-			t.Fatalf("the %s fixture at %s carries the parquet magic; it was supposed to be wrong", kind, path)
+		// Both ends, because both ends are the contract. A check of the front
+		// alone cannot tell a bad footer from a good file, which is the one thing
+		// this kind claims.
+		if len(data) < 2*len(parquetMagic) {
+			t.Fatalf("the %s fixture at %s is %d bytes, too short to carry a magic at each end", kind, path, len(data))
+		}
+		if head := data[:len(parquetMagic)]; !bytes.Equal(head, []byte(parquetMagic)) {
+			t.Fatalf("the %s fixture at %s starts with %q, not %q; it is supposed to look like a parquet file until its footer is read", kind, path, head, parquetMagic)
+		}
+		if tail := data[len(data)-len(parquetMagic):]; bytes.Equal(tail, []byte(parquetMagic)) {
+			t.Fatalf("the %s fixture at %s ends with %q; its footer was supposed to be wrong", kind, path, parquetMagic)
+		}
+
+	default:
+		t.Fatalf("no verification is written for %s; a new kind needs a check here, or its fixture only claims to be broken", kind)
+	}
+}
+
+// nonEmptyLines splits data into lines and drops the blank ones, so a trailing
+// newline is not mistaken for a final, empty document.
+func nonEmptyLines(data []byte) [][]byte {
+	var lines [][]byte
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if len(bytes.TrimSpace(line)) > 0 {
+			lines = append(lines, bytes.TrimSpace(line))
 		}
 	}
+	return lines
 }
 
 // goodWorkbook returns the bytes of a workbook that opens cleanly, and proves
 // it before returning. Everything the workbook kinds damage starts here, so a
 // generator that produced an unreadable "good" file would make the damaged ones
 // meaningless.
-func goodWorkbook(t *testing.T) []byte {
+func goodWorkbook(t reporter) []byte {
 	t.Helper()
 
 	f := excelize.NewFile()
@@ -233,7 +317,7 @@ func goodWorkbook(t *testing.T) []byte {
 
 // truncateTail removes a fraction of the tail: 1/n of the bytes. For a ZIP that
 // takes the central directory with it, which is at the end.
-func truncateTail(t *testing.T, data []byte, n int) []byte {
+func truncateTail(t reporter, data []byte, n int) []byte {
 	t.Helper()
 	if len(data) < n*2 {
 		t.Fatalf("cannot truncate %d bytes by a %dth", len(data), n)
@@ -241,7 +325,7 @@ func truncateTail(t *testing.T, data []byte, n int) []byte {
 	return data[:len(data)-len(data)/n]
 }
 
-func gzipBytes(t *testing.T, data []byte) []byte {
+func gzipBytes(t reporter, data []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
@@ -254,7 +338,7 @@ func gzipBytes(t *testing.T, data []byte) []byte {
 	return buf.Bytes()
 }
 
-func zstdBytes(t *testing.T, data []byte) []byte {
+func zstdBytes(t reporter, data []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	zw, err := zstd.NewWriter(&buf)
@@ -273,7 +357,7 @@ func zstdBytes(t *testing.T, data []byte) []byte {
 // gunzip returns the decompressed bytes, or nil when the stream does not
 // decompress. It reads to the end on purpose: a truncated stream opens fine and
 // fails only when the reader reaches the missing tail.
-func gunzip(t *testing.T, data []byte) []byte {
+func gunzip(t reporter, data []byte) []byte {
 	t.Helper()
 	zr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -288,7 +372,7 @@ func gunzip(t *testing.T, data []byte) []byte {
 }
 
 // unzstd is gunzip for zstd.
-func unzstd(t *testing.T, data []byte) []byte {
+func unzstd(t reporter, data []byte) []byte {
 	t.Helper()
 	zr, err := zstd.NewReader(bytes.NewReader(data))
 	if err != nil {

@@ -54,9 +54,8 @@ func (t *signalTrap) signal() os.Signal {
 	return t.received
 }
 
-// run execute sqly command. This function do dependency injection
-// and run the interactive shell. The exit code classifies the failure; see
-// shell.ExitCode for what each one means.
+// run constructs the application and runs the interactive shell. The exit code
+// classifies the failure; see shell.ExitCode for what each one means.
 //
 // SIGINT and SIGTERM cancel the run's context rather than killing the process,
 // so the deferred cleanup still removes the temp directories a download or a
