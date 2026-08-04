@@ -108,6 +108,37 @@ Excel compares sheet names case-insensitively itself.)
 
 An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.
 
+## Remote inputs
+
+A positional argument may be an `http` or `https` URL. sqly downloads it to a
+temporary file, imports that, and removes it when the run ends — including when
+the run fails or is interrupted.
+
+A URL is the one input nobody local vouched for: the server chooses the size and
+where a redirect leads. These bounds apply to it and to nothing else.
+
+| Bound | Value | On breach |
+|:--|:--|:--|
+| Download size | 2 GiB | the download is refused and the partial file removed |
+| Redirects | 5 | the chain is reported as not settling |
+| Redirect scheme | `http`, `https` | a redirect to any other scheme is refused by name |
+| Response headers | 30 seconds | the request fails |
+| Whole transfer | 15 minutes | the request fails |
+
+The size cap holds whether or not the server declares a `Content-Length`: a
+chunked response is stopped while it is being read, so a body that never ends
+cannot fill the disk. A declared size over the limit is refused before the body
+is read at all.
+
+The limits are not flags. A limit that is routinely raised protects nothing, and
+2 GiB is far past what fits in an in-memory SQLite database — the import would
+exhaust memory long before the download reached the cap. It is there to stop a
+server filling the disk on the way, not to size your data.
+
+The table is named after the file that arrives, not the URL you typed. A dataset
+behind a short link or a `latest` alias is named from the redirect target, then
+from `Content-Disposition`, then from the URL path, then from `Content-Type`.
+
 ## Text encodings
 
 A text input without a Unicode BOM is decoded as UTF-8 unless `--encoding` says otherwise: `utf-8`, `shift-jis` (accepting `cp932`, `ms932`, `windows-31j`, `sjis`), `euc-jp`, `iso-2022-jp`, `utf-16le`, `utf-16be`. A BOM always wins over the flag.
