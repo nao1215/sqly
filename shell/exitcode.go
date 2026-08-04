@@ -100,7 +100,7 @@ func ExitCode(err error) int {
 	return ExitFailure
 }
 
-// readAllContext is io.ReadAll that gives up when ctx is cancelled.
+// readAllContext is io.ReadAll that gives up when ctx is canceled.
 //
 // It exists because trapping SIGINT is only half of handling it. main.go cancels
 // the run's context instead of letting the default handler kill the process,
