@@ -76,8 +76,17 @@ func TestSaveInPlace_FollowsASymlinkWhenAskedTo(t *testing.T) {
 	// A user who asks sqly to write through a link is told where that write went,
 	// because the whole reason the default refuses is that the destination is not
 	// the path they typed.
-	if !strings.Contains(stderr, target) {
-		t.Errorf("stderr should name the resolved target %q, got: %s", target, stderr)
+	//
+	// The expected path is resolved the same way sqly resolves it. On Windows
+	// t.TempDir can hand back an 8.3 short path (C:\Users\RUNNER~1\...) while
+	// EvalSymlinks returns the long form, so comparing against the raw path fails
+	// on a difference that has nothing to do with what is being tested.
+	wantPath := target
+	if resolved, rerr := filepath.EvalSymlinks(target); rerr == nil {
+		wantPath = resolved
+	}
+	if !strings.Contains(stderr, wantPath) {
+		t.Errorf("stderr should name the resolved target %q, got: %s", wantPath, stderr)
 	}
 }
 
