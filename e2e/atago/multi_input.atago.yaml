@@ -1,0 +1,510 @@
+# Several inputs at once, against the real binary.
+#
+# A multi-file import is one operation. The happy path is that every file
+# becomes a table and they can be joined; the failure path is that one bad file
+# means none of them load. The second is the one worth testing hard, and the
+# position of the bad file matters: a bad file first proves nothing about
+# rollback, because nothing had been loaded yet.
+#
+# Documented at doc/cookbook.md and website/content/reference.md.
+version: "1"
+
+suite:
+  name: sqly multiple inputs
+
+scenarios:
+  - name: three files of one format all become tables
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &users
+          file: users.csv
+          content: |
+            id,name
+            1,alice
+            2,bob
+      - fixture: &orders
+          file: orders.csv
+          content: |
+            id,user_id,amount
+            10,1,100
+            11,2,250
+            12,1,50
+      - fixture: &products
+          file: products.csv
+          content: |
+            id,label
+            1,widget
+      - run:
+          command: sqly users.csv orders.csv products.csv
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - users
+              - orders
+              - products
+
+  - name: a three-table join across three files answers correctly
+    env: *hist
+    steps:
+      - fixture: *users
+      - fixture: *orders
+      - fixture: *products
+      - run:
+          command: sqly --output-format csv --sql "SELECT u.name, SUM(o.amount) AS total FROM users u JOIN orders o ON u.id = o.user_id JOIN products p ON p.id = u.id GROUP BY u.name ORDER BY u.name" users.csv orders.csv products.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "alice,150"
+
+  - name: the argument order does not change the answer when nothing collides
+    env: *hist
+    steps:
+      - fixture: *users
+      - fixture: *orders
+      - fixture: *products
+      - run:
+          command: sqly --output-format csv --sql "SELECT u.name, SUM(o.amount) AS total FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.name ORDER BY u.name" products.csv orders.csv users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "alice,150"
+
+  - name: a successful multi-file import says nothing on stderr
+    env: *hist
+    steps:
+      - fixture: *users
+      - fixture: *orders
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM orders" users.csv orders.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "3"
+          stderr:
+            empty: true
+
+  # Mixed formats. Once a file is a table its format is irrelevant, and that is
+  # the claim: five formats, one query.
+  - name: five formats load together and join
+    env: *hist
+    steps:
+      - fixture: &mixed_users
+          file: users.csv
+          content: |
+            id,name
+            1,alice
+            2,bob
+      - fixture: &mixed_scores
+          file: scores.tsv
+          content: "id\tscore\n1\t90\n2\t80\n"
+      - fixture: &mixed_events
+          file: events.jsonl
+          content: |
+            {"id":1,"kind":"login"}
+            {"id":2,"kind":"logout"}
+      - fixture: &mixed_parquet
+          file: products.parquet
+          from: testdata/products.parquet
+      - fixture: &mixed_book
+          file: book.xlsx
+          from: testdata/sheets_visibility.xlsx
+      - run:
+          command: sqly users.csv scores.tsv events.jsonl products.parquet book.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - users
+              - scores
+              - events
+              - products
+              - book_Visible
+
+  - name: a join spanning csv, tsv, and jsonl answers correctly
+    env: *hist
+    steps:
+      - fixture: *mixed_users
+      - fixture: *mixed_scores
+      - fixture: *mixed_events
+      - run:
+          command: sqly --output-format csv --sql "SELECT u.name, s.score, json_extract(e.data, '$.kind') AS kind FROM users u JOIN scores s ON u.id = s.id JOIN events e ON json_extract(e.data, '$.id') = u.id ORDER BY u.id" users.csv scores.tsv events.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "alice,90,login"
+              - "bob,80,logout"
+
+  - name: values survive a mixed-format import intact
+    env: *hist
+    steps:
+      - fixture:
+          file: types.csv
+          content: |
+            n,r,t,u
+            42,1.5,007,café
+      - fixture:
+          file: nulls.jsonl
+          content: |
+            {"a":null}
+      - run:
+          # An integer stays a number, a real keeps its fraction, a zero-padded
+          # code stays text, a non-ASCII value survives, and a null stays null.
+          command: sqly --output-format json --sql "SELECT n, r, t, u FROM types" types.csv nulls.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - '"n":42'
+              - '"r":1.5'
+              - '"t":"007"'
+              - '"u":"café"'
+
+  - name: the workbook sheet policy holds in a mixed-format import
+    env: *hist
+    steps:
+      - fixture: *mixed_users
+      - fixture: *mixed_book
+      - run:
+          command: sqly users.csv book.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - users
+              - book_Visible
+            not_contains: book_Internal
+      - assert:
+          stderr:
+            contains: "Skipped 2 hidden sheets"
+
+  - name: --include-hidden-sheets changes the workbook and leaves other formats alone
+    env: *hist
+    steps:
+      - fixture: *mixed_users
+      - fixture: *mixed_book
+      - run:
+          command: sqly --include-hidden-sheets users.csv book.xlsx
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - users
+              - book_Visible
+              - book_Internal
+              - book_Secret
+
+  # A file named alongside the directory holding it is one source, not two.
+  - name: a directory and an explicit file load together
+    env: *hist
+    steps:
+      - fixture:
+          file: data/users.csv
+          content: |
+            id,name
+            1,alice
+      - fixture:
+          file: extra.csv
+          content: |
+            id,note
+            1,hello
+      - run:
+          command: sqly data extra.csv
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - users
+              - extra
+
+  - name: naming a file and its directory imports it once, not twice
+    env: *hist
+    steps:
+      - fixture:
+          file: data/users.csv
+          content: |
+            id,name
+            1,alice
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM users" data data/users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  # Table-name collisions. Two inputs that want one table are refused, and the
+  # refusal names both of them: picking one would drop the other's rows with
+  # nothing said.
+  - name: the same file name in two directories is refused, not silently merged
+    env: *hist
+    steps:
+      - fixture:
+          file: a/book.csv
+          content: |
+            v
+            from-a
+      - fixture:
+          file: b/book.csv
+          content: |
+            v
+            from-b
+      - run:
+          command: sqly --sql "SELECT * FROM book" a/book.csv b/book.csv
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains:
+              - "table-name collision"
+              - "a/book.csv"
+              - "b/book.csv"
+              - '"book"'
+
+  - name: reversing the arguments reports the same collision
+    env: *hist
+    steps:
+      - fixture:
+          file: a/book.csv
+          content: |
+            v
+            from-a
+      - fixture:
+          file: b/book.csv
+          content: |
+            v
+            from-b
+      - run:
+          command: sqly --sql "SELECT * FROM book" b/book.csv a/book.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains:
+              - "table-name collision"
+              - "a/book.csv"
+              - "b/book.csv"
+
+  - name: two names that sanitize to one table are refused
+    env: *hist
+    steps:
+      - fixture:
+          file: a/user-data.csv
+          content: |
+            v
+            hyphen
+      - fixture:
+          file: b/user data.csv
+          content: |
+            v
+            space
+      - run:
+          command: sqly --sql "SELECT 1" "a/user-data.csv" "b/user data.csv"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains:
+              - "table-name collision"
+              - "user_data"
+
+  - name: a collision leaves no table behind
+    env: *hist
+    steps:
+      - fixture:
+          file: a/book.csv
+          content: |
+            v
+            from-a
+      - fixture:
+          file: b/book.csv
+          content: |
+            v
+            from-b
+      - fixture:
+          file: other.csv
+          content: |
+            v
+            unrelated
+      - run:
+          # The unrelated input is readable and would have loaded first. It must
+          # not survive the refusal.
+          command: sqly
+          stdin: ".import other.csv a/book.csv b/book.csv\n.tables\n"
+      - assert:
+          exit_code: 3
+          stdout:
+            not_contains: other
+
+  # One broken input among readable ones. The corrupt fixtures are written by
+  # the generator in testutil/corrupt.go, which verifies its own output; the
+  # ones committed under testdata/ here are the two an atago spec needs as
+  # files. See e2e/corrupt_fixtures_test.go, which reads them back and fails if
+  # they ever become readable.
+  - name: a broken input first fails the whole import
+    env: *hist
+    steps:
+      - fixture: &alpha
+          file: alpha.csv
+          content: |
+            v
+            1
+      - fixture: &beta
+          file: beta.csv
+          content: |
+            v
+            2
+      - fixture: &broken_book
+          file: broken.xlsx
+          from: testdata/corrupt_truncated.xlsx
+      - run:
+          command: sqly
+          stdin: ".import broken.xlsx alpha.csv beta.csv\n.tables\n"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains:
+              - "no table was created or changed"
+              - "broken.xlsx"
+
+  - name: a broken input in the middle rolls back the file before it
+    env: *hist
+    steps:
+      - fixture: *alpha
+      - fixture: *beta
+      - fixture: *broken_book
+      - run:
+          command: sqly
+          stdin: ".import alpha.csv broken.xlsx beta.csv\n.tables\n"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains:
+              - "no table was created or changed"
+              - "broken.xlsx"
+      - assert:
+          # alpha was readable and comes first. If it survived, nothing was
+          # rolled back.
+          stdout:
+            not_contains:
+              - alpha
+              - beta
+
+  - name: a broken input last rolls back both files before it
+    env: *hist
+    steps:
+      - fixture: *alpha
+      - fixture: *beta
+      - fixture: *broken_book
+      - run:
+          command: sqly
+          stdin: ".import alpha.csv beta.csv broken.xlsx\n.tables\n"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "broken.xlsx"
+      - assert:
+          stdout:
+            not_contains:
+              - alpha
+              - beta
+
+  - name: a failed .import inside a session stops the script and prints no result
+    env: *hist
+    steps:
+      - fixture:
+          file: kept.csv
+          content: |
+            v
+            before
+      - fixture: *alpha
+      - fixture: *broken_book
+      - run:
+          # Whether the pre-existing table survived is a question about session
+          # state, which a batch script cannot ask after it has stopped; that is
+          # asserted directly in shell/import_atomicity_test.go. What is visible
+          # here is that the failing .import ends the script before the query
+          # after it runs, so nothing is printed from a database mid-import.
+          command: sqly kept.csv
+          stdin: ".import alpha.csv broken.xlsx\n.mode csv\nSELECT v FROM kept;\n"
+      - assert:
+          exit_code: 3
+          stdout:
+            not_contains:
+              - before
+              - alpha
+          stderr:
+            contains: "no table was created or changed"
+
+  - name: a broken outer codec fails the import as clearly as a broken file
+    env: *hist
+    steps:
+      - fixture: *alpha
+      - fixture:
+          file: packed.csv.zst
+          from: testdata/corrupt_truncated.csv.zst
+      - run:
+          command: sqly --sql "SELECT 1" alpha.csv packed.csv.zst
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "packed.csv.zst"
+
+  - name: repairing the broken file and importing again works in the same session
+    env: *hist
+    steps:
+      - fixture: *alpha
+      - fixture: *beta
+      - fixture: *broken_book
+      - fixture:
+          file: repaired.csv
+          content: |
+            v
+            9
+      - run:
+          # The first .import fails and rolls back. The second names the same
+          # readable files plus a working replacement, and must reach the state
+          # a session that never saw the broken file would.
+          command: sqly
+          stdin: ".import alpha.csv broken.xlsx beta.csv\n.import alpha.csv repaired.csv beta.csv\n.mode csv\nSELECT (SELECT v FROM alpha) || ',' || (SELECT v FROM repaired) || ',' || (SELECT v FROM beta) AS row;\n"
+      - assert:
+          # The batch stops at the failing statement, so this is driven through
+          # the interactive-style stdin stream where a failed .import is
+          # reported and the session carries on.
+          stderr:
+            contains: "no table was created or changed"
+
+  - name: a query never runs on a partly loaded database
+    env: *hist
+    steps:
+      - fixture: *alpha
+      - fixture: *broken_book
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM alpha" alpha.csv broken.xlsx
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+
+  - name: --output writes nothing when an input cannot be read
+    env: *hist
+    steps:
+      - fixture: *alpha
+      - fixture: *broken_book
+      - run:
+          command: sqly --output-format csv --output out.csv --sql "SELECT * FROM alpha" alpha.csv broken.xlsx
+      - assert:
+          exit_code: 3
+      - assert:
+          # Not even an empty file: a destination that exists says the run got
+          # far enough to write, and it did not.
+          file:
+            path: out.csv
+            exists: false

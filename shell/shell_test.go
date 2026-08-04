@@ -1984,21 +1984,13 @@ func TestShellRunBatch_ReturnsErrorOnCommandFailure(t *testing.T) {
 	}
 }
 
-func TestPartialImportStartupMessage(t *testing.T) {
-	t.Parallel()
-
-	got := partialImportStartupMessage(2, 1)
-	for _, want := range []string{"partial data", "2 of 3", "1 failed", "ready to query"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("partialImportStartupMessage(2, 1) = %q, want it to contain %q", got, want)
-		}
-	}
-}
-
-func TestShellRun_InteractivePartialImportWarning(t *testing.T) {
-	// A partial startup import still opens the interactive shell. The final
-	// warning must explain the shell state (started, some tables available,
-	// details above) instead of the bare partial-import error.
+// TestShellRun_StartupImportFailureDoesNotOpenAShell replaces a test that
+// asserted the opposite. A startup import that could not read one of its inputs
+// used to load the others and open the prompt anyway, with a warning saying so.
+// An import is now one operation, so there is no half-loaded session to hand
+// anyone: opening a prompt onto an empty database while reporting that the
+// files were read is worse than not starting.
+func TestShellRun_StartupImportFailureDoesNotOpenAShell(t *testing.T) {
 	shell, cleanup, err := newShell(t, []string{"sqly", "testdata/user.csv", "missing_input.csv"})
 	if err != nil {
 		t.Fatal(err)
@@ -2006,8 +1998,9 @@ func TestShellRun_InteractivePartialImportWarning(t *testing.T) {
 	defer cleanup()
 
 	shell.isTTY = func() bool { return true }
-	// Stop right after the startup warning so the test does not block on a prompt.
+	promptOpened := false
 	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		promptOpened = true
 		return nil, errors.New("stop before interactive loop")
 	}
 
@@ -2016,17 +2009,23 @@ func TestShellRun_InteractivePartialImportWarning(t *testing.T) {
 	var stderr bytes.Buffer
 	config.Stderr = &stderr
 
-	_ = shell.Run(context.Background())
+	runErr := shell.Run(context.Background())
 
+	if runErr == nil {
+		t.Fatal("Run returned no error after an input could not be read")
+	}
+	if promptOpened {
+		t.Error("the interactive prompt opened even though the import failed")
+	}
+	if got := ExitCode(runErr); got != ExitInput {
+		t.Errorf("ExitCode = %d, want %d", got, ExitInput)
+	}
 	got := stderr.String()
-	if !strings.Contains(got, "started with partial data") {
-		t.Errorf("stderr = %q, want it to explain the partial-import shell state", got)
+	if !strings.Contains(got, "missing_input.csv") {
+		t.Errorf("stderr = %q, want it to name the input it could not read", got)
 	}
-	if !strings.Contains(got, "1 of 2 inputs imported") {
-		t.Errorf("stderr = %q, want it to report the import counts", got)
-	}
-	if !strings.Contains(got, "ready to query") {
-		t.Errorf("stderr = %q, want it to say the loaded tables are usable", got)
+	if strings.Contains(got, "partial") {
+		t.Errorf("stderr = %q; an import no longer half-succeeds", got)
 	}
 }
 

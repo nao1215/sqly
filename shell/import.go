@@ -18,46 +18,27 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-// errPartialImport is returned when some explicitly requested inputs imported
-// successfully and at least one failed. Callers use errors.Is to decide whether
-// to continue (interactive shell) or fail the run (non-interactive modes).
-var errPartialImport = errors.New("one or more inputs failed to import")
-
-// partialImportError carries the success and failure counts of a partial import
-// alongside the one-line summary. It wraps errPartialImport so errors.Is still
-// detects the condition, while errors.As lets the interactive shell report how
-// much data loaded; non-interactive callers see the same detailed final line.
-type partialImportError struct {
-	succeeded int
-	failed    int
-	summary   string
-}
-
-// Error renders the detailed final line for non-interactive callers: the
-// sentinel message followed by the per-input summary.
-func (e *partialImportError) Error() string {
-	return fmt.Sprintf("%s: %s", errPartialImport.Error(), e.summary)
-}
-
-// Unwrap exposes errPartialImport so errors.Is keeps matching the sentinel.
-func (e *partialImportError) Unwrap() error { return errPartialImport }
-
-// importFailedError is an import where nothing loaded: every requested input
-// failed. It is the same class of problem as a partial import — an input sqly
-// could not read — and is a type for the same reason, so the exit code is
-// decided from what happened rather than from the shape of the message.
+// importFailedError is an import that read nothing it could use.
+//
+// It is a type rather than a message so the exit code is decided from what
+// happened rather than from the shape of the words. An import is one operation:
+// it either loaded every input it was given or none of them, so there is no
+// "partly failed" for this to be a lesser version of.
 type importFailedError struct {
 	failed  int
 	summary string
 }
 
 func (e *importFailedError) Error() string {
-	return fmt.Sprintf("all %d import(s) failed: %s", e.failed, e.summary)
+	return "import failed, and no table was created or changed: " + e.summary
 }
 
-// importCommand imports files into the in-memory database.
-// Each file/directory is loaded individually so that same-name tables from
-// different directories are overwritten (last-wins) rather than failing.
+// importCommand imports files into the in-memory database as one operation.
+//
+// Every path is resolved, every table name it will claim is checked, and then
+// all of them are loaded in a single transaction. If any part fails, nothing is
+// left behind: no table, no source record, no baseline, and no temporary file.
+// See import_plan.go for why the phases are separated.
 func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
 		// A missing path argument is a command error so a batch script fails fast
@@ -69,191 +50,118 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 		// than reporting it as an input sqly could not read.
 		return &invocationError{Err: errors.New(".import requires at least one file or directory path\n" + importUsageText())}
 	}
+	return s.runImport(ctx, argv, argv)
+}
 
-	var errorMessages []string
-	var successCount int
+// runImport is importCommand's body, with the labels to quote in messages kept
+// separate from the paths being resolved. They differ only for an internal
+// caller that resolves one place while the user named another.
+func (s *Shell) runImport(ctx context.Context, argv, labels []string) error {
+	plan, err := s.resolveImportPlan(ctx, argv, labels)
+	if err != nil {
+		return s.reportImportFailure(err)
+	}
+	defer plan.release()
 
-	for _, path := range argv {
-		// Reject an empty path so `.import ""` does not silently import the
-		// current working directory. Like a missing argument, this is decided from
-		// the command line alone, so it is a usage error rather than an input that
-		// could not be read.
-		if strings.TrimSpace(path) == "" {
-			return &invocationError{Err: errors.New(".import was given an empty path\n" + importUsageText())}
-		}
+	claims, err := s.preflightTableNames(ctx, plan)
+	if err != nil {
+		return s.reportImportFailure(err)
+	}
 
-		var pathImported bool
-		err := func() error {
-			cleanPath, cleanup, info, err := s.resolveImportTarget(ctx, path)
-			if cleanup != nil {
-				defer cleanup()
-			}
-			if err != nil {
-				return err
-			}
+	before, err := s.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		return s.reportImportFailure(fmt.Errorf("failed to get table names before importing: %w", err))
+	}
+	beforeSet := tableNameSet(before)
 
-			if info.IsDir() {
-				imported, err := s.importDirectory(ctx, cleanPath, path)
-				pathImported = imported
-				return err
-			}
+	// One call, one transaction. A failure here rolls the whole thing back, so
+	// the session is exactly as it was and the next line can say so plainly.
+	if err := s.usecases.importer.LoadFiles(ctx, plan.loadPaths()...); err != nil {
+		return s.reportImportFailure(s.describeLoadFailure(plan, err))
+	}
 
-			if err := s.importFile(ctx, cleanPath, path); err != nil {
-				return err
-			}
-			pathImported = true
-			return nil
-		}()
-		if err != nil {
-			errorMessages = append(errorMessages, err.Error())
-			continue
-		}
-		if pathImported {
-			successCount++
-		}
+	after, err := s.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		return s.reportImportFailure(fmt.Errorf("failed to get table names after importing: %w", err))
+	}
+	afterSet := tableNameSet(after)
+
+	for _, target := range plan.targets {
+		s.warnSkippedExcelSheets(target.loadPath, target.displayPath)
+	}
+
+	imported := s.recordImportedTables(ctx, claims, afterSet)
+	if len(imported) == 0 && len(diffTableNames(after, beforeSet)) == 0 {
+		return s.reportImportFailure(importProducedNothing(plan))
 	}
 
 	// A successful import can change a table's columns without changing the
 	// table-name set (re-import), so drop the cached completion suggestions.
-	if successCount > 0 {
-		s.invalidateCompletionCache()
-	}
+	s.invalidateCompletionCache()
 
-	if len(errorMessages) > 0 {
-		statusOut := s.importStatusWriter()
-		if successCount > 0 {
-			fmt.Fprintf(statusOut, "\nImport completed with %d successful import(s) and %d error(s):\n", successCount, len(errorMessages))
-		} else {
-			fmt.Fprintf(statusOut, "\nImport failed with %d error(s):\n", len(errorMessages))
-		}
-		for _, errMsg := range errorMessages {
-			fmt.Fprintf(statusOut, "  - %s\n", errMsg)
-		}
-		// Also carry the per-input detail in the returned error, since wrappers and
-		// logs often surface only the final error line; a generic message would
-		// drop context already computed here.
-		summary := summarizeImportErrors(errorMessages)
-		if successCount == 0 {
-			return &importFailedError{failed: len(errorMessages), summary: summary}
-		}
-		// A requested input failed while others succeeded. Return a
-		// partialImportError so non-interactive runs exit non-zero and callers can
-		// detect the sentinel with errors.Is, while the interactive shell reads the
-		// counts to explain the shell state and starts with the tables that loaded.
-		return &partialImportError{succeeded: successCount, failed: len(errorMessages), summary: summary}
+	// In inspect mode the structured report is the only intended output, so a
+	// successful import stays quiet on stderr. Warnings (e.g. keyword table
+	// names) and errors still print.
+	if !s.reportOnly() && len(plan.directoryLabels) > 0 {
+		fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n",
+			len(imported), strings.Join(plan.directoryLabels, ", "), imported)
 	}
-
 	return nil
 }
 
-// summarizeImportErrors condenses per-input failure messages into one line for
-// the returned error: the first failure plus a "(+N more)" count when several
-// inputs failed. The full list still goes to stderr; this keeps the final error
-// line informative when only it is surfaced.
-func summarizeImportErrors(messages []string) string {
-	switch len(messages) {
-	case 0:
-		return ""
-	case 1:
-		return messages[0]
-	default:
-		return fmt.Sprintf("%s (+%d more)", messages[0], len(messages)-1)
-	}
-}
-
-// importDirectory loads every supported file in a directory into the database,
-// one file at a time, so each table can be mapped back to the exact file that
-// produced it. Returns imported=true when at least one table was loaded or
-// overwritten.
+// importDirectory loads every supported file under a directory as one atomic
+// import, reporting whether it produced any table.
 //
-// Importing per file (rather than handing the whole directory to filesql) lets
-// importDirectory:
-//   - record each table's real source file even when the basename is sanitized
-//     or the file yields several tables (Excel/ACH/Fedwire), so --inspect reports
-//     per-file provenance ();
-//   - reject two files in the tree that map to the same table name instead of
-//     silently overwriting one with the other ();
-//   - treat re-importing over an existing table as a reported overwrite, not "no
-//     supported files", and re-point that table's source so write-back targets
-//     the directory file rather than the original ().
-//
-// Every imported table is marked as a directory import so write-back still
-// rejects it: a directory is not a single editable source the session owns.
-func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath string) (imported bool, err error) {
-	files, err := s.supportedFilesInDir(cleanPath)
-	if err != nil {
-		return false, fmt.Errorf("failed to scan directory %s: %w", displayPath, err)
-	}
-	if len(files) == 0 {
-		return false, fmt.Errorf("no supported files found in directory %s", displayPath)
-	}
-
-	// producedHere maps a table name to the file in this directory import that
-	// produced it, so a later file mapping to the same name is a collision rather
-	// than a silent overwrite.
-	producedHere := make(map[string]string)
-	var importedTables []string
-
-	for _, file := range files {
-		before, err := s.usecases.importer.GetTableNames(ctx)
-		if err != nil {
-			return false, fmt.Errorf("failed to get table names before importing %s: %w", file, err)
-		}
-		beforeSet := tableNameSet(before)
-
-		loadPath := file
-		cleanupLoad := func() {}
-		if prepared, cleanup, perr := s.prepareImportLoadPath(file); perr != nil {
-			return false, fmt.Errorf("failed to prepare %s from directory %s: %w", file, displayPath, perr)
-		} else if cleanup != nil {
-			loadPath, cleanupLoad = prepared, cleanup
-		}
-
-		if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
-			cleanupLoad()
-			return false, fmt.Errorf("failed to import file %s from directory %s: %w", file, displayPath, err)
-		}
-		s.warnSkippedExcelSheets(loadPath, file)
-		cleanupLoad()
-
-		// The tables this file owns are the ones it newly created. When it only
-		// overwrote tables that already existed (a re-import), fall back to the
-		// existing tables whose name matches this file's signature.
-		fileTables := diffTableNames(mustTables(ctx, s), beforeSet)
-		if len(fileTables) == 0 {
-			// The file overwrote tables that already existed. Which ones is decided
-			// by the record and by an exact name claim — never by a prefix another
-			// file produces exactly.
-			fileTables = s.tablesOverwrittenBy(file, beforeSet, true)
-		}
-
-		for _, name := range fileTables {
-			if prev, ok := producedHere[name]; ok && prev != file {
-				return false, fmt.Errorf("table-name collision: %s and %s both map to table %q in directory %s; rename a file to disambiguate", prev, file, name, displayPath)
-			}
-		}
-		for _, name := range fileTables {
-			producedHere[name] = file
-			s.recordTableSources(ctx, []string{name}, file)
-			s.markDirImported(name)
-		}
-		s.warnKeywordTableNames(fileTables)
-		importedTables = append(importedTables, fileTables...)
-	}
-
-	if len(importedTables) == 0 {
-		// The directory held supported files but none of them produced a table.
-		return false, nil
-	}
-
-	sort.Strings(importedTables)
-	// In inspect mode the structured report is the only intended output, so a
-	// successful directory import stays quiet on stderr. Warnings (e.g. keyword
-	// table names) and errors still print.
-	if !s.reportOnly() {
-		fmt.Fprintf(s.importStatusWriter(), "Successfully imported %d table(s) from directory %s: %v\n", len(importedTables), displayPath, importedTables)
+// It is a thin wrapper on importCommand, kept because a directory import is
+// worth naming and because it is the entry point the directory tests drive.
+// The work — resolution, the collision preflight, one transaction, and the
+// bookkeeping that follows a commit — is importCommand's, so a directory and a
+// list of files cannot drift into behaving differently.
+func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath string) (bool, error) {
+	if err := s.runImport(ctx, []string{cleanPath}, []string{displayPath}); err != nil {
+		return false, err
 	}
 	return true, nil
+}
+
+// importFile loads a single file as an import of one, for the same reason.
+func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) error {
+	return s.runImport(ctx, []string{cleanPath}, []string{displayPath})
+}
+
+// describeLoadFailure turns filesql's error into one that names the input the
+// user typed. A staged download or a re-encoded copy has a temp path filesql
+// quotes, and a user cannot act on a path they never wrote.
+func (s *Shell) describeLoadFailure(plan *importPlan, err error) error {
+	for _, target := range plan.targets {
+		if !strings.Contains(err.Error(), target.loadPath) {
+			continue
+		}
+		if msg, ok := s.stdinImportErrorMessage(target.displayPath, err, target.loadPath); ok {
+			return errors.New(msg)
+		}
+		if target.loadPath == target.displayPath {
+			return fmt.Errorf("failed to import file %s: %w", target.displayPath, err)
+		}
+		// Replace the staged path so the message quotes what the user named.
+		return fmt.Errorf("failed to import file %s: %s", target.displayPath,
+			strings.ReplaceAll(err.Error(), target.loadPath, target.displayPath))
+	}
+	return err
+}
+
+// reportImportFailure prints the failure and returns it classified.
+//
+// Everything here exits 3: the import read no input it could use. A bad command
+// line is the exception and keeps its own class, because the thing to fix is
+// what was typed rather than what was read.
+func (s *Shell) reportImportFailure(err error) error {
+	var invocationErr *invocationError
+	if errors.As(err, &invocationErr) {
+		return err
+	}
+	fmt.Fprintf(s.importStatusWriter(), "\nImport failed; no table was created or changed:\n  - %s\n", err.Error())
+	return &importFailedError{failed: 1, summary: err.Error()}
 }
 
 // mustTables returns the current table names, or nil on error. importDirectory
@@ -318,59 +226,6 @@ func (s *Shell) tablesNamedAfterFile(file string, names map[string]struct{}) []s
 	return matched
 }
 
-// tablesOverwrittenBy returns the tables an import of this file just replaced:
-// the ones already recorded against it, plus its base name when nothing with a
-// stronger claim holds it.
-//
-// A "<base>_" prefix is never a claim on its own. It looks like one for the
-// formats where a file becomes several tables, and that is where this went
-// wrong: a directory holding sample.xlsx and sample_test.csv let the workbook
-// claim sample_test, so re-importing the workbook took a table it had never
-// produced — clearing its directory marker and making a file the session must
-// not write suddenly writable. A workbook's own sheet tables are recorded
-// against it, so the record already covers them and the guess adds nothing but
-// the bug.
-//
-// The base name is a real claim: this file does produce that table. Who may take
-// it from whom depends on which side asked for the import, which is what
-// fromDirectory says.
-//
-// A directory sweep takes any name it produces: loading a tree is last-wins by
-// definition, and the alternative is a directory that refuses to load because
-// something in it shares a name with an earlier argument. An individually named
-// file is narrower: it takes a free name, a name it already holds, and a name
-// held by a directory import — a bulk sweep yields to a file the user named —
-// but not one another explicitly named file produced, which the caller reports
-// as a collision.
-func (s *Shell) tablesOverwrittenBy(file string, names map[string]struct{}, fromDirectory bool) []string {
-	claimed := make(map[string]struct{})
-	for _, name := range s.tablesFromSource(file, names) {
-		claimed[name] = struct{}{}
-	}
-	base := s.usecases.importer.GetTableNameFromFilePath(file)
-	if _, exists := names[base]; exists && (fromDirectory || !s.heldByAnotherExplicitFile(base)) {
-		claimed[base] = struct{}{}
-	}
-
-	owned := make([]string, 0, len(claimed))
-	for name := range claimed {
-		owned = append(owned, name)
-	}
-	sort.Strings(owned)
-	return owned
-}
-
-// heldByAnotherExplicitFile reports whether a different, individually named
-// input produced this table. A table that arrived through a directory import
-// does not count: that is the case an explicit import is allowed to take over.
-func (s *Shell) heldByAnotherExplicitFile(name string) bool {
-	if s.dirImported[name] {
-		return false
-	}
-	source, ok := s.tableSources[name]
-	return ok && source != stdinTableSource
-}
-
 // tablesFromSource returns the tables that were recorded as coming from this
 // exact source when they were imported.
 //
@@ -422,8 +277,6 @@ func (s *Shell) markDirImported(name string) {
 	s.dirImported[name] = true
 }
 
-// importFile loads a single file into the database, recording which tables it
-// produced so write-back knows what the file owns.
 // stdinImportErrorMessage renders an import failure for the staged --stdin-format
 // dataset with the random temp staging path replaced by a stable
 // "stdin (--stdin-format FORMAT)" reference. ok is false when displayPath is not the
@@ -445,96 +298,6 @@ func (s *Shell) stdinImportErrorMessage(displayPath string, err error, candidate
 		msg = strings.ReplaceAll(msg, filepath.Dir(p), label)
 	}
 	return msg, true
-}
-
-func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) error {
-	// loadPath is the path actually handed to filesql. It differs from cleanPath
-	// only for an extensionless pseudo-file (e.g. /dev/stdin, /proc/self/fd/0),
-	// which is staged to a temporary CSV so it imports end-to-end.
-	loadPath := cleanPath
-	cleanupLoad := func() {}
-	if !s.usecases.importer.IsSupportedFile(cleanPath) {
-		staged, cleanup, ok := s.stagePseudoFileAsCSV(cleanPath)
-		if !ok {
-			return fmt.Errorf("unsupported file format: %s (supported: csv, tsv, ltsv, json, jsonl, parquet, xlsx [+compressed], ach, fed)", filepath.Base(cleanPath))
-		}
-		cleanupLoad = cleanup
-		loadPath = staged
-	}
-	preparedPath, cleanupPrepared, err := s.prepareImportLoadPath(loadPath)
-	if err != nil {
-		cleanupLoad()
-		return err
-	}
-	defer cleanupLoad()
-	if cleanupPrepared != nil {
-		defer cleanupPrepared()
-	}
-	loadPath = preparedPath
-
-	// Capture which tables this file creates so --inspect and write-back (.save)
-	// can map them back to their source path.
-	before, err := s.usecases.importer.GetTableNames(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get table names before importing %s: %w", displayPath, err)
-	}
-	existingTables := tableNameSet(before)
-
-	if err := s.usecases.importer.LoadFiles(ctx, loadPath); err != nil {
-		// A failed --stdin-format import would otherwise leak the random staging temp
-		// path (in both this wrapper and the path filesql embeds in its own
-		// error). Map it back to a stable "stdin (--stdin-format FORMAT)" reference.
-		if msg, ok := s.stdinImportErrorMessage(displayPath, err, cleanPath, loadPath); ok {
-			return errors.New(msg)
-		}
-		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
-	}
-	s.warnSkippedExcelSheets(loadPath, displayPath)
-
-	after, err := s.usecases.importer.GetTableNames(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get table names after importing %s: %w", displayPath, err)
-	}
-
-	// A successful import that produced no new table means this file overwrote one
-	// or more tables that already existed in the session.
-	newNames := diffTableNames(after, existingTables)
-	if len(newNames) == 0 {
-		// Ownership is read from the record, never inferred from the name. Only the
-		// tables this exact source produced are re-pointed or unmarked below; a
-		// sibling table that merely shares a prefix keeps whatever it had, and a
-		// table another file produced is a collision rather than a takeover —
-		// which is the difference between this and a directory import, where
-		// last-wins across the tree is the point.
-		owned := s.tablesOverwrittenBy(displayPath, existingTables, false)
-		switch {
-		case len(owned) > 0:
-			// Re-import of the same source path (including a symlink alias) is a
-			// harmless last-wins overwrite. Take clean ownership so a table first
-			// seen via a directory import becomes a normal file-backed table that
-			// write-back accepts, and re-point it at the path the user named.
-			s.recordTableSources(ctx, owned, displayPath)
-			s.clearDirImported(owned)
-			s.warnKeywordTableNames(owned)
-			return nil
-		case len(s.tablesNamedAfterFile(loadPath, existingTables)) == 0:
-			// No table was created, and no table carries this file's name — so the
-			// file did not collide with anything, it simply held no data. An Excel
-			// workbook whose only sheet has no cells arrives here. Saying "collision"
-			// would send the user looking for a second input that does not exist.
-			return fmt.Errorf("%s produced no table; the file has no rows to import", displayPath)
-		default:
-			// Two distinct plain-file inputs sanitized to the same table name (for
-			// example "a-b.csv" and "a_b.csv" both becoming "a_b"). filesql overwrote
-			// the earlier table, which would leave the first file's source mapped to
-			// the second file's rows, so fail instead of silently overwriting. Ref
-			return fmt.Errorf("table-name collision: %s sanitizes to a table name already imported from another input; rename the file to disambiguate", displayPath)
-		}
-	}
-	s.recordTableSources(ctx, newNames, displayPath)
-	s.warnKeywordTableNames(newNames)
-
-	return nil
 }
 
 // clearDirImported removes the directory-import marker from the given tables, so

@@ -299,6 +299,8 @@ Writing a *query result* somewhere is a different job, and that one is a flag:
 | ACH | `.ach` | several tables (`_file_header`, `_batches`, `_entries`, `_addenda`) |
 | Fedwire | `.fed` | one `_message` table |
 
+Multiple inputs are loaded atomically: if one file cannot be read, none of them are imported and the run exits `3`. See the [cookbook](https://nao1215.github.io/sqly/cookbook/#multiple-files-are-one-import).
+
 All except ACH and Fedwire also read the compression extensions above. Text inputs without a BOM decode as UTF-8, or as Shift-JIS, EUC-JP, ISO-2022-JP, or UTF-16 with `--encoding`. See [Formats](https://nao1215.github.io/sqly/formats/).
 
 ## Flags

@@ -118,12 +118,10 @@ func ExitCode(err error) int {
 	}
 
 	var (
-		partialErr      *partialImportError
 		importFailedErr *importFailedError
 		scriptSourceErr *scriptSourceError
 	)
-	if errors.As(err, &partialErr) || errors.As(err, &importFailedErr) ||
-		errors.As(err, &scriptSourceErr) {
+	if errors.As(err, &importFailedErr) || errors.As(err, &scriptSourceErr) {
 		return ExitInput
 	}
 

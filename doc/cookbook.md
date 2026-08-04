@@ -10,6 +10,7 @@ SQLite can do, sqly can do — the file is just the table.
 | I want to | Go to |
 |:--|:--|
 | Look at a file I have never seen | [First look at a file](#first-look-at-a-file) |
+| Load several files at once, and know what happens if one is bad | [Multiple files are one import](#multiple-files-are-one-import) |
 | Convert CSV to JSON, TSV, Excel, Parquet | [Convert between formats](#convert-between-formats) |
 | Join two files | [Join across files](#join-across-files) |
 | Join files of different formats | [Join across formats](#join-across-formats) |
@@ -100,6 +101,56 @@ Compression comes from the destination's extension — `.gz`, `.bz2`, `.xz`,
 ```shell
 sqly --output-format csv --sql "SELECT * FROM user" --output user.csv.zst user.csv
 ```
+
+## Multiple files are one import
+
+Name as many inputs as you like. Each becomes a table, formats mix freely, and
+one query sees all of them:
+
+```shell
+sqly --sql "
+  SELECT u.name, SUM(o.amount) AS total
+  FROM users u
+  JOIN orders o ON u.id = o.user_id
+  GROUP BY u.name
+" users.csv orders.jsonl
+```
+
+They are loaded as one operation, not one after another. If any input is
+unreadable or malformed, none of the files in that import are committed: the
+tables from the files that were fine are rolled back, the files after the bad
+one are never read, and the session is left exactly as it was.
+
+```text
+$ sqly --sql "SELECT * FROM users" users.csv broken.xlsx orders.csv
+Import failed; no table was created or changed:
+  - failed to read file broken.xlsx: ...
+$ echo $?
+3
+```
+
+That means a failed import needs nothing undone. Fix the file and run the same
+command again; there is no half-loaded state to clear first. The same holds for
+`.import` inside a session, for a directory argument, and for a mix of local
+files and URLs — a download that succeeded before a later failure is rolled back
+and its temporary file removed with it.
+
+Two inputs that want the same table name are refused rather than resolved by
+picking one, because picking one would drop the other's rows without saying so:
+
+```text
+$ sqly --sql "SELECT 1" a/book.csv b/book.csv
+table-name collision: a/book.csv and b/book.csv both map to table "book";
+rename one of them or import them separately
+```
+
+Files in different directories are different inputs even when they share a name,
+so `a/users.csv` and `b/users.csv` are two files and neither is discarded. A file
+named twice, or named alongside the directory holding it, is one input and is
+read once.
+
+Arguments are read in the order you wrote them. Inside a directory argument the
+files are read in a fixed order that does not vary by platform.
 
 ## Join across files
 

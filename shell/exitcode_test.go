@@ -49,7 +49,7 @@ func TestExitCode(t *testing.T) {
 		},
 		{
 			name: "an input that failed to import is an input error",
-			err:  &partialImportError{succeeded: 0, failed: 1, summary: "no.csv: path does not exist"},
+			err:  &importFailedError{failed: 1, summary: "no.csv: path does not exist"},
 			want: ExitInput,
 		},
 		{
@@ -102,7 +102,7 @@ func TestExitCode_ClassifiesThroughWrapping(t *testing.T) {
 	}{
 		{
 			name: "an import error wrapped by the statement that hit it",
-			err:  fmt.Errorf("line 3: %w", &partialImportError{succeeded: 0, failed: 1, summary: "no.csv"}),
+			err:  fmt.Errorf("line 3: %w", &importFailedError{failed: 1, summary: "no.csv"}),
 			want: ExitInput,
 		},
 		{

@@ -9,9 +9,10 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.7.0
+	github.com/klauspost/compress v1.19.1
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
-	github.com/nao1215/filesql v0.32.0
+	github.com/nao1215/filesql v0.32.1
 	github.com/nao1215/prompt v0.0.13
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/spf13/pflag v1.0.10
@@ -38,7 +39,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/igrmk/treemap/v2 v2.0.1 // indirect
 	github.com/klauspost/asmfmt v1.3.2 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-tty v0.0.8 // indirect

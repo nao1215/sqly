@@ -152,6 +152,7 @@ func TestDocs_EveryDocumentedShellCommandExists(t *testing.T) {
 // be skipped.
 var cookbookCoverage = map[string]string{
 	"First look at a file":                 "e2e/atago/cookbook.atago.yaml",
+	"Multiple files are one import":        "e2e/atago/multi_input.atago.yaml",
 	"Convert between formats":              "e2e/atago/cookbook.atago.yaml",
 	"Join across files":                    "e2e/atago/join.atago.yaml",
 	"Join across formats":                  "e2e/atago/cookbook.atago.yaml",
@@ -1011,6 +1012,83 @@ func TestExamples_AreRunByTheE2ESuite(t *testing.T) {
 	for _, file := range []string{"report.sql", "update.sqly", "sales.csv"} {
 		if !strings.Contains(body, file) {
 			t.Errorf("%s does not run examples/%s against the real binary", spec, file)
+		}
+	}
+}
+
+// TestDocs_StateTheAtomicMultiInputContract keeps the pages that promise
+// all-or-nothing honest. A reader who believes a failed import leaves nothing
+// behind will not go looking for half-loaded tables to clean up, so a page that
+// stopped saying it — or an implementation that stopped doing it — is worth
+// failing over.
+func TestDocs_StateTheAtomicMultiInputContract(t *testing.T) {
+	t.Parallel()
+
+	cookbook := readDoc(t, "doc/cookbook.md")
+	const cookbookHeading = "## Multiple files are one import"
+	recipe := section(cookbook, cookbookHeading)
+	if recipe == "" {
+		t.Fatalf("doc/cookbook.md no longer has the %q section", cookbookHeading)
+	}
+	for _, want := range []string{
+		"none of the files in that import are committed",
+		"table-name collision",
+		"in the order you wrote them",
+	} {
+		if !strings.Contains(recipe, want) {
+			t.Errorf("the cookbook %q section does not state: %s", cookbookHeading, want)
+		}
+	}
+	// The exit code the recipe quotes has to be the one the code returns.
+	if !strings.Contains(recipe, strconv.Itoa(shell.ExitInput)) {
+		t.Errorf("the cookbook %q section does not name exit code %d", cookbookHeading, shell.ExitInput)
+	}
+
+	reference := readDoc(t, "website/content/reference.md")
+	const referenceHeading = "### Multiple inputs"
+	inputs := section(reference, referenceHeading)
+	if inputs == "" {
+		t.Fatalf("website/content/reference.md no longer has the %q section", referenceHeading)
+	}
+	for _, want := range []string{
+		"every file loads or none of them",
+		"refused before anything is loaded",
+	} {
+		if !strings.Contains(inputs, want) {
+			t.Errorf("the reference %q section does not state: %s", referenceHeading, want)
+		}
+	}
+	if !strings.Contains(inputs, "`"+strconv.Itoa(shell.ExitInput)+"`") {
+		t.Errorf("the reference %q section does not name exit code %d", referenceHeading, shell.ExitInput)
+	}
+
+	// The README points at the recipe rather than repeating it.
+	readme := readDoc(t, "README.md")
+	if !strings.Contains(readme, "atomically") {
+		t.Error("README.md no longer mentions that multiple inputs load atomically")
+	}
+	if !strings.Contains(readme, "multiple-files-are-one-import") {
+		t.Error("README.md does not link to the cookbook recipe for it")
+	}
+}
+
+// TestE2E_ExercisesTheMultiInputContract closes the loop the wording checks
+// leave open: the pages say all-or-nothing, and a spec has to run it against the
+// real binary — including with the unreadable file in the middle and at the end,
+// which are the only positions that can show a rollback happened.
+func TestE2E_ExercisesTheMultiInputContract(t *testing.T) {
+	t.Parallel()
+
+	const spec = "e2e/atago/multi_input.atago.yaml"
+	body := readDoc(t, spec)
+	for _, want := range []string{
+		"a broken input first",
+		"a broken input in the middle",
+		"a broken input last",
+		"table-name collision",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("%s does not cover: %s", spec, want)
 		}
 	}
 }

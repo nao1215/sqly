@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/domain/model"
@@ -468,20 +470,31 @@ func QuoteIdentifier(identifier string) string {
 	return `"` + escaped + `"`
 }
 
-// SanitizeForSQL sanitizes a string to be SQL-safe. This function matches
-// the sanitization logic used by filesql library's sanitizeTableName() to ensure
-// consistent table name generation between sqly and filesql.
+// SanitizeForSQL derives the table name filesql gives a source of this name.
+//
+// It has to agree with filesql exactly, because sqly works out which tables an
+// import will create before running it — to refuse two inputs that would claim
+// the same one. A rule that differs invents collisions that do not exist and
+// misses ones that do. It used to keep ASCII letters and digits only, so every
+// file named in a non-Latin script sanitized to the empty string and then to the
+// fallback "sheet": two such files looked like a collision, while filesql was
+// happily naming their tables after them.
+//
+// Letters, digits, and combining marks are judged by Unicode category, matching
+// filesql. A combining mark is kept so a decomposed accent stays attached to its
+// base letter.
 //
 // Transformations applied:
 //   - Replaces spaces, hyphens (-), and dots (.) with underscores
-//   - Removes any non-alphanumeric characters except underscores
-//   - Adds "sheet_" prefix if the name starts with a number
+//   - Drops every character that is not a letter, digit, mark, or underscore
+//   - Adds "sheet_" prefix if the name starts with a digit
 //   - Returns "sheet" as fallback for empty names
 //
 // Example:
 //
 //	SanitizeForSQL("A test") returns "A_test"
-//	SanitizeForSQL("Café") returns "Caf"
+//	SanitizeForSQL("Café") returns "Café"
+//	SanitizeForSQL("売上") returns "売上"
 //	SanitizeForSQL("Sheet-1") returns "Sheet_1"
 //	SanitizeForSQL("2023-data") returns "sheet_2023_data"
 func SanitizeForSQL(name string) string {
@@ -490,18 +503,18 @@ func SanitizeForSQL(name string) string {
 	result = strings.ReplaceAll(result, "-", "_")
 	result = strings.ReplaceAll(result, ".", "_")
 
-	// Then remove any non-alphanumeric characters except underscore
+	// Then drop everything an identifier may not carry.
 	var sanitized strings.Builder
 	for _, r := range result {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) || r == '_' {
 			sanitized.WriteRune(r)
 		}
 	}
 
 	finalResult := sanitized.String()
 
-	// Add "sheet_" prefix if name starts with a number (matches filesql behavior)
-	if len(finalResult) > 0 && finalResult[0] >= '0' && finalResult[0] <= '9' {
+	// Add "sheet_" prefix if the name starts with a digit (matches filesql).
+	if first, _ := utf8.DecodeRuneInString(finalResult); unicode.IsDigit(first) {
 		finalResult = defaultSheetName + "_" + finalResult
 	}
 

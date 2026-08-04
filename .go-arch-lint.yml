@@ -30,6 +30,7 @@ vendors:
   runewidth: { in: github.com/mattn/go-runewidth }
   text: { in: [golang.org/x/text/encoding/japanese, golang.org/x/text/encoding/unicode, golang.org/x/text/transform] }
   fileparser: { in: github.com/nao1215/fileparser }
+  compress: { in: github.com/klauspost/compress/zstd }
 
 components:
   cmd:   { in: . }
@@ -87,6 +88,11 @@ deps:
   testutil:
     canUse:
       - cmp
+      # The corrupt-fixture generator builds a real workbook and a real zstd
+      # stream and then damages them, so it needs the writers a fixture that
+      # claims to be a damaged one has to have been made with.
+      - excelize
+      - compress
   model:
     canUse:
       - runewidth
