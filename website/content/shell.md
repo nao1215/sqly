@@ -69,6 +69,7 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | `.dump TABLE FILE` | export one table; the format follows `.mode`, or the file extension when the mode is `table` |
 | `.save DIR` | write every changed table into `DIR`, leaving the sources alone |
 | `.save --in-place` | overwrite each table's source file |
+| `.save --in-place --follow-symlinks` | also overwrite through a symlinked source, which is otherwise refused |
 
 ## Batch mode
 

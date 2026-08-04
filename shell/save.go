@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/nao1215/sqly/config"
@@ -14,6 +15,10 @@ import (
 
 // inPlaceArg is the .save argument that selects destructive in-place overwrite.
 const inPlaceArg = "--in-place"
+
+// followSymlinksArg opts an in-place save into writing through a symlinked
+// source. See planSymlinkPolicy for why that needs asking for.
+const followSymlinksArg = "--follow-symlinks"
 
 // noDataChangedMessage explains a save that wrote nothing because the session
 // left every table as imported, so a read-only session never looks like a
@@ -24,6 +29,16 @@ const noDataChangedMessage = "no table data changed in this session; nothing to 
 // shell. ".save DIR" writes into a directory without touching the sources;
 // ".save --in-place" overwrites the source files.
 func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) error {
+	// --follow-symlinks modifies an in-place save and nothing else, so it is
+	// stripped here and validated against the destination below. Taking it as a
+	// second positional argument would report it as "too many arguments", which
+	// says nothing about why it was refused.
+	followSymlinks := false
+	if i := slices.Index(argv, followSymlinksArg); i >= 0 {
+		followSymlinks = true
+		argv = append(append([]string{}, argv[:i]...), argv[i+1:]...)
+	}
+
 	if len(argv) != 1 {
 		// A missing or extra argument is a command error so a batch script fails
 		// fast instead of skipping the save and exiting 0. The usage and note ride
@@ -32,10 +47,18 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 			"[Usage]\n" +
 			"  .save DIRECTORY   write each table into DIRECTORY (originals untouched)\n" +
 			"  .save --in-place  overwrite each table's source file\n" +
+			"                    add --follow-symlinks to write through a symlinked source\n" +
 			"[Note]\n" +
 			"  csv/tsv/ltsv/parquet sources are written; compression is preserved.\n" +
 			"  A whole ACH/Fedwire set is reconstructed back into a single .ach/.fed file\n" +
 			"  when all of that source's tables are still present")
+	}
+	// The option only means anything for the destructive form. `.save DIR
+	// --follow-symlinks` reads as though it changes something about the export,
+	// and there is nothing there for it to change.
+	if followSymlinks && argv[0] != inPlaceArg {
+		return fmt.Errorf(".save %s applies to %s only; .save DIR writes elsewhere and never follows a source link",
+			followSymlinksArg, inPlaceArg)
 	}
 	// Reject an empty destination so `.save ""` is not silently treated as an
 	// in-place save, which the user never asked for.
@@ -70,7 +93,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 		return nil
 	}
 	if argv[0] == inPlaceArg {
-		return s.writeBack(ctx, "")
+		return s.writeBack(ctx, "", followSymlinks)
 	}
 	// Expand a leading "~" so `.save ~/out` writes under the home directory
 	// instead of a literal "~" directory.
@@ -78,7 +101,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	if err != nil {
 		return err
 	}
-	return s.writeBack(ctx, destDir)
+	return s.writeBack(ctx, destDir, followSymlinks)
 }
 
 // noTablesToSaveError builds the empty-session save error with recovery guidance
@@ -179,7 +202,7 @@ type writeTarget struct {
 // ACH or Fedwire source are reconstructed together into the one file they came
 // from. Anything that cannot be written that way is rejected before the first
 // byte is written, so a session is never partially saved.
-func (s *Shell) writeBack(ctx context.Context, destDir string) error {
+func (s *Shell) writeBack(ctx context.Context, destDir string, followSymlinks bool) error {
 	// Both destinations skip a table the session did not change, and they mean
 	// different things by "did not change" — see planWriteBack.
 	targets, err := s.planWriteBack(ctx, destDir, true)
@@ -190,7 +213,63 @@ func (s *Shell) writeBack(ctx context.Context, destDir string) error {
 		fmt.Fprintln(config.Stderr, "no imported table changed in this session; nothing to save")
 		return nil
 	}
+	if err := s.applySymlinkPolicy(destDir, targets, followSymlinks); err != nil {
+		return err
+	}
 	return s.executeWriteBack(ctx, destDir, targets)
+}
+
+// applySymlinkPolicy decides whether an in-place save may write through a
+// symlinked source, and says where the write is going when it may.
+//
+// An in-place save overwrites the file it read, and a symlink makes "the file it
+// read" two answers: the link the user typed and the file behind it. sqly writes
+// to the second — every step of the write resolves the link, which is what keeps
+// a save from replacing the link with a regular file and leaving the real one
+// holding the old rows. That is the right way to follow a link and it is still
+// worth asking about, because the path being overwritten is one the user never
+// named. It can sit outside the directory they are working in, and it can be
+// shared with something that did not expect sqly to rewrite it.
+//
+// So the default refuses and names the link, and --follow-symlinks is how a user
+// who meant it says so. When they do, the resolved path goes to stderr: the
+// whole reason for asking is that the destination is not what was typed, so
+// proceeding silently would answer the question by ignoring it.
+//
+// This is scoped to the in-place form. `.save DIR` writes somewhere else and
+// leaves every source alone, so a symlinked source is not a hazard there.
+func (s *Shell) applySymlinkPolicy(destDir string, targets []writeTarget, followSymlinks bool) error {
+	if destDir != "" {
+		return nil
+	}
+
+	var problems []string
+	for _, tgt := range targets {
+		info, err := os.Lstat(tgt.dest)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			// A path that cannot be stat'd is left to the write itself, which
+			// reports filesystem failures with the phase they happened in.
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(tgt.dest)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %s is a symlink that does not resolve: %v",
+				tgt.table, tgt.dest, err))
+			continue
+		}
+		if !followSymlinks {
+			problems = append(problems, fmt.Sprintf(
+				"%s: %s is a symlink to %s; an in-place save would overwrite that file, which you did not name. Add %s to do it anyway, or save to a directory with .save DIR",
+				tgt.table, tgt.dest, resolved, followSymlinksArg))
+			continue
+		}
+		fmt.Fprintf(config.Stderr, "following the symlink %s to %s\n", tgt.dest, resolved)
+	}
+
+	if len(problems) > 0 {
+		return &writeBackError{Err: fmt.Errorf("cannot save session:\n  - %s", strings.Join(problems, "\n  - "))}
+	}
+	return nil
 }
 
 // planWriteBack validates that every current table can be written and returns the

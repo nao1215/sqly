@@ -302,7 +302,11 @@ scenarios:
             path: two.csv
             contains: "8"
 
-  - name: writes through a symlinked source instead of replacing the link
+  # An in-place save through a symlink has to be asked for, because the file it
+  # overwrites is one the user never named. Both halves are checked: the refusal
+  # leaves the target alone, and the opt-in writes through the link correctly
+  # rather than replacing it with a regular file.
+  - name: refuses an in-place save through a symlinked source by default
     skip:
       os: windows
     env: *hist
@@ -318,6 +322,30 @@ scenarios:
       - run:
           command: sqly link.csv
           stdin: "UPDATE link SET name = 'zoe';\n.save --in-place\n"
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "is a symlink to"
+          file:
+            path: real/u.csv
+            not_contains: zoe
+
+  - name: writes through a symlinked source when --follow-symlinks is given
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: real/u.csv
+          content: |
+            id,name
+            1,alice
+      - fixture:
+          file: link.csv
+          symlink: real/u.csv
+      - run:
+          command: sqly link.csv
+          stdin: "UPDATE link SET name = 'zoe';\n.save --in-place --follow-symlinks\n"
       - assert:
           exit_code: 0
           file:

@@ -342,7 +342,7 @@ func TestWriteBack_RejectsDirectoryImport(t *testing.T) {
 	if err := shell.exec(context.Background(), "INSERT INTO one VALUES (2)"); err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
-	if err := shell.writeBack(context.Background(), t.TempDir()); err == nil {
+	if err := shell.writeBack(context.Background(), t.TempDir(), false); err == nil {
 		t.Fatal("write-back of a directory-imported table returned nil, want rejection")
 	}
 }

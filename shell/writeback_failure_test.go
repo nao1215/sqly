@@ -121,7 +121,7 @@ func TestWriteBack_SerializeFailureLeavesEverySourceUntouched(t *testing.T) {
 		return ops.CreateTemp(d, pattern)
 	}
 
-	err := shell.writeBack(context.Background(), "")
+	err := shell.writeBack(context.Background(), "", false)
 	if err == nil {
 		t.Fatal("writeBack succeeded although the second target could not be staged")
 	}
@@ -158,7 +158,7 @@ func TestWriteBack_BackupFailureStopsBeforeAnyCommit(t *testing.T) {
 	// The first Copy is the backup; the commit's copy fallback comes later.
 	shell.files.Copy = failOnNth2(1, ops.Copy, errInjected)
 
-	if err := shell.writeBack(context.Background(), ""); err == nil {
+	if err := shell.writeBack(context.Background(), "", false); err == nil {
 		t.Fatal("writeBack succeeded although the backup could not be taken")
 	}
 	if got := readFile(t, src); got != content {
@@ -186,7 +186,7 @@ func TestWriteBack_ChmodFailureStopsTheCommit(t *testing.T) {
 	shell.files = ops
 	shell.files.Chmod = func(string, os.FileMode) error { return errInjected }
 
-	if err := shell.writeBack(context.Background(), ""); err == nil {
+	if err := shell.writeBack(context.Background(), "", false); err == nil {
 		t.Fatal("writeBack succeeded although the permissions could not be carried over")
 	}
 	if got := readFile(t, src); got != content {
@@ -234,7 +234,7 @@ func TestWriteBack_RollbackFailureIsReportedWithTheCause(t *testing.T) {
 		}
 	}
 
-	err := shell.writeBack(context.Background(), "")
+	err := shell.writeBack(context.Background(), "", false)
 	if err == nil {
 		t.Fatal("writeBack succeeded although a commit and its rollback both failed")
 	}
@@ -318,7 +318,7 @@ func TestWriteBack_InPlacePreservesSourcePermissions(t *testing.T) {
 	silenceStderr(t)
 	markChanged(t, shell, "shared")
 
-	if err := shell.writeBack(context.Background(), ""); err != nil {
+	if err := shell.writeBack(context.Background(), "", false); err != nil {
 		t.Fatalf("writeBack: %v", err)
 	}
 
@@ -354,7 +354,7 @@ func TestWriteBack_DuplicateInputPathWritesOnce(t *testing.T) {
 	if len(targets) != 1 {
 		t.Fatalf("planned %d targets for one file named twice, want 1: %+v", len(targets), targets)
 	}
-	if err := shell.writeBack(context.Background(), ""); err != nil {
+	if err := shell.writeBack(context.Background(), "", false); err != nil {
 		t.Fatalf("writeBack: %v", err)
 	}
 	if extra := leftoverFiles(t, dir, "twice.csv"); len(extra) > 0 {

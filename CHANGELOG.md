@@ -5,6 +5,8 @@
 ### Breaking Changes
 * Exit codes now classify the failure instead of reporting every one as `1`. A bad command line or an unrunnable script exits `2`, an input that could not be read exits `3`, a destination that could not be written exits `4`, and a statement that ran and failed still exits `1`. A wrapper that only checks for non-zero is unaffected; one that checks for `1` specifically has to widen the check. The class is decided from the failure itself, so a `.save` that cannot write exits `4` inside a script exactly as it does on its own.
 
+* `.save --in-place` refuses a symlinked source unless `--follow-symlinks` is given. Following a link is still the only correct way to write through one — a rename would replace the link and leave the real file holding the old rows — but it overwrites a path the user never typed, which can sit outside the directory they are working in. The refusal names the link and what it resolves to; the opt-in prints the resolved path to stderr before writing. `.save DIR` is unaffected and rejects the option as meaningless there.
+
 ### New Features
 * SIGINT and SIGTERM cancel the run and exit `130` instead of killing the process. The query is canceled, the deferred cleanup runs, and the temp directories a download or a staged stdin dataset created are removed. The interactive shell is unaffected: the prompt reads Ctrl-C as a keystroke.
 
