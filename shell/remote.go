@@ -73,6 +73,11 @@ func newRemoteClient() *http.Client {
 		// mid-download cannot hang the CLI indefinitely.
 		Timeout: 15 * time.Minute,
 		Transport: &http.Transport{
+			// A custom Transport replaces http.DefaultTransport wholesale, which
+			// is where proxy support lives. Without this a user behind a corporate
+			// proxy cannot fetch a URL at all, and the failure looks like the host
+			// being unreachable rather than like a setting sqly ignored.
+			Proxy:                 http.ProxyFromEnvironment,
 			ResponseHeaderTimeout: 30 * time.Second,
 		},
 		CheckRedirect: checkRemoteRedirect,

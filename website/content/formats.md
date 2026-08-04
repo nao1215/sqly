@@ -135,9 +135,13 @@ The limits are not flags. A limit that is routinely raised protects nothing, and
 exhaust memory long before the download reached the cap. It is there to stop a
 server filling the disk on the way, not to size your data.
 
-The table is named after the file that arrives, not the URL you typed. A dataset
-behind a short link or a `latest` alias is named from the redirect target, then
-from `Content-Disposition`, then from the URL path, then from `Content-Type`.
+The table is named after the file that arrives, not the URL you typed. The name
+is taken from the first of these that gives a supported filename:
+`Content-Disposition`, the final response URL, the URL you typed, then
+`Content-Type`. A dataset behind a short link or a `latest` alias is therefore
+named after its redirect target.
+
+`HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` are honored.
 
 ## Text encodings
 
