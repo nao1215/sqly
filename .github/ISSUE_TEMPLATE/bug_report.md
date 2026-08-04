@@ -23,7 +23,8 @@ If the input matters, a few lines of it are more useful than a description of it
 What you expected to happen.
 
 **What happened**
-The output, including anything on stderr, and the exit code (`echo $?`).
+The output, including anything on stderr, and the exit code — `echo $?` in a
+POSIX shell, `$LASTEXITCODE` in PowerShell, `%ERRORLEVEL%` in cmd.
 
 **Environment**
  - sqly version (`sqly --version`):

@@ -5,10 +5,11 @@ and Fedwire files ((devel))
   sqly [OPTIONS] [FILE|DIRECTORY|URL ...]
 
   Each input is loaded into an in-memory SQLite database as a table named
-  after the file. With --sql or --sql-file, sqly runs the query and exits;
-  with neither, it opens an interactive shell, or runs SQL piped into it.
-  sqly has no subcommands. Dot-commands run inside the shell, including
-  .save, which writes changed tables back to their files.
+  after the file. With --sql, --sql-file, or --script-file, sqly runs the
+  work and exits; with none of them, it opens an interactive shell, or runs
+  a script piped into it. sqly has no subcommands. Dot-commands run inside
+  the shell, in a piped script, and in a --script-file — including .save,
+  which writes changed tables back to their files.
 
 [Examples]
   - open the shell with a file loaded

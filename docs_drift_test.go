@@ -661,12 +661,20 @@ func TestFlags_EveryOneIsDocumentedInTheReference(t *testing.T) {
 	}
 	body := string(data)
 
+	// The names the page documents, as whole words. A prefix test would let
+	// `--sql-file` stand in for `--sql`, so a flag could go undocumented and the
+	// test would still pass.
+	documented := make(map[string]bool)
+	for _, m := range regexp.MustCompile("`--([a-z][a-z0-9-]*)").FindAllStringSubmatch(body, -1) {
+		documented[m[1]] = true
+	}
+
 	flags := definedFlags(t)
 	if len(flags) < 10 {
 		t.Fatalf("only %d flags found; the extractor or the parser changed", len(flags))
 	}
 	for _, name := range flags {
-		if !strings.Contains(body, "`--"+name) {
+		if !documented[name] {
 			t.Errorf("--%s is a real flag that %s does not document", name, page)
 		}
 	}
@@ -682,9 +690,9 @@ func TestFlags_EveryOneIsDocumentedInTheReference(t *testing.T) {
 	for _, name := range flags {
 		defined[name] = true
 	}
-	for _, m := range regexp.MustCompile("`--([a-z][a-z0-9-]*)").FindAllStringSubmatch(body, -1) {
-		if !defined[m[1]] && !dotCommandOptions[m[1]] {
-			t.Errorf("%s documents --%s, which the parser does not define", page, m[1])
+	for name := range documented {
+		if !defined[name] && !dotCommandOptions[name] {
+			t.Errorf("%s documents --%s, which the parser does not define", page, name)
 		}
 	}
 }

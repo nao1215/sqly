@@ -24,8 +24,9 @@ is the whole picture in one place — the sections below explain the entries.
 
 Reading the columns:
 
-- **stdin** — can be piped in with `--stdin-format`. The three that cannot are
-  binary or multi-table: there is no filename to name the tables after.
+- **stdin** — can be piped in with `--stdin-format`. The four that cannot
+  (Parquet, Excel, ACH, Fedwire) are binary or multi-table: there is no filename
+  to name the tables after.
 - **Compressed** — readable through `.gz`, `.bz2`, `.xz`, `.zst`, `.z`,
   `.snappy`, `.s2`, `.lz4`. ACH and Fedwire are not. A compressed Parquet file
   reads, but cannot be written back: Parquet already compresses internally, and

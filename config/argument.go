@@ -210,9 +210,16 @@ func newArg(args []string) (*Arg, error) {
 	// is a flag value like --row-mismatch or --dialect, so a typo should fail the
 	// same way they do: before anything is read, as a usage error naming the
 	// values that exist.
-	if *stdinFormat != "" && !validStdinFormats[strings.ToLower(strings.TrimSpace(*stdinFormat))] {
-		return nil, fmt.Errorf("unsupported --stdin-format value %q: want %s", *stdinFormat,
-			strings.ReplaceAll(stdinFormatHelp, ", ", ", "))
+	if *stdinFormat != "" {
+		normalized := strings.ToLower(strings.TrimSpace(*stdinFormat))
+		if !validStdinFormats[normalized] {
+			return nil, fmt.Errorf("unsupported --stdin-format value %q: want %s", *stdinFormat, stdinFormatHelp)
+		}
+		// Store what was validated, not what was typed. Accepting " CSV " here and
+		// passing the raw string on left the staging step looking it up in a map
+		// keyed by the canonical names and failing there instead — a value that
+		// passed validation and then failed anyway.
+		*stdinFormat = normalized
 	}
 
 	// --stdin-table only names the --stdin-format dataset, so it has no effect
@@ -437,10 +444,11 @@ func usage(flag pflag.FlagSet) string {
 	s += fmt.Sprintf("  %s [OPTIONS] [FILE|DIRECTORY|URL ...]\n", color.GreenString("sqly"))
 	s += "\n"
 	s += "  Each input is loaded into an in-memory SQLite database as a table named\n"
-	s += "  after the file. With --sql or --sql-file, sqly runs the query and exits;\n"
-	s += "  with neither, it opens an interactive shell, or runs SQL piped into it.\n"
-	s += "  sqly has no subcommands. Dot-commands run inside the shell, including\n"
-	s += "  .save, which writes changed tables back to their files.\n"
+	s += "  after the file. With --sql, --sql-file, or --script-file, sqly runs the\n"
+	s += "  work and exits; with none of them, it opens an interactive shell, or runs\n"
+	s += "  a script piped into it. sqly has no subcommands. Dot-commands run inside\n"
+	s += "  the shell, in a piped script, and in a --script-file — including .save,\n"
+	s += "  which writes changed tables back to their files.\n"
 	s += "\n"
 	s += "[Examples]\n"
 	s += fmt.Sprintf("  - %s\n", color.HiYellowString("open the shell with a file loaded"))

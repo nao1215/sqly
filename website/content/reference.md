@@ -135,8 +135,8 @@ no writer at all cannot hang it.
 | none | a terminal | opens the interactive shell |
 | none | a pipe or a redirected file | runs it as a script: SQL and dot-commands |
 | `--stdin-format FORMAT` | anything | imports it as the table `stdin` |
-| `--sql` / `--sql-file` / `--inspect` | a terminal, `/dev/null`, or an empty file | nothing; stdin is unused |
-| `--sql` / `--sql-file` / `--inspect` | a pipe or a non-empty file | nothing, and says so on stderr |
+| `--sql` / `--sql-file` / `--script-file` / `--inspect` | a terminal, `/dev/null`, or an empty file | nothing; stdin is unused |
+| `--sql` / `--sql-file` / `--script-file` / `--inspect` | a pipe or a non-empty file | nothing, and says so on stderr |
 
 The last row is the one worth knowing. `cat data.csv \| sqly --sql "..." other.csv`
 looks like it feeds `data.csv` in, and it does not — the answer comes from
@@ -158,7 +158,7 @@ cat data.csv | sqly --sql "SELECT COUNT(*) FROM stdin" /dev/stdin
 rejected — the split is quote-, comment-, and trigger-aware, so a semicolon inside
 `'a;b'` or a `-- comment;` does not count as a second statement.
 
-`--sql-file` and a piped script run every statement. How many of them may return
+`--sql-file`, `--script-file`, and a piped script run every statement. How many of them may return
 rows depends on the output format, because only some formats can say where one
 result ends and the next begins:
 
