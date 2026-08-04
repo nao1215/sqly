@@ -213,6 +213,7 @@ func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath stri
 			cleanupLoad()
 			return false, fmt.Errorf("failed to import file %s from directory %s: %w", file, displayPath, err)
 		}
+		s.warnSkippedExcelSheets(loadPath, file)
 		cleanupLoad()
 
 		// The tables this file owns are the ones it newly created. When it only
@@ -488,6 +489,7 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) e
 		}
 		return fmt.Errorf("failed to import file %s: %w", displayPath, err)
 	}
+	s.warnSkippedExcelSheets(loadPath, displayPath)
 
 	after, err := s.usecases.importer.GetTableNames(ctx)
 	if err != nil {
@@ -908,6 +910,7 @@ func importUsageText() string {
 		"  - Files and directories can be mixed in arguments\n" +
 		"  - Directories are automatically detected and all supported files are imported\n" +
 		"  - If import multiple files/directories, separate them with spaces\n" +
-		"  - For Excel files, all sheets are imported as separate tables (enables cross-sheet JOINs)\n" +
+		"  - For Excel files, each sheet the workbook shows becomes its own table (enables cross-sheet JOINs);\n" +
+		"    start sqly with --include-hidden-sheets to import the hidden ones too\n" +
 		"  - JSON/JSONL data is stored in a 'data' column; use json_extract() to query fields"
 }

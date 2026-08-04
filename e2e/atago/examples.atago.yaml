@@ -1,0 +1,191 @@
+# The runnable examples in examples/, driven against the real binary.
+#
+# The point of examples/ is that a reader can clone the repository and run what
+# the README shows. That claim decays silently: a flag is renamed, an output
+# format shifts, and the files stay in the tree looking correct. So the fixtures
+# here are the real example files, copied in with `from:` rather than retyped —
+# a copy in this spec would drift from examples/ exactly as the docs would.
+#
+# Documented at examples/README.md and doc/cookbook.md.
+version: "1"
+
+suite:
+  name: sqly runnable examples
+
+scenarios:
+  - name: examples/report.sql runs and aggregates by region
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &sales
+          file: sales.csv
+          from: ../../examples/data/sales.csv
+      - fixture: &report
+          file: report.sql
+          from: ../../examples/report.sql
+      - run:
+          command: sqly --output-format csv --sql-file report.sql sales.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "region,total"
+              - "EMEA,2650"
+              - "AMER,2400"
+              - "ASIA,1650"
+
+  - name: examples/report.sql orders the regions by total, descending
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: *report
+      - run:
+          command: sqly --output-format csv --sql-file report.sql sales.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            # The ORDER BY is the part of the example a reader is being shown;
+            # asserting only the values would pass with it removed.
+            line: 2
+            equals: "EMEA,2650"
+      - assert:
+          stdout:
+            line: 3
+            equals: "AMER,2400"
+      - assert:
+          stdout:
+            line: 4
+            equals: "ASIA,1650"
+
+  - name: examples/update.sqly rewrites a region and saves the result
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: &update
+          file: update.sqly
+          from: ../../examples/update.sqly
+      - run:
+          command: sqly --script-file update.sqly sales.csv
+      - assert:
+          exit_code: 0
+      - assert:
+          # The .save is the half of the example that --sql-file cannot do, so
+          # its output is what proves the script ran to the end.
+          file:
+            path: out/sales.csv
+            contains:
+              - "APAC,widget,1200"
+              - "APAC,gadget,450"
+      - assert:
+          file:
+            path: out/sales.csv
+            not_contains: "ASIA"
+
+  - name: examples/update.sqly leaves its own input file alone
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: *update
+      - run:
+          command: sqly --script-file update.sqly sales.csv
+      - assert:
+          exit_code: 0
+      - assert:
+          # `.save DIR` writes copies. An example that quietly edited the file it
+          # ships with could only be run once from a clean clone.
+          file:
+            path: sales.csv
+            contains: "ASIA,widget,1200"
+
+  - name: the script example is rejected by --sql-file, before any statement runs
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture:
+          file: update.sql
+          from: ../../examples/update.sqly
+      - run:
+          command: sqly --sql-file update.sql sales.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains:
+              - ".save"
+              - "--script-file"
+      - assert:
+          # The UPDATE precedes the dot-command in the file. Rejecting the script
+          # after running it would leave the table changed and the user told it
+          # failed.
+          file:
+            path: out/sales.csv
+            exists: false
+
+  - name: the script example cannot be combined with --output
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: *update
+      - run:
+          command: sqly --script-file update.sqly --output out.csv sales.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: ".dump"
+      - assert:
+          file:
+            path: out.csv
+            exists: false
+
+  - name: an empty script file is a usage error rather than a silent success
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture:
+          file: empty.sqly
+          content: ""
+      - run:
+          command: sqly --script-file empty.sqly sales.csv
+      - assert:
+          exit_code: 2
+
+  - name: a script stops at a failing statement and does not run the save after it
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture:
+          file: broken.sqly
+          content: |
+            UPDATE sales SET region = 'APAC' WHERE region = 'ASIA';
+            SELECT * FROM no_such_table;
+            .save ./out
+      - run:
+          command: sqly --script-file broken.sqly sales.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no_such_table"
+      - assert:
+          # The save is the line after the failure. A script that carried on
+          # would write a half-applied edit to disk.
+          file:
+            path: out/sales.csv
+            exists: false
+
+  - name: a script keeps its results on stdout and its diagnostics on stderr
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture:
+          file: query.sqly
+          content: |
+            .mode csv
+            SELECT region FROM sales ORDER BY region LIMIT 1;
+      - run:
+          command: sqly --script-file query.sqly sales.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "AMER"
+      - assert:
+          stdout:
+            not_contains: "Change output mode"

@@ -21,25 +21,32 @@ point to pin a version against.
 * An unsupported `--stdin-format` value is rejected while parsing rather than when stdin is staged, so it exits `2` as a usage error instead of `1` after the run had started.
 * Exit codes now classify the failure instead of reporting every one as `1`. A bad command line or an unrunnable script exits `2`, an input that could not be read exits `3`, a destination that could not be written exits `4`, and a statement that ran and failed still exits `1`. A wrapper that only checks for non-zero is unaffected; one that checks for `1` specifically has to widen the check. The class is decided from the failure itself, so a `.save` that cannot write exits `4` inside a script exactly as it does on its own.
 * `.save --in-place` refuses a symlinked source unless `--follow-symlinks` is given. Following a link is still the only correct way to write through one — a rename would replace the link and leave the real file holding the old rows — but it overwrites a path the user never typed, which can sit outside the directory they are working in. The refusal names the link and what it resolves to; the opt-in prints the resolved path to stderr before writing. `.save DIR` is unaffected and rejects the option as meaningless there.
+* An Excel workbook now contributes only the sheets it shows. A hidden sheet usually holds the spreadsheet's own working-out rather than data anyone meant to publish, and turning it into a queryable table surprises whoever opens a file they did not build. `--include-hidden-sheets` imports them, hidden and very hidden alike, and is a session setting a later `.import` keeps. An import that skipped sheets says how many, on stderr, without naming them; `--inspect` names them. A run whose inputs are all known and hold no workbook rejects the flag, as `--encoding` and `--row-mismatch` already do; a shell with no inputs accepts it, because the `.import` it is for has not happened yet.
+* SIGTERM now exits `143` where it used to exit `130`. `130` is `128+SIGINT` and `143` is `128+SIGTERM`, which is what a shell reports for a process each signal killed. Reporting both as `130` made "someone pressed Ctrl-C" indistinguishable from "the surrounding system took the run away" — a canceled CI job, a service manager shutting down, a `timeout` giving up — which is exactly the distinction a wrapper deciding whether to retry needs. SIGINT is unchanged.
 
 ### New Features
-* SIGINT and SIGTERM cancel the run and exit `130` instead of killing the process. The query is canceled, the deferred cleanup runs, and the temp directories a download or a staged stdin dataset created are removed. The interactive shell is unaffected: the prompt reads Ctrl-C as a keystroke.
+* SIGINT and SIGTERM cancel the run instead of killing the process. The query is canceled, the deferred cleanup runs, and the temp directories a download or a staged stdin dataset created are removed. A second signal ends the run outright. The interactive shell is unaffected: the prompt reads Ctrl-C as a keystroke.
+* `--inspect` reports an `excel_sheets` array for a run whose inputs include a workbook: every sheet, whether the workbook shows it, whether this run imported it, and the table it became. It is the only place a hidden sheet is named. The field is additive and absent when no workbook was read, so a consumer of `tables` sees what it always saw.
+* `examples/` holds two files that run against a clone as shown: `report.sql` for `--sql-file` and `update.sqly` for `--script-file`. The E2E suite runs both, so the commands in the README and the cookbook cannot go stale while looking correct.
 
 ### Documentation
 * The formats page opens with a capability matrix: what each format can do for reading, stdin, URLs, compression, tables per file, query results, write-back, and types. The formats differ in all of those, and the page previously described them one at a time.
 * The reference documents `--help` and `--version`, which it had never listed despite promising every flag, and gained a section comparing `--sql-file`, `--script-file`, and a piped script.
 * CONTRIBUTING points at `website/content/` instead of the mkdocs tree that was replaced by Hugo, and the bug report template asks for the command, the exit code, and `sqly --version` instead of browser steps and a Go version.
 * A drift test derives the flag list from the parser and fails when the reference documents a flag that does not exist, or omits one that does. Another fails if the README goes back to stating a flag count; it said twelve while there were thirteen.
+* The formats page says what the 2 GiB download limit does not cover. It bounds the HTTP response body and nothing else: a compressed input expands after it lands, an XLSX file is a ZIP whose sheet XML is far larger than the archive, and every imported row then goes into an in-memory SQLite database. Row count, column count, field size, and CPU time are not bounded at all. A URL well inside 2 GiB can still exhaust memory, so a remote input is documented as untrusted data to run where an over-large import is survivable.
+* The cookbook's Excel and script recipes match what sqly does. "Every sheet is imported" is gone, and "pipe a script that has dot-commands" is now `--script-file`. The exit-code recipe lists the codes rather than saying "non-zero", and the write-back recipe covers the symlink refusal and `--follow-symlinks`.
+* Drift tests cover the new claims: both script flags appear in the README with a link to `examples/`, the reference documents `--include-hidden-sheets`, the formats and cookbook pages state the visible-only default, the documented signal codes match `128+SIGINT` and `128+SIGTERM`, the download limit is described as a body limit, and the example files exist, are linked, and are run by the E2E suite. Flag names are matched as whole tokens, so `--sql-file` can no longer stand in for a missing `--sql`.
 
 ### v1.0.0 CLI Surface
 This supersedes the list under v1.0.0-rc1, which is left as the record of what that tag promised.
 
-* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`.
+* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`, `--include-hidden-sheets`.
 * Query: `--sql/-s SQL`, `--sql-file/-f FILE`, `--script-file FILE`, `--dialect sqlite|mysql|postgresql|googlesql`.
 * Output: `--output/-o FILE`, `--output-format table|vertical|csv|tsv|ltsv|json|jsonl|markdown|excel|parquet`.
 * Inspection: `--inspect`, `--inspect-sample N`.
 * General: `--help/-h`, `--version/-v`.
-* Exit codes: `0` success, `1` a statement failed, `2` usage, `3` input, `4` output, `130` interrupted.
+* Exit codes: `0` success, `1` a statement failed, `2` usage, `3` input, `4` output, `130` SIGINT, `143` SIGTERM.
 
 ## [v1.0.0-rc1](https://github.com/nao1215/sqly/compare/v0.31.0...v1.0.0-rc1) (2026-08-04)
 
@@ -92,7 +99,7 @@ The release candidate for v1.0.0. The command surface below is what v1.0.0 commi
 ### v1.0.0 CLI Surface
 The command surface below is what v1.0.0 commits to. Anything not listed is not part of the guarantee.
 
-* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`.
+* Input: positional paths (files, directories, `http(s)` URLs), `--stdin-format FORMAT`, `--stdin-table NAME`, `--encoding ENCODING`, `--row-mismatch error|skip|pad`, `--include-hidden-sheets`.
 * Query: `--sql/-s SQL`, `--sql-file/-f FILE`, `--dialect sqlite|mysql|postgresql|googlesql`.
 * Output: `--output/-o FILE`, `--output-format table|vertical|csv|tsv|ltsv|json|jsonl|markdown|excel|parquet`.
 * Inspection: `--inspect`, `--inspect-sample N`.

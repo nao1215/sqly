@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -160,6 +161,45 @@ func Test_startupErrorMessage(t *testing.T) {
 		want := "failed to initialize sqly shell: history db open failed"
 		if got != want {
 			t.Errorf("mismatch got=%q, want=%q", got, want)
+		}
+	})
+}
+
+// TestSignalTrap covers the record that decides the exit code. The signal it
+// keeps is the only thing left by the time the run unwinds that says which one
+// arrived, so a trap that forgets it, or that lets a later signal overwrite the
+// first, would report Ctrl-C and a service manager's SIGTERM as the same run.
+func TestSignalTrap(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a run nothing signaled has no signal to report", func(t *testing.T) {
+		t.Parallel()
+		trap := &signalTrap{}
+		if got := trap.signal(); got != nil {
+			t.Errorf("an untouched trap reports %v, want nil", got)
+		}
+	})
+
+	t.Run("the first signal decides, and a second does not renumber it", func(t *testing.T) {
+		t.Parallel()
+		trap := &signalTrap{}
+		trap.record(os.Interrupt)
+		trap.record(syscall.SIGTERM)
+
+		if got := trap.signal(); got != os.Interrupt {
+			t.Errorf("trap reports %v, want the first signal %v", got, os.Interrupt)
+		}
+		if got := shell.ExitCodeForSignal(trap.signal()); got != shell.ExitInterrupt {
+			t.Errorf("exit code = %d, want %d", got, shell.ExitInterrupt)
+		}
+	})
+
+	t.Run("a SIGTERM is reported as the termination code", func(t *testing.T) {
+		t.Parallel()
+		trap := &signalTrap{}
+		trap.record(syscall.SIGTERM)
+		if got := shell.ExitCodeForSignal(trap.signal()); got != shell.ExitTerminated {
+			t.Errorf("exit code = %d, want %d", got, shell.ExitTerminated)
 		}
 	})
 }

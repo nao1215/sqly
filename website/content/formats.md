@@ -92,9 +92,11 @@ That keeps heterogeneous documents queryable — no schema is guessed, and a fie
 
 ## Excel
 
-Every sheet becomes its own table, so a workbook is queried the way a directory
-is: pick the table you want. All sheets are imported — there is no flag to select
-one, because selecting one is what the `FROM` clause is for.
+Each sheet the workbook shows becomes its own table, so a workbook is queried the
+way a directory is: pick the table you want. There is no flag to select a single
+sheet, because selecting one is what the `FROM` clause is for. Sheets the
+workbook hides are left out unless [`--include-hidden-sheets`](#hidden-sheets)
+asks for them.
 
 ```shell
 sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
@@ -123,8 +125,9 @@ sheet `select` of `book.xlsx` is `book_select`, an ordinary identifier.
 
 | The workbook has | sqly does |
 |:--|:--|
-| Many sheets | imports every one; a hundred sheets is a hundred tables |
-| A hidden sheet | imports it like any other — hidden is a display property |
+| Many shown sheets | each becomes its own table; a hundred shown sheets is a hundred tables |
+| A hidden sheet | leaves it out, and says how many it left out; `--include-hidden-sheets` imports it |
+| A very hidden sheet | the same: sqly does not tell the two kinds of hiding apart |
 | A sheet with no cells | skips it; no empty table is created |
 | A sheet with a header and no rows | imports it as a table with zero rows |
 | No usable sheet at all | fails the import, saying the file produced no table |
@@ -147,6 +150,50 @@ sheets "Q1 sales" and "Q1.sales" of book.xlsx both map to table
 
 Rename one of the sheets. (Two sheets differing only in case cannot occur —
 Excel compares sheet names case-insensitively itself.)
+
+The check runs over the sheets that are actually imported. A hidden sheet that
+would want the same table as a shown one is not a collision while it stays
+unimported; adding `--include-hidden-sheets` brings it into the check and the
+same workbook is then refused.
+
+### Hidden sheets
+
+sqly imports only the sheets a workbook shows. A hidden sheet usually holds the
+spreadsheet's own working-out — intermediate calculations, a lookup table, a
+draft nobody deleted — and turning that into a queryable table surprises whoever
+opens a file they did not build.
+
+An import that left sheets behind says how many, on stderr:
+
+```text
+Skipped 2 hidden sheets in book.xlsx; start sqly with --include-hidden-sheets to import them.
+```
+
+That is a count, not a list: the names of hidden sheets are the part of a
+workbook its author chose not to present. `--inspect` names them, because a
+report of what a file holds is exactly what it was asked for:
+
+```shell
+sqly --inspect book.xlsx
+```
+
+Its `excel_sheets` array carries every sheet with `visible` (what the workbook
+says) and `imported` (what this run did).
+
+`--include-hidden-sheets` imports the hidden sheets too, and it is a session
+setting: a shell started with it keeps that policy for every later `.import`.
+
+```shell
+sqly --include-hidden-sheets --sql "SELECT * FROM book_Internal" book.xlsx
+```
+
+Excel separates *hidden* (a reader can undo it from the sheet tabs) from
+*very hidden* (only the VBA editor can). sqly does not distinguish them — the
+library it reads workbooks with reports one flag covering both — so neither kind
+is imported by default and both are imported with the flag.
+
+There is no syntax for selecting individual sheets. Import the workbook and pick
+the table you want in SQL.
 
 An Excel source cannot be written back in place, because several tables share one file. Export to a new workbook with `--output-format excel --output`.
 
@@ -172,10 +219,29 @@ chunked response is stopped while it is being read, so a body that never ends
 cannot fill the disk. A declared size over the limit is refused before the body
 is read at all.
 
-The limits are not flags. A limit that is routinely raised protects nothing, and
-2 GiB is far past what fits in an in-memory SQLite database — the import would
-exhaust memory long before the download reached the cap. It is there to stop a
-server filling the disk on the way, not to size your data.
+The limits are not flags. A limit that is routinely raised protects nothing.
+
+### What the download limit does not bound
+
+The 2 GiB cap is on the HTTP response body — the bytes that arrive over the
+network. It is not a bound on what importing those bytes costs, and for some
+formats the two are far apart:
+
+- A compressed input is expanded after it lands. A 100 MB `.csv.gz` can become
+  several gigabytes of CSV.
+- An XLSX file is a ZIP archive, and the sheet XML inside it expands well past
+  the archive's size.
+- Every imported row ends up in an in-memory SQLite database. Resident memory
+  runs to roughly twice the expanded data, not the downloaded size.
+- Row count, column count, the size of one field, and CPU time are not capped at
+  all. Formats that are parsed whole — XLSX, Parquet, JSON, LTSV — hold the
+  parsed form in memory while the tables are built.
+
+So a URL well inside 2 GiB can still exhaust memory or run for a long time.
+**Treat a remote input as untrusted data**: it is chosen by whoever runs the
+server, not by you. Run it where an over-large import is survivable — a
+container with a memory limit, a machine you can kill — rather than relying on
+the download cap to size the work.
 
 The table is named after the file that arrives, not the URL you typed. The name
 is taken from the first of these that gives a supported filename:

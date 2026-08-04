@@ -71,6 +71,11 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | `.save --in-place` | overwrite each table's source file |
 | `.save --in-place --follow-symlinks` | also overwrite through a symlinked source, which is otherwise refused |
 
+`.import` reads a workbook the way the session was started: one table per sheet
+the workbook shows, unless sqly was launched with `--include-hidden-sheets`. The
+sheet policy is a session setting rather than a per-import one, so it does not
+change halfway through a session; see [Excel sheets](/reference/#excel-sheets).
+
 ## Batch mode
 
 Without a TTY, the same commands are read from stdin as a script. This is how you script sqly:

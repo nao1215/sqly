@@ -1,0 +1,2 @@
+UPDATE sales SET region = 'APAC' WHERE region = 'ASIA';
+.save ./out

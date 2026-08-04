@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/nao1215/sqly/config"
@@ -24,27 +25,87 @@ func main() {
 	osExit(run(os.Args))
 }
 
+// signalTrap is the record of which signal stopped a run.
+//
+// The signal has to be kept rather than inferred, because by the time the run
+// unwinds nothing left carries it: the context reports only that it was
+// canceled, and a query that noticed first returns a driver error that never
+// mentions a signal. Ctrl-C and a service manager's SIGTERM would then be
+// indistinguishable, and they exit with different codes.
+type signalTrap struct {
+	mu       sync.Mutex
+	received os.Signal
+}
+
+// record stores the first signal to arrive. Later ones change nothing: the
+// second signal's job is to kill the process outright, not to renumber the exit.
+func (t *signalTrap) record(sig os.Signal) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.received == nil {
+		t.received = sig
+	}
+}
+
+// signal returns the signal that stopped the run, or nil if none did.
+func (t *signalTrap) signal() os.Signal {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.received
+}
+
 // run execute sqly command. This function do dependency injection
 // and run the interactive shell. The exit code classifies the failure; see
 // shell.ExitCode for what each one means.
 //
 // SIGINT and SIGTERM cancel the run's context rather than killing the process,
 // so the deferred cleanup still removes the temp directories a download or a
-// staged stdin dataset created. The interactive shell is unaffected: the prompt
-// puts the terminal in raw mode, where Ctrl-C arrives as a keystroke and no
-// signal is delivered at all.
+// staged stdin dataset created. Which of the two arrived decides the exit code:
+// 130 for SIGINT, 143 for SIGTERM. The interactive shell is unaffected by
+// either: the prompt puts the terminal in raw mode, where Ctrl-C arrives as a
+// keystroke and no signal is delivered at all.
 func run(args []string) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	trap := &signalTrap{}
+	// Two slots, not one. The second is for a signal that arrives in the moment
+	// between the first being delivered and the default disposition being
+	// restored below: with one slot that signal has nowhere to go and is dropped,
+	// and "press it again" would then need a third press. The window is tiny, but
+	// `kill -TERM` twice in a script closes it faster than any person could.
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
 	// Trapping a signal takes away the one guarantee the default handler gave:
 	// that it always kills the process. Cancellation reaches every blocking read
 	// sqly does itself, but not one inside a dependency or the kernel, and a CLI
 	// that can swallow Ctrl-C is worse than one that exits untidily. Restoring the
 	// default disposition after the first signal means a second one kills it
 	// outright, which is the usual "press it again" contract.
+	//
+	// The signal is recorded before the cancellation is published, so a run that
+	// sees a canceled context can always read back which signal canceled it.
 	go func() {
-		<-ctx.Done()
-		stop()
+		sig, ok := <-signals
+		if !ok {
+			return
+		}
+		trap.record(sig)
+		signal.Stop(signals)
+		cancel()
+
+		// A signal that was already queued behind the first one means the user
+		// has asked twice, and the second ask is "stop now" rather than "stop
+		// tidily". Honoring it here is what the restored default disposition
+		// does for every later signal; this only covers the one that arrived too
+		// early to reach it. The cleanup is deliberately skipped — that is what
+		// pressing it again means.
+		select {
+		case second := <-signals:
+			osExit(shell.ExitCodeForSignal(second))
+		default:
+		}
 	}()
 
 	sqlyShell, cleanup, err := di.NewShell(args)
@@ -54,16 +115,18 @@ func run(args []string) int {
 	}
 	defer cleanup()
 
-	if err := sqlyShell.Run(ctx); err != nil {
-		fmt.Fprintf(config.Stderr, "%v\n", err)
-		// A canceled context is reported as an interrupt whatever the failing
-		// statement called it. A query that notices the cancellation first returns
-		// a driver error that says nothing about a signal, so the signal's own
-		// record of what happened is what decides.
-		if ctx.Err() != nil {
-			return shell.ExitInterrupt
-		}
-		return shell.ExitCode(err)
+	runErr := sqlyShell.Run(ctx)
+	if runErr != nil {
+		fmt.Fprintf(config.Stderr, "%v\n", runErr)
+	}
+	// A run a signal stopped exits with that signal's code whatever the failing
+	// statement called the error — including when the statement managed to finish
+	// and returned nothing at all, which is still a run that was cut short.
+	if sig := trap.signal(); sig != nil {
+		return shell.ExitCodeForSignal(sig)
+	}
+	if runErr != nil {
+		return shell.ExitCode(runErr)
 	}
 	return shell.ExitOK
 }

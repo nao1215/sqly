@@ -19,6 +19,8 @@ func TestOptionApplicability(t *testing.T) {
 	jsonl := writeCSV(t, dir, "docs.jsonl", "{\"a\":1}\n")
 	parquet := writeCSV(t, dir, "data.parquet", "not really parquet")
 	gzipped := writeCSV(t, dir, "rows.csv.gz", "unused")
+	xlsx := writeCSV(t, dir, "book.xlsx", "not really a workbook")
+	gzippedXLSX := writeCSV(t, dir, "book.xlsx.gz", "unused")
 	sub := filepath.Join(dir, "nested")
 	if err := os.Mkdir(sub, 0o750); err != nil {
 		t.Fatal(err)
@@ -66,6 +68,43 @@ func TestOptionApplicability(t *testing.T) {
 		{
 			name: "encoding is accepted for a remote input, whose format is unknown",
 			args: []string{"--encoding", "shift-jis", "--sql", "SELECT 1", "https://example.test/data"},
+		},
+		{
+			name: "include-hidden-sheets with a workbook input is accepted",
+			args: []string{"--include-hidden-sheets", "--sql", "SELECT 1", xlsx},
+		},
+		{
+			name:    "include-hidden-sheets with only a csv input is rejected",
+			args:    []string{"--include-hidden-sheets", "--sql", "SELECT 1", csv},
+			wantErr: "--include-hidden-sheets",
+		},
+		{
+			name: "include-hidden-sheets is accepted when one of several inputs is a workbook",
+			args: []string{"--include-hidden-sheets", "--sql", "SELECT 1", csv, xlsx},
+		},
+		{
+			name: "include-hidden-sheets is accepted for a compressed workbook",
+			args: []string{"--include-hidden-sheets", "--sql", "SELECT 1", gzippedXLSX},
+		},
+		{
+			name: "include-hidden-sheets is accepted for a directory, whose contents are unknown",
+			args: []string{"--include-hidden-sheets", "--sql", "SELECT 1", sub},
+		},
+		{
+			name: "include-hidden-sheets is accepted for a remote input, whose format is unknown",
+			args: []string{"--include-hidden-sheets", "--sql", "SELECT 1", "https://example.test/data"},
+		},
+		{
+			// The flag is the session's sheet policy, and a shell with no inputs
+			// yet is exactly the case where a later .import will use it. Every
+			// other option is rejected here; this one must not be.
+			name: "include-hidden-sheets is accepted with no input at all",
+			args: []string{"--include-hidden-sheets"},
+		},
+		{
+			name:    "include-hidden-sheets is still rejected when the only input is a piped csv dataset",
+			args:    []string{"--stdin-format", "csv", "--include-hidden-sheets", "--sql", "SELECT 1"},
+			wantErr: "--include-hidden-sheets",
 		},
 		{
 			name: "an option left at its default is never rejected",

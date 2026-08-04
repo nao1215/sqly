@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +40,12 @@ var delimitedImportExtensions = map[string]bool{
 	model.ExtTSV: true,
 }
 
+// excelImportExtensions is the one format that has sheets, and so the only one
+// --include-hidden-sheets can affect.
+var excelImportExtensions = map[string]bool{
+	model.ExtExcel: true,
+}
+
 // validateOptionApplicability rejects an import option the user typed that
 // cannot apply to any input of this run. It runs before the import so a rejected
 // run reads no file and writes nothing.
@@ -51,7 +58,23 @@ func (s *Shell) validateOptionApplicability() error {
 		return &invocationError{Err: fmt.Errorf("--row-mismatch %s applies to csv and tsv inputs, and this run has none; drop the flag",
 			s.argument.RowMismatch)}
 	}
+	// --include-hidden-sheets is checked last and one step more leniently than
+	// the others, because it is not only an import option: it is the session's
+	// sheet policy, and an interactive shell started with no input at all can
+	// still .import a workbook later. Only a run that already knows every input
+	// it will ever read, and knows none of them is a workbook, can prove the flag
+	// useless.
+	if s.argument.IsExplicit("include-hidden-sheets") && s.hasAnyInput() && !s.hasInputMatching(excelImportExtensions) {
+		return &invocationError{Err: errors.New("--include-hidden-sheets applies to xlsx inputs, and this run has none; drop the flag")}
+	}
 	return nil
+}
+
+// hasAnyInput reports whether the run was given something to import up front. A
+// run with nothing has not decided its inputs yet: the shell it starts reads
+// them from .import.
+func (s *Shell) hasAnyInput() bool {
+	return s.argument.StdinFormat != "" || len(s.argument.FilePaths) > 0
 }
 
 // hasInputMatching reports whether any input of this run could be one of the

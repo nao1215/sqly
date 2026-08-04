@@ -30,9 +30,31 @@ type inspectTable struct {
 	SampleRows json.RawMessage `json:"sample_rows"`
 }
 
+// inspectExcelSheet describes one sheet of an imported workbook: whether the
+// workbook showed it, whether this run imported it, and what table it became.
+//
+// It exists because a workbook is the one input whose tables are not the whole
+// story. sqly imports only the sheets a workbook shows unless told otherwise,
+// so "which tables did I get?" leaves "and what else was in there?" unanswered,
+// and the answer is not derivable from the file name or the table list.
+//
+// Table is omitted for a sheet that was not imported: there is no table to
+// name, and an empty string would read as one.
+type inspectExcelSheet struct {
+	Source   string `json:"source"`
+	Name     string `json:"name"`
+	Visible  bool   `json:"visible"`
+	Imported bool   `json:"imported"`
+	Table    string `json:"table,omitempty"`
+}
+
 // inspectReport is the top-level JSON contract produced by --inspect.
+//
+// ExcelSheets is additive: it is absent for a run with no workbook among its
+// inputs, so a consumer reading only Tables sees exactly what it saw before.
 type inspectReport struct {
-	Tables []inspectTable `json:"tables"`
+	Tables      []inspectTable      `json:"tables"`
+	ExcelSheets []inspectExcelSheet `json:"excel_sheets,omitempty"`
 }
 
 func outputModeFlagName(o *config.Output) string {
@@ -102,6 +124,7 @@ func (s *Shell) runInspect(ctx context.Context) error {
 		}
 		report.Tables = append(report.Tables, entry)
 	}
+	report.ExcelSheets = s.excelSheetReports()
 
 	encoded, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {

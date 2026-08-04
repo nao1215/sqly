@@ -134,8 +134,8 @@ jobs:
           # Present: flags v1.0.0 commits to. A page that lost one is a page a
           # reader cannot use to write a working command.
           for flag in --stdin-format --stdin-table --encoding --row-mismatch \
-                      --sql --sql-file --script-file --dialect \
-                      --output --output-format --inspect --inspect-sample; do
+                      --include-hidden-sheets --sql --sql-file --script-file \
+                      --dialect --output --output-format --inspect --inspect-sample; do
             case "${page}" in
               *"${flag}"*) ;;
               *) echo "::error::${flag} is missing from the deployed reference page" >&2; exit 1 ;;
@@ -151,3 +151,33 @@ jobs:
             esac
           done
           echo "the deployed reference page matches the v1.0.0 flag surface"
+
+      - name: Check the deployed pages state the contracts a wrong page would break
+        run: |
+          # A flag name being present says the page mentions it. These say the
+          # page still means what the implementation does — the class of drift a
+          # name check cannot see, and the one that misleads a reader worst: a
+          # wrapper written against the wrong exit code, or an untrusted URL run
+          # on the belief that 2 GiB bounds what it can cost.
+          reference=$(curl -fsSL --max-time 30 "${SITE}reference/?cachebust=${GITHUB_RUN_ID}")
+          formats=$(curl -fsSL --max-time 30 "${SITE}formats/?cachebust=${GITHUB_RUN_ID}")
+
+          require() {
+            haystack=$1
+            needle=$2
+            where=$3
+            case "${haystack}" in
+              *"${needle}"*) ;;
+              *) echo "::error::the deployed ${where} page does not state: ${needle}" >&2; exit 1 ;;
+            esac
+          }
+
+          require "${reference}" "SIGINT stopped the run" "reference"
+          require "${reference}" "SIGTERM stopped the run" "reference"
+          require "${reference}" "143" "reference"
+          require "${reference}" "only the sheets a workbook shows" "reference"
+          require "${formats}" "only the sheets a workbook shows" "formats"
+          require "${formats}" "very hidden" "formats"
+          require "${formats}" "2 GiB" "formats"
+          require "${formats}" "What the download limit does not bound" "formats"
+          echo "the deployed pages state the v1.0.0 contracts"

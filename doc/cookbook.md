@@ -15,12 +15,12 @@ SQLite can do, sqly can do — the file is just the table.
 | Join files of different formats | [Join across formats](#join-across-formats) |
 | Read a `.gz` / `.zst` / `.xz` file | [Compressed files](#compressed-files) |
 | Pull fields out of JSON or JSONL | [JSON and JSONL](#json-and-jsonl) |
-| Query a sheet of a workbook | [Excel workbooks](#excel-workbooks) |
+| Query a sheet of a workbook, or a sheet it hides | [Excel workbooks](#excel-workbooks) |
 | Query a file on a web server | [Files over HTTP](#files-over-http) |
 | Pipe data in from another command | [Pipe data in](#pipe-data-in) |
 | Pipe the result into jq, awk, or sort | [Pipe data out](#pipe-data-out) |
 | Load a whole directory | [Load a directory](#load-a-directory) |
-| Run a saved `.sql` script | [Run SQL from a file](#run-sql-from-a-file) |
+| Run a saved `.sql` script or `.sqly` script | [Run SQL or a sqly script from a file](#run-sql-or-a-sqly-script-from-a-file) |
 | Rank, bucket, or window over rows | [Analytics](#analytics) |
 | Edit a file in place | [Write changes back](#write-changes-back) |
 | Write MySQL / PostgreSQL / BigQuery SQL | [Other SQL dialects](#other-sql-dialects) |
@@ -196,18 +196,34 @@ sqly --output-format csv --output flat.csv \
 
 ## Excel workbooks
 
-Every sheet becomes a table named `filename_sheetname`:
+Each sheet the workbook shows becomes a table named `filename_sheetname`. Start
+with `--inspect`, which lists every sheet the file holds and which of them became
+a table:
 
 ```shell
 sqly --inspect book.xlsx
-sqly --sql "SELECT * FROM book_Sheet1" book.xlsx
 ```
 
-Every sheet is imported, so pick the one you want by its table name:
+Then pick the one you want by its table name — there is no syntax for selecting a
+sheet on the command line:
 
 ```shell
-sqly --sql "SELECT * FROM book_Q3_actuals" book.xlsx
+sqly --sql "SELECT * FROM book_Visible" book.xlsx
 ```
+
+A hidden sheet is left out. That is usually what you want: hidden sheets tend to
+hold the spreadsheet's own working-out — intermediate calculations, a lookup
+table, an old draft — rather than data anyone meant to publish. sqly says how
+many it skipped, on stderr, without naming them; `--inspect` is where the names
+are. Import them with `--include-hidden-sheets`:
+
+```shell
+sqly --include-hidden-sheets --sql "SELECT * FROM book_Internal" book.xlsx
+```
+
+The flag is a session setting, so a shell started with it applies it to every
+later `.import` too. Excel's *hidden* and *very hidden* are not told apart:
+neither is imported by default, both are with the flag.
 
 Write a result back out as a workbook:
 
@@ -230,7 +246,17 @@ The same URL works from the shell:
 sqly:~(table)$ .import https://example.com/data/user.csv
 ```
 
-Only `http` and `https` are fetched; any other scheme is rejected by name.
+Only `http` and `https` are fetched; any other scheme is rejected by name. sqly
+follows at most five redirects, and a redirect to another scheme is refused.
+`HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` are honored.
+
+The downloaded response body is capped at 2 GiB. That cap is on the bytes that
+arrive over the network and on nothing else: a compressed input expands after it
+lands, an XLSX file is a ZIP whose sheet XML is much larger than the archive, and
+every imported row then goes into an in-memory SQLite database. A URL well inside
+2 GiB can still use far more memory and CPU than its size suggests. Treat a
+remote input as untrusted data and run it somewhere an over-large import is
+survivable.
 
 ## Pipe data in
 
@@ -303,7 +329,19 @@ sqly --output-format csv --sql "SELECT COUNT(*) FROM sales" sales.csv.gz
 
 ### Exit codes in a pipeline
 
-sqly exits non-zero when an import or a query fails, so `set -e` stops the script:
+sqly exits non-zero when an import or a query fails, and the code says which
+stage failed:
+
+| Code | Meaning |
+|:--|:--|
+| `1` | a statement ran and failed |
+| `2` | the command line or the script was not accepted |
+| `3` | an input could not be read |
+| `4` | a destination could not be written |
+| `130` | SIGINT stopped the run — someone pressed Ctrl-C |
+| `143` | SIGTERM stopped the run — something else asked it to stop |
+
+`set -e` stops the script on any of them:
 
 ```shell
 set -e
@@ -337,20 +375,36 @@ Files and directories mix freely:
 sqly ./data extra.csv --sql "SELECT * FROM extra"
 ```
 
-## Run SQL from a file
+## Run SQL or a sqly script from a file
 
 ```shell
 sqly --sql-file report.sql sales.csv
+sqly --script-file update.sqly sales.csv
 ```
 
-The script holds SQL, and may hold several statements; each result is printed in
-turn. Dot-commands are not SQL, so a `--sql-file` that runs one is rejected —
-pipe such a script to sqly instead. Send a single-result script straight to a
-file:
+`--sql-file` holds SQL and nothing else. It may hold several statements; each
+result is printed in turn. A dot-command in it is a usage error, reported before
+any statement runs, naming `--script-file` as the flag that takes them.
+
+`--script-file` holds what the shell holds — SQL and dot-commands alike — so it is
+the one to reach for when the script has a side effect:
+
+```text
+UPDATE sales SET region = 'APAC' WHERE region = 'ASIA';
+.save ./out
+```
+
+`--script-file` rejects `--output`: a script can print several results and take
+several actions, and one destination cannot carry that. Write from inside the
+script with `.dump` instead. `--sql-file` does accept `--output` for a
+single-result script:
 
 ```shell
 sqly --output-format csv --sql-file report.sql --output report.csv sales.csv
 ```
+
+Both files are in [`examples/`](https://github.com/nao1215/sqly/tree/main/examples)
+and can be run straight from a clone.
 
 ## Analytics
 
@@ -429,6 +483,18 @@ printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./o
 ```shell
 printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place\n" | sqly user.csv
 ```
+
+A source reached through a symlink is refused by `.save --in-place`, because
+following one writes a file whose path you never typed. Say so explicitly to
+allow it:
+
+```shell
+printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place --follow-symlinks\n" | sqly link-to-user.csv
+```
+
+That is a check on intent, not a security boundary: it asks whether you meant to
+write through the link, and it cannot defend against a filesystem that changes
+underneath the write.
 
 The same commands work in the interactive shell, where you can look at the
 result before saving it:

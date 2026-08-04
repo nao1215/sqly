@@ -87,6 +87,13 @@ type Shell struct {
 	// random path (and the temp dir filesql embeds in its own error) back to a
 	// stable "stdin" reference, instead of leaking the implementation detail.
 	stdinStagedPath string
+	// excelWorkbooks records what each imported workbook held at the moment it
+	// was imported: every sheet and whether the workbook showed it. It is kept
+	// because --inspect reports the sheets that did not become tables, and by
+	// then the file may be gone — a workbook fetched over HTTP is staged into a
+	// temp directory the import cleans up.
+	excelWorkbooks []excelWorkbookImport
+
 	// tableSources maps an imported table name to the source path it came from.
 	// It is populated on every import and used by the --inspect report and by
 	// write-back (.save) to map a table back to its source file.
@@ -609,6 +616,11 @@ func (s *Shell) init(ctx context.Context) error {
 	// Apply the malformed-row import policy from the --row-mismatch flag before any
 	// file is loaded, so the initial import honors the requested handling.
 	s.usecases.importer.SetRowMismatchPolicy(s.state.rowMismatch)
+	// The Excel sheet policy is set the same way and for the same reason, and it
+	// is set once for the session rather than per import: a shell started with
+	// --include-hidden-sheets keeps that policy for every later .import, so what
+	// the flag means does not change halfway through a session.
+	s.usecases.importer.SetIncludeHiddenSheets(s.state.includeHiddenSheets)
 
 	// History is best-effort: a read-only or unwritable history DB (CI,
 	// sandboxes, containers) must not block the requested query or command.
