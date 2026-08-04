@@ -367,9 +367,10 @@ wrong" from "that file would not load" without reading stderr.
 | `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback | the destination |
 | `130` | SIGINT or SIGTERM stopped the run | — |
 
-Codes `2`, `3`, and `4` are decided before or during the stage they name, so a `2`
-means nothing was read and nothing was written. A `4` means the query may already
-have produced results.
+Most code-`2` failures are decided before anything is read or written. The
+exception is a script whose result sets the chosen format cannot separate: that
+is only known once the script has run, so the inputs were read even though
+nothing was printed. A `4` means the query may already have produced results.
 
 The class is the same whether a failure happens at the top level or inside a
 script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly

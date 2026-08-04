@@ -128,7 +128,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".import\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".import requires"
 

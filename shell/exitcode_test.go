@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/nao1215/sqly/config"
 )
@@ -172,4 +175,53 @@ func mustArgError(t *testing.T) error {
 		t.Fatalf("parsing an unknown flag returned %T, want *config.ArgError", err)
 	}
 	return err
+}
+
+// TestRun_StdinScriptReadObservesCancellation is the half of interrupt handling
+// that a signal handler alone does not give you. main.go traps SIGINT and
+// cancels the run's context instead of letting the default handler kill the
+// process — which means every blocking read in the run has to notice, or
+// trapping the signal turns "Ctrl-C quits" into "Ctrl-C does nothing".
+//
+// A stdin script read is the blocking one that matters: a pipe whose writer
+// never closes (a harness, a FIFO with an idle writer) leaves io.ReadAll parked
+// forever. It is driven here through an io.Pipe left open on purpose.
+func TestRun_StdinScriptReadObservesCancellation(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// A pipe with a writer that is never closed and never writes: the reader
+	// blocks until something else intervenes.
+	reader, writer := io.Pipe()
+	defer func() { _ = writer.Close() }()
+	s.stdin = reader
+	s.isTTY = func() bool { return false }
+
+	backupOut, backupErr := config.Stdout, config.Stderr
+	var out, errOut strings.Builder
+	config.Stdout, config.Stderr = &out, &errOut
+	defer func() { config.Stdout, config.Stderr = backupOut, backupErr }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+
+	// Give Run time to reach the read, then interrupt it the way a signal would.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case runErr := <-done:
+		if runErr == nil {
+			t.Fatal("an interrupted run returned no error")
+		}
+		if got := ExitCode(runErr); got != ExitInterrupt {
+			t.Errorf("ExitCode = %d, want %d (%v)", got, ExitInterrupt, runErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after the context was cancelled; the stdin read ignores cancellation")
+	}
 }

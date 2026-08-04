@@ -294,7 +294,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	// Read and parse the script now, so a script that cannot run — a bad
 	// boundary, or a helper command in a SQL file — fails before the import
 	// spends time on files. The same parse is what executes below.
-	elements, err := s.loadScript()
+	elements, err := s.loadScript(ctx)
 	if err != nil {
 		return err
 	}
@@ -366,7 +366,7 @@ func (s *Shell) Run(ctx context.Context) error {
 // they come. The interactive shell and --inspect have no script; every other
 // mode has exactly one, parsed once here and executed later from the same
 // result.
-func (s *Shell) loadScript() ([]scriptElement, error) {
+func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 	var (
 		script string
 		origin string
@@ -383,7 +383,7 @@ func (s *Shell) loadScript() ([]scriptElement, error) {
 		}
 		script, origin = loaded, s.argument.SQLFilePath
 	case modeStdinScript:
-		data, err := io.ReadAll(s.stdin)
+		data, err := readAllContext(ctx, s.stdin)
 		if err != nil {
 			return nil, &scriptSourceError{Err: fmt.Errorf("failed to read the script from stdin: %w", err)}
 		}
@@ -617,7 +617,7 @@ func (s *Shell) init(ctx context.Context) error {
 		if s.isTTY() {
 			return &invocationError{Err: errors.New("--stdin-format requires piped or redirected stdin")}
 		}
-		stdinPath, cleanup, err := s.stageStdinDataset()
+		stdinPath, cleanup, err := s.stageStdinDataset(ctx)
 		if err != nil {
 			return err
 		}
@@ -682,7 +682,7 @@ var stdinFormatExtensions = map[string]string{
 // arguments (including table naming and joins). The returned cleanup removes the
 // temp directory; it is safe to call after import because the data is already
 // copied into the shared database.
-func (s *Shell) stageStdinDataset() (string, func(), error) {
+func (s *Shell) stageStdinDataset(ctx context.Context) (string, func(), error) {
 	ext, ok := stdinFormatExtensions[s.argument.StdinFormat]
 	if !ok {
 		return "", nil, fmt.Errorf("unsupported --stdin-format value %q: want csv, tsv, ltsv, json, or jsonl", s.argument.StdinFormat)
@@ -700,10 +700,18 @@ func (s *Shell) stageStdinDataset() (string, func(), error) {
 		cleanup()
 		return "", nil, fmt.Errorf("create stdin staging file: %w", err)
 	}
-	if _, err := io.Copy(f, s.stdin); err != nil {
+	// Cancellation-aware for the same reason the script read is: a piped dataset
+	// whose writer never closes would otherwise ignore the interrupt entirely.
+	data, err := readAllContext(ctx, s.stdin)
+	if err != nil {
 		_ = f.Close()
 		cleanup()
 		return "", nil, fmt.Errorf("read stdin data: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		cleanup()
+		return "", nil, fmt.Errorf("write stdin staging file: %w", err)
 	}
 	if err := f.Close(); err != nil {
 		cleanup()

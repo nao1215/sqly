@@ -62,7 +62,12 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 	if len(argv) == 0 {
 		// A missing path argument is a command error so a batch script fails fast
 		// instead of skipping the import and exiting 0. The usage rides on the error.
-		return errors.New(".import requires at least one file or directory path\n" + importUsageText())
+		//
+		// It is an invocationError, not an import failure: the command as written
+		// cannot be run, and nothing was read to fail at. That keeps a malformed
+		// .import in the usage class with every other "you typed it wrong", rather
+		// than reporting it as an input sqly could not read.
+		return &invocationError{Err: errors.New(".import requires at least one file or directory path\n" + importUsageText())}
 	}
 
 	var errorMessages []string
@@ -70,10 +75,11 @@ func (c CommandList) importCommand(ctx context.Context, s *Shell, argv []string)
 
 	for _, path := range argv {
 		// Reject an empty path so `.import ""` does not silently import the
-		// current working directory.
+		// current working directory. Like a missing argument, this is decided from
+		// the command line alone, so it is a usage error rather than an input that
+		// could not be read.
 		if strings.TrimSpace(path) == "" {
-			errorMessages = append(errorMessages, "empty import path")
-			continue
+			return &invocationError{Err: errors.New(".import was given an empty path\n" + importUsageText())}
 		}
 
 		var pathImported bool

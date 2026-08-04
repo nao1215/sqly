@@ -36,6 +36,16 @@ func main() {
 func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Trapping a signal takes away the one guarantee the default handler gave:
+	// that it always kills the process. Cancellation reaches every blocking read
+	// sqly does itself, but not one inside a dependency or the kernel, and a CLI
+	// that can swallow Ctrl-C is worse than one that exits untidily. Restoring the
+	// default disposition after the first signal means a second one kills it
+	// outright, which is the usual "press it again" contract.
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
 
 	sqlyShell, cleanup, err := di.NewShell(args)
 	if err != nil {
@@ -46,7 +56,7 @@ func run(args []string) int {
 
 	if err := sqlyShell.Run(ctx); err != nil {
 		fmt.Fprintf(config.Stderr, "%v\n", err)
-		// A cancelled context is reported as an interrupt whatever the failing
+		// A canceled context is reported as an interrupt whatever the failing
 		// statement called it. A query that notices the cancellation first returns
 		// a driver error that says nothing about a signal, so the signal's own
 		// record of what happened is what decides.

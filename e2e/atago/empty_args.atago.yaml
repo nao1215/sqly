@@ -53,6 +53,6 @@ scenarios:
           command: sqly
           stdin: ".import \"\"\n.tables\n"
       - assert:
-          exit_code: 3
+          exit_code: 2
           stderr:
-            contains: "empty import path"
+            contains: "was given an empty path"

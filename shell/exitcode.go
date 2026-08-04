@@ -3,6 +3,7 @@ package shell
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/nao1215/sqly/config"
 )
@@ -56,7 +57,12 @@ func ExitCode(err error) int {
 	// An interrupt is checked first because it is not a stage: it can arrive
 	// during any of them, and what it means — the user stopped this — does not
 	// depend on where the run had got to.
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	//
+	// Only context.Canceled. A context.DeadlineExceeded is a timeout, not a user
+	// signal, and sqly's only deadlines are on the HTTP client: treating one as an
+	// interrupt would report a download that timed out as 130 instead of as the
+	// input failure it is.
+	if errors.Is(err, context.Canceled) {
 		return ExitInterrupt
 	}
 
@@ -92,4 +98,38 @@ func ExitCode(err error) int {
 	}
 
 	return ExitFailure
+}
+
+// readAllContext is io.ReadAll that gives up when ctx is cancelled.
+//
+// It exists because trapping SIGINT is only half of handling it. main.go cancels
+// the run's context instead of letting the default handler kill the process,
+// which is what lets the deferred cleanup remove the temp directories a download
+// or a staged stdin dataset created. The cost is that every blocking read now has
+// to notice the cancellation itself: an io.ReadAll parked on a pipe whose writer
+// never closes — a harness that hands its child a reader, a FIFO with an idle
+// writer — used to be killed outright by the signal, and after trapping it would
+// simply sit there. "Ctrl-C quits" would have become "Ctrl-C does nothing".
+//
+// The read continues in its goroutine after a cancellation returns. There is no
+// way to interrupt it (the reader may be any io.Reader, with no deadline to set),
+// and nothing is waiting on it: the process is on its way out, and the goroutine
+// goes with it.
+func readAllContext(ctx context.Context, r io.Reader) ([]byte, error) {
+	type outcome struct {
+		data []byte
+		err  error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		data, err := io.ReadAll(r)
+		done <- outcome{data: data, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case res := <-done:
+		return res.data, res.err
+	}
 }

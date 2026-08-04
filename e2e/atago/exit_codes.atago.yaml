@@ -225,3 +225,48 @@ scenarios:
           exit_code: 1
           stdout:
             empty: true
+
+  # 130: the run was stopped by a signal. This is the class a unit test cannot
+  # reach — it is the process's own exit status, produced by the signal handler,
+  # the cancellation reaching a blocking read, and the cleanup that follows.
+  - name: an interrupted run exits 130
+    # Needs a POSIX shell for job control and kill.
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          # A FIFO whose writer never writes: sqly reads it as a script and
+          # blocks. Before the signal handler observed cancellation this hung
+          # forever on SIGINT instead of exiting, which is the regression the
+          # scenario exists to catch.
+          command: sh -c 'mkfifo pipe; sleep 30 > pipe & holder=$!; sqly rows.csv < pipe >/dev/null 2>/dev/null & child=$!; sleep 1; kill -INT $child; wait $child; code=$?; kill $holder 2>/dev/null; echo "exit=$code"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "exit=130"
+
+  - name: an interrupted run leaves no staged temp directory behind
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: rows.csv
+          content: |
+            id
+            1
+      - run:
+          # TMPDIR is redirected into the workdir so the check sees only what
+          # this run created. A signal that killed the process outright would
+          # leave the staged stdin dataset behind.
+          command: sh -c 'mkdir -p tmp; export TMPDIR="$PWD/tmp"; mkfifo pipe; sleep 30 > pipe & holder=$!; sqly --stdin-format csv --sql "SELECT 1" < pipe >/dev/null 2>/dev/null & child=$!; sleep 1; kill -INT $child; wait $child; kill $holder 2>/dev/null; ls tmp | grep -c sqly- || echo 0'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0"
