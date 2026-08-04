@@ -49,7 +49,12 @@ jobs:
           hugo version
 
       - name: Build website
+        # The commit is stamped into every page so the deploy can be verified
+        # afterwards. Hugo reads HUGO_PARAMS_* as config overrides, which is why
+        # it arrives as a param rather than through getenv.
         run: make website
+        env:
+          HUGO_PARAMS_BUILDCOMMIT: ${{ github.sha }}
 
       - name: Index the site with Pagefind
         run: |
@@ -79,3 +84,66 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  # A green deploy step means the artifact was accepted, not that the site a
+  # reader loads is the one just built. This fetches the live site and checks
+  # it: the build commit matches, the current flags are on the page, and the
+  # flags removed before v1.0.0 are not.
+  #
+  # The retry exists because a CDN takes a little while to serve the new copy.
+  # It is bounded in both attempts and total wait, and it fails loudly when the
+  # bound is reached rather than passing on a timeout.
+  verify:
+    if: github.event_name != 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    env:
+      SITE: https://nao1215.github.io/sqly/
+      EXPECTED_SHA: ${{ github.sha }}
+      MAX_ATTEMPTS: "10"
+      SLEEP_SECONDS: "20"
+    steps:
+      - name: Wait for the deployed commit to go live
+        run: |
+          attempt=1
+          while [ "${attempt}" -le "${MAX_ATTEMPTS}" ]; do
+            live=$(curl -fsSL --max-time 30 "${SITE}?cachebust=${GITHUB_RUN_ID}-${attempt}" \
+              | grep -o 'name="sqly-build-commit" content="[0-9a-f]*"' \
+              | sed 's/.*content="//; s/"//') || live=""
+            if [ "${live}" = "${EXPECTED_SHA}" ]; then
+              echo "the live site is ${live}"
+              exit 0
+            fi
+            echo "attempt ${attempt}/${MAX_ATTEMPTS}: live is '${live}', want '${EXPECTED_SHA}'"
+            attempt=$((attempt + 1))
+            [ "${attempt}" -le "${MAX_ATTEMPTS}" ] && sleep "${SLEEP_SECONDS}"
+          done
+          echo "::error::the deployed commit ${EXPECTED_SHA} did not appear on ${SITE} within $((MAX_ATTEMPTS * SLEEP_SECONDS))s" >&2
+          exit 1
+
+      - name: Check the reference page shows the current flags
+        run: |
+          page=$(curl -fsSL --max-time 30 "${SITE}reference/?cachebust=${GITHUB_RUN_ID}")
+
+          # Present: flags v1.0.0 commits to. A page that lost one is a page a
+          # reader cannot use to write a working command.
+          for flag in --stdin-format --stdin-table --encoding --row-mismatch \
+                      --sql --sql-file --script-file --dialect \
+                      --output --output-format --inspect --inspect-sample; do
+            case "${page}" in
+              *"${flag}"*) ;;
+              *) echo "::error::${flag} is missing from the deployed reference page" >&2; exit 1 ;;
+            esac
+          done
+
+          # Absent: flags removed before v1.0.0. A page still advertising one
+          # sends a reader to write a command that fails.
+          for flag in --json-typed --ndjson-typed --import-mode --save-in-place \
+                      --save-tables --cache-clear --stdin-name; do
+            case "${page}" in
+              *"${flag}"*) echo "::error::${flag} was removed but is still on the deployed reference page" >&2; exit 1 ;;
+            esac
+          done
+          echo "the deployed reference page matches the v1.0.0 flag surface"

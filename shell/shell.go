@@ -251,6 +251,13 @@ func (s *Shell) Run(ctx context.Context) error {
 	// --output is honored by --sql (a single result) and --sql-file (the script's
 	// one result set). Without either (batch stdin or interactive) the flag was
 	// silently ignored, so reject it instead of looking successful.
+	if s.argument.Output.FilePath != "" && s.argument.ScriptFilePath != "" {
+		// A script already has a way to write a file, and it is per-result rather
+		// than per-run: .dump names the table and the destination at the point in
+		// the script where it means something. One --output for a whole script
+		// would have to pick one of its results, and nothing says which.
+		return &invocationError{Err: errors.New("--output does not apply to --script-file; write from inside the script with .dump TABLE FILE")}
+	}
 	if s.argument.Output.FilePath != "" && s.argument.Query == "" && s.argument.SQLFilePath == "" {
 		return &invocationError{Err: errors.New("--output requires --sql or --sql-file")}
 	}
@@ -333,7 +340,7 @@ func (s *Shell) Run(ctx context.Context) error {
 		}
 		return s.finishNonInteractive(ctx)
 
-	case modeStdinScript:
+	case modeStdinScript, modeScriptFile:
 		if err := s.prepareForScript(ctx, elements); err != nil {
 			return err
 		}
@@ -343,7 +350,9 @@ func (s *Shell) Run(ctx context.Context) error {
 		}
 		// A non-interactive run that executed nothing — empty or comment-only
 		// stdin — is a silent no-op that still exits 0, so headless wrappers and CI
-		// mistake it for a completed query. Surface a hint and fail instead.
+		// mistake it for a completed query. Surface a hint and fail instead. A
+		// --script-file with nothing in it was already rejected when it was read,
+		// which is why only the stdin case needs the hint.
 		if !ranAny {
 			return &invocationError{Err: errNoStatements}
 		}
@@ -378,6 +387,12 @@ func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 			return nil, err
 		}
 		script, origin = loaded, s.argument.SQLFilePath
+	case modeScriptFile:
+		loaded, err := readScriptFile(s.argument.ScriptFilePath)
+		if err != nil {
+			return nil, err
+		}
+		script, origin = loaded, s.argument.ScriptFilePath
 	case modeStdinScript:
 		data, err := readAllContext(ctx, s.stdin)
 		if err != nil {
@@ -400,7 +415,7 @@ func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 	if !s.plan.mode.allowsHelperCommands() {
 		if helper, found := firstHelper(elements); found {
 			return nil, &scriptError{Err: fmt.Errorf(
-				"%s runs SQL only, but line %d is the helper command %q; pipe the script to sqly instead: printf '...' | sqly FILE",
+				"%s runs SQL only, but line %d is the helper command %q; run it with --script-file, or pipe it to sqly",
 				origin, helper.startLine, helper.commandName())}
 		}
 	}

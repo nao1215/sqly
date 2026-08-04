@@ -57,12 +57,52 @@ option applies to the inputs it can and the run proceeds.
 | Flag | Does |
 |:--|:--|
 | `-s`, `--sql SQL` | run one statement, then exit |
-| `-f`, `--sql-file FILE` | run every SQL statement in a file, then exit; cannot combine with `--sql` |
+| `-f`, `--sql-file FILE` | run every SQL statement in a file, then exit |
+| `--script-file FILE` | run a sqly script from a file: SQL and dot-commands, then exit |
 | `--dialect NAME` | write the query in `sqlite` (default), `mysql`, `postgresql`, or `googlesql` and have it translated |
 
-Without either query flag, sqly opens the interactive shell on a terminal, and
-reads SQL from stdin when it is piped. `--stdin-format` takes stdin for the data,
-so it needs `--sql`, `--sql-file`, or `--inspect` to say what to run.
+`--sql`, `--sql-file`, and `--script-file` each name the work to run, so any two
+of them together is rejected. Without one, sqly opens the interactive shell on a
+terminal and reads a script from stdin when it is piped. `--stdin-format` takes
+stdin for the data, so it needs one of the three, or `--inspect`, to say what to
+run.
+
+### SQL file or script file
+
+A `--sql-file` holds SQL. A `--script-file` holds what the shell reads: SQL
+statements and dot-commands alike, exactly the text a pipe would carry.
+
+| | `--sql-file` | `--script-file` | piped stdin |
+|:--|:--|:--|:--|
+| SQL statements | yes | yes | yes |
+| Dot-commands | rejected by name and line | yes | yes |
+| `.save`, `.import` | rejected | yes | yes |
+| stdin free for `--stdin-format` | yes | yes | no |
+| `--output` | yes, for one result set | rejected; use `.dump` | no |
+| Several result sets | `table`, `vertical`, `markdown` only | same | same |
+| On a failing statement | stops there, non-zero | stops there, non-zero | stops there, non-zero |
+
+The two flags are separate rather than one flag with a relaxed rule because they
+make different promises. A `.sql` file is a thing other tools read too, and one
+that silently ran `.save` would be a shell script wearing a SQL extension. The
+flag that permits side effects says `script` in its name.
+
+Everything else is the same, deliberately: a script that works piped in works
+from a file unchanged, which is what makes it worth keeping in version control.
+
+```shell
+sqly --script-file monthly.sqly sales.csv
+```
+
+```text
+# monthly.sqly
+UPDATE sales SET region = 'APAC' WHERE region = 'ASIA';
+.save --in-place
+```
+
+An empty `--script-file` is rejected rather than exiting 0 having done nothing. A
+script that is only dot-commands is fine — it has no SQL statement in it and does
+not need one.
 
 ### What a `--sql-file` may contain
 
@@ -369,6 +409,17 @@ temporary file, so without this a world-readable CSV would come back owner-only.
 **The limit:** replacing several files cannot be atomic on any OS sqly runs on.
 What is guaranteed is that nothing is replaced until everything has been written,
 and that a failure after that point is reported with the exact files affected.
+
+## General
+
+| Flag | Does |
+|:--|:--|
+| `-h`, `--help` | print the grouped option list and exit |
+| `-v`, `--version` | print the sqly version and exit |
+
+sqly has no subcommands, so these are flags and not words: `sqly help` and
+`sqly version` are read as input paths. Typing either is recognized as the
+mistake it is and answered with a hint rather than a "path does not exist".
 
 ## Table name rules
 

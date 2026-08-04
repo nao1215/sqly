@@ -38,6 +38,15 @@
 <link rel="icon" href="{{ $favicon }}" type="{{ $faviconType }}"{{ if eq $faviconType "image/png" }} sizes="64x64"{{ end }}>
 {{- $css := slice (resources.Get "css/site.css") (resources.Get "css/chroma.css") | resources.Concat "css/bundle.css" | minify | fingerprint }}
 <link rel="stylesheet" href="{{ $css.RelPermalink }}">
+{{- /* Build metadata, so a deployed page can be told apart from a stale cached
+       one. The post-deploy check reads these to confirm the commit it expects
+       is the commit that is live; without them, "the site is up" and "the site
+       is the site we just built" are indistinguishable. The workflow sets the
+       commit via HUGO_PARAMS_BUILDCOMMIT; a local build falls back to "dev".
+       Hugo's getenv is whitelisted to HUGO_* only, and a param override is the
+       idiomatic way in besides. */ -}}
+<meta name="sqly-build-commit" content="{{ or site.Params.buildCommit "dev" }}">
+<meta name="sqly-build-time" content="{{ now.UTC.Format "2006-01-02T15:04:05Z" }}">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>

@@ -2728,21 +2728,21 @@ func TestShellRun_StdinDataset(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid stdin format returns a clear error", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly", "--stdin-format", "xml", "--sql", "SELECT 1"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanup()
-		shell.isTTY = func() bool { return false }
-		shell.stdin = strings.NewReader("a,b\n1,2\n")
-
-		err = shell.Run(context.Background())
+	// An unsupported --stdin-format is a flag value, so it is rejected where the
+	// other enum flags are: while parsing, before anything is read. It used to
+	// surface only when stdin was staged, which made a typo look like a runtime
+	// failure rather than a bad command line.
+	t.Run("an invalid stdin format is rejected while parsing, not when stdin is staged", func(t *testing.T) {
+		_, _, err := newShell(t, []string{"sqly", "--stdin-format", "xml", "--sql", "SELECT 1"})
 		if err == nil {
-			t.Fatal("invalid --stdin-format value returned nil error, want error")
+			t.Fatal("an invalid --stdin-format value was accepted")
 		}
-		if !strings.Contains(err.Error(), "stdin") {
-			t.Fatalf("error = %q, want it to mention stdin", err.Error())
+		if !strings.Contains(err.Error(), "--stdin-format") {
+			t.Fatalf("error = %q, want it to name the flag", err.Error())
+		}
+		var argErr *config.ArgError
+		if !errors.As(err, &argErr) {
+			t.Errorf("error is %T, want a *config.ArgError so it exits as a usage error", err)
 		}
 	})
 

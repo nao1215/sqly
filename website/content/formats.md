@@ -4,6 +4,47 @@ description: Every file format sqly reads and writes, how each one becomes a tab
 weight: 50
 ---
 
+## What each format can do
+
+The formats are not interchangeable. Reading is nearly universal; writing back
+into the source file is not, and two of them are not even one table each. This
+is the whole picture in one place — the sections below explain the entries.
+
+| Format | Read | stdin | URL | Compressed | Tables per file | Query result | Write back | Types |
+|:--|:--|:--|:--|:--|:--|:--|:--|:--|
+| CSV | yes | yes | yes | yes | 1 | yes | yes | inferred |
+| TSV | yes | yes | yes | yes | 1 | yes | yes | inferred |
+| LTSV | yes | yes | yes | yes | 1 | yes | yes | inferred |
+| JSON | yes | yes | yes | yes | 1 (`data` column) | yes | no | document kept whole |
+| JSONL | yes | yes | yes | yes | 1 (`data` column) | yes | no | document kept whole |
+| Parquet | yes | no | yes | yes (read only) | 1 | yes (needs `--output`) | yes, uncompressed | from the schema |
+| Excel | yes | no | yes | yes | one per sheet | yes (needs `--output`) | no | inferred |
+| ACH | yes | no | yes | no | 4: `_file_header`, `_batches`, `_entries`, `_addenda` | yes | yes, as a set | fixed by the spec |
+| Fedwire | yes | no | yes | no | 1: `_message` | yes | yes, as a set | fixed by the spec |
+
+Reading the columns:
+
+- **stdin** — can be piped in with `--stdin-format`. The three that cannot are
+  binary or multi-table: there is no filename to name the tables after.
+- **Compressed** — readable through `.gz`, `.bz2`, `.xz`, `.zst`, `.z`,
+  `.snappy`, `.s2`, `.lz4`. ACH and Fedwire are not. A compressed Parquet file
+  reads, but cannot be written back: Parquet already compresses internally, and
+  `.save` will not produce a doubly compressed file.
+- **Query result** — can be produced by `--output-format`. Parquet and Excel are
+  binary and need `--output` to write to; they are never printed.
+- **Write back** — `.save` can rewrite the source. JSON and JSONL cannot,
+  because the whole document lives in one column and sqly cannot reconstruct
+  the file from it. Excel cannot, because several tables share the file. ACH and
+  Fedwire are rebuilt from their complete set of tables into one file.
+- **Types** — `inferred` means sqly reads the values and picks INTEGER, REAL, or
+  TEXT; a value that looks numeric but must stay text (a zero-padded code) stays
+  text. Parquet carries its own schema, and the financial formats have theirs
+  fixed by the specification.
+
+Compression is preserved by a write-back: a `.csv.gz` source is rewritten as
+`.csv.gz`. A `.bz2` source cannot be written back at all — there is no bzip2
+writer — and is refused before anything is touched.
+
 ## Read
 
 | Format | Extensions | Becomes |

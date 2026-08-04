@@ -801,3 +801,36 @@ func TestRollbackCommitted(t *testing.T) {
 		t.Errorf("a destination this save created must be removed again, stat err = %v", err)
 	}
 }
+
+// runWithArgs runs a full invocation from its command line, with stdin closed.
+// runScriptStreams covers the piped case; this covers the flags that read their
+// work from somewhere else, where what is being tested is the invocation itself.
+func runWithArgs(t *testing.T, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	shell, cleanup, newErr := newShell(t, append([]string{"sqly"}, args...))
+	if newErr != nil {
+		t.Fatalf("newShell: %v", newErr)
+	}
+	defer cleanup()
+	shell.isTTY = func() bool { return false }
+	shell.stdin = strings.NewReader("")
+
+	stdout, stderr = captureStreams(t, func() error {
+		err = shell.Run(context.Background())
+		return err
+	})
+	return stdout, stderr, err
+}
+
+// captureStreams redirects config.Stdout and config.Stderr for the duration of
+// fn and returns what was written to each. They are process-wide, so a test
+// using it cannot run in parallel.
+func captureStreams(t *testing.T, fn func() error) (stdout, stderr string) {
+	t.Helper()
+	backupOut, backupErr := config.Stdout, config.Stderr
+	var out, errOut strings.Builder
+	config.Stdout, config.Stderr = &out, &errOut
+	defer func() { config.Stdout, config.Stderr = backupOut, backupErr }()
+	_ = fn()
+	return out.String(), errOut.String()
+}

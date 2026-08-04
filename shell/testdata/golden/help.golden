@@ -42,9 +42,12 @@ and Fedwire files ((devel))
   Query:
     -s, --sql SQL               run one SQL statement, then exit
     -f, --sql-file FILE         run every SQL statement in this file, then exit;
-                                a dot-command is rejected, so pipe such a script
-                                in instead; printing several results needs
+                                a dot-command is rejected, so use --script-file
+                                for those; printing several results needs
                                 --output-format table, vertical, or markdown
+        --script-file FILE      run this sqly script, then exit: SQL statements
+                                and dot-commands, exactly as when piped in; use
+                                it to script .save and .import from a file
         --dialect NAME          write the query in one of: sqlite, mysql,
                                 postgresql, googlesql; sqly translates it to
                                 SQLite (default: sqlite)

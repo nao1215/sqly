@@ -1,0 +1,176 @@
+# --script-file is the entry point for a sqly script kept in a file: SQL
+# statements and dot-commands, exactly what a pipe carries. --sql-file stays SQL
+# only, and the boundary between them is the contract these scenarios pin.
+#
+# The pair matters because before --script-file existed, moving a working piped
+# script into a file made it stop working — --sql-file rejected the dot-commands
+# and there was nowhere else to put them.
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly --script-file
+
+scenarios:
+  - name: runs dot-commands and SQL from one file
+    steps:
+      - fixture:
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - fixture:
+          file: s.sqly
+          content: |
+            UPDATE t SET b = 9;
+            .save --in-place
+      - run:
+          command: sqly --script-file s.sqly t.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: t.csv
+            contains: "9"
+
+  - name: gives the same result as the same script piped in
+    steps:
+      - fixture: &rows
+          file: t.csv
+          content: |
+            a,b
+            1,2
+      - fixture:
+          file: s.sqly
+          content: |
+            .mode csv
+            SELECT b FROM t;
+      - run:
+          command: sqly --script-file s.sqly t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+      - run:
+          command: sh -c 'printf ".mode csv\nSELECT b FROM t;\n" | sqly t.csv'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+
+  - name: still refuses a dot-command in a --sql-file and names the new flag
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: q.sql
+          content: |
+            SELECT 1;
+            .save --in-place
+      - run:
+          command: sqly --sql-file q.sql t.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "--script-file"
+          file:
+            path: t.csv
+            not_contains: "9"
+
+  - name: rejects a second source for the work to run
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: s.sqly
+          content: |
+            SELECT 1;
+      - run:
+          command: sqly --script-file s.sqly --sql "SELECT 1" t.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "cannot be used together"
+
+  - name: points at .dump when --output is given
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: s.sqly
+          content: |
+            SELECT 1;
+      - run:
+          command: sqly --script-file s.sqly --output out.csv t.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: ".dump"
+          file:
+            path: out.csv
+            exists: false
+
+  - name: leaves stdin free for a piped dataset
+    steps:
+      - fixture:
+          file: s.sqly
+          content: |
+            .mode csv
+            SELECT COUNT(*) AS n FROM stdin;
+      - run:
+          command: sqly --stdin-format csv --script-file s.sqly
+          stdin: |
+            a,b
+            1,2
+            3,4
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+
+  - name: rejects an empty script rather than exiting 0 having done nothing
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: empty.sqly
+          content: "   \n"
+      - run:
+          command: sqly --script-file empty.sqly t.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "is empty"
+
+  - name: reports a missing script as an input error
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --script-file nope.sqly t.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "--script-file"
+
+  - name: stops at the failing statement and reports its line
+    steps:
+      - fixture: *rows
+      - fixture:
+          file: s.sqly
+          content: |
+            SELECT 1;
+            SELECT * FROM no_such_table;
+            .save --in-place
+      - run:
+          command: sqly --script-file s.sqly t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "line 2"
+      - assert:
+          # The .save after the failure never ran, so the source is untouched.
+          file:
+            path: t.csv
+            equals: |
+              a,b
+              1,2

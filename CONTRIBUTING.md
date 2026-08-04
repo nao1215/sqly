@@ -76,10 +76,17 @@ CI does not render GIFs; the `TestDemoAssetsInSync` test instead fails when a ta
 and its GIF, or the README and a GIF, fall out of sync.
 
 ## Documentation
-`README.md` (English) is the source of truth for user-facing documentation. When
-you add or change a feature, also update the GitHub Pages docs under
-`doc/pages/markdown/`. Avoid bold and emoji in documentation. Localized READMEs
-have been removed; please do not add new ones.
+`README.md` (English) introduces sqly and links out; the site under
+`website/content/` is where the detail lives. When you add or change a feature,
+update the page it belongs to — `reference.md` for flags and exit codes,
+`formats.md` for what sqly reads and writes, `shell.md` for dot-commands — and
+the README only if the change is one a first-time reader needs.
+
+The site is Hugo. `make website` builds it into `website/public/`, and a push to
+`main` that touches `website/**` deploys it.
+
+Avoid bold and emoji in documentation. Localized READMEs have been removed;
+please do not add new ones.
 
 ## Releasing
 Maintainers cut releases by pushing a `v*` tag. The process is documented in
