@@ -20,6 +20,17 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ## [Unreleased]
 
+### New Features
+
+* A query against a table the session does not have now lists the ones it does: `hint: this session has no table "staf". Available tables: ident, staff.` followed by a link to the table naming rules. sqly's premise is that a file is a table, but the name is derived rather than given — a hyphen becomes an underscore, a leading digit gains a prefix, a workbook sheet becomes `file_sheet` — so the failure a caller hits most was the one that said least. Twenty names are listed, then `... (N total)`. A session holding nothing is told how to get a table instead. A missing column gets a line of the same kind, naming `.describe TABLE` and `sqly --inspect FILE`. Both go to stderr, next to the error they explain; stdout stays empty and the exit code stays `1`.
+* An import stopped by the default `--row-mismatch error` names the two policies that would have let it through. `pad` already named the flag it was refusing; the default, which is what everybody meets first, said only that the field counts differed. An `.import` typed into a running session is offered `.row-mismatch` instead, because a flag can only be passed when the process starts.
+
+### Bug Fixes
+
+* An import failure is reported once. It was printed by the import and then printed again by whoever received the error, so every failing run said the same sentence twice — and a script's failure said it twice with the line number attached to only one of them. The line number is unaffected.
+* A failing import names the file once and the loading library once. `failed to import file rm.csv: load file "rm.csv": filesql: parsing failed: failed to stream file rm.csv: filesql: column count mismatch: row 2 has 2 fields, want 3` had `rm.csv` in it three times, because both sqly and filesql wrapped the failure with the path. The path now travels beside the error as a value instead of inside its text. The filesql half is fixed upstream in v0.33.0, not worked around here.
+* A `file://` URL is told to drop the prefix rather than to download something. "Download the file first and pass its local path" is advice that cannot be followed for a file that is already on this machine: `cannot import file:///etc/hostname: sqly takes local paths directly; drop the "file://" prefix and pass /etc/hostname`. Every other scheme keeps the advice that does apply to it.
+
 ### Breaking Changes
 
 * `excel_sheets[].source` in the `--inspect` report is now an absolute path, the same string as the `tables[].source` of the tables that workbook produced. It used to be the path as it was typed, so `sqly --inspect book.xlsx` named one file `/abs/path/book.xlsx` in one array and `book.xlsx` in the other, and a consumer holding both could not tell they were the same workbook. A remote workbook still reports the URL it was downloaded from, unchanged. The order of `excel_sheets` follows the normalized value, and a workbook imported twice under two spellings is now one source in the report rather than two. `schema_version` stays `1`: the field's type and meaning are what the schema always described, and this is the implementation catching up to its sister field. A consumer that keyed on the relative path breaks.

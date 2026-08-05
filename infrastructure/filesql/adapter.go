@@ -230,16 +230,39 @@ func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string)
 		WithExcelSheetPolicy(filesqlExcelSheetPolicy(f.includeHiddenSheets))
 	validated, err := builder.Build(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("load file %q: %w", path, err)
+		return nil, importError(path, err)
 	}
 	registry, err := validated.LoadIntoTxWithPending(ctx, tx)
 	if err != nil {
 		if f.rowMismatchPolicy == model.RowMismatchPad && errors.Is(err, filesql.ErrColumnMismatch) {
-			return nil, fmt.Errorf("load file %q: --row-mismatch pad refuses to truncate a long row: %w", path, err)
+			return nil, importError(path, fmt.Errorf("--row-mismatch pad refuses to truncate a long row: %w", unnamedCause(err)))
 		}
-		return nil, fmt.Errorf("load file %q: %w", path, err)
+		return nil, importError(path, err)
 	}
 	return registry, nil
+}
+
+// importError names the input a load failed on, carrying the path as a value so
+// the caller can report the path the user typed rather than the staged copy this
+// layer was given.
+func importError(path string, err error) error {
+	return &model.ImportError{Path: path, Err: unnamedCause(err)}
+}
+
+// unnamedCause drops the file name filesql puts on a load failure, because the
+// path travels beside the error instead.
+//
+// Both layers want to say which file failed. filesql has to, because a caller
+// can hand it many at once; sqly loads one file per call and reports the failure
+// against the path the user typed, so keeping filesql's copy made every message
+// name the same file twice. The cause is reached through the type filesql
+// provides for this, not by cutting the path back out of the text.
+func unnamedCause(err error) error {
+	var parseErr *filesql.ParseError
+	if errors.As(err, &parseErr) {
+		return parseErr.Err
+	}
+	return err
 }
 
 // LoadFile loads a single file into the database

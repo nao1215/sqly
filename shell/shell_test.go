@@ -2020,11 +2020,12 @@ func TestShellRun_StartupImportFailureDoesNotOpenAShell(t *testing.T) {
 	if got := ExitCode(runErr); got != ExitInput {
 		t.Errorf("ExitCode = %d, want %d", got, ExitInput)
 	}
-	got := stderr.String()
-	if !strings.Contains(got, "missing_input.csv") {
-		t.Errorf("stderr = %q, want it to name the input it could not read", got)
+	// The failure is carried by the returned error rather than printed here, so
+	// that whoever receives it says it once. main.go is what writes it to stderr.
+	if !strings.Contains(runErr.Error(), "missing_input.csv") {
+		t.Errorf("error = %q, want it to name the input it could not read", runErr)
 	}
-	if strings.Contains(got, "partial") {
+	if got := stderr.String(); strings.Contains(got, "partial") {
 		t.Errorf("stderr = %q; an import no longer half-succeeds", got)
 	}
 }

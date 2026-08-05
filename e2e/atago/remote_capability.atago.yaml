@@ -178,7 +178,7 @@ scenarios:
           stdout:
             equals: ""
           stderr:
-            contains: "only http and https URLs are downloaded"
+            contains: 'drop the "file://" prefix and pass /etc/passwd' 
 
   - name: names --allow-remote in the help text
     env: *hist

@@ -32,23 +32,27 @@ var (
 const (
 	importCommand      = ".import"
 	rowMismatchCommand = ".row-mismatch"
-	cdCommand          = ".cd"
-	clearCommand       = ".clear"
-	dumpCommand        = ".dump"
-	exitCommand        = ".exit"
-	headerCommand      = ".header"
-	helpCommand        = ".help"
-	lsCommand          = ".ls"
-	modeCommand        = ".mode"
-	tablesCommand      = ".tables"
-	pwdCommand         = ".pwd"
-	schemaCommand      = ".schema"
-	describeCommand    = ".describe"
-	saveCommand        = ".save"
-	dialectCommand     = ".dialect"
-	helpFlag           = "--help"
-	versionFlag        = "--version"
-	helpArgument       = "help"
+	// rowMismatchFlag is the same choice spelled for the command line. Which of
+	// the two a message offers depends on whether the process has already
+	// started; see rowMismatchAdvice.
+	rowMismatchFlag = "--row-mismatch"
+	cdCommand       = ".cd"
+	clearCommand    = ".clear"
+	dumpCommand     = ".dump"
+	exitCommand     = ".exit"
+	headerCommand   = ".header"
+	helpCommand     = ".help"
+	lsCommand       = ".ls"
+	modeCommand     = ".mode"
+	tablesCommand   = ".tables"
+	pwdCommand      = ".pwd"
+	schemaCommand   = ".schema"
+	describeCommand = ".describe"
+	saveCommand     = ".save"
+	dialectCommand  = ".dialect"
+	helpFlag        = "--help"
+	versionFlag     = "--version"
+	helpArgument    = "help"
 
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
@@ -88,6 +92,12 @@ type Shell struct {
 	// random path (and the temp dir filesql embeds in its own error) back to a
 	// stable "stdin" reference, instead of leaking the implementation detail.
 	stdinStagedPath string
+	// importingStartupInputs is true while the inputs named on the command line
+	// are being imported, and false for an .import typed into a running session.
+	// It decides which spelling advice offers: a flag can only be passed when the
+	// process starts, so a session already running is told about the helper
+	// command instead.
+	importingStartupInputs bool
 	// excelWorkbooks records what each imported workbook held at the moment it
 	// was imported: every sheet and whether the workbook showed it. It is kept
 	// because --inspect reports the sheets that did not become tables, and by
@@ -704,7 +714,9 @@ func (s *Shell) init(ctx context.Context) error {
 	// temp dir filesql embeds in its own error) back to a stable "stdin"
 	// reference instead of leaking the implementation-detail path.
 	s.stdinStagedPath = stagedStdinPath
+	s.importingStartupInputs = true
 	importErr := s.commands.importCommand(ctx, s, paths)
+	s.importingStartupInputs = false
 	// Re-point any stdin-derived table's source from the ephemeral temp path to
 	// a stable "stdin" marker, so --inspect does not leak the temp path
 	// and write-back can reject stdin-backed tables instead of writing to a
@@ -1222,7 +1234,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	req = strings.TrimRight(req, ";")
 	table, affectedRows, err := s.usecases.query.ExecSQL(ctx, req)
 	if err != nil {
-		return err
+		return s.withMissingNameHint(ctx, err)
 	}
 	// Track whether this statement actually changed data, so write-back runs only
 	// for a run that modified a table (not an EXPLAIN or a zero-row DML).,

@@ -325,12 +325,18 @@ func TestRemote_AllowRemoteWithoutAURLIsFine(t *testing.T) {
 // TestRemote_CapabilityDoesNotUnlockOtherSchemes keeps --allow-remote to what it
 // says: http and https. A scheme sqly cannot fetch is refused with the flag
 // exactly as without it, and no request is attempted.
+//
+// What each refusal says differs, which is why the expected wording is per URL.
+// A file: URL names something already on this machine, so it is told to drop the
+// prefix; every other scheme names somewhere sqly cannot reach, where fetching
+// it separately is the way through.
 func TestRemote_CapabilityDoesNotUnlockOtherSchemes(t *testing.T) {
-	for _, url := range []string{
-		"ftp://example.test/data.csv",
-		"file:///etc/passwd",
-		"ssh://example.test/data.csv",
-		"gopher://example.test/data.csv",
+	//nolint:gosec // URLs under test, not credentials; /etc/passwd is the path a file: URL is refused for
+	for url, wantSays := range map[string]string{
+		"ftp://example.test/data.csv":    "http and https",
+		"file:///etc/passwd":             `drop the "file://" prefix`,
+		"ssh://example.test/data.csv":    "http and https",
+		"gopher://example.test/data.csv": "http and https",
 	} {
 		t.Run(url, func(t *testing.T) {
 			for _, allow := range []bool{false, true} {
@@ -348,8 +354,8 @@ func TestRemote_CapabilityDoesNotUnlockOtherSchemes(t *testing.T) {
 				if runErr == nil {
 					t.Fatalf("--allow-remote=%v accepted %s, want a refusal", allow, url)
 				}
-				if !strings.Contains(runErr.Error(), "http and https") {
-					t.Errorf("--allow-remote=%v: error %q does not say only http and https are downloaded", allow, runErr)
+				if !strings.Contains(runErr.Error(), wantSays) {
+					t.Errorf("--allow-remote=%v: error %q does not say %q", allow, runErr, wantSays)
 				}
 			}
 		})

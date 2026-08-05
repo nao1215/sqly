@@ -331,6 +331,16 @@ rest alone.
 | `skip` | drop the row, import the rest |
 | `pad` | pad a short row with empty values; fail on a long one rather than truncating it |
 
+The default names the other two when it stops, so a failed import says what to
+do next:
+
+```text
+failed to import file rm.csv: filesql: column count mismatch: row 2 has 2 fields, want 3; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones
+```
+
+An `.import` inside a running session is offered `.row-mismatch` instead: the
+flag can only be given when the process starts.
+
 ## Output formats
 
 `--output-format` picks how a result is printed. The same query, three ways:

@@ -150,6 +150,43 @@ func unfetchableURLScheme(raw string) string {
 	return strings.ToLower(scheme)
 }
 
+// localPathFromFileURL returns the path a file: URL names, and whether raw was
+// one. A URL naming another host has no local path and is not one.
+//
+// url.Parse is not used: it accepts far more than this needs to decide, and what
+// it returns for a Windows path ("file:///C:/data.csv") is a path with a leading
+// separator that no longer opens. The two spellings that carry a local path are
+// "file:///path" and the empty-authority "file://path"; anything with a host in
+// between names a machine sqly cannot read from.
+func localPathFromFileURL(raw string) (string, bool) {
+	const prefix = "file://"
+	if !strings.HasPrefix(strings.ToLower(raw), prefix) {
+		return "", false
+	}
+	rest := raw[len(prefix):]
+	if after, ok := strings.CutPrefix(rest, "/"); ok {
+		// "file:///C:/data.csv" is a Windows path once the separator that stands
+		// for the empty authority is removed; "file:///etc/hostname" is not.
+		if isWindowsDrivePath(after) {
+			return after, true
+		}
+		return "/" + after, true
+	}
+	// No third slash: what follows is an authority. Only an empty one is local,
+	// and an empty one leaves nothing here at all.
+	return "", false
+}
+
+// isWindowsDrivePath reports whether p starts with a drive letter and a colon,
+// which is what tells "C:/data.csv" from a rooted POSIX path.
+func isWindowsDrivePath(p string) bool {
+	if len(p) < 2 || p[1] != ':' {
+		return false
+	}
+	c := p[0]
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
 // sameSourceLocation compares imported sources. Local files use sameFilePath so
 // symlink aliases still match; remote URLs compare after normalization.
 func sameSourceLocation(a, b string) bool {
