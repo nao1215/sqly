@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
 	github.com/nao1215/filesql v0.34.0
-	github.com/nao1215/prompt v0.0.15
+	github.com/nao1215/prompt v0.0.16
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/pflag v1.0.10

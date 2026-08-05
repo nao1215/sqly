@@ -63,7 +63,7 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Key | Does |
 |:--|:--|
 | `Enter` | run the statement, or continue it on the next line while it is unfinished |
-| `Ctrl-C` | throw away the line being typed; the session stays open |
+| `Ctrl-C` | throw away the line being typed, or stop the statement that is running; the session stays open |
 | `Ctrl-D` | quit, like `.exit` |
 | `Tab` | complete keywords, tables, columns, paths, and dot-command arguments |
 | `Esc` | close the completion list |
@@ -74,8 +74,19 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | `Ctrl-K` / `Ctrl-U` / `Ctrl-W` | delete to end of line, the whole line, the previous word |
 | `Ctrl-L` | clear the screen |
 
-Ctrl-C does not stop a statement that is already running; it takes effect at the
-prompt.
+Ctrl-C reaches a statement that is already running, so a query that turns out to
+be slower than expected can be stopped:
+
+```text
+sqly:~/data(table)$ SELECT COUNT(*) FROM huge JOIN huge;
+^C
+canceled: SELECT COUNT(*) FROM huge JOIN huge;
+sqly:~/data(table)$
+```
+
+A canceled statement changes nothing: its transaction rolls back, and the
+session carries on. Canceling is not a failure, so a session that ends normally
+afterward still exits 0.
 
 ## Dot-commands
 
