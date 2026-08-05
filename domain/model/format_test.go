@@ -15,7 +15,7 @@ func TestPrintModeRoundTrips(t *testing.T) {
 
 	for _, mode := range PrintModes() {
 		name := mode.String()
-		if name == "unknown" {
+		if name == unknownPrintModeName {
 			t.Errorf("mode %d is in PrintModes but has no name", mode)
 			continue
 		}
@@ -33,14 +33,14 @@ func TestPrintModeRoundTrips(t *testing.T) {
 // TestPrintModesCoversEveryDeclaredMode fails when a PrintMode constant is added
 // without a registry entry. The constants are consecutive from PrintModeTable,
 // so the highest one declared is the count, and a mode missing from the registry
-// shows up as one whose String is "unknown".
+// shows up as one whose String is the unknown-mode name.
 func TestPrintModesCoversEveryDeclaredMode(t *testing.T) {
 	t.Parallel()
 
 	// PrintModeVertical is the last constant declared; update this when a mode is
 	// added after it.
 	for mode := PrintModeTable; mode <= PrintModeVertical; mode++ {
-		if mode.String() == "unknown" {
+		if mode.String() == unknownPrintModeName {
 			t.Errorf("PrintMode %d is declared but has no registry entry, so no flag can name it", mode)
 		}
 	}

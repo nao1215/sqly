@@ -105,6 +105,13 @@ func PrintModes() []PrintMode {
 	return modes
 }
 
+// unknownPrintModeName is what String reports for a value that is not one of the
+// declared modes. Nothing sqly does can produce one — the modes come from the
+// two parsers, and both reject a name they do not know — so it marks a
+// programming error rather than a user's, and the tests use it to catch a mode
+// declared without a registry entry.
+const unknownPrintModeName = "unknown"
+
 // String return string of PrintMode.
 func (p PrintMode) String() string {
 	for _, m := range printModes {
@@ -112,7 +119,7 @@ func (p PrintMode) String() string {
 			return m.name
 		}
 	}
-	return "unknown"
+	return unknownPrintModeName
 }
 
 // ParsePrintMode returns the mode a user named, and whether the name is one.
