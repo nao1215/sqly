@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/sqltext"
 )
 
 // SQL keyword tokens used by statement classification, named once to avoid
@@ -93,131 +94,36 @@ func statementLineSpan(buf string, bufStartLine int, stmt string) (start, end in
 	return start, end
 }
 
-// stripLeadingSQLComments removes leading line ("--") and block ("/* */")
-// comments, leading empty statements (bare ";"), and surrounding whitespace from a
-// statement, returning "" when nothing executable remains. sqly classifies a
-// statement by its first token, so a leading comment would otherwise be rejected as
-// "not sql"; SQL files commonly open with a header comment, so this lets them run
-// unchanged. A leading ";" is an empty statement, so dropping it keeps a statement
-// like ";UPDATE t ..." classified by its real verb instead of as a no-rowset
-// statement that skips write-back.
-func stripLeadingSQLComments(s string) string {
-	for {
-		s = strings.TrimSpace(s)
-		switch {
-		case strings.HasPrefix(s, "--"):
-			i := strings.IndexByte(s, '\n')
-			if i < 0 {
-				return "" // line comment runs to the end of the input
-			}
-			s = s[i+1:]
-		case strings.HasPrefix(s, "/*"):
-			i := strings.Index(s, "*/")
-			if i < 0 {
-				return "" // unterminated block comment, nothing executable
-			}
-			s = s[i+2:]
-		case strings.HasPrefix(s, ";"):
-			s = s[1:] // leading empty statement
-		default:
-			return s
-		}
-	}
-}
-
 // splitSQLStatements splits accumulated text into complete statements terminated
 // by a top-level ";" and returns the trailing unterminated remainder. Semicolons
 // inside string literals, identifiers, and comments are ignored so they do not
 // split a statement mid-value. Each returned statement has leading comments
 // stripped so it is classified by its first SQL keyword.
 func splitSQLStatements(s string) (stmts []string, remainder string) {
-	runes := []rune(s)
-	var (
-		start                         int
-		inSingle, inDouble            bool
-		inBacktick, inBracket         bool
-		inLineComment, inBlockComment bool
-	)
-	isWordRune := func(r rune) bool {
-		return r == '_' ||
-			(r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9')
-	}
 	// A CREATE TRIGGER ... BEGIN ... END statement contains inner ";" that must not
 	// split it. trig tracks whether the current statement is a CREATE TRIGGER and
 	// how deep its BEGIN/CASE ... END nesting is, so a ";" only terminates once the
 	// body's END has balanced its BEGIN. It resets after each split.
-	var trig triggerState
-	for i := 0; i < len(runes); i++ {
-		c := runes[i]
-		switch {
-		case inLineComment:
-			if c == '\n' {
-				inLineComment = false
+	var (
+		start int
+		trig  triggerState
+	)
+	for tok := range sqltext.Tokens(s) {
+		switch tok.Kind {
+		case sqltext.Word:
+			trig.observe(strings.ToUpper(tok.Text(s)))
+		case sqltext.Semicolon:
+			if trig.insideBody() {
+				continue // ";" inside a trigger body does not terminate the statement
 			}
-		case inBlockComment:
-			if c == '*' && i+1 < len(runes) && runes[i+1] == '/' {
-				inBlockComment = false
-				i++
+			if stmt := sqltext.StripNoise(s[start:tok.Start]); stmt != "" {
+				stmts = append(stmts, stmt)
 			}
-		case inSingle:
-			if c == '\'' {
-				inSingle = false
-			}
-		case inDouble:
-			if c == '"' {
-				inDouble = false
-			}
-		case inBacktick:
-			// SQLite backtick-quoted identifier; a doubled backtick escapes one,
-			// which this toggle handles since it re-enters on the next backtick.
-			if c == '`' {
-				inBacktick = false
-			}
-		case inBracket:
-			// SQLite bracket-quoted identifier; "]" closes it (brackets do not nest).
-			if c == ']' {
-				inBracket = false
-			}
-		default:
-			switch {
-			case c == '\'':
-				inSingle = true
-			case c == '"':
-				inDouble = true
-			case c == '`':
-				inBacktick = true
-			case c == '[':
-				inBracket = true
-			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
-				inLineComment = true
-				i++
-			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
-				inBlockComment = true
-				i++
-			case isWordRune(c):
-				// Consume a whole identifier/keyword token and feed it to the trigger
-				// tracker, so BEGIN/CASE/END inside a CREATE TRIGGER are balanced.
-				j := i
-				for j+1 < len(runes) && isWordRune(runes[j+1]) {
-					j++
-				}
-				trig.observe(strings.ToUpper(string(runes[i : j+1])))
-				i = j
-			case c == ';':
-				if trig.insideBody() {
-					break // ";" inside a trigger body does not terminate the statement
-				}
-				if stmt := stripLeadingSQLComments(string(runes[start:i])); stmt != "" {
-					stmts = append(stmts, stmt)
-				}
-				start = i + 1
-				trig = triggerState{}
-			}
+			start = tok.End
+			trig = triggerState{}
 		}
 	}
-	return stmts, string(runes[start:])
+	return stmts, s[start:]
 }
 
 // triggerState tracks whether the current statement is a CREATE TRIGGER and the
@@ -283,72 +189,12 @@ const sqlCreate = "CREATE"
 // statement or a helper command. An unterminated block comment is not a boundary,
 // because following lines (including dot-lines) are still inside the comment.
 func atStatementBoundary(pending string) bool {
-	if strings.TrimSpace(stripLeadingSQLComments(pending)) != "" {
+	if sqltext.StripNoise(pending) != "" {
 		return false
 	}
-	// stripLeadingSQLComments also strips to "" for an unterminated block comment,
-	// so check that state explicitly to avoid treating an open comment as empty.
-	return !endsInsideBlockComment(pending)
-}
-
-// endsInsideBlockComment reports whether s ends inside an unterminated "/* ... */"
-// block comment, scanning quote- and comment-aware so a "/*" inside a string
-// literal or line comment is not mistaken for a comment opener.
-func endsInsideBlockComment(s string) bool {
-	runes := []rune(s)
-	var (
-		inSingle, inDouble            bool
-		inBacktick, inBracket         bool
-		inLineComment, inBlockComment bool
-	)
-	for i := 0; i < len(runes); i++ {
-		c := runes[i]
-		switch {
-		case inLineComment:
-			if c == '\n' {
-				inLineComment = false
-			}
-		case inBlockComment:
-			if c == '*' && i+1 < len(runes) && runes[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-		case inSingle:
-			if c == '\'' {
-				inSingle = false
-			}
-		case inDouble:
-			if c == '"' {
-				inDouble = false
-			}
-		case inBacktick:
-			if c == '`' {
-				inBacktick = false
-			}
-		case inBracket:
-			if c == ']' {
-				inBracket = false
-			}
-		default:
-			switch {
-			case c == '\'':
-				inSingle = true
-			case c == '"':
-				inDouble = true
-			case c == '`':
-				inBacktick = true
-			case c == '[':
-				inBracket = true
-			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
-				inLineComment = true
-				i++
-			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
-				inBlockComment = true
-				i++
-			}
-		}
-	}
-	return inBlockComment
+	// StripNoise also strips to "" for an unterminated block comment, so check
+	// that state explicitly to avoid treating an open comment as empty.
+	return !sqltext.EndsInsideBlockComment(pending)
 }
 
 // statementSaveCompatible reports whether a non-interactive write-back run
@@ -373,7 +219,7 @@ func statementSaveCompatible(stmt string) bool {
 	if createsTempTable(stmt) {
 		return true
 	}
-	switch leadingSQLKeyword(stmt) {
+	switch sqltext.LeadingKeyword(stmt) {
 	case kwSelect, kwValues, "WITH", "EXPLAIN", "TABLE":
 		return true
 	default:
@@ -384,7 +230,7 @@ func statementSaveCompatible(stmt string) bool {
 // createsTempTable reports whether a statement creates a temporary table or
 // view: "CREATE TEMP ..." or "CREATE TEMPORARY ...", in any case.
 func createsTempTable(stmt string) bool {
-	fields := strings.Fields(strings.ToUpper(stripLeadingSQLComments(stmt)))
+	fields := strings.Fields(strings.ToUpper(sqltext.StripNoise(stmt)))
 	if len(fields) < 2 || fields[0] != sqlCreate {
 		return false
 	}
@@ -408,11 +254,11 @@ func firstSaveIncompatibleStatement(elements []scriptElement) string {
 // An EXPLAIN of such a statement is read-only and reports false, so it never
 // triggers write-back.
 func statementModifiesData(stmt string) bool {
-	switch leadingSQLKeyword(stmt) {
+	switch sqltext.LeadingKeyword(stmt) {
 	case kwInsert, kwUpdate, kwDelete, kwReplace:
 		return true
 	case "WITH":
-		switch withMainVerb(stmt) {
+		switch sqltext.MainVerb(stmt) {
 		case kwInsert, kwUpdate, kwDelete, kwReplace:
 			return true
 		}
@@ -435,101 +281,6 @@ func statementResultMessage(stmt string, affected int64) string {
 // msgStatementExecuted is the neutral stdout line printed for a no-rowset
 // statement that does not change table data (DDL, PRAGMA, maintenance).
 const msgStatementExecuted = "statement executed successfully\n"
-
-// leadingSQLKeyword returns the upper-cased first keyword of a statement after
-// leading comments are stripped, reading only the leading ASCII letters.
-func leadingSQLKeyword(stmt string) string {
-	s := stripLeadingSQLComments(stmt)
-	i := 0
-	for i < len(s) && ((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= 'A' && s[i] <= 'Z')) {
-		i++
-	}
-	return strings.ToUpper(s[:i])
-}
-
-// withMainVerb returns the main statement verb of a WITH statement: the first
-// INSERT/UPDATE/DELETE/REPLACE/SELECT/VALUES token at parenthesis depth 0 outside
-// quotes and comments, so the CTE bodies (inside parentheses) are skipped. It
-// lets write-back detection see that a WITH ... UPDATE modifies data while a
-// WITH ... SELECT does not.
-func withMainVerb(stmt string) string {
-	runes := []rune(stmt)
-	var (
-		depth                         int
-		inSingle, inDouble            bool
-		inBacktick, inBracket         bool
-		inLineComment, inBlockComment bool
-	)
-	isWordRune := func(r rune) bool {
-		return r == '_' ||
-			(r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9')
-	}
-	for i := 0; i < len(runes); i++ {
-		c := runes[i]
-		switch {
-		case inLineComment:
-			if c == '\n' {
-				inLineComment = false
-			}
-		case inBlockComment:
-			if c == '*' && i+1 < len(runes) && runes[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-		case inSingle:
-			if c == '\'' {
-				inSingle = false
-			}
-		case inDouble:
-			if c == '"' {
-				inDouble = false
-			}
-		case inBacktick:
-			if c == '`' {
-				inBacktick = false
-			}
-		case inBracket:
-			if c == ']' {
-				inBracket = false
-			}
-		default:
-			switch {
-			case c == '\'':
-				inSingle = true
-			case c == '"':
-				inDouble = true
-			case c == '`':
-				inBacktick = true
-			case c == '[':
-				inBracket = true
-			case c == '-' && i+1 < len(runes) && runes[i+1] == '-':
-				inLineComment = true
-				i++
-			case c == '/' && i+1 < len(runes) && runes[i+1] == '*':
-				inBlockComment = true
-				i++
-			case c == '(':
-				depth++
-			case c == ')':
-				if depth > 0 {
-					depth--
-				}
-			case depth == 0 && isWordRune(c):
-				start := i
-				for i+1 < len(runes) && isWordRune(runes[i+1]) {
-					i++
-				}
-				switch strings.ToUpper(string(runes[start : i+1])) {
-				case kwSelect, kwValues, kwInsert, kwUpdate, kwDelete, kwReplace:
-					return strings.ToUpper(string(runes[start : i+1]))
-				}
-			}
-		}
-	}
-	return ""
-}
 
 // readScriptFile reads a --script-file. It is the sibling of readSQLFile and
 // differs in what counts as empty: a script whose only content is dot-commands
@@ -573,7 +324,7 @@ func readSQLFile(path string) (string, error) {
 	// strips down to nothing once leading comments are removed. Reject it instead
 	// of silently running nothing.
 	stmts, remainder := splitSQLStatements(content)
-	if len(stmts) == 0 && stripLeadingSQLComments(remainder) == "" {
+	if len(stmts) == 0 && sqltext.StripNoise(remainder) == "" {
 		return "", &scriptError{Err: fmt.Errorf("--sql-file %q contains no executable SQL statements", path)}
 	}
 	return content, nil
