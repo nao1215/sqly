@@ -447,7 +447,7 @@ func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 		if err != nil {
 			return nil, &scriptSourceError{Err: fmt.Errorf("failed to read the script from stdin: %w", err)}
 		}
-		script, origin = string(data), "stdin"
+		script, origin = string(data), stdinTableSource
 	default:
 		return nil, nil
 	}

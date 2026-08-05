@@ -22,7 +22,10 @@ The prompt shows the working directory and the current output mode. Tab
 completes SQL keywords, table names, column names, and paths, and after a
 dot-command it completes that command's arguments: `.dialect m` reaches `mysql`,
 `.mode m` reaches `markdown`. History persists across sessions, and records a
-line even when sqly rejected it, so the up-arrow brings it back to be fixed.
+line even when sqly rejected it, so the up-arrow brings it back to be fixed. It
+records the line as typed, so a URL carrying credentials is stored as typed too —
+`SQLY_HISTORY_DB_PATH` says where. What sqly prints back is redacted: a password
+in a URL never reaches a message, a refusal, or an `--inspect` report.
 
 ## Multi-line statements
 

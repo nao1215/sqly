@@ -238,16 +238,16 @@ func remoteFilenameHint(raw string) string {
 func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string, func(), error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return "", nil, fmt.Errorf("build download request for %s: %w", rawURL, err)
+		return "", nil, fmt.Errorf("build download request for %s: %w", redactURL(rawURL), err)
 	}
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return "", nil, fmt.Errorf("download %s: %w", rawURL, err)
+		return "", nil, fmt.Errorf("download %s: %w", redactURL(rawURL), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", nil, fmt.Errorf("download %s: unexpected HTTP status %s", rawURL, resp.Status)
+		return "", nil, fmt.Errorf("download %s: unexpected HTTP status %s", redactURL(rawURL), resp.Status)
 	}
 
 	// A declared size over the limit is refused before a byte of the body is
@@ -257,7 +257,7 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 	limit := s.downloadLimit()
 	if resp.ContentLength > limit {
 		return "", nil, fmt.Errorf("download %s: too large: the server declared %d bytes and the limit is %d",
-			rawURL, resp.ContentLength, limit)
+			redactURL(rawURL), resp.ContentLength, limit)
 	}
 
 	filename, err := s.remoteDownloadFilename(rawURL, resp)
@@ -270,7 +270,7 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 
 	dir, err := os.MkdirTemp("", "sqly-http-")
 	if err != nil {
-		return "", nil, fmt.Errorf("create temp dir for %s: %w", rawURL, err)
+		return "", nil, fmt.Errorf("create temp dir for %s: %w", redactURL(rawURL), err)
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 
@@ -278,7 +278,7 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 	f, err := os.Create(localPath) //nolint:gosec // localPath is under a sqly-created temp dir
 	if err != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("create staging file for %s: %w", rawURL, err)
+		return "", nil, fmt.Errorf("create staging file for %s: %w", redactURL(rawURL), err)
 	}
 
 	// Read one byte past the limit rather than exactly the limit, so a body that
@@ -287,7 +287,7 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 	closeErr := f.Close()
 	if copyErr != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("download %s: %w", rawURL, copyErr)
+		return "", nil, fmt.Errorf("download %s: %w", redactURL(rawURL), copyErr)
 	}
 	if written > limit {
 		// The staged file goes with the refusal. A partial download left on disk
@@ -295,11 +295,11 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 		// CSV is worse than none: it parses.
 		cleanup()
 		return "", nil, fmt.Errorf("download %s: too large: the response exceeded the %d byte limit",
-			rawURL, limit)
+			redactURL(rawURL), limit)
 	}
 	if closeErr != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("close staging file for %s: %w", rawURL, closeErr)
+		return "", nil, fmt.Errorf("close staging file for %s: %w", redactURL(rawURL), closeErr)
 	}
 	return localPath, cleanup, nil
 }
@@ -341,7 +341,7 @@ func (s *Shell) remoteDownloadFilename(rawURL string, resp *http.Response) (stri
 	if first != "" {
 		return first, nil
 	}
-	return "", fmt.Errorf("download %s: could not determine a supported filename from the URL, Content-Disposition, or Content-Type", rawURL)
+	return "", fmt.Errorf("download %s: could not determine a supported filename from the URL, Content-Disposition, or Content-Type", redactURL(rawURL))
 }
 
 func contentDispositionFilename(header string) string {
@@ -385,5 +385,30 @@ func filenameFromContentType(header string) string {
 		return "download.xlsx"
 	default:
 		return ""
+	}
+}
+
+// redactURL returns raw with any password in it replaced, for a message a person
+// will read. A URL can carry credentials, and sqly prints the URL it was given
+// in every message about a download — an HTTP status, a size limit, a format it
+// could not name. Printed as given, the secret reaches stderr, and from there a
+// bug report or a CI log. Go's own transport error already redacts it, so
+// repeating the raw URL alongside undid that.
+//
+// Only the schemes sqly downloads are rewritten. Everything else is returned
+// exactly as given: a local path holds no credentials sqly put in flight, and
+// re-serializing one damages it — "C:\\data\\x.csv" parses as a URL whose scheme
+// is "C", which comes back lowercased as "c:\\data\\x.csv" and no longer names the
+// file the message is about.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	switch u.Scheme {
+	case "http", "https":
+		return u.Redacted()
+	default:
+		return raw
 	}
 }

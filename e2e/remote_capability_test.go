@@ -328,3 +328,53 @@ func TestRemoteCapability_UnusedCapabilityIsAccepted(t *testing.T) {
 		t.Errorf("stdout = %q, want the local result", stdout)
 	}
 }
+
+// TestRemoteCapability_CredentialsAreNotEchoedBack covers what the binary prints
+// back when the URL it was given carries a password. Two of these go to stdout —
+// the --inspect report is the document people commit, attach, and paste — and
+// the refusal is printed before any request is made, so it is often the first
+// thing seen. Go's own transport error redacts the password; sqly repeated the
+// raw URL alongside it and undid that.
+func TestRemoteCapability_CredentialsAreNotEchoedBack(t *testing.T) {
+	const secret = "hunter2"
+	server := newCountingServer(t)
+	withCredentials := strings.Replace(server.csvURL(), "http://", "http://user:"+secret+"@", 1)
+
+	assertRedacted := func(t *testing.T, label, stdout, stderr string) {
+		t.Helper()
+		if strings.Contains(stdout, secret) {
+			t.Errorf("%s: stdout repeats the password back:\n%s", label, stdout)
+		}
+		if strings.Contains(stderr, secret) {
+			t.Errorf("%s: stderr repeats the password back:\n%s", label, stderr)
+		}
+		if !strings.Contains(stdout+stderr, "user:xxxxx@") {
+			t.Errorf("%s: neither stream shows the redacted URL, so the message may not name the source at all:\nstdout: %s\nstderr: %s",
+				label, stdout, stderr)
+		}
+	}
+
+	t.Run("the refusal without --allow-remote", func(t *testing.T) {
+		stdout, stderr, _ := run(t, "", "--sql", "SELECT 1", withCredentials)
+		assertRedacted(t, "refusal", stdout, stderr)
+	})
+
+	t.Run("the inspect report", func(t *testing.T) {
+		stdout, stderr, code := run(t, "", "--allow-remote", "--inspect", withCredentials)
+		if code != 0 {
+			t.Fatalf("inspect exit code = %d, want 0\nstderr: %s", code, stderr)
+		}
+		assertRedacted(t, "inspect", stdout, stderr)
+	})
+
+	t.Run("a failed download", func(t *testing.T) {
+		// Port 1 refuses the connection, so this exercises the message sqly wraps
+		// around a transport error — the error Go itself already redacts.
+		unreachable := "http://user:" + secret + "@127.0.0.1:1/data.csv"
+		stdout, stderr, code := run(t, "", "--allow-remote", "--sql", "SELECT 1", unreachable)
+		if code == 0 {
+			t.Fatalf("downloading an unusable body succeeded, want a failure\nstdout: %s", stdout)
+		}
+		assertRedacted(t, "download failure", stdout, stderr)
+	})
+}

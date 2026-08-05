@@ -39,11 +39,18 @@ const remoteCapabilityFlag = "--allow-remote"
 // download. It is an invocationError, so it exits 2 as a usage error: the fix is
 // on the command line, and nothing was read or written on the way to it.
 func remoteCapabilityError(urls []string) error {
+	// The URLs are redacted: a refusal is printed before any request is made, so
+	// it is often the first thing a user sees, and a URL can carry a password.
+	redacted := make([]string, 0, len(urls))
+	for _, u := range urls {
+		redacted = append(redacted, redactURL(u))
+	}
+
 	subject := "a remote input"
-	if len(urls) == 1 {
-		subject = urls[0]
-	} else if len(urls) > 1 {
-		subject = strings.Join(urls, ", ")
+	if len(redacted) == 1 {
+		subject = redacted[0]
+	} else if len(redacted) > 1 {
+		subject = strings.Join(redacted, ", ")
 	}
 	return &invocationError{Err: fmt.Errorf(
 		"sqly will not download %s: reading an http(s) URL needs %s, which this session was not given. Re-run with %s to allow it. %s is a network capability, not a sandbox or an SSRF defense: it decides whether sqly makes a request, not where the request may go",

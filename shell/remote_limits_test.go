@@ -368,3 +368,130 @@ func TestDownloadRemoteInput_NamesTheFileFromTheRedirectTarget(t *testing.T) {
 		t.Errorf("staged file = %q, want it named after the redirect target (sales.csv)", got)
 	}
 }
+
+// TestRemoteErrorsRedactCredentials covers what an error message is allowed to
+// repeat back. A URL can carry a password, and every message about a download
+// interpolated the URL as given, so a failed import printed the secret to
+// stderr — the stream people paste into bug reports. Go's own transport error
+// already redacts it, so sqly was undoing that.
+func TestRemoteErrorsRedactCredentials(t *testing.T) {
+	t.Parallel()
+
+	const secret = "hunter2"
+
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+	}{
+		{
+			name: "an HTTP status the download cannot use",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			},
+		},
+		{
+			name: "a body whose format cannot be named",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				fmt.Fprint(w, "not a table")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(tt.handler)
+			defer server.Close()
+
+			s, cleanup := newLimitShell(t, server)
+			defer cleanup()
+
+			withCredentials := strings.Replace(server.URL, "http://", "http://user:"+secret+"@", 1)
+			_, done, err := s.downloadRemoteInput(context.Background(), withCredentials)
+			if done != nil {
+				done()
+			}
+			if err == nil {
+				t.Fatal("download succeeded, want an error to inspect")
+			}
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("error repeats the password back: %q", err.Error())
+			}
+			if !strings.Contains(err.Error(), "user:xxxxx@") {
+				t.Errorf("error = %q, want the URL with its password redacted", err.Error())
+			}
+		})
+	}
+}
+
+// TestRemoteRefusalRedactsCredentials covers the message a session without
+// --allow-remote prints. It names the URL it will not fetch, and that URL is the
+// one place a password is most likely to be: the refusal is printed before any
+// request is made, so it is often the first thing a user sees.
+func TestRemoteRefusalRedactsCredentials(t *testing.T) {
+	t.Parallel()
+
+	const password = "hunter2"
+	err := remoteCapabilityError([]string{"https://user:" + password + "@example.com/data.csv"})
+	if err == nil {
+		t.Fatal("a remote input without --allow-remote was accepted, want a refusal")
+	}
+	if strings.Contains(err.Error(), password) {
+		t.Errorf("refusal repeats the password back: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "user:xxxxx@") {
+		t.Errorf("refusal = %q, want the URL with its password redacted", err.Error())
+	}
+}
+
+// TestRedactURL covers what the redaction may and may not touch. It runs over
+// every kind of source string a message can name, because the function sees them
+// all: only the schemes sqly downloads are rewritten, and everything else has to
+// come back byte for byte. A Windows path is the case that proves it — it parses
+// as a URL whose scheme is its drive letter, and re-serializing lowercases that.
+func TestRedactURL(t *testing.T) {
+	t.Parallel()
+
+	// The credentials are assembled rather than written as one literal: a literal
+	// URL carrying a password is what a secret scanner is built to find, and a
+	// test fixture is not worth teaching it to ignore.
+	const (
+		user     = "user"
+		password = "hunter2"
+	)
+	withCredentials := func(scheme string) string {
+		return scheme + "://" + user + ":" + password + "@host/data.csv"
+	}
+	redacted := func(scheme string) string {
+		return scheme + "://" + user + ":xxxxx@host/data.csv"
+	}
+
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "http password is replaced", raw: withCredentials("http"), want: redacted("http")},
+		{name: "https password is replaced", raw: withCredentials("https"), want: redacted("https")},
+		{name: "a username without a password is kept", raw: "https://user@host/data.csv", want: "https://user@host/data.csv"},
+		{name: "a plain URL is unchanged", raw: "https://host/data.csv", want: "https://host/data.csv"},
+		{name: "a Windows path keeps its drive letter", raw: `C:\data\people.csv`, want: `C:\data\people.csv`},
+		{name: "a Windows path with forward slashes", raw: "C:/data/people.csv", want: "C:/data/people.csv"},
+		{name: "an absolute Unix path", raw: "/var/data/people.csv", want: "/var/data/people.csv"},
+		{name: "a relative path", raw: "testdata/people.csv", want: "testdata/people.csv"},
+		{name: "the stdin source name", raw: stdinTableSource, want: stdinTableSource},
+		{name: "a file URL is not a download", raw: "file:///data/people.csv", want: "file:///data/people.csv"},
+		{name: "an empty source", raw: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := redactURL(tt.raw); got != tt.want {
+				t.Errorf("redactURL(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
