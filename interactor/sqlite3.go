@@ -10,6 +10,7 @@ import (
 	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
+	"github.com/nao1215/sqly/domain/sqltext"
 	"github.com/nao1215/sqly/infrastructure/filesql"
 	"github.com/nao1215/sqly/usecase"
 )
@@ -138,7 +139,7 @@ func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64,
 func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	// Strip a leading BOM and leading comments so the statement classifies and
 	// runs the same way it does on the batch and --sql-file paths.
-	stmt := stripSQLNoise(statement)
+	stmt := sqltext.StripNoise(statement)
 	if stmt == "" {
 		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
@@ -175,7 +176,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		// result columns, so the query path reports ErrNoRows. Re-run it on the exec
 		// path so it commits and reports neutral success instead of a misleading "no
 		// records" error.
-		if !errors.Is(err, repository.ErrNoRows) || leadingKeyword(stmt) != sqlPRAGMA {
+		if !errors.Is(err, repository.ErrNoRows) || sqltext.LeadingKeyword(stmt) != sqlPRAGMA {
 			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}
 	}

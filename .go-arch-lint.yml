@@ -37,6 +37,7 @@ components:
   domain: { in: domain }
   model: { in: domain/model }
   cleanup: { in: domain/cleanup }
+  sqltext: { in: domain/sqltext }
   repository: { in: domain/repository }
   infrastructure: { in: [infrastructure, infrastructure/mock/**] }
   memory-infra: { in: [infrastructure/memory, infrastructure/filesql] }
@@ -59,6 +60,11 @@ commonComponents:
   # Every layer has something to release, so the rule has to be reachable from
   # all of them; that is why it is common rather than a dependency edge.
   - cleanup
+  # sqltext is the same shape: a dependency-free leaf holding the one walk over
+  # SQL text that tells code from string literals, quoted identifiers, and
+  # comments. The shell asks it where a statement ends, the interactor asks it
+  # what kind of statement this is, and neither owns the other.
+  - sqltext
 
 deps:
   di:

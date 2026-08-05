@@ -61,32 +61,6 @@ func TestSQLProducesRowset(t *testing.T) {
 	}
 }
 
-func TestMainStatementVerb(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		stmt string
-		want string
-	}{
-		{"WITH feeding UPDATE", "WITH s AS (SELECT 1) UPDATE t SET x=1", sqlUPDATE},
-		{"WITH feeding INSERT", "WITH s AS (SELECT 1) INSERT INTO t SELECT * FROM s", sqlINSERT},
-		{"WITH feeding DELETE", "WITH s AS (SELECT 1) DELETE FROM t", sqlDELETE},
-		{"WITH feeding SELECT", "WITH s AS (SELECT 1) SELECT * FROM s", sqlSELECT},
-		{"CTE body SELECT ignored at depth>0", "WITH s AS (SELECT 1 FROM (SELECT 2)) UPDATE t SET x=1", sqlUPDATE},
-		{"verb inside string literal ignored", "WITH s AS (SELECT 'UPDATE') SELECT * FROM s", sqlSELECT},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := mainStatementVerb(tt.stmt); got != tt.want {
-				t.Errorf("mainStatementVerb(%q) = %q, want %q", tt.stmt, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestUnsupportedStatementReason verifies that statements sqly cannot run under
 // its per-statement transaction and in-memory model are flagged with a reason,
 // while statements it can run (DML, DDL, ANALYZE, PRAGMA, queries) are not.

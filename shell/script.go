@@ -3,6 +3,8 @@ package shell
 import (
 	"fmt"
 	"strings"
+
+	"github.com/nao1215/sqly/domain/sqltext"
 )
 
 // A script is what sqly reads when it is not being typed at: a `--sql-file`, a
@@ -145,7 +147,7 @@ func parseScript(script string) ([]scriptElement, error) {
 	}
 
 	// A trailing statement with no ";" still runs; trailing comments alone do not.
-	if leftover := stripLeadingSQLComments(pending.String()); leftover != "" {
+	if leftover := sqltext.StripNoise(pending.String()); leftover != "" {
 		start, end := statementLineSpan(pending.String(), pendingStart, leftover)
 		elements = append(elements, scriptElement{
 			kind: elementSQL, text: leftover, startLine: start, endLine: end,

@@ -32,64 +32,6 @@ func TestIsAllDigits_Cov(t *testing.T) {
 	}
 }
 
-// TestEndsInsideBlockComment_Cov drives the quote- and comment-aware scanner
-// through every state so a "/*" opener is only honored outside strings and line
-// comments.
-func TestEndsInsideBlockComment_Cov(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		in   string
-		want bool
-	}{
-		{"empty", "", false},
-		{"open block", "SELECT 1 /* open", true},
-		{"closed block", "SELECT 1 /* closed */", false},
-		{"opener in single quote", "SELECT '/*'", false},
-		{"opener in double quote", "SELECT \"/*\"", false},
-		{"opener in backtick", "SELECT `/*`", false},
-		{"opener in bracket", "SELECT [/*]", false},
-		{"opener in line comment", "-- /* not a block\n", false},
-		{"line comment then open block", "-- note\n/* open", true},
-		{"plain line comment", "SELECT 1 -- trailing", false},
-	}
-	for _, tt := range tests {
-		if got := endsInsideBlockComment(tt.in); got != tt.want {
-			t.Errorf("%s: endsInsideBlockComment(%q) = %v, want %v", tt.name, tt.in, got, tt.want)
-		}
-	}
-}
-
-// TestWithMainVerb_Cov confirms that the main verb of a WITH statement is read at
-// parenthesis depth 0, skipping CTE bodies, quoted identifiers, and comments.
-func TestWithMainVerb_Cov(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"cte then update", "WITH cte AS (SELECT 1) UPDATE t SET x=1", "UPDATE"},
-		{"cte then select", "WITH cte AS (SELECT 1) SELECT * FROM cte", "SELECT"},
-		{"cte then insert", "WITH cte AS (SELECT 1) INSERT INTO t SELECT * FROM cte", "INSERT"},
-		{"cte then delete", "WITH cte AS (SELECT 1) DELETE FROM t", "DELETE"},
-		{"cte then replace", "WITH cte AS (SELECT 1) REPLACE INTO t VALUES(1)", "REPLACE"},
-		{"cte then values", "WITH cte AS (SELECT 1) VALUES (1)", "VALUES"},
-		{"line comment before verb", "WITH cte AS (SELECT 1) -- note\nUPDATE t SET x=1", "UPDATE"},
-		{"block comment before verb", "WITH cte AS (SELECT 1) /* c */ UPDATE t SET x=1", "UPDATE"},
-		{"keyword hidden in single quote", "WITH cte AS (SELECT 1) SELECT 'UPDATE'", "SELECT"},
-		{"double-quoted cte name", "WITH \"c\" AS (SELECT 1) SELECT 1", "SELECT"},
-		{"backtick cte name", "WITH `c` AS (SELECT 1) SELECT 1", "SELECT"},
-		{"bracket cte name", "WITH [c] AS (SELECT 1) SELECT 1", "SELECT"},
-		{"no main verb", "WITH cte AS (SELECT 1)", ""},
-	}
-	for _, tt := range tests {
-		if got := withMainVerb(tt.in); got != tt.want {
-			t.Errorf("%s: withMainVerb(%q) = %q, want %q", tt.name, tt.in, got, tt.want)
-		}
-	}
-}
-
 // TestTablesNamedAfterFile_Cov confirms a single-table format claims only its
 // exact table name, while a multi-table (ACH) format also claims its "<base>_"
 // prefixed names. This is name matching, used only to detect a collision.
