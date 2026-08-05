@@ -1880,6 +1880,57 @@ func TestMigrationGuide_ExplainsRc2ToRc3(t *testing.T) {
 	}
 }
 
+// TestMigrationGuide_ExplainsRc4ToRc5 holds the guide to the changes an rc4
+// command line or wrapper has to absorb. A breaking change recorded only in the
+// CHANGELOG leaves the person upgrading to work out the edit themselves.
+func TestMigrationGuide_ExplainsRc4ToRc5(t *testing.T) {
+	t.Parallel()
+
+	guide := readDoc(t, migrationGuideFile)
+	if !strings.Contains(guide, "## v1.0.0-rc4 → v1.0.0-rc5") {
+		t.Fatalf("%s has no rc4 to rc5 section", migrationGuideFile)
+	}
+	flat := flatten(section(guide, "## v1.0.0-rc4 → v1.0.0-rc5"))
+
+	for _, claim := range []string{
+		"XLSX cannot represent",
+		"exit 4",
+		"csv, tsv, or json",
+		"tables[].source",
+		"user:xxxxx@",
+		"Ctrl-C",
+	} {
+		if !strings.Contains(flat, claim) {
+			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
+		}
+	}
+}
+
+// TestCHANGELOG_ListsTheRc5BreakingChanges is the rc4 check for the release
+// after it: what the guide tells someone to change, the release notes have to
+// record.
+func TestCHANGELOG_ListsTheRc5BreakingChanges(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "CHANGELOG.md")
+	rc5 := section(body, "## [v1.0.0-rc5]")
+	if rc5 == "" {
+		t.Fatal("CHANGELOG.md has no v1.0.0-rc5 section")
+	}
+	breaking := flatten(section(rc5, "### Breaking Changes"))
+	if breaking == "" {
+		t.Fatal("the v1.0.0-rc5 CHANGELOG entry has no Breaking Changes section")
+	}
+	for _, claim := range []string{"Excel", "U+FFFE", "source", "user:xxxxx@"} {
+		if !strings.Contains(breaking, claim) {
+			t.Errorf("the rc5 Breaking Changes section does not mention %s", claim)
+		}
+	}
+	if !strings.Contains(flatten(rc5), migrationGuideLink) {
+		t.Errorf("the rc5 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
+	}
+}
+
 // TestMigrationGuide_ExplainsRc3ToRc4 holds the guide to the changes an rc3
 // command line or wrapper has to absorb. A breaking change recorded only in the
 // CHANGELOG leaves the person upgrading to work out the edit themselves.
