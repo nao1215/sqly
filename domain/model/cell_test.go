@@ -21,10 +21,10 @@ func TestCellStringUsesDriverType(t *testing.T) {
 		cell Cell
 		want string
 	}{
-		{name: "null renders as empty", cell: NullCell(), want: ""},
-		{name: "empty text renders as empty", cell: NewTextCell(""), want: ""},
-		{name: "text is verbatim", cell: NewTextCell("hello"), want: "hello"},
-		{name: "leading zeros survive", cell: NewTextCell("00123"), want: "00123"},
+		{name: "null renders as empty", cell: NewCell(nil), want: ""},
+		{name: "empty text renders as empty", cell: NewCell(""), want: ""},
+		{name: "text is verbatim", cell: NewCell("hello"), want: "hello"},
+		{name: "leading zeros survive", cell: NewCell("00123"), want: "00123"},
 		{name: "integer is decimal", cell: NewCell(int64(42)), want: "42"},
 		{name: "negative integer", cell: NewCell(int64(-7)), want: "-7"},
 		{name: "real is shortest round-trip", cell: NewCell(1.5), want: "1.5"},
@@ -48,17 +48,17 @@ func TestCellStringUsesDriverType(t *testing.T) {
 func TestCellNullIsNotEmptyString(t *testing.T) {
 	t.Parallel()
 
-	if !NullCell().IsNull() {
-		t.Error("NullCell().IsNull() = false")
+	if !NewCell(nil).IsNull() {
+		t.Error("NewCell(nil).IsNull() = false")
 	}
-	if NewTextCell("").IsNull() {
-		t.Error("NewTextCell(\"\").IsNull() = true, want false")
+	if NewCell("").IsNull() {
+		t.Error("NewCell(\"\").IsNull() = true, want false")
 	}
-	if NullCell().String() != NewTextCell("").String() {
+	if NewCell(nil).String() != NewCell("").String() {
 		t.Error("NULL and empty string should render identically in text output")
 	}
-	if NullCell().Value() != nil {
-		t.Errorf("NullCell().Value() = %#v, want nil", NullCell().Value())
+	if NewCell(nil).Value() != nil {
+		t.Errorf("NewCell(nil).Value() = %#v, want nil", NewCell(nil).Value())
 	}
 }
 
@@ -98,13 +98,13 @@ func TestNewTableFromCellsRejectsShapeMismatch(t *testing.T) {
 		name string
 		rows [][]Cell
 	}{
-		{name: "row too short", rows: [][]Cell{{NewTextCell("a")}}},
-		{name: "row too long", rows: [][]Cell{{NewTextCell("a"), NewTextCell("b"), NewTextCell("c")}}},
+		{name: "row too short", rows: [][]Cell{{NewCell("a")}}},
+		{name: "row too long", rows: [][]Cell{{NewCell("a"), NewCell("b"), NewCell("c")}}},
 		{
 			name: "second row diverges",
 			rows: [][]Cell{
-				{NewTextCell("a"), NewTextCell("b")},
-				{NewTextCell("a")},
+				{NewCell("a"), NewCell("b")},
+				{NewCell("a")},
 			},
 		},
 	}
@@ -130,14 +130,14 @@ func TestNewTableFromCellsRejectsShapeMismatch(t *testing.T) {
 func TestNewTableFromCellsCopiesInput(t *testing.T) {
 	t.Parallel()
 
-	rows := [][]Cell{{NewCell(int64(1)), NewTextCell("keep")}}
+	rows := [][]Cell{{NewCell(int64(1)), NewCell("keep")}}
 	tbl, err := NewTableFromCells("t", Header{"id", "name"}, rows)
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
 	}
 
-	rows[0][0] = NewTextCell("tampered")
-	rows[0][1] = NullCell()
+	rows[0][0] = NewCell("tampered")
+	rows[0][1] = NewCell(nil)
 
 	var out bytes.Buffer
 	if err := tbl.Print(&out, PrintModeJSON); err != nil {
@@ -162,7 +162,7 @@ func TestTableRecordsMatchCells(t *testing.T) {
 	t.Parallel()
 
 	tbl, err := NewTableFromCells("t", Header{"i", "r", "s", "n"}, [][]Cell{
-		{NewCell(int64(42)), NewCell(1.5), NewTextCell("00123"), NullCell()},
+		{NewCell(int64(42)), NewCell(1.5), NewCell("00123"), NewCell(nil)},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -216,7 +216,7 @@ func TestWithNameDoesNotShareRowStorage(t *testing.T) {
 	// Appending to the copy must not be observable through the original, and
 	// vice versa: the two must not share one backing array.
 	renamed.records = append(renamed.records, Record{"appended"})
-	renamed.cells = append(renamed.cells, NewTextCell("appended"))
+	renamed.cells = append(renamed.cells, NewCell("appended"))
 	if got := len(tbl.Records()); got != 2 {
 		t.Errorf("original rows = %d after appending to the renamed copy, want 2", got)
 	}
@@ -248,7 +248,7 @@ func TestRecordsCannotCorruptTheTable(t *testing.T) {
 	t.Parallel()
 
 	table, err := NewTableFromCells("t", Header{"n", "s"}, [][]Cell{
-		{NewCell(int64(42)), NewTextCell("original")},
+		{NewCell(int64(42)), NewCell("original")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -354,8 +354,8 @@ func TestRowViewCannotWriteThroughToTheTable(t *testing.T) {
 	t.Parallel()
 
 	tbl, err := NewTableFromCells("t", Header{"n", "s"}, [][]Cell{
-		{NewCell(int64(42)), NewTextCell("original")},
-		{NewCell(int64(7)), NewTextCell("second")},
+		{NewCell(int64(42)), NewCell("original")},
+		{NewCell(int64(7)), NewCell("second")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -416,16 +416,16 @@ func TestRowsIteration(t *testing.T) {
 		after []string
 	}{
 		{name: "no rows", rows: nil, want: nil, stop: -1},
-		{name: "one row", rows: [][]Cell{{NewTextCell("a")}}, want: []string{"a"}, stop: -1},
+		{name: "one row", rows: [][]Cell{{NewCell("a")}}, want: []string{"a"}, stop: -1},
 		{
 			name: "several rows in order",
-			rows: [][]Cell{{NewTextCell("a")}, {NewTextCell("b")}, {NewTextCell("c")}},
+			rows: [][]Cell{{NewCell("a")}, {NewCell("b")}, {NewCell("c")}},
 			want: []string{"a", "b", "c"},
 			stop: -1,
 		},
 		{
 			name: "early exit stops the iteration",
-			rows: [][]Cell{{NewTextCell("a")}, {NewTextCell("b")}, {NewTextCell("c")}},
+			rows: [][]Cell{{NewCell("a")}, {NewCell("b")}, {NewCell("c")}},
 			want: []string{"a", "b"},
 			stop: 2,
 		},
@@ -479,7 +479,7 @@ func TestHeaderCannotBeMutatedThroughTheAccessor(t *testing.T) {
 	t.Parallel()
 
 	tbl, err := NewTableFromCells("t", Header{"first", "second"}, [][]Cell{
-		{NewTextCell("a"), NewTextCell("b")},
+		{NewCell("a"), NewCell("b")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -525,8 +525,8 @@ func TestWithNameHeaderIsIndependent(t *testing.T) {
 	t.Parallel()
 
 	tbl, err := NewTableFromCells("original", Header{"id", "name"}, [][]Cell{
-		{NewCell(int64(1)), NewTextCell("alice")},
-		{NewCell(int64(2)), NewTextCell("bob")},
+		{NewCell(int64(1)), NewCell("alice")},
+		{NewCell(int64(2)), NewCell("bob")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -570,8 +570,8 @@ func TestOutputFormatsAgreeAfterPublicAPIUse(t *testing.T) {
 	t.Parallel()
 
 	tbl, err := NewTableFromCells("t", Header{"i", "r", "s", "n"}, [][]Cell{
-		{NewCell(int64(42)), NewCell(1.5), NewTextCell("00123"), NullCell()},
-		{NewCell(int64(-7)), NewCell(2.0), NewTextCell("true"), NewTextCell("")},
+		{NewCell(int64(42)), NewCell(1.5), NewCell("00123"), NewCell(nil)},
+		{NewCell(int64(-7)), NewCell(2.0), NewCell("true"), NewCell("")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)

@@ -41,7 +41,7 @@ func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
 	query := mock.NewMockQueryUsecase(ctrl)
 
 	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
-		model.NewRecord([]string{"1"}),
+		model.Record([]string{"1"}),
 	})
 
 	// First command: the history write fails as if the DB became read-only after
@@ -80,7 +80,7 @@ func TestExec_HistoryWriteDoesNotScanHistory(t *testing.T) {
 	query := mock.NewMockQueryUsecase(ctrl)
 
 	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
-		model.NewRecord([]string{"1"}),
+		model.Record([]string{"1"}),
 	})
 
 	// A history write is a single insert: it must not call List to compute an id.

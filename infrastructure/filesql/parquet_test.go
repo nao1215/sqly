@@ -176,9 +176,9 @@ func TestDumpTableToParquet_PreservesNull(t *testing.T) {
 	t.Parallel()
 
 	table, err := model.NewTableFromCells("nulls", model.Header{"id", "name"}, [][]model.Cell{
-		{model.NullCell(), model.NewTextCell("A")},      // id is SQL NULL
-		{model.NewTextCell(""), model.NewTextCell("B")}, // id is an empty string
-		{model.NewCell(int64(1)), model.NewTextCell("C")},
+		{model.NewCell(nil), model.NewCell("A")}, // id is SQL NULL
+		{model.NewCell(""), model.NewCell("B")},  // id is an empty string
+		{model.NewCell(int64(1)), model.NewCell("C")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)

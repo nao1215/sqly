@@ -460,7 +460,7 @@ func TestTablePrintJSON_NullDistinctFromEmpty(t *testing.T) {
 	// empty string. Both render as "" in text output, so JSON is the only place
 	// the difference is observable.
 	tbl, err := NewTableFromCells("t", Header{"n", "e", "x"}, [][]Cell{
-		{NullCell(), NewTextCell(""), NewTextCell("1")},
+		{NewCell(nil), NewCell(""), NewCell("1")},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -500,9 +500,9 @@ func TestTablePrintJSONScalars(t *testing.T) {
 	header := Header{"i", "f", "b", "n", "empty", "big", "lead", "text"}
 	// Column 3 (n) is a SQL NULL; column 4 (empty) is a real empty string.
 	tbl, err := NewTableFromCells("t", header, [][]Cell{{
-		NewTextCell("42"), NewTextCell("-1.5"), NewTextCell("true"), NullCell(),
-		NewTextCell(""), NewTextCell("123456789012345678901234567890"),
-		NewTextCell("007"), NewTextCell("hello"),
+		NewCell("42"), NewCell("-1.5"), NewCell("true"), NewCell(nil),
+		NewCell(""), NewCell("123456789012345678901234567890"),
+		NewCell("007"), NewCell("hello"),
 	}})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -539,8 +539,8 @@ func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 	tbl, err := NewTableFromCells("query",
 		Header{"integer", "real", "text_number", "text_bool", "padded", "null", "empty"},
 		[][]Cell{{
-			NewCell(int64(42)), NewCell(float64(1.5)), NewTextCell("123"),
-			NewTextCell("true"), NewTextCell("00123"), NullCell(), NewTextCell(""),
+			NewCell(int64(42)), NewCell(float64(1.5)), NewCell("123"),
+			NewCell("true"), NewCell("00123"), NewCell(nil), NewCell(""),
 		}})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
@@ -598,7 +598,7 @@ func TestTablePrintJSONPreservesDatabaseTypes(t *testing.T) {
 func TestTableWithNamePreservesJSONMetadata(t *testing.T) {
 	t.Parallel()
 	table, err := NewTableFromCells("query_result", Header{"n", "text", "null"}, [][]Cell{
-		{NewCell(int64(42)), NewTextCell("123"), NullCell()},
+		{NewCell(int64(42)), NewCell("123"), NewCell(nil)},
 	})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)

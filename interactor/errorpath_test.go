@@ -164,7 +164,7 @@ func TestDumpTable_InitCompressionError(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
-		model.NewRecord([]string{"1"}),
+		model.Record([]string{"1"}),
 	})
 	out := filepath.Join(t.TempDir(), "out.csv.bz2")
 
@@ -181,7 +181,7 @@ func TestDumpTable_Parquet(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("people", model.NewHeader([]string{"id", "name"}), []model.Record{
-		model.NewRecord([]string{"1", "alice"}),
+		model.Record([]string{"1", "alice"}),
 	})
 	out := filepath.Join(t.TempDir(), "people.parquet")
 
@@ -213,7 +213,7 @@ func TestDumpTable_PreservesExistingFileOnFailure(t *testing.T) {
 		exp := newTestExportInteractor()
 		// Table with a tab character in a value, which is invalid in LTSV format
 		table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
-			model.NewRecord([]string{"1", "alice\tbob"}),
+			model.Record([]string{"1", "alice\tbob"}),
 		})
 
 		tempDir := t.TempDir()
@@ -250,7 +250,7 @@ func TestDumpTable_PreservesFilePermissions(t *testing.T) {
 
 		exp := newTestExportInteractor()
 		table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
-			model.NewRecord([]string{"1", "alice"}),
+			model.Record([]string{"1", "alice"}),
 		})
 
 		tempDir := t.TempDir()

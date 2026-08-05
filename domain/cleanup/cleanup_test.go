@@ -1,11 +1,9 @@
 package cleanup
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 // TestJoinKeepsBothErrors is the whole point of the package: the rule it
@@ -106,72 +104,3 @@ func TestJoinPreservesTypedErrors(t *testing.T) {
 type pathError struct{ path string }
 
 func (e *pathError) Error() string { return "path error: " + e.path }
-
-// TestContextStaysLiveWhenNotDone checks that cleanup inherits the caller's
-// deadline while the operation's context is still usable, so a caller's timeout
-// keeps applying.
-func TestContextStaysLiveWhenNotDone(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithTimeout(t.Context(), time.Hour)
-	defer cancel()
-
-	got, release := Context(ctx)
-	defer release()
-
-	if got != ctx {
-		t.Error("Context returned a different context while the original was live")
-	}
-	if got.Err() != nil {
-		t.Errorf("cleanup context is already done: %v", got.Err())
-	}
-}
-
-// TestContextSurvivesCancellation is the reason the helper exists. Reusing a
-// cancelled context for cleanup makes every statement fail immediately, so the
-// resource stays held — a cancelled query would leave a database attached and
-// break the next run. Cleanup gets a detached context with a grace period.
-func TestContextSurvivesCancellation(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if ctx.Err() == nil {
-		t.Fatal("precondition: the context should be cancelled")
-	}
-
-	got, release := Context(ctx)
-	defer release()
-
-	if got.Err() != nil {
-		t.Errorf("cleanup context is unusable after cancellation: %v", got.Err())
-	}
-	deadline, ok := got.Deadline()
-	if !ok {
-		t.Fatal("cleanup context has no deadline; it must not run unbounded")
-	}
-	if remaining := time.Until(deadline); remaining <= 0 || remaining > cleanupGrace {
-		t.Errorf("cleanup deadline in %v, want (0, %v]", remaining, cleanupGrace)
-	}
-}
-
-// TestContextReleaseIsAlwaysSafe checks that the returned cancel func can be
-// called on both paths, so callers can defer it unconditionally.
-func TestContextReleaseIsAlwaysSafe(t *testing.T) {
-	t.Parallel()
-
-	live, release := Context(t.Context())
-	release()
-	release() // idempotent
-	if live == nil {
-		t.Error("Context returned a nil context")
-	}
-
-	cancelled, stop := context.WithCancel(t.Context())
-	stop()
-	detached, release2 := Context(cancelled)
-	release2()
-	if detached.Err() == nil {
-		t.Error("releasing the cleanup context did not cancel it")
-	}
-}

@@ -21,14 +21,14 @@ func TestNewHeader(t *testing.T) {
 func TestNewRecord(t *testing.T) {
 	t.Parallel()
 
-	r := NewRecord([]string{"1", "2"})
+	r := Record([]string{"1", "2"})
 	if len(r) != 2 || r[0] != "1" || r[1] != "2" {
-		t.Errorf("NewRecord() = %v, want [1 2]", r)
+		t.Errorf("Record() = %v, want [1 2]", r)
 	}
 
-	empty := NewRecord(nil)
+	empty := Record(nil)
 	if len(empty) != 0 {
-		t.Errorf("NewRecord(nil) = %v, want empty", empty)
+		t.Errorf("Record(nil) = %v, want empty", empty)
 	}
 }
 

@@ -98,22 +98,6 @@ func TestNewHistoryDB(t *testing.T) {
 	}
 }
 
-func TestNewInMemHistoryDB(t *testing.T) {
-	t.Parallel()
-
-	db, cleanup, err := NewInMemHistoryDB()
-	if err != nil {
-		t.Fatalf("NewInMemHistoryDB failed: %v", err)
-	}
-	defer cleanup()
-	if db == nil {
-		t.Fatal("expected in-memory history database, got nil")
-	}
-	if _, err := (*sql.DB)(db).ExecContext(context.Background(), "CREATE TABLE history_test (id INTEGER)"); err != nil {
-		t.Fatalf("in-memory history database is not usable: %v", err)
-	}
-}
-
 func TestSQLite3DriverEnablesForeignKeysAndBusyTimeout(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {

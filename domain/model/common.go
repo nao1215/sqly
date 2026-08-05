@@ -25,11 +25,6 @@ func (h Header) Equal(h2 Header) bool {
 // Record is CSV/TSV/Table records.
 type Record []string
 
-// NewRecord create new Record.
-func NewRecord(r []string) Record {
-	return Record(r)
-}
-
 // Equal compare Record.
 func (r Record) Equal(r2 Record) bool {
 	if len(r) != len(r2) {

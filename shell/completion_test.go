@@ -1820,7 +1820,10 @@ func TestImportCompletionAbsolutePathThenImportSucceeds(t *testing.T) {
 		t.Fatalf("importCommand(%q) failed: %v", completed, err)
 	}
 
-	tables := mustTables(ctx, shell)
+	tables, err := shell.usecases.importer.GetTableNames(ctx)
+	if err != nil {
+		t.Fatalf("GetTableNames: %v", err)
+	}
 	names := make([]string, 0, len(tables))
 	for _, tbl := range tables {
 		names = append(names, tbl.Name())

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/testutil"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -16,7 +16,7 @@ import (
 // database so subtests can run in parallel.
 func covPerNewHistoryRepo(t *testing.T) (*historyRepository, func()) {
 	t.Helper()
-	historyDB, cleanup, err := config.NewInMemHistoryDB()
+	historyDB, cleanup, err := testutil.NewInMemHistoryDB()
 	if err != nil {
 		t.Fatal(err)
 	}

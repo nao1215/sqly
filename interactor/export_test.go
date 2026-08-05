@@ -33,8 +33,8 @@ func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age", "city"}), []model.Record{
-		model.NewRecord([]string{"John", "25", "New York"}),
-		model.NewRecord([]string{"Jane", "30", "Los Angeles"}),
+		model.Record([]string{"John", "25", "New York"}),
+		model.Record([]string{"Jane", "30", "Los Angeles"}),
 	})
 
 	tempDir := t.TempDir()
@@ -64,7 +64,7 @@ func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age", "city"}), []model.Record{
-		model.NewRecord([]string{"John", "25", "New York"}),
+		model.Record([]string{"John", "25", "New York"}),
 	})
 
 	tempDir := t.TempDir()
@@ -90,7 +90,7 @@ func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
-		model.NewRecord([]string{"John", "25"}),
+		model.Record([]string{"John", "25"}),
 	})
 
 	tempDir := t.TempDir()
@@ -116,7 +116,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 	exp := newTestExportInteractor()
 
 	table := model.NewTable("test_sheet", model.NewHeader([]string{"id", "name"}), []model.Record{
-		model.NewRecord([]string{"1", "Gina"}),
+		model.Record([]string{"1", "Gina"}),
 	})
 
 	tempDir := t.TempDir()
@@ -149,7 +149,7 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 	exp := newTestExportInteractor()
 
 	table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
-		model.NewRecord([]string{"1", "Alice"}),
+		model.Record([]string{"1", "Alice"}),
 	})
 
 	tempDir := t.TempDir()
@@ -203,8 +203,8 @@ func TestExportInteractor_DumpTable_JSON(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
-		model.NewRecord([]string{"John", "25"}),
-		model.NewRecord([]string{"Jane", "30"}),
+		model.Record([]string{"John", "25"}),
+		model.Record([]string{"Jane", "30"}),
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.json")
@@ -256,7 +256,7 @@ func TestExportInteractor_DumpTable_CSV_Gzip(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
-		model.NewRecord([]string{"John", "25"}),
+		model.Record([]string{"John", "25"}),
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.csv.gz")
@@ -276,8 +276,8 @@ func TestExportInteractor_DumpTable_NDJSON_Gzip(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
-		model.NewRecord([]string{"John", "25"}),
-		model.NewRecord([]string{"Jane", "30"}),
+		model.Record([]string{"John", "25"}),
+		model.Record([]string{"Jane", "30"}),
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson.gz")
@@ -304,8 +304,8 @@ func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
-		model.NewRecord([]string{"John", "25"}),
-		model.NewRecord([]string{"Jane", "30"}),
+		model.Record([]string{"John", "25"}),
+		model.Record([]string{"Jane", "30"}),
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson")

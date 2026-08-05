@@ -20,7 +20,7 @@ import (
 )
 
 // These tests intentionally avoid t.Parallel at the top level.
-// importCommand/importDirectory/importFile can write to the package-global
+// importCommand and runImport can write to the package-global
 // config.Stdout, and running them concurrently with shell_test helpers that
 // temporarily swap config.Stdout to an os.Pipe can deadlock on Windows due to
 // the smaller pipe buffer size.
@@ -35,13 +35,9 @@ func TestImportDirectory_EmptyDir_ReturnsError(t *testing.T) {
 	emptyDir := t.TempDir()
 
 	// filesql returns an error for empty directories (no supported files found),
-	// so importDirectory propagates the error and returns imported=false.
-	imported, err := s.importDirectory(context.Background(), emptyDir, emptyDir)
-	if err == nil {
+	// so the import propagates it rather than reporting an empty success.
+	if err := s.runImport(context.Background(), []string{emptyDir}, []string{emptyDir}); err == nil {
 		t.Fatal("expected error for empty directory, got nil")
-	}
-	if imported {
-		t.Error("expected imported=false for empty directory, got true")
 	}
 }
 
@@ -62,23 +58,15 @@ func TestImportDirectory_ReimportSameDir_ReportsOverwrite(t *testing.T) {
 	ctx := context.Background()
 
 	// First import creates the table.
-	imported, err := s.importDirectory(ctx, dir, dir)
-	if err != nil {
+	if err := s.runImport(ctx, []string{dir}, []string{dir}); err != nil {
 		t.Fatalf("first import: %v", err)
-	}
-	if !imported {
-		t.Error("expected first import to succeed")
 	}
 
 	// Re-importing the same directory overwrites the existing table. The
-	// directory still contains a supported file, so the import is reported as
-	// successful (it overwrote data) rather than as "No supported files". Ref
-	imported, err = s.importDirectory(ctx, dir, dir)
-	if err != nil {
+	// directory still contains a supported file, so the import succeeds (it
+	// overwrote data) rather than failing with "No supported files".
+	if err := s.runImport(ctx, []string{dir}, []string{dir}); err != nil {
 		t.Fatalf("second import: %v", err)
-	}
-	if !imported {
-		t.Error("expected re-import of a directory with a supported file to report imported=true")
 	}
 }
 
@@ -225,8 +213,8 @@ func TestImportDirectory_RecordsPerFileSource(t *testing.T) {
 	copyTestFile(t, "customer-transfer.fed", filepath.Join(dir, "customer-transfer.fed"))
 
 	ctx := context.Background()
-	if _, err := s.importDirectory(ctx, dir, dir); err != nil {
-		t.Fatalf("importDirectory: %v", err)
+	if err := s.runImport(ctx, []string{dir}, []string{dir}); err != nil {
+		t.Fatalf("runImport: %v", err)
 	}
 
 	absDir, _ := filepath.Abs(dir)
@@ -277,7 +265,7 @@ func TestImportDirectory_RejectsDuplicateBasenameCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = s.importDirectory(context.Background(), dir, dir)
+	err = s.runImport(context.Background(), []string{dir}, []string{dir})
 	if err == nil {
 		t.Fatal("expected a collision error for duplicate basenames, got nil")
 	}
@@ -302,7 +290,7 @@ func TestImportDirectory_RejectsSanitizedCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = s.importDirectory(context.Background(), dir, dir)
+	err = s.runImport(context.Background(), []string{dir}, []string{dir})
 	if err == nil {
 		t.Fatal("expected a collision error for sanitized-name collision, got nil")
 	}
@@ -331,8 +319,8 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 	if err := os.WriteFile(orig, origData, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.importFile(ctx, orig, orig); err != nil {
-		t.Fatalf("importFile: %v", err)
+	if err := s.runImport(ctx, []string{orig}, []string{orig}); err != nil {
+		t.Fatalf("runImport: %v", err)
 	}
 	if s.dirImported["user"] {
 		t.Fatal("user should not be a directory import yet")
@@ -348,12 +336,8 @@ func TestImportDirectory_ReimportOverFileImport_UpdatesSourceAndBlocksSave(t *te
 		t.Fatal(err)
 	}
 
-	imported, err := s.importDirectory(ctx, dir, dir)
-	if err != nil {
-		t.Fatalf("importDirectory re-import: %v", err)
-	}
-	if !imported {
-		t.Error("expected the directory re-import to report imported=true")
+	if err := s.runImport(ctx, []string{dir}, []string{dir}); err != nil {
+		t.Fatalf("runImport re-import: %v", err)
 	}
 	if !s.dirImported["user"] {
 		t.Error("user must be marked as a directory import after re-import")
@@ -498,7 +482,7 @@ func TestImportCommand_TopLevelErrorCarriesDetail(t *testing.T) {
 	})
 }
 
-func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
+func TestShell_runImport_directoryImportsAndReportsTables(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -510,16 +494,12 @@ func TestShell_importDirectory_importsAndReportsTables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var imported bool
 	// Import progress goes to stderr, so capture stderr here.
 	out := captureStderr(t, func() {
-		imported, err = s.importDirectory(context.Background(), dir, "fixtures")
+		err = s.runImport(context.Background(), []string{dir}, []string{"fixtures"})
 	})
 	if err != nil {
-		t.Fatalf("importDirectory returned error: %v", err)
-	}
-	if !imported {
-		t.Fatal("importDirectory reported imported=false, want true")
+		t.Fatalf("runImport returned error: %v", err)
 	}
 	if !strings.Contains(out, "Successfully imported 1 table(s) from directory fixtures") {
 		t.Fatalf("output %q does not report a successful import", out)
@@ -549,7 +529,7 @@ func TestImportFile_UnsupportedFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = s.importFile(context.Background(), tmpFile, tmpFile)
+	err = s.runImport(context.Background(), []string{tmpFile}, []string{tmpFile})
 	if err == nil {
 		t.Fatal("expected error for unsupported format")
 	}
@@ -571,8 +551,8 @@ func TestImportFile_CSVSuccess(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := s.importFile(ctx, tmpFile, tmpFile); err != nil {
-		t.Fatalf("importFile: %v", err)
+	if err := s.runImport(ctx, []string{tmpFile}, []string{tmpFile}); err != nil {
+		t.Fatalf("runImport: %v", err)
 	}
 
 	tables, err := s.usecases.importer.GetTableNames(ctx)
@@ -597,7 +577,7 @@ func TestImportFile_NonexistentFile(t *testing.T) {
 	}
 	defer cleanup()
 
-	err = s.importFile(context.Background(), "/nonexistent/file.csv", "/nonexistent/file.csv")
+	err = s.runImport(context.Background(), []string{"/nonexistent/file.csv"}, []string{"/nonexistent/file.csv"})
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}
@@ -619,12 +599,8 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	imported, err := s.importDirectory(ctx, dir, dir)
-	if err != nil {
-		t.Fatalf("importDirectory: %v", err)
-	}
-	if !imported {
-		t.Error("expected imported=true")
+	if err := s.runImport(ctx, []string{dir}, []string{dir}); err != nil {
+		t.Fatalf("runImport: %v", err)
 	}
 
 	tables, err := s.usecases.importer.GetTableNames(ctx)
@@ -868,8 +844,8 @@ func TestStagePseudoFileScopedToPseudoFiles(t *testing.T) {
 	config.Stdout = &bytes.Buffer{}
 	config.Stderr = &bytes.Buffer{}
 	defer func() { config.Stdout, config.Stderr = backout, backerr }()
-	if err := shell.importFile(context.Background(), plain, plain); err == nil {
-		t.Error("importFile accepted a non-pseudo extensionless file, want an unsupported-format error")
+	if err := shell.runImport(context.Background(), []string{plain}, []string{plain}); err == nil {
+		t.Error("runImport accepted a non-pseudo extensionless file, want an unsupported-format error")
 	}
 }
 
@@ -983,5 +959,57 @@ func TestDescribeLoadFailure_NamesTheLongestMatchingInput(t *testing.T) {
 	}
 	if strings.Contains(got, "failed to import file /data/x.csv:") {
 		t.Errorf("error %q names the shorter path, which imported fine", got)
+	}
+}
+
+func TestValidatePath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		path        string
+		shouldError bool
+		// unixOnly marks a case that depends on the Unix system-directory block,
+		// which keys on Unix absolute paths (e.g. "/etc"). On Windows filepath.Abs
+		// rewrites such a path (e.g. "C:\\etc\\passwd"), so the block does not apply
+		// and the case is skipped.
+		unixOnly bool
+	}{
+		{name: "Normal file path", path: "test.csv", shouldError: false},
+		{name: "Absolute path", path: "/tmp/test.csv", shouldError: false},
+		{name: "Single parent directory", path: "../test.csv", shouldError: false},
+		{name: "Two parent directories", path: "../../test.csv", shouldError: false},
+		{name: "Dangerous path traversal", path: "../../../etc/passwd", shouldError: true},
+		{name: "Clean path functionality", path: "./test/../test.csv", shouldError: false},
+		// /dev/shm and /dev/fd hold legitimate user inputs and are accepted, while
+		// other system directories stay blocked.
+		{name: "dev shm user file is allowed", path: "/dev/shm/sqly/user.csv", shouldError: false},
+		{name: "dev fd descriptor is allowed", path: "/dev/fd/63", shouldError: false},
+		// Standard stream pseudo-files and the Linux /proc fd aliases are allowed
+		// too, so streamed and fd-backed inputs import.
+		{name: "dev stdin is allowed", path: "/dev/stdin", shouldError: false},
+		{name: "dev stdout is allowed", path: "/dev/stdout", shouldError: false},
+		{name: "proc self fd is allowed", path: "/proc/self/fd/0", shouldError: false},
+		{name: "proc pid fd is allowed", path: "/proc/1234/fd/3", shouldError: false},
+		{name: "dev block device is blocked", path: "/dev/sda", shouldError: true, unixOnly: true},
+		{name: "proc cmdline of self is blocked", path: "/proc/self/cmdline", shouldError: true, unixOnly: true},
+		{name: "etc is blocked", path: "/etc/passwd", shouldError: true, unixOnly: true},
+		{name: "proc is blocked", path: "/proc/cpuinfo", shouldError: true, unixOnly: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if tt.unixOnly && runtime.GOOS == "windows" {
+				t.Skip("system-directory block applies to Unix absolute paths only")
+			}
+			_, err := validatePath(tt.path)
+			if tt.shouldError && err == nil {
+				t.Errorf("validatePath(%s) expected error but got none", tt.path)
+			}
+			if !tt.shouldError && err != nil {
+				t.Errorf("validatePath(%s) unexpected error = %v", tt.path, err)
+			}
+		})
 	}
 }

@@ -106,7 +106,7 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 			header = row
 			continue
 		}
-		records = append(records, model.NewRecord(row))
+		records = append(records, model.Record(row))
 	}
 	return model.NewTable(filepath.Base(path), model.NewHeader(header), records)
 }

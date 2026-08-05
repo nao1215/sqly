@@ -12,10 +12,8 @@
 package cleanup
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"time"
 )
 
 // ErrCleanup marks a failure in work done to undo or release something after
@@ -43,26 +41,4 @@ func Join(primary, cleanupErr error, what string) error {
 		return primary
 	}
 	return errors.Join(primary, fmt.Errorf("%w: %s: %w", ErrCleanup, what, cleanupErr))
-}
-
-// cleanupGrace is how long cleanup may take after the operation's own context is
-// already done. It is short: the point is to release a resource, not to finish
-// the work that was cancelled.
-const cleanupGrace = 5 * time.Second
-
-// Context returns the context to run cleanup under.
-//
-// While the operation's context is still live, cleanup uses it, so a caller's
-// deadline continues to apply. Once it is done — cancelled, or past its
-// deadline — cleanup cannot use it: every statement would fail immediately, and
-// the resource would stay held. Cancelling a query is a reason to release what
-// it attached, not a reason to leak it. In that case cleanup gets a detached
-// context with a short grace period instead.
-//
-// The returned cancel func must always be called.
-func Context(ctx context.Context) (context.Context, context.CancelFunc) {
-	if ctx.Err() == nil {
-		return ctx, func() {}
-	}
-	return context.WithTimeout(context.WithoutCancel(ctx), cleanupGrace)
 }

@@ -3,7 +3,6 @@ package shell
 import (
 	"context"
 	"errors"
-	"sort"
 	"strings"
 )
 
@@ -52,15 +51,4 @@ func (c CommandList) hasCmd(key string) bool {
 // hasCmdPrefix returns whether s has dot prefix or not
 func (c CommandList) hasCmdPrefix(s string) bool {
 	return strings.HasPrefix(s, ".")
-}
-
-// sortCommandNameKey returns an array of sorted keys (command names)
-// to sort the command list map
-func (c CommandList) sortCommandNameKey() []string {
-	keys := make([]string, 0, len(c))
-	for key := range c {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
