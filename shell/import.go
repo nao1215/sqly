@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -133,44 +134,87 @@ func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) e
 // user typed. A staged download or a re-encoded copy has a temp path filesql
 // quotes, and a user cannot act on a path they never wrote.
 func (s *Shell) describeLoadFailure(plan *importPlan, err error) error {
-	// The longest matching path wins. Containment alone is not exclusive: one
-	// input's path can be a prefix of another's ("/data/x" inside "/data/xy"),
-	// and the first match would then name a file that imported perfectly well.
 	best := -1
-	for i, target := range plan.targets {
-		if !strings.Contains(err.Error(), target.loadPath) {
-			continue
+	// The loader says which input it failed on, so the path is matched as a value
+	// rather than looked for in the message.
+	var importErr *model.ImportError
+	if errors.As(err, &importErr) {
+		for i, target := range plan.targets {
+			if target.loadPath == importErr.Path {
+				best = i
+				break
+			}
 		}
-		if best < 0 || len(target.loadPath) > len(plan.targets[best].loadPath) {
-			best = i
+		if best >= 0 {
+			err = importErr.Err
+		}
+	}
+	if best < 0 {
+		// A failure from somewhere other than the per-file load names the path in
+		// its text, if at all. The longest matching path wins: containment alone
+		// is not exclusive, since one input's path can be a prefix of another's
+		// ("/data/x" inside "/data/xy"), and the first match would then name a
+		// file that imported perfectly well.
+		for i, target := range plan.targets {
+			if !strings.Contains(err.Error(), target.loadPath) {
+				continue
+			}
+			if best < 0 || len(target.loadPath) > len(plan.targets[best].loadPath) {
+				best = i
+			}
 		}
 	}
 	if best >= 0 {
 		target := plan.targets[best]
 		if msg, ok := s.stdinImportErrorMessage(target.displayPath, err, target.loadPath); ok {
-			return errors.New(msg)
+			return errors.New(msg + s.rowMismatchAdvice(err))
 		}
 		if target.loadPath == target.displayPath {
-			return fmt.Errorf("failed to import file %s: %w", target.displayPath, err)
+			return fmt.Errorf("failed to import file %s: %w%s", target.displayPath, err, s.rowMismatchAdvice(err))
 		}
 		// Replace the staged path so the message quotes what the user named.
-		return fmt.Errorf("failed to import file %s: %s", target.displayPath,
-			strings.ReplaceAll(err.Error(), target.loadPath, target.displayPath))
+		return fmt.Errorf("failed to import file %s: %s%s", target.displayPath,
+			strings.ReplaceAll(err.Error(), target.loadPath, target.displayPath), s.rowMismatchAdvice(err))
 	}
 	return err
 }
 
-// reportImportFailure prints the failure and returns it classified.
+// rowMismatchAdvice is the way out of an import that stopped on a short or long
+// row, or "" for a failure that is about something else.
+//
+// The default policy is the one a user meets without choosing it, and it was the
+// only one that did not name what changes it: `pad` says which flag it is
+// refusing, while `error` — the one everybody hits first — said only that the
+// counts differ. Which spelling to offer depends on where the import ran. A
+// flag can only be passed when the process starts, so an .import typed into a
+// running session is told about the helper command instead of a flag it has no
+// way to reach.
+func (s *Shell) rowMismatchAdvice(err error) string {
+	if s.state.rowMismatch != model.RowMismatchError || !errors.Is(err, filesql.ErrColumnMismatch) {
+		return ""
+	}
+	knob := rowMismatchCommand
+	if s.importingStartupInputs {
+		knob = rowMismatchFlag
+	}
+	return fmt.Sprintf("; use %s skip to drop such rows, or %s pad to fill short ones", knob, knob)
+}
+
+// reportImportFailure classifies an import failure.
 //
 // Everything here exits 3: the import read no input it could use. A bad command
 // line is the exception and keeps its own class, because the thing to fix is
 // what was typed rather than what was read.
+//
+// It returns the failure rather than printing it. Printing here and returning it
+// as well meant every failing import said the same sentence twice, once from the
+// import and once from whoever received the error — and a script's failure said
+// it twice with the line number attached to only one of them.
 func (s *Shell) reportImportFailure(err error) error {
 	var invocationErr *invocationError
 	if errors.As(err, &invocationErr) {
 		return err
 	}
-	fmt.Fprintf(s.importStatusWriter(), "\nImport failed; no table was created or changed:\n  - %s\n", err.Error())
 	return &importFailedError{failed: 1, summary: err.Error()}
 }
 
@@ -394,6 +438,14 @@ func localImportAccessError(path string, err error) error {
 	// anything is looked up. The scheme is the useful thing to say either way, so
 	// it is checked before the error kind rather than inside one branch.
 	if scheme := unfetchableURLScheme(path); scheme != "" {
+		// A file: URL is the one scheme "download it first" cannot be done for:
+		// the file is already on this machine and the prefix is the whole problem,
+		// so the advice is to drop it. Every other scheme names something sqly
+		// cannot reach, where fetching it separately is the way through.
+		if local, ok := localPathFromFileURL(path); ok {
+			return fmt.Errorf("cannot import %s: sqly takes local paths directly; drop the %q prefix and pass %s",
+				path, "file://", local)
+		}
 		return fmt.Errorf(
 			"cannot import %s: only http and https URLs are downloaded, but this one uses the %q scheme; download the file first and pass its local path",
 			path, scheme)

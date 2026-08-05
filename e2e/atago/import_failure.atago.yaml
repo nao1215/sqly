@@ -82,4 +82,4 @@ scenarios:
           stdout:
             empty: true
           stderr:
-            contains: "Import failed"
+            contains: "no table was created or changed"

@@ -655,6 +655,19 @@ Spaces, hyphens, and dots become `_`. Punctuation and symbols are removed. A nam
 
 A name that collides with a SQLite keyword is imported and a warning names it; quote it in queries.
 
+A query against a table this session does not have says so on stderr and lists
+the ones it does, so a name that was derived rather than typed can be checked
+without a second run:
+
+```text
+hint: this session has no table "staf". Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules
+```
+
+Twenty names are listed; past that the list is cut and the total follows it as
+`... (N total)`. A missing column gets a line of the same kind, pointing at
+`.describe TABLE` and `sqly --inspect FILE`. Both are hints, not errors: stdout
+stays empty and the run still exits `1`.
+
 ## Exit codes
 
 A failing run says which stage failed, so a script can tell "the command line was

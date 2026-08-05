@@ -94,8 +94,8 @@ scenarios:
           exit_code: 3
           stderr:
             contains:
-              - "file"
-              - 'only http and https URLs'
+              - 'drop the "file://" prefix'
+              - "/tmp/user.csv"
             not_contains: "path does not exist"
 
   # A local file whose name merely contains a colon is not a URL, so it must keep

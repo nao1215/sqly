@@ -1,0 +1,216 @@
+# What a failure says, checked against the real binary.
+#
+# sqly is run by wrappers and agents that read stderr and decide what to do
+# next, so a message that repeats itself, that leaks the layer it came from, or
+# that names no way forward costs a retry nobody needed. Each scenario below
+# pins one such message.
+#
+# The hermetic runner (scripts/run_e2e.sh) builds sqly and puts it on PATH.
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly error message hygiene
+
+scenarios:
+  # An import failure was printed by the import and then printed again by main,
+  # so the same sentence arrived twice for every failing run.
+  - name: reports an import failure once
+    skip:
+      os: windows
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" missing.csv
+          stderr_to: err.log
+      - assert:
+          exit_code: 3
+      - run:
+          command: sh -c 'echo "count=$(grep -c "no table was created or changed" err.log)"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "count=1"
+
+  # The same, for a .import inside a script — where the line number must survive
+  # the deduplication. A fix that simply dropped one of the two prints would take
+  # "which line failed" with it.
+  - name: reports a script import failure once, with its line
+    skip:
+      os: windows
+    steps:
+      - fixture: &staff
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+            bob,ops
+      - run:
+          command: sqly staff.csv
+          stdin: ".import missing.csv\n"
+          stderr_to: err.log
+      - assert:
+          exit_code: 3
+      - run:
+          command: sh -c 'echo "count=$(grep -c "no table was created or changed" err.log)"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "count=1"
+      - assert:
+          file:
+            path: err.log
+            contains: "line 1"
+
+  # sqly derives table names from file names, and the derivation is not obvious:
+  # a hyphen becomes an underscore, a leading digit gains a prefix, a workbook
+  # becomes file_sheet. "no such table" was the one failure that said nothing
+  # about what the session does hold.
+  - name: names the tables a session holds when a query misses
+    steps:
+      - fixture: *staff
+      - fixture:
+          file: ident.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly --sql "SELECT * FROM staf" staff.csv ident.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains:
+              - "no such table"
+              - 'hint: this session has no table "staf". Available tables: ident, staff.'
+              - "https://nao1215.github.io/sqly/reference/#table-name-rules"
+
+  - name: says how to get a table when the session has none
+    steps:
+      - run:
+          command: sqly --sql "SELECT * FROM sales"
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: "hint: this session has no tables. Pass a file, directory, or URL as an argument, or use .import inside the shell."
+
+  - name: points at the ways to list columns when a column misses
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --sql "SELECT nam FROM staff" staff.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: 'hint: no column "nam". Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.'
+
+  # The hint is a diagnostic, so it belongs on stderr with the error it explains.
+  - name: keeps the hint off stdout and out of the exit code
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --output-format json --sql "SELECT * FROM staf" staff.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+
+  # The default row-mismatch policy is the one a user meets without choosing it,
+  # and it was the only one that did not name the flag that changes it.
+  - name: names the escape from the default row-mismatch policy
+    steps:
+      - fixture: &ragged
+          file: rm.csv
+          content: |
+            a,b,c
+            1,2
+      - run:
+          command: sqly --sql "SELECT 1" rm.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones"
+
+  # Inside the shell the process has already started, so the flag cannot be
+  # passed any more; the helper command is the only thing that can be acted on.
+  - name: names the helper command when the import ran inside the shell
+    steps:
+      - fixture: *ragged
+      - fixture: *staff
+      - run:
+          command: sqly staff.csv
+          stdin: ".import rm.csv\n"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "; use .row-mismatch skip to drop such rows, or .row-mismatch pad to fill short ones"
+      - assert:
+          stderr:
+            not_contains: "use --row-mismatch"
+
+  # One failure, one file, one mention of each. The message used to name rm.csv
+  # three times and the loading library twice, because sqly wrapped it twice and
+  # the library framed it twice on its own.
+  - name: names the file and the layer once each
+    skip:
+      os: windows
+    steps:
+      - fixture: *ragged
+      - run:
+          command: sqly --sql "SELECT 1" rm.csv
+          stderr_to: err.log
+      - assert:
+          exit_code: 3
+      - run:
+          command: sh -c 'line=$(grep "column count mismatch" err.log); echo "paths=$(printf "%s" "$line" | grep -o "rm\.csv" | grep -c .) layers=$(printf "%s" "$line" | grep -o "filesql:" | grep -c .)"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "paths=1 layers=1"
+      - assert:
+          file:
+            path: err.log
+            not_contains: 'load file "'
+
+  # "Download it first" is advice that cannot be followed for a file: URL: the
+  # file is already local, and the prefix is the only thing in the way.
+  - name: says what to do with a file URL
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --sql "SELECT 1" file:///etc/hostname
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: 'cannot import file:///etc/hostname: sqly takes local paths directly; drop the "file://" prefix and pass /etc/hostname'
+      - assert:
+          stderr:
+            not_contains: "download the file first"
+
+  # The path is meant to be pasted, so what a URL spells as %20 has to come back
+  # as the space it stands for.
+  - name: decodes the path it tells the caller to use
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" "file:///tmp/my%20file.csv"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "and pass /tmp/my file.csv"
+
+  # Every other scheme keeps the advice that does apply to it.
+  - name: still says to download an input it cannot fetch
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" ftp://example.com/data.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "download the file first and pass its local path"

@@ -271,3 +271,40 @@ func TestDownloadRemoteInputErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestLocalPathFromFileURL covers the path a file: URL is told to be pasted
+// instead of. What it returns is meant to be typed back on a command line, so a
+// percent sequence left in it, or an authority that names another machine, would
+// send the reader to a file that is not there.
+func TestLocalPathFromFileURL(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		raw    string
+		want   string
+		wantOK bool
+	}{
+		{name: "a rooted path", raw: "file:///etc/hostname", want: "/etc/hostname", wantOK: true},
+		{name: "an escaped space is decoded", raw: "file:///tmp/my%20file.csv", want: "/tmp/my file.csv", wantOK: true},
+		{name: "a percent in a name survives escaping", raw: "file:///tmp/100%25.csv", want: "/tmp/100%.csv", wantOK: true},
+		{name: "a windows drive path keeps its drive", raw: "file:///C:/data.csv", want: "C:/data.csv", wantOK: true},
+		{name: "the scheme is matched case-insensitively", raw: "FILE:///etc/hostname", want: "/etc/hostname", wantOK: true},
+		// Not local: the authority names a machine sqly cannot read from.
+		{name: "a host makes it someone else's file", raw: "file://server/share/data.csv", wantOK: false},
+		// Not a path anyone can paste, so the general scheme message is better.
+		{name: "invalid escaping is not a path", raw: "file:///tmp/my%2Gfile.csv", wantOK: false},
+		{name: "another scheme is not a file URL", raw: "ftp://example.test/data.csv", wantOK: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := localPathFromFileURL(test.raw)
+			if ok != test.wantOK {
+				t.Fatalf("localPathFromFileURL(%q) ok = %v, want %v", test.raw, ok, test.wantOK)
+			}
+			if got != test.want {
+				t.Errorf("localPathFromFileURL(%q) = %q, want %q", test.raw, got, test.want)
+			}
+		})
+	}
+}
