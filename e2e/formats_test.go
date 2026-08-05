@@ -351,7 +351,7 @@ func TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry(t *testing.T) {
 	if code != 4 {
 		t.Errorf("exit code = %d, want 4 (a value the format cannot represent)\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stderr, "control character") || !strings.Contains(stderr, "U+0001") {
+	if !strings.Contains(stderr, "XLSX cannot represent") || !strings.Contains(stderr, "U+0001") {
 		t.Errorf("stderr = %q, want it to name the character it cannot write", stderr)
 	}
 	if stdout != "" {
