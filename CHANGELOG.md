@@ -20,6 +20,10 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* Editing an earlier line of a buffered statement no longer walks the prompt up the screen. Pressing the left arrow across a line break, and every keystroke after it, redrew the prompt one row too high and took a line of scrollback with it: after a dozen keystrokes sqly's own banner was gone. The prompt library erased the block it had drawn by moving up its height, which is where the cursor is only while it sits on the last line. Fixed in prompt v0.0.14, which also stopped measuring the terminal by writing to it and reading the reply back out of the input stream — a keystroke typed during a redraw could be consumed with that reply, and a terminal that did not answer cost 100ms of every redraw. sqly's interactive pty suite runs in a second where it took over a minute.
+
 ## [v1.0.0-rc4](https://github.com/nao1215/sqly/compare/v1.0.0-rc3...v1.0.0-rc4) (2026-08-05)
 
 A release candidate for v1.0.0, not the final one. Everything below is a change
