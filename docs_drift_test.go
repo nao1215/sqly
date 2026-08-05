@@ -1880,6 +1880,57 @@ func TestMigrationGuide_ExplainsRc2ToRc3(t *testing.T) {
 	}
 }
 
+// TestMigrationGuide_ExplainsRc3ToRc4 holds the guide to the changes an rc3
+// command line or wrapper has to absorb. A breaking change recorded only in the
+// CHANGELOG leaves the person upgrading to work out the edit themselves.
+func TestMigrationGuide_ExplainsRc3ToRc4(t *testing.T) {
+	t.Parallel()
+
+	guide := readDoc(t, migrationGuideFile)
+	if !strings.Contains(guide, "## v1.0.0-rc3 → v1.0.0-rc4") {
+		t.Fatalf("%s has no rc3 to rc4 section", migrationGuideFile)
+	}
+	flat := flatten(section(guide, "## v1.0.0-rc3 → v1.0.0-rc4"))
+
+	for _, claim := range []string{
+		"excel_sheets[].source",
+		"exit code `1`",
+		"`.dialect` writes to stderr",
+		"`.mode` and `.row-mismatch` with no argument report instead of failing",
+		"--inspect cannot be combined with --dialect mysql",
+		"batch statement",
+	} {
+		if !strings.Contains(flat, claim) {
+			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
+		}
+	}
+}
+
+// TestCHANGELOG_ListsTheRc4BreakingChanges is the rc3 check for the release
+// after it: what the guide tells someone to change, the release notes have to
+// record.
+func TestCHANGELOG_ListsTheRc4BreakingChanges(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "CHANGELOG.md")
+	rc4 := section(body, "## [v1.0.0-rc4]")
+	if rc4 == "" {
+		t.Fatal("CHANGELOG.md has no v1.0.0-rc4 section")
+	}
+	breaking := flatten(section(rc4, "### Breaking Changes"))
+	if breaking == "" {
+		t.Fatal("the v1.0.0-rc4 CHANGELOG entry has no Breaking Changes section")
+	}
+	for _, claim := range []string{".dialect", ".row-mismatch", "--inspect", "--dialect"} {
+		if !strings.Contains(breaking, claim) {
+			t.Errorf("the rc4 Breaking Changes section does not mention %s", claim)
+		}
+	}
+	if !strings.Contains(flatten(rc4), migrationGuideLink) {
+		t.Errorf("the rc4 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
+	}
+}
+
 // TestCHANGELOG_ListsTheRc3BreakingChanges keeps the release notes in step with
 // the guide, since the two are read by different people.
 func TestCHANGELOG_ListsTheRc3BreakingChanges(t *testing.T) {

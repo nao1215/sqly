@@ -67,6 +67,91 @@ The same contradiction inside a script — a `.mode` that disagrees with a `.dum
 destination — stays a runtime check, because the mode is session state. It exits
 `2` at the statement that hits it.
 
+### `.dialect` writes to stderr
+
+`dialect set to mysql`, and the `current dialect: ...` line a bare `.dialect`
+prints, were written to stdout. A script that named its dialect therefore put a
+control line in the middle of the data:
+
+```text
+Before rc4:
+  sqly --output-format json --script-file d.sqly t.csv | jq .
+  # jq: parse error: Invalid numeric literal at line 1, column 8
+
+From rc4:
+  # stdout holds the JSON document, and both lines are on stderr
+```
+
+**What to change:** nothing, if you were piping stdout into a parser — that case
+was broken and now works. A script that captured stdout to read the confirmation
+reads stderr instead.
+
+**Check if:** you have a fixture comparing sqly's stdout for a run that switches
+dialect. The line has moved out of it.
+
+### `.mode` and `.row-mismatch` with no argument report instead of failing
+
+The three session settings — `.dialect`, `.mode`, `.row-mismatch` — answered an
+argument-less call three different ways. `.dialect` reported the current value
+and succeeded; the other two failed the run.
+
+```text
+Before rc4:
+  printf '.mode\n' | sqly t.csv
+  # exit 1, ".mode requires a mode name" and the mode list on stderr
+
+From rc4:
+  printf '.mode\n' | sqly t.csv
+  # exit 0, "current output mode: table (available: ...)" on stderr
+```
+
+**What to change:** nothing in a script that passes a value. A mode or policy
+name that does not exist is still rejected, so a typo still fails the run.
+
+**Check if:** you have a script that relied on a bare `.mode` or `.row-mismatch`
+stopping it. It now continues, under the setting that was already in effect.
+
+### `--inspect` refuses an explicit `--dialect`
+
+`--dialect` translates the SQL a run executes, and `--inspect` executes none, so
+the flag was accepted and discarded without a word.
+
+```text
+Before rc4:
+  sqly --dialect mysql --inspect t.csv
+  # exit 0, the report, and the dialect ignored
+
+From rc4:
+  sqly --dialect mysql --inspect t.csv
+  # exit 2, "--inspect cannot be combined with --dialect mysql"
+```
+
+**What to change:** drop the `--dialect` from an `--inspect` run. It never did
+anything there. A flag left at its default is not rejected, so plain
+`sqly --inspect data.csv` is unaffected.
+
+### A `--sql` failure is no longer framed as a batch
+
+`--sql` takes one statement, and its failure was wrapped in the wording a
+multi-statement script uses:
+
+```text
+Before rc4:
+  sqly --sql "SELECT * FROM nope" t.csv
+  # batch statement 1 failed at line 1: "SELECT * FROM nope": execute query error: ...
+  # hint: ...
+  # batch stopped: statement failed
+
+From rc4:
+  # execute query error: ...: SELECT * FROM nope
+  # hint: ...
+```
+
+**What to change:** nothing, unless a wrapper matches on `batch statement` or
+`batch stopped` for a `--sql` run. A `--sql-file`, a `--script-file`, and a piped
+script still print both, because with several statements the position is the only
+way back to the one that failed. Exit codes are unchanged.
+
 ## v1.0.0-rc2 → v1.0.0-rc3
 
 Two defaults changed, in the same direction and for the same reason: sqly is run
