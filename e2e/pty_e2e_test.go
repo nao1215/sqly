@@ -540,9 +540,11 @@ func TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession(t *testing.T) {
 	s.typeKeys("SELECT 'never_ru")
 	s.write("\x03")
 
-	// The session must still serve the next query, and the abandoned line must
-	// not appear in it.
-	s.typeKeys("SELECT 'alive_after_ctrl_c';")
+	// The session must still serve the next query. Every marker below is built by
+	// concatenation so the string waited for exists only in a result: the typed
+	// text is echoed back too, and matching that would pass without executing
+	// anything.
+	s.typeKeys("SELECT 'alive' || '_after_ctrl_c';")
 	s.write("\r")
 	s.waitFor("alive_after_ctrl_c", ioTimeout)
 	if strings.Contains(s.output(), "never_run") {
@@ -553,7 +555,7 @@ func TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession(t *testing.T) {
 	// running, so EOF is what ends it.
 	s.write("\x03")
 	time.Sleep(300 * time.Millisecond)
-	s.typeKeys("SELECT 'alive_after_empty_ctrl_c';")
+	s.typeKeys("SELECT 'alive' || '_after_empty_ctrl_c';")
 	s.write("\r")
 	s.waitFor("alive_after_empty_ctrl_c", ioTimeout)
 
@@ -580,7 +582,9 @@ func TestInteractivePTY_MultiStatementLineRunsEveryStatement(t *testing.T) {
 	t.Cleanup(s.close)
 	s.waitReady(startupTimeout)
 
-	s.submitLine("SELECT 'first_result' AS a; SELECT 'second_result' AS b;")
+	// Concatenated markers so each string appears only in a printed result, never
+	// in the echo of the line that produced it.
+	s.submitLine("SELECT 'first' || '_result' AS a; SELECT 'second' || '_result' AS b;")
 	s.waitFor("first_result", ioTimeout)
 	s.waitFor("second_result", ioTimeout)
 
@@ -601,7 +605,7 @@ func TestInteractivePTY_TerminatorIsSQLAware(t *testing.T) {
 	s.waitReady(startupTimeout)
 
 	// A statement finished with a trailing comment runs on that Enter alone.
-	s.submitLine("SELECT 'comment_then_run' AS a; -- a note")
+	s.submitLine("SELECT 'comment' || '_then_run' AS a; -- a note")
 	s.waitFor("comment_then_run", ioTimeout)
 
 	// A trigger body spans lines and holds its own ";" — each Enter continues.
@@ -612,9 +616,10 @@ func TestInteractivePTY_TerminatorIsSQLAware(t *testing.T) {
 	s.submitLine("END;")
 	s.waitFor("statement executed successfully", ioTimeout)
 
-	// The shell is still in a normal state afterwards.
-	s.submitLine("SELECT name AS created FROM sqlite_master WHERE type = 'trigger';")
-	s.waitFor("audit_trg", ioTimeout)
+	// The trigger exists, and the count proves it: the marker is computed, so it
+	// cannot be matched against the CREATE TRIGGER line echoed earlier.
+	s.submitLine("SELECT 'triggers=' || COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger';")
+	s.waitFor("triggers=1", ioTimeout)
 
 	time.Sleep(300 * time.Millisecond)
 	s.sendEOF()
@@ -632,11 +637,16 @@ func TestInteractivePTY_PasteKeepsTabsAndRunsOnce(t *testing.T) {
 	t.Cleanup(s.close)
 	s.waitReady(startupTimeout)
 
-	// "a<TAB>b" survives as the value only if the TAB reached the buffer.
-	s.write("\x1b[200~SELECT 'a\tb' AS pasted;\x1b[201~")
+	// The pasted literal holds a TAB, so its length is 3 only if the TAB reached
+	// the buffer; a TAB eaten by completion leaves 2. The length is computed by
+	// the engine, so the assertion is about what ran, not about what was echoed.
+	s.write("\x1b[200~SELECT 'len=' || length('a\tb') AS n;\x1b[201~")
 	time.Sleep(300 * time.Millisecond)
 	s.write("\r")
-	s.waitFor("a\tb", ioTimeout)
+	s.waitFor("len=3", ioTimeout)
+	if strings.Contains(s.output(), "len=2") {
+		t.Errorf("interactive shell: the pasted TAB was dropped:\n%s", s.output())
+	}
 
 	time.Sleep(300 * time.Millisecond)
 	s.sendEOF()

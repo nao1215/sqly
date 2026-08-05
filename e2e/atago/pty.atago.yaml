@@ -527,12 +527,12 @@ scenarios:
             - send: "SELECT 'NEVER_RUN"
             - expect: "NEVER_RUN"
             - send: { key: ctrl-c }
+            - expect: '\^C' # the interrupt was taken; only Ctrl-C prints this
             - expect: '\(table\)\$' # a fresh prompt, not an exit
             - send: "SELECT name FROM people WHERE age = 25;\r"
-            - expect: "Bob" # the session still answers
+            - expect: "Bob" # a result token: the typed line does not contain it
             - expect: '\(table\)\$'
             - send: { key: ctrl-c } # and again from an empty prompt
-            - expect: '\(table\)\$'
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0 # an interrupt is not a failure
@@ -553,7 +553,9 @@ scenarios:
           timeout: 30s
           session:
             - expect: '\(table\)\$'
-            - send: "SELECT 'FIRST_RESULT' AS a; SELECT 'SECOND_RESULT' AS b;\r"
+            # Both markers are concatenated by the engine, so each string exists
+            # only in a printed result and never in the echo of the line typed.
+            - send: "SELECT 'FIRST' || '_RESULT' AS a; SELECT 'SECOND' || '_RESULT' AS b;\r"
             - expect: "FIRST_RESULT"
             - expect: "SECOND_RESULT"
             - expect: '\(table\)\$'
@@ -582,20 +584,25 @@ scenarios:
             - expect: "statement executed successfully"
             - expect: '\(table\)\$'
             - send: "CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN\r"
-            - expect: '\.\.\.>'
-            - send: "INSERT INTO audit VALUES ('x');\r"
-            - expect: '\.\.\.>' # the inner ";" continued the statement
+            - expect: '\.\.\.>' # the statement is unfinished, so it buffers
+            # The body's own ";" must not submit. Waiting for the echoed body line
+            # is what proves the send landed: the continuation marker is already
+            # on screen from the line before, so expecting it again would match
+            # without anything having happened.
+            - send: "INSERT INTO audit VALUES ('BODY_LINE');\r"
+            - expect: "BODY_LINE"
             - send: "END;\r"
-            - expect: "statement executed successfully"
-            - expect: '\(table\)\$'
-            - send: "SELECT name AS created FROM sqlite_master WHERE type = 'trigger';\r"
-            - expect: "audit_trg"
+            # The count is computed by the engine, so this string cannot be
+            # matched against the CREATE TRIGGER line echoed earlier. It is 1 only
+            # if the whole trigger reached SQLite as one statement.
+            - send: "SELECT 'TRIGGERS=' || COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger';\r"
+            - expect: "TRIGGERS=1"
             - expect: '\(table\)\$'
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0
           stdout:
-            contains: "audit_trg"
+            contains: "TRIGGERS=1"
 
   # A comment after the terminator does not delay the statement it follows. The
   # shell asked whether the line ended with ";", so this one waited on a
