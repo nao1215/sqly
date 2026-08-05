@@ -27,6 +27,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 			"  like (table, vertical), the format is inferred from the file extension\n" +
 			"  (e.g. .tsv, .parquet), falling back to CSV (written to the path as given)\n" +
 			"  when the extension is unknown.\n" +
+			"  A path with no extension gets the format's own: .dump t out writes out.csv.\n" +
 			"  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).\n" +
 			"  A .mode that disagrees with the extension is rejected instead of normalizing.\n" +
 			"  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format")

@@ -21,6 +21,8 @@ import (
 const (
 	migrationGuideFile = "doc/migration.md"
 	migrationGuideLink = "doc/migration.md"
+	// referencePage is the page that quotes most of sqly's messages verbatim.
+	referencePage = "website/content/reference.md"
 )
 
 // docSources returns every file that shows a reader how to run sqly: the README,
@@ -2019,5 +2021,82 @@ func TestPagesVerification_ChecksTheRc3Contracts(t *testing.T) {
 		if !strings.Contains(workflow, claim) {
 			t.Errorf("the Pages verification does not check the deployed site for: %s", claim)
 		}
+	}
+}
+
+// TestDocs_QuotedMessagesAreTheOnesTheBinaryPrints ties every message quoted
+// verbatim in the documentation to the E2E scenario that asserts sqly prints it.
+//
+// It exists because a substring assertion is not enough to hold a quote in
+// place. e2e/atago/script_contract.atago.yaml checked only `contains: "runs SQL
+// only"`, so the reference kept advertising a sentence sqly had stopped
+// printing — a different flag to reach for and a `printf '...' | sqly FILE`
+// recipe that had been replaced by --script-file — and every test stayed green.
+//
+// Both sides hold the same string, so neither can move alone: editing the
+// documentation fails here, and changing the message fails the E2E that runs the
+// real binary. A message worth quoting is worth pinning in both places; a
+// message not pinned in an E2E should not be quoted as if it were what sqly
+// says.
+func TestDocs_QuotedMessagesAreTheOnesTheBinaryPrints(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		// message is quoted verbatim by both files below.
+		message string
+		doc     string
+		spec    string
+	}{
+		{
+			name:    "a helper command in a --sql-file",
+			message: `save.sql runs SQL only, but line 2 is the helper command ".save"; run it with --script-file, or pipe it to sqly`,
+			doc:     referencePage,
+			spec:    "e2e/atago/script_contract.atago.yaml",
+		},
+		{
+			name:    "the notice for sheets an import left behind",
+			message: "Skipped 2 hidden sheets in book.xlsx; start sqly with --include-hidden-sheets to import them.",
+			doc:     referencePage,
+			spec:    "e2e/atago/excel_sheets.atago.yaml",
+		},
+		{
+			name:    "the hint that lists the tables a session has",
+			message: `hint: this session has no table "staf". Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules`,
+			doc:     referencePage,
+			spec:    "e2e/atago/error_hygiene.atago.yaml",
+		},
+		{
+			// The path in the full message is the workdir's, so what is pinned is
+			// the advice, which is the part a reader acts on.
+			name:    "the refusal to save in place through a symlink",
+			message: "an in-place save would overwrite that file, which you did not name. Add --follow-symlinks to do it anyway, or save to a directory with .save DIR",
+			doc:     referencePage,
+			spec:    "e2e/atago/file_write_contract.atago.yaml",
+		},
+		{
+			name:    "the import stopped by the default row-mismatch policy",
+			message: "failed to import file rm.csv: filesql: column count mismatch: row 1 has 2 fields, want 3; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones",
+			doc:     "website/content/formats.md",
+			spec:    "e2e/atago/error_hygiene.atago.yaml",
+		},
+		{
+			name:    "the line that says where a result was written",
+			message: "Output sql result to user.json (output mode=json)",
+			doc:     "README.md",
+			spec:    "e2e/atago/output_status.atago.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if !strings.Contains(readDoc(t, tt.doc), tt.message) {
+				t.Errorf("%s no longer quotes the message the E2E pins:\n%s", tt.doc, tt.message)
+			}
+			if !strings.Contains(readDoc(t, tt.spec), tt.message) {
+				t.Errorf("%s no longer asserts the message %s quotes:\n%s", tt.spec, tt.doc, tt.message)
+			}
+		})
 	}
 }

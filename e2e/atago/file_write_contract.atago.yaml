@@ -325,7 +325,13 @@ scenarios:
       - assert:
           exit_code: 4
           stderr:
-            contains: "is a symlink to"
+            # The advice half is quoted whole, because website/content/reference.md
+            # shows this exact sentence and a drift test requires both to hold the
+            # same string. The path it names is the workdir's, so only the fixed
+            # part can be pinned here.
+            contains:
+              - "is a symlink to"
+              - "an in-place save would overwrite that file, which you did not name. Add --follow-symlinks to do it anyway, or save to a directory with .save DIR"
           file:
             path: real/u.csv
             not_contains: zoe

@@ -80,3 +80,36 @@ scenarios:
           exit_code: 0
           stdout:
             contains: user_name
+
+  # A file whose name starts with "-" is read as a flag, which is what "--"
+  # exists for. It works and was documented nowhere, so a caller handling
+  # arbitrary file names had no way to know it could.
+  - name: reads a file whose name starts with a dash after --
+    steps:
+      - fixture:
+          file: -.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sqly --inspect -- -.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].row_count"
+              equals: 1
+
+  - name: reads such a name as a flag without the separator
+    steps:
+      - fixture:
+          file: -.csv
+          content: |
+            a,b
+            1,2
+      - run:
+          command: sqly --inspect -.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "unknown shorthand flag"

@@ -18,7 +18,7 @@ suite:
 scenarios:
   - name: keeps stdout empty for --output and reports on stderr
     steps:
-      - fixture:
+      - fixture: &user
           file: user.csv
           content: |
             user_name,identifier
@@ -33,6 +33,23 @@ scenarios:
             contains: "Output sql result to"
           file:
             path: out.csv
+            exists: true
+
+  # The README shows this run and this line. It is quoted whole here, and a
+  # drift test requires both to hold the same string.
+  - name: reports the destination and the format the README advertises
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output user.json --sql "SELECT * FROM user" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+          stderr:
+            contains: "Output sql result to user.json (output mode=json)"
+          file:
+            path: user.json
             exists: true
 
   - name: keeps stdout free of the .dump status line
@@ -76,3 +93,40 @@ scenarios:
             not_contains: Saved
           stderr:
             contains: "Saved u to"
+
+  # Where "affected is N row(s)" goes depends on the output format, and the
+  # reference documents the split. A format a person reads carries the count on
+  # stdout with the rest of what they are watching; a format a program parses
+  # keeps stdout to data alone, so the count moves to stderr. All eight are
+  # checked, because the rule is only useful if none of them is the exception.
+  - name: prints the affected-row count on stdout in a format a person reads
+    matrix:
+      - mode: table
+      - mode: vertical
+      - mode: markdown
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format ${mode} --sql "UPDATE user SET user_name = 'x'" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "affected is 1 row(s)"
+
+  - name: keeps the affected-row count off stdout in a format a program parses
+    matrix:
+      - mode: csv
+      - mode: tsv
+      - mode: ltsv
+      - mode: json
+      - mode: jsonl
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format ${mode} --sql "UPDATE user SET user_name = 'x'" user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            empty: true
+          stderr:
+            contains: "affected is 1 row(s)"

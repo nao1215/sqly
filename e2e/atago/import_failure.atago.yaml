@@ -83,3 +83,51 @@ scenarios:
             empty: true
           stderr:
             contains: "no table was created or changed"
+
+  # Two inputs sqly cannot read at all, with no flag that changes the answer.
+  # Both are documented on the formats page as unreadable, so both are pinned
+  # here: a later change that starts accepting one is a documentation change too.
+  - name: refuses a CSV whose header repeats a column name
+    steps:
+      - fixture:
+          file: dup.csv
+          content: |
+            a,a
+            1,2
+      - run:
+          command: sqly --sql "SELECT 1" dup.csv
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "filesql: duplicate column name: a"
+
+  - name: refuses a file with nothing in it
+    steps:
+      - fixture:
+          file: empty.csv
+          content: ""
+      - run:
+          command: sqly --sql "SELECT 1" empty.csv
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "filesql: empty data source: file is empty"
+
+  # The contrast that makes the two above a rule rather than a surprise: a file
+  # holding only a header is a table with no rows, not an unreadable file.
+  - name: reads a header-only file as a table with no rows
+    steps:
+      - fixture:
+          file: hdronly.csv
+          content: |
+            a,b
+      - run:
+          command: sqly --output-format json --sql "SELECT * FROM hdronly" hdronly.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "[]"

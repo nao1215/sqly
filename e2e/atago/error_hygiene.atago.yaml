@@ -84,8 +84,9 @@ scenarios:
           stderr:
             contains:
               - "no such table"
-              - 'hint: this session has no table "staf". Available tables: ident, staff.'
-              - "https://nao1215.github.io/sqly/reference/#table-name-rules"
+              # Quoted whole, because website/content/reference.md shows this
+              # exact line and a drift test requires both to hold the same string.
+              - 'hint: this session has no table "staf". Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules' 
 
   - name: says how to get a table when the session has none
     steps:
@@ -135,7 +136,9 @@ scenarios:
       - assert:
           exit_code: 3
           stderr:
-            contains: "; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones"
+            # Quoted whole, because website/content/formats.md shows this exact
+            # line and a drift test requires both to hold the same string.
+            contains: "failed to import file rm.csv: filesql: column count mismatch: row 1 has 2 fields, want 3; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones"
 
   # Inside the shell the process has already started, so the flag cannot be
   # passed any more; the helper command is the only thing that can be acted on.

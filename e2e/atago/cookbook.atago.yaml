@@ -44,6 +44,81 @@ scenarios:
               path: "$.tables[0].name"
               equals: staff
 
+  # The cookbook pipes this report into jq to print one line per table. The jq
+  # part is not run here — a spec that skips itself when jq is missing proves
+  # nothing on the machines that have it either — so the two fields the jq
+  # program reads are asserted straight out of the JSON instead. If they move,
+  # the documented one-liner stops producing what it says it does.
+  - name: reports the name and row count the jq recipe reads
+    steps:
+      - fixture: &user
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+            smith79,3
+      - run:
+          command: sqly --inspect user.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].name"
+              equals: user
+      - assert:
+          stdout:
+            json:
+              path: "$.tables[0].row_count"
+              equals: 3
+
+  # A headerless file loses its first row to the header sqly always reads, so
+  # the cookbook shows how to put one in front of it. Both halves are checked:
+  # what happens without the workaround, and that the workaround recovers the
+  # row and names the columns.
+  - name: adds a header line to a file that has none
+    skip:
+      os: windows
+    steps:
+      - fixture: &headerless
+          file: data.csv
+          content: |
+            1,alice,100
+            2,bob,200
+      - run:
+          command: sh -c "(echo 'c1,c2,c3'; cat data.csv) | sqly --stdin-format csv --output-format json --sql 'SELECT * FROM stdin'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$[0].c2"
+              equals: alice
+      - assert:
+          stdout:
+            json:
+              path: "$[1].c2"
+              equals: bob
+
+  - name: loses the first row of a headerless file read directly
+    steps:
+      - fixture: *headerless
+      - run:
+          command: sqly --inspect data.csv
+      - assert:
+          exit_code: 0
+          # Two data rows in the file, one row in the table: line 1 became the
+          # column names.
+          stdout:
+            json:
+              path: "$.tables[0].row_count"
+              equals: 1
+      - assert:
+          stdout:
+            json:
+              path: "$.tables[0].columns[1].name"
+              equals: alice
+
   - name: converts a csv to json, excel, and parquet
     steps:
       - fixture: *staff
