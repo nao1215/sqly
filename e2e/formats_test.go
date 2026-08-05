@@ -332,3 +332,46 @@ func hexOf(s string) string {
 	}
 	return b.String()
 }
+
+// TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry covers the one format that
+// used to answer an unrepresentable value by changing it. XLSX is XML, and XML
+// 1.0 has no way to write most control characters, so the writer substituted
+// U+FFFD: the export succeeded, the file appeared, and the value was gone. The
+// documented contract for a format that cannot represent a value is to refuse
+// and leave the destination alone, which is what LTSV already did.
+func TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry(t *testing.T) {
+	dir := t.TempDir()
+	source := writeFixture(t, dir, "ctl.csv", "id,v\n1,A\x01B\n")
+	out := filepath.Join(dir, "out.xlsx")
+	if err := os.WriteFile(out, []byte("PRECIOUS"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "--output-format", "excel", "--output", out, "--sql", "SELECT * FROM ctl", source)
+	if code != 4 {
+		t.Errorf("exit code = %d, want 4 (a value the format cannot represent)\nstderr: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "control character") || !strings.Contains(stderr, "U+0001") {
+		t.Errorf("stderr = %q, want it to name the character it cannot write", stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+
+	// The destination is untouched, as it is for every other refused export.
+	got, err := os.ReadFile(out) //nolint:gosec // path built by the test
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "PRECIOUS" {
+		t.Errorf("destination = %q, want it left exactly as it was", got)
+	}
+
+	// A value XLSX can carry still exports, so the check refuses only what it
+	// must: tab, newline, and carriage return are the control characters XML keeps.
+	keepable := writeFixture(t, dir, "keep.csv", "id,v\n1,\"a\tb\"\n")
+	kept := filepath.Join(dir, "keep.xlsx")
+	if _, stderr, code := run(t, "", "--output-format", "excel", "--output", kept, "--sql", "SELECT * FROM keep", keepable); code != 0 {
+		t.Errorf("exporting a tab exit code = %d, want 0\nstderr: %s", code, stderr)
+	}
+}

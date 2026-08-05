@@ -81,6 +81,11 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 
 	f.SetActiveSheet(0)
 	header := table.Header()
+	for _, label := range header {
+		if err := ensureExcelRepresentable(label, label); err != nil {
+			return err
+		}
+	}
 	if err := f.SetSheetRow(sheetName, "A1", &header); err != nil {
 		return err
 	}
@@ -89,6 +94,11 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	row := make([]string, 0, table.ColumnCount())
 	for i, record := range table.Rows {
 		row = record.AppendTo(row[:0])
+		for col, value := range row {
+			if err := ensureExcelRepresentable(table.ColumnName(col), value); err != nil {
+				return err
+			}
+		}
 		if err := f.SetSheetRow(sheetName, fmt.Sprintf("A%d", i+excelRowOffset), &row); err != nil {
 			return err
 		}
@@ -101,4 +111,28 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	// outputs so .xlsx files are plain data files. Why not pass excelize
 	// Options: SaveAs hard-codes the mode and ignores a permissions option.
 	return os.Chmod(excelFilePath, defaultFilePerm)
+}
+
+// ensureExcelRepresentable reports an error when a value holds a character XLSX
+// cannot carry, so the export is refused before a file is written.
+//
+// XLSX is XML, and XML 1.0 allows only three characters below U+0020: tab, line
+// feed, and carriage return. Nothing above it is refused — DEL and U+FFFD itself
+// are written unchanged. The writer substitutes U+FFFD for the rest, which
+// makes an export silent data loss — the file appears, the process succeeds, and
+// the value is gone. LTSV already refuses what it cannot represent rather than
+// writing something that cannot be read back; this is the same rule for the same
+// reason. The replacement character also has a meaning in sqly's output already:
+// it says a file was read with the wrong --encoding, and an export that produces
+// it on its own would make that signal a guess.
+func ensureExcelRepresentable(label, value string) error {
+	for _, r := range value {
+		if r == '\t' || r == '\n' || r == '\r' {
+			continue // the three XML keeps
+		}
+		if r < 0x20 {
+			return fmt.Errorf("excel: value for column %q contains the control character U+%04X, which XLSX cannot represent; remove it or export to csv/tsv/json", label, r)
+		}
+	}
+	return nil
 }
