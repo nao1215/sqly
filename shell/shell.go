@@ -19,6 +19,7 @@ import (
 	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/sqltext"
 )
 
 var (
@@ -510,9 +511,17 @@ func (s *Shell) communicate(ctx context.Context) error {
 			if errors.Is(err, io.EOF) || errors.Is(err, prompt.ErrEOF) {
 				return nil
 			}
+			// Ctrl-C throws away the line being typed and nothing else, the way
+			// every other SQL shell answers it. Reporting it as a failure ended the
+			// session instead: a half-typed query, or one whose Ctrl-C arrived while
+			// a long statement was still running, took the shell down with it and
+			// exited non-zero. The prompt has already echoed "^C".
+			if errors.Is(err, prompt.ErrInterrupted) {
+				continue
+			}
 			return err
 		}
-		if err = s.exec(ctx, input); err != nil {
+		if err = s.execInteractive(ctx, input); err != nil {
 			if errors.Is(err, ErrExitSqly) {
 				return nil // user input ".exit"
 			}
@@ -804,10 +813,11 @@ func (s *Shell) promptPrefix() string {
 // line. Without this, every newline submits, splitting a pasted or typed
 // multi-line statement into separate executions.
 //
-// SQL is complete when it ends with ";". A dot-command (".tables", ".import",
-// ...) and an empty buffer also submit. Pressing Enter on a blank continuation
-// line force-submits whatever is buffered, so a query typed without a trailing
-// ";" still runs without forcing the user to add one.
+// SQL is complete when a ";" has closed a statement and nothing executable
+// follows it. A dot-command (".tables", ".import", ...) and an empty buffer also
+// submit. Pressing Enter on a blank continuation line force-submits whatever is
+// buffered, so a query typed without a trailing ";" still runs without forcing
+// the user to add one.
 func sqlInputComplete(input string) bool {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
@@ -816,7 +826,7 @@ func sqlInputComplete(input string) bool {
 	if strings.HasPrefix(trimmed, ".") {
 		return true
 	}
-	if strings.HasSuffix(trimmed, ";") {
+	if endsAtStatementBoundary(input) {
 		return true
 	}
 	// The current line is the text after the last newline. When it is blank the
@@ -826,6 +836,30 @@ func sqlInputComplete(input string) bool {
 		lastLine = input[i+1:]
 	}
 	return strings.TrimSpace(lastLine) == ""
+}
+
+// endsAtStatementBoundary reports whether input ends where a statement ended: a
+// ";" has closed at least one statement and only comments and whitespace follow
+// it.
+//
+// Asking whether the text ends with ";" was not the same question. A ";" is a
+// terminator only where SQLite treats it as one, so that test submitted a
+// fragment for every ";" inside a string literal ("SELECT 'a;"), inside an
+// identifier, or inside a trigger body, where it is ordinary text — and refused
+// to submit a finished statement that carried a trailing comment
+// ("SELECT 1; -- note"), which left the shell waiting with nothing to wait for.
+// The batch reader has always answered this with the same scanner, which is why
+// a script could do what could not be typed.
+func endsAtStatementBoundary(input string) bool {
+	if sqltext.EndsInsideBlockComment(input) {
+		return false
+	}
+	// The remainder is what follows the last ";" that terminated a statement, so
+	// it is shorter than the input exactly when one did. Counting terminators
+	// rather than statements is what makes a bare ";" a complete (empty) input
+	// instead of a buffer the prompt would wait on forever.
+	_, remainder := splitSQLStatements(input)
+	return len(remainder) < len(input) && sqltext.StripNoise(remainder) == ""
 }
 
 // Suggest is a local struct to maintain compatibility with old code structure
@@ -1113,20 +1147,65 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 	if req == "" {
 		return nil // user only input enter, space tab
 	}
+	s.recordHistory(ctx, req)
+	return s.dispatch(ctx, req)
+}
 
-	// History is recorded before the line is parsed, so an input rejected for its
-	// syntax is still recallable with the up-arrow.
-	//
-	// Skip history persistence when it is disabled so a read-only history DB
-	// cannot fail the requested command. History is best-effort: a runtime
-	// failure after startup disables history for the rest of the session and
-	// warns, instead of aborting the command.
-	if s.historyEnabled {
-		if err := s.recordUserRequest(ctx, req); err != nil {
-			s.disableHistory(err)
-		}
+// execInteractive runs one submission from the interactive prompt: everything
+// typed or pasted before Enter, which is not always one statement.
+//
+// The line is parsed the way a script is, so every statement in it runs and
+// every result is printed. Handing the whole line to the engine as a single
+// query ran the statements but kept one result, so pasting a snippet — the usual
+// way more than one statement is entered — printed the last table and silently
+// dropped the rest, and a line whose last statement was a SELECT could print no
+// rows at all.
+//
+// History records the line as it was typed rather than the statements it was
+// split into, so the up-arrow returns what the user wrote.
+func (s *Shell) execInteractive(ctx context.Context, input string) error {
+	req := strings.TrimSpace(input)
+	if req == "" {
+		return nil // user only input enter, space tab
+	}
+	s.recordHistory(ctx, req)
+
+	// A helper command is a whole line by definition and is never SQL, so it goes
+	// straight to the dispatcher instead of through the statement scanner.
+	if looksLikeCommand(req) {
+		return s.dispatch(ctx, req)
 	}
 
+	elements, err := parseScript(input)
+	if err != nil {
+		return err
+	}
+	for _, element := range elements {
+		if err := s.dispatch(ctx, element.text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recordHistory stores what the user asked for, before the line is parsed, so an
+// input rejected for its syntax is still recallable with the up-arrow.
+//
+// Skip history persistence when it is disabled so a read-only history DB cannot
+// fail the requested command. History is best-effort: a runtime failure after
+// startup disables history for the rest of the session and warns, instead of
+// aborting the command.
+func (s *Shell) recordHistory(ctx context.Context, req string) {
+	if !s.historyEnabled {
+		return
+	}
+	if err := s.recordUserRequest(ctx, req); err != nil {
+		s.disableHistory(err)
+	}
+}
+
+// dispatch runs one already-recorded helper command or SQL statement.
+func (s *Shell) dispatch(ctx context.Context, req string) error {
 	if looksLikeCommand(req) {
 		argv, err := splitArgs(req)
 		if err != nil {

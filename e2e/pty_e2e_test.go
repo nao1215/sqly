@@ -512,3 +512,135 @@ func copySmokeFixture(t *testing.T, source, destination string) {
 		t.Fatal(err)
 	}
 }
+
+// typeKeys types each character as its own write, the way a person does. The
+// helpers that send a whole line in one burst deliberately avoid the completer;
+// these tests must not, because the defects below only appear when the shell
+// processes keystrokes one at a time.
+func (s *ptySession) typeKeys(keys string) {
+	s.t.Helper()
+	for _, r := range keys {
+		s.write(string(r))
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession covers what Ctrl-C means
+// at a prompt: throw away the line being typed, keep the session. The keystrokes
+// are sent one at a time, and Ctrl-C on its own, because that is how the key
+// arrives from a keyboard.
+//
+// Before the fix the interrupt ended the shell with status 1, so a half-typed
+// query could not be abandoned without losing the session.
+func TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	s.typeKeys("SELECT 'never_ru")
+	s.write("\x03")
+
+	// The session must still serve the next query, and the abandoned line must
+	// not appear in it.
+	s.typeKeys("SELECT 'alive_after_ctrl_c';")
+	s.write("\r")
+	s.waitFor("alive_after_ctrl_c", ioTimeout)
+	if strings.Contains(s.output(), "never_run") {
+		t.Errorf("interactive shell: the interrupted line was executed:\n%s", s.output())
+	}
+
+	// A second interrupt, this time at an empty prompt, must also leave the shell
+	// running, so EOF is what ends it.
+	s.write("\x03")
+	time.Sleep(300 * time.Millisecond)
+	s.typeKeys("SELECT 'alive_after_empty_ctrl_c';")
+	s.write("\r")
+	s.waitFor("alive_after_empty_ctrl_c", ioTimeout)
+
+	// Raw mode must still have been entered once for the whole session. An
+	// interrupt that dropped the terminal and re-acquired it would reopen the
+	// mode-switch window where input is lost, at the moment the user is typing.
+	if got := s.rawCount(bracketedPasteEnable); got != 1 {
+		t.Errorf("interactive shell: raw mode entered %d times across two interrupts, want 1", got)
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d after Ctrl-C, want 0 (an interrupt is not a failure)", code)
+	}
+}
+
+// TestInteractivePTY_MultiStatementLineRunsEveryStatement covers a line holding
+// several statements, which is what pasting a snippet produces. Every result
+// must be printed; the line used to reach SQLite as one query, so all but one
+// result was silently dropped.
+func TestInteractivePTY_MultiStatementLineRunsEveryStatement(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	s.submitLine("SELECT 'first_result' AS a; SELECT 'second_result' AS b;")
+	s.waitFor("first_result", ioTimeout)
+	s.waitFor("second_result", ioTimeout)
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_TerminatorIsSQLAware covers where a ";" ends a statement.
+// A trigger body's inner ";" does not, and a trailing comment after one does not
+// stop it from having ended. Both were decided by "does the text end with ;",
+// which made a trigger impossible to type and left a commented line unsubmitted.
+func TestInteractivePTY_TerminatorIsSQLAware(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// A statement finished with a trailing comment runs on that Enter alone.
+	s.submitLine("SELECT 'comment_then_run' AS a; -- a note")
+	s.waitFor("comment_then_run", ioTimeout)
+
+	// A trigger body spans lines and holds its own ";" — each Enter continues.
+	s.submitLine("CREATE TABLE audit (msg TEXT);")
+	s.waitFor("statement executed successfully", ioTimeout)
+	s.submitLine("CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN")
+	s.submitLine("  SELECT 1;")
+	s.submitLine("END;")
+	s.waitFor("statement executed successfully", ioTimeout)
+
+	// The shell is still in a normal state afterwards.
+	s.submitLine("SELECT name AS created FROM sqlite_master WHERE type = 'trigger';")
+	s.waitFor("audit_trg", ioTimeout)
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_PasteKeepsTabsAndRunsOnce covers a bracketed paste holding
+// a TAB: the TAB is content, not the completion key, and the pasted statement
+// runs when Enter follows. The TAB used to run completion, which deleted it from
+// the buffer and could rewrite the pasted word.
+func TestInteractivePTY_PasteKeepsTabsAndRunsOnce(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// "a<TAB>b" survives as the value only if the TAB reached the buffer.
+	s.write("\x1b[200~SELECT 'a\tb' AS pasted;\x1b[201~")
+	time.Sleep(300 * time.Millisecond)
+	s.write("\r")
+	s.waitFor("a\tb", ioTimeout)
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
