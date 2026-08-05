@@ -104,3 +104,40 @@ scenarios:
           exit_code: 0
           stdout:
             contains: 太郎
+
+  # The same file read as UTF-8 — the default — is not an error. Every byte the
+  # decoder cannot make sense of becomes U+FFFD and the run exits 0, so a wrapper
+  # that only checks the exit code gets mojibake and no warning. sqly cannot tell
+  # this from a file that genuinely holds U+FFFD, which is why it is documented
+  # rather than guessed at; the replacement character in the output is the signal
+  # to reach for --encoding.
+  - name: reads a Shift-JIS file as UTF-8 without complaining
+    steps:
+      - fixture: &shiftjis
+          file: people.csv
+          base64: "aWQsbmFtZQoxLJG+mFkKMiyJ1I5xCg=="
+      - run:
+          command: sqly --output-format json --sql "SELECT name FROM people ORDER BY id LIMIT 1" people.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            empty: true
+          stdout:
+            # JSON escapes it, which is also how a consumer greps for it.
+            contains: '\ufffd'
+      - assert:
+          stdout:
+            not_contains: 太郎
+
+  - name: names the encoding and gets the text back
+    steps:
+      - fixture: *shiftjis
+      - run:
+          command: sqly --encoding shift-jis --output-format json --sql "SELECT name FROM people ORDER BY id LIMIT 1" people.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: 太郎
+      - assert:
+          stdout:
+            not_contains: '\ufffd'

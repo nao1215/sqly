@@ -38,10 +38,9 @@ scenarios:
       - assert:
           exit_code: 2
           stderr:
-            contains:
-              - "line 2"
-              - ".save"
-              - "runs SQL only"
+            # Quoted whole, because website/content/reference.md shows this exact
+            # line and a drift test requires both to hold the same string.
+            contains: 'save.sql runs SQL only, but line 2 is the helper command ".save"; run it with --script-file, or pipe it to sqly'
           file:
             path: user.csv
             contains: booker12

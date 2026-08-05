@@ -60,6 +60,46 @@ writer — and is refused before anything is touched.
 | ACH | `.ach` | several tables: `_file_header`, `_batches`, `_entries`, `_addenda` |
 | Fedwire | `.fed` | one `_message` table |
 
+### CSV and TSV have no headerless mode
+
+The first line is always the header. There is no flag that turns this off, and
+nothing detects a file that has none: a headerless file loads with its first row
+consumed as column names, so a row disappears and the columns are named after
+that row's values.
+
+```shell
+printf '1,alice,100\n2,bob,200\n' > nohdr.csv
+sqly --inspect nohdr.csv
+```
+
+```text
+row_count: 1, columns: 1, alice, 100
+```
+
+Two rows in the file, one row in the table. `--inspect` reports the same thing,
+because it describes what was imported rather than what is on disk, so a caller
+asking "what is this file" is told one row fewer than it holds.
+
+Put a header in front of the data instead:
+
+```shell
+(echo 'c1,c2,c3'; cat nohdr.csv) | sqly --stdin-format csv --sql "SELECT * FROM stdin"
+```
+
+### Files that cannot be read at all
+
+Two inputs are refused outright, with exit `3` and no flag that changes the
+answer:
+
+| Input | Message |
+|:--|:--|
+| a CSV whose header repeats a name | `filesql: duplicate column name: a` |
+| a file of zero bytes | `filesql: empty data source: file is empty` |
+
+Rename one of the duplicate columns, or drop the file. A file holding only a
+header is neither of these: it imports as a table with no rows, which is what a
+query against it returns.
+
 ## Write
 
 `--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format jsonl`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
@@ -316,6 +356,27 @@ whose source is a URL; export it to a local file instead.
 
 A text input without a Unicode BOM is decoded as UTF-8 unless `--encoding` says otherwise: `utf-8`, `shift-jis` (accepting `cp932`, `ms932`, `windows-31j`, `sjis`), `euc-jp`, `iso-2022-jp`, `utf-16le`, `utf-16be`. A BOM always wins over the flag.
 
+### Getting the encoding wrong is a successful run
+
+A file in another encoding read as UTF-8 does not fail. Every byte the decoder
+cannot make sense of becomes `U+FFFD` (`�`), the query runs, and the process
+exits `0` with nothing on stderr:
+
+```shell
+sqly --output-format csv --sql "SELECT * FROM sj" sj.csv
+```
+
+```text
+���O,�l
+��,1
+```
+
+sqly cannot tell this from a file that genuinely holds `U+FFFD`, so it does not
+guess. The replacement character is the signal: if a result holds one, the
+`--encoding` is wrong. A script can look for it without reading the output —
+`sqly --output-format json ... | grep -q '\\ufffd'` — because the JSON encoder
+writes it escaped.
+
 ## Row mismatches
 
 When a CSV or TSV row has a different field count from the header. Only CSV and
@@ -335,7 +396,7 @@ The default names the other two when it stops, so a failed import says what to
 do next:
 
 ```text
-failed to import file rm.csv: filesql: column count mismatch: row 2 has 2 fields, want 3; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones
+failed to import file rm.csv: filesql: column count mismatch: row 1 has 2 fields, want 3; use --row-mismatch skip to drop such rows, or --row-mismatch pad to fill short ones
 ```
 
 An `.import` inside a running session is offered `.row-mismatch` instead: the

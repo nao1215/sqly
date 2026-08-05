@@ -18,6 +18,20 @@ one you want by name in SQL, the same way you pick among a directory's files.
 
 A URL is read only with [`--allow-remote`](#remote-inputs).
 
+`--` ends the flags. Everything after it is an input, which is the only way to
+name a file whose own name begins with `-`:
+
+```shell
+sqly --inspect -- -.csv
+```
+
+Without it the name is parsed as flags:
+
+```text
+$ sqly --inspect -.csv
+unknown shorthand flag: '.' in -.csv
+```
+
 | Flag | Does |
 |:--|:--|
 | `--stdin-format FORMAT` | read stdin as a dataset instead of as SQL: `csv`, `tsv`, `ltsv`, `json`, `jsonl` |
@@ -205,8 +219,7 @@ before any statement runs:
 
 ```text
 $ sqly --sql-file save.sql user.csv
---sql-file runs SQL only, but line 2 is the helper command ".save"; pipe the
-script to sqly instead: printf '...' | sqly FILE
+save.sql runs SQL only, but line 2 is the helper command ".save"; run it with --script-file, or pipe it to sqly
 ```
 
 The flag says SQL, and a `.sql` file that runs `.save` is a shell script wearing
@@ -296,6 +309,50 @@ rather than a file holding whichever result happened to be last.
 `--sql-file` run that selects one without `--output` is rejected rather than
 printing something else.
 
+### Where the destination's extension leaves off
+
+`--output` and the extension of the path it names decide the format together,
+and the file that appears is not always the path that was typed:
+
+| Destination | Written to | Format |
+|:--|:--|:--|
+| `--output oo` | `oo.csv` | csv |
+| `--output o.weird` | `o.weird` | csv |
+| `--output rep --output-format json` | `rep.json` | json |
+| `--output w.weird --output-format json` | `w.weird` | json |
+
+The three rules behind the table:
+
+- A known format extension picks the format. Contradicting it with
+  `--output-format` is a usage error, exit `2`, decided before anything is read.
+- An unknown extension is left exactly as it was typed, and the format is
+  whatever `--output-format` says (`csv` by default).
+- No extension at all gets the format's own appended.
+
+So `--output report` writes `report.csv` and reading `report` afterwards finds
+nothing. The path that was actually written is always on stderr, and reading it
+is more reliable than reproducing these rules:
+
+```text
+Output sql result to report.csv (output mode=csv)
+```
+
+`.dump TABLE FILE` follows the same rules.
+
+### Where a statement's status line goes
+
+A statement that returns no rows produces a count rather than a result, and
+where that count is printed depends on the output format:
+
+| `--output-format` | `affected is N row(s)` |
+|:--|:--|
+| `table`, `vertical`, `markdown` | stdout |
+| `csv`, `tsv`, `ltsv`, `json`, `jsonl` | stderr |
+
+A format a person reads carries the count with everything else they are
+watching. A format a program parses keeps stdout to data alone, so a status line
+there would have to be skipped by every consumer; it goes to stderr instead.
+
 ### What `--output` guarantees
 
 The result is written to a temporary file beside the destination and moved into
@@ -333,9 +390,7 @@ UPDATE link SET n = 2;
 .save --in-place
 EOF
 # cannot save session:
-#   - link: link.csv is a symlink to /srv/shared/real.csv; an in-place save would
-#     overwrite that file, which you did not name. Add --follow-symlinks to do it
-#     anyway, or save to a directory with .save DIR
+#   - link: link.csv is a symlink to /srv/shared/real.csv; an in-place save would overwrite that file, which you did not name. Add --follow-symlinks to do it anyway, or save to a directory with .save DIR
 ```
 
 The reason is not that following the link is wrong — it is the only correct way

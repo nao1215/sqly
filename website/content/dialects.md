@@ -126,6 +126,31 @@ Each of the four fails that test for its own reason:
 - `SUBSTR` from position 0 is an off-by-one each dialect resolves its own way, so reproducing it means one helper that knows every dialect's rule, not a MySQL special case bolted onto a shared function.
 - The boolean cast is only recoverable where the expression is syntactically a boolean. `CAST(col AS STRING)` over a column of 0 and 1 is not, because SQLite has no boolean type and nothing downstream can tell that column from a plain integer one.
 
+## A translated expression is named after what it became
+
+An expression sqly rewrites carries the name of the SQLite form it was rewritten
+into, and that name is what the result is labeled with — a JSON key, a CSV
+header, a column in a table:
+
+```shell
+$ sqly --output-format json --dialect postgresql --sql "SELECT salary::text FROM staff" staff.csv
+[{"postgresql_cast(salary, 'text')":"120"}]
+
+$ sqly --output-format json --dialect mysql --sql "SELECT CONCAT(name,'-',dept) FROM staff" staff.csv
+[{"strict_concat(name,'-',dept)":"alice-eng"}]
+```
+
+Name the column when the output is going to be read by something:
+
+```shell
+$ sqly --output-format json --dialect postgresql --sql "SELECT salary::text AS salary_text FROM staff" staff.csv
+[{"salary_text":"120"}]
+```
+
+Every example on this page uses `AS` for that reason. The internal name is not a
+promise: it is whatever the translation currently produces, and it can change
+without the query changing.
+
 ## When to reach for something else
 
 `--dialect` exists so you can reuse a query you already have without rewriting it by hand. It is not a way to test what a query will do in production.

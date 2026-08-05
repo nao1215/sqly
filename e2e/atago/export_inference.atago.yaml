@@ -172,3 +172,63 @@ scenarios:
           file:
             path: result.json
             contains: '"user_name":"booker12"'
+
+  # The four destination shapes, each checked by the name of the file that
+  # actually appeared. An agent that writes `--output report` and later reads
+  # `report` finds nothing, because the format's extension was appended; the
+  # rules table on the reference page is what these pin.
+  - name: appends the format extension to a destination with none
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output oo --sql "SELECT user_name FROM user LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Output sql result to oo.csv (output mode=csv)"
+          file:
+            path: oo.csv
+            exists: true
+      - assert:
+          file:
+            path: oo
+            exists: false
+
+  - name: writes to an unknown extension exactly as it was given
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output o.weird --sql "SELECT user_name FROM user LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Output sql result to o.weird (output mode=csv)"
+          file:
+            path: o.weird
+            exists: true
+
+  - name: appends the chosen format extension to a bare destination
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output rep --output-format json --sql "SELECT user_name FROM user LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Output sql result to rep.json (output mode=json)"
+          file:
+            path: rep.json
+            contains: '"user_name"'
+
+  - name: leaves an unknown extension alone and writes the chosen format into it
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output w.weird --output-format json --sql "SELECT user_name FROM user LIMIT 1" user.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Output sql result to w.weird (output mode=json)"
+          file:
+            path: w.weird
+            contains: '"user_name"'

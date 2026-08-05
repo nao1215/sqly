@@ -133,10 +133,9 @@ scenarios:
       - assert:
           exit_code: 0
           stderr:
-            contains:
-              - "Skipped 2 hidden sheets"
-              - "book.xlsx"
-              - "--include-hidden-sheets"
+            # Quoted whole, because website/content/reference.md shows this exact
+            # line and a drift test requires both to hold the same string.
+            contains: "Skipped 2 hidden sheets in book.xlsx; start sqly with --include-hidden-sheets to import them."
       - assert:
           # The notice is a count, not a list: the names of hidden sheets are
           # what --inspect is for. And it must not reach stdout, which carries

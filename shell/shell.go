@@ -1249,11 +1249,15 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		}
 	}
 	if table == nil {
-		// While collecting a --sql-file script's output, a no-rowset statement
-		// (DDL, DML, PRAGMA) is a legitimate setup step. Stay silent so stdout
-		// holds nothing but the exported data; the one-result-set contract is
-		// checked after the whole script runs.
+		// While a run's output is being collected — an --output export, or a
+		// machine-readable format, which carries one result and nothing else — a
+		// no-rowset statement (DDL, DML, PRAGMA) is a legitimate step whose status
+		// line must not reach stdout: stdout holds the data a program parses. It
+		// goes to stderr instead of being dropped, so "how many rows did that
+		// UPDATE change" has an answer in every format rather than only in the
+		// ones a person reads.
 		if s.collectingOutput {
+			fmt.Fprint(config.Stderr, statementResultMessage(req, affectedRows))
 			return nil
 		}
 		// --output is only meaningful for a statement that produces a rowset. An

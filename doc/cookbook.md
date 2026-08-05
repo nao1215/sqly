@@ -64,6 +64,25 @@ sqly:~(table)$ .schema user
 sqly:~(table)$ .describe user
 ```
 
+Pull one line per table out of the report, for a script that wants a summary
+rather than the document:
+
+```shell
+sqly --inspect user.csv | jq -r '.tables[] | "\(.name): \(.row_count) rows"'
+```
+
+```text
+user: 3 rows
+```
+
+If the first line of the file is data rather than column names, add a header
+before sqly sees it. sqly always reads line 1 as the header, so a headerless
+file loses that row and names its columns after the values in it:
+
+```shell
+(echo 'c1,c2,c3'; cat data.csv) | sqly --stdin-format csv --sql "SELECT * FROM stdin"
+```
+
 ## Convert between formats
 
 The output flag decides the format; `--output` decides where it goes.

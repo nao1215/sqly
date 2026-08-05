@@ -564,3 +564,41 @@ scenarios:
             contains:
               - "Engineering,3,47667,2118"
               - "Sales,2,57500,2538"
+
+  # A translated expression is named after what it was rewritten into, and that
+  # name becomes the JSON key or the CSV header. The dialects page documents it
+  # and tells the reader to alias such expressions; these pin the names as they
+  # are now, so a filesql change that starts preserving the written expression is
+  # a documentation change too, not a silent one.
+  - name: "postgresql: an unaliased cast is labeled with its rewritten name"
+    steps:
+      - fixture: *employees
+      - run:
+          command: sqly --output-format json --dialect postgresql --sql "SELECT salary::text FROM employees WHERE name = 'Alice'" employees.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "postgresql_cast(salary, 'text')"
+
+  - name: "mysql: an unaliased CONCAT is labeled with its rewritten name"
+    steps:
+      - fixture: *employees
+      - run:
+          command: sqly --output-format json --dialect mysql --sql "SELECT CONCAT(name,'-',name) FROM employees WHERE name = 'Alice'" employees.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "strict_concat(name,'-',name)"
+
+  - name: an alias is what the caller asked for and is kept
+    steps:
+      - fixture: *employees
+      - run:
+          command: sqly --output-format json --dialect postgresql --sql "SELECT salary::text AS salary_text FROM employees WHERE name = 'Alice'" employees.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"salary_text"'
+      - assert:
+          stdout:
+            not_contains: "postgresql_cast"
