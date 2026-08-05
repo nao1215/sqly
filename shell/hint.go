@@ -3,7 +3,7 @@ package shell
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -92,7 +92,7 @@ func (s *Shell) missingTableHint(ctx context.Context, missing string) (string, b
 		names = append(names, t.Name())
 	}
 	// Sorted, so the same session lists them the same way every time.
-	sort.Strings(names)
+	slices.Sort(names)
 	listed := names
 	if len(names) > maxHintedTables {
 		listed = append(names[:maxHintedTables:maxHintedTables], fmt.Sprintf("... (%d total)", len(names)))

@@ -388,7 +388,9 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 	case PrintModeLTSV:
 		return t.printLTSV(out)
 	case PrintModeExcel:
-		return t.printExcel(out)
+		// Export-only, like Parquet below: on screen it renders as CSV, and the
+		// workbook is written by the export path (.dump / --output).
+		return t.printCSV(out)
 	case PrintModeJSON:
 		return t.printJSON(out)
 	case PrintModeJSONL:
@@ -681,12 +683,6 @@ func ensureLTSVValueRepresentable(label, value string) error {
 		return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
 	}
 	return nil
-}
-
-// printExcel print all record in excel format.
-// This is the same as printCSV.
-func (t *Table) printExcel(out io.Writer) error {
-	return t.printCSV(out)
 }
 
 // rowToJSONObject builds a JSON object for one record, preserving the header

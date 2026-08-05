@@ -11,7 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/nao1215/filesql"
@@ -218,7 +218,7 @@ func (s *Shell) supportedFilesInDir(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 	return files, nil
 }
 
@@ -244,7 +244,7 @@ func (s *Shell) tablesNamedAfterFile(file string, names map[string]struct{}) []s
 			}
 		}
 	}
-	sort.Strings(matched)
+	slices.Sort(matched)
 	return matched
 }
 
@@ -270,7 +270,7 @@ func (s *Shell) tablesFromSource(source string, names map[string]struct{}) []str
 			owned = append(owned, name)
 		}
 	}
-	sort.Strings(owned)
+	slices.Sort(owned)
 	return owned
 }
 

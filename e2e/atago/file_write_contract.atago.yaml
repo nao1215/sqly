@@ -1,5 +1,6 @@
-# Writing a file is the same problem twice — `--output` writes one query result,
-# `.save` writes the tables a session changed — so both go through the same
+# Writing a file is the same problem three times — `--output` writes one query
+# result, `.dump` writes one named table, `.save` writes the tables a session
+# changed — so all three go through the same
 # steps: serialize beside the destination, then move it into place. These
 # scenarios check that from the outside, where the contract is what the user can
 # observe: an existing file is either the old one or the new one, never a
