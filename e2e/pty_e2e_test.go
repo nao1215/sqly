@@ -644,3 +644,57 @@ func TestInteractivePTY_PasteKeepsTabsAndRunsOnce(t *testing.T) {
 		t.Fatalf("interactive shell: exit code = %d, want 0", code)
 	}
 }
+
+// TestInteractivePTY_CtrlCDuringQueryLeavesSessionUsable covers the worst shape
+// of the interrupt bug. The prompt holds the terminal in raw mode, so Ctrl-C
+// pressed while a statement runs is not a signal and does not stop the query: it
+// waits in the input buffer. It used to be read as the next line and end the
+// shell, discarding the session once the query finally returned. The query still
+// runs to completion — that part is unchanged — but the session must survive.
+func TestInteractivePTY_CtrlCDuringQueryLeavesSessionUsable(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// A recursive CTE long enough that the interrupt below lands while it runs.
+	s.write("SELECT count(*) AS counted FROM (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 20000000) SELECT x FROM c);\r")
+	time.Sleep(1500 * time.Millisecond)
+	s.write("\x03")
+
+	s.waitFor("20000000", 60*time.Second)
+	s.write("SELECT 'usable_after_interrupt';\r")
+	s.waitFor("usable_after_interrupt", ioTimeout)
+
+	if strings.Contains(s.output(), "interrupted") {
+		t.Errorf("interactive shell: the buffered interrupt was reported as a failure:\n%s", s.output())
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_LiteralSpanningLinesKeepsBuffering covers a string literal
+// typed across lines with a ";" inside it. The first Enter used to submit
+// "SELECT 'multi;", which SQLite rejects as an unterminated token.
+func TestInteractivePTY_LiteralSpanningLinesKeepsBuffering(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	s.submitLine("SELECT 'multi;")
+	s.submitLine("line' AS s;")
+	s.waitFor("multi;", ioTimeout)
+	s.waitFor("line", ioTimeout)
+	if strings.Contains(s.output(), "unrecognized token") {
+		t.Errorf("interactive shell: the literal was submitted before it closed:\n%s", s.output())
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
