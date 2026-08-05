@@ -481,7 +481,7 @@ func TestRedactURL(t *testing.T) {
 		{name: "a Windows path with forward slashes", raw: "C:/data/people.csv", want: "C:/data/people.csv"},
 		{name: "an absolute Unix path", raw: "/var/data/people.csv", want: "/var/data/people.csv"},
 		{name: "a relative path", raw: "testdata/people.csv", want: "testdata/people.csv"},
-		{name: "the stdin source name", raw: "stdin", want: "stdin"},
+		{name: "the stdin source name", raw: stdinTableSource, want: stdinTableSource},
 		{name: "a file URL is not a download", raw: "file:///data/people.csv", want: "file:///data/people.csv"},
 		{name: "an empty source", raw: "", want: ""},
 	}
