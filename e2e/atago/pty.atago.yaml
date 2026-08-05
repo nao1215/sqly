@@ -450,3 +450,63 @@ scenarios:
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0
+
+  # Editing an earlier line of a buffered statement leaves the screen alone. The
+  # renderer erased the block it had drawn by moving up its height, which is
+  # where the cursor is only while it sits on the last line; a left arrow
+  # crossing the line break put it on the first, so every keystroke after that
+  # erased one row too high and the prompt walked up the screen, taking a line of
+  # scrollback with it each time. Fixed in prompt v0.0.14.
+  #
+  # The banner sqly prints at startup is what the climb ate, so it is what the
+  # screen is checked for: after sixteen left arrows it is still there, above a
+  # prompt still holding both lines of the statement.
+  - name: editing an earlier line leaves the lines above the prompt alone
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 12
+          cols: 80
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name\r"
+            - expect: '\.\.\.>'
+            - send: "FROM people"
+            - expect: "FROM people"
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            - send: { key: left }
+            # Typing here is the barrier: the character lands where the sixteen
+            # arrows left the cursor, so seeing it proves every one of them has
+            # been processed and the screen below is the settled one.
+            - send: "X"
+            - expect: "SELECT Xname"
+            # The screen is checked while the statement is still being edited:
+            # after the exit below it holds neither line.
+            - expect_screen:
+                contains: 'enter "SQL query" or "sqly command that begins with a dot".'
+            - expect_screen:
+                contains: ".help print usage, .exit exit sqly."
+            - expect_screen:
+                contains: "...> FROM people"
+            # Ctrl-U clears the line so Ctrl-D is read as end of input rather
+            # than as a delete.
+            - send: { key: ctrl-u }
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
