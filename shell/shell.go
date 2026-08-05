@@ -201,6 +201,11 @@ type promptSession interface {
 	Close() error
 	Run() (string, error)
 	SetPrefix(string)
+	// WatchInterrupt watches the terminal for Ctrl-C while a submission runs and
+	// returns a context canceled when it arrives. Between prompts nothing else is
+	// reading the terminal, and raw mode makes Ctrl-C a byte rather than a
+	// signal, so this is the only way the key can reach a running statement.
+	WatchInterrupt(context.Context) (context.Context, context.CancelFunc)
 }
 
 type promptFactory func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error)
@@ -513,15 +518,14 @@ func (s *Shell) communicate(ctx context.Context) error {
 			}
 			// Ctrl-C throws away the line being typed and nothing else, the way
 			// every other SQL shell answers it. Reporting it as a failure ended the
-			// session instead: a half-typed query, or one whose Ctrl-C arrived while
-			// a long statement was still running, took the shell down with it and
+			// session instead: a half-typed query took the shell down with it and
 			// exited non-zero. The prompt has already echoed "^C".
 			if errors.Is(err, prompt.ErrInterrupted) {
 				continue
 			}
 			return err
 		}
-		if err = s.execInteractive(ctx, input); err != nil {
+		if err := s.execWatchingForInterrupt(ctx, p, input); err != nil {
 			if errors.Is(err, ErrExitSqly) {
 				return nil // user input ".exit"
 			}
@@ -529,6 +533,36 @@ func (s *Shell) communicate(ctx context.Context) error {
 			continue
 		}
 	}
+}
+
+// execWatchingForInterrupt runs one submission with Ctrl-C watched for, so a
+// statement that turns out to be slower than expected can be stopped.
+//
+// Nothing reads the terminal between prompts, and the prompt holds it in raw
+// mode, where Ctrl-C is a byte rather than a signal: the key could not reach a
+// running statement at all. It waited in the input buffer, the statement ran to
+// completion however long it took, and the byte was then read as the next line.
+//
+// A canceled statement is not a failed one. It is reported and the loop goes on,
+// so the session survives it the same way it survives an interrupt at the prompt.
+// Whether it was canceled is asked of the watch's context rather than of the
+// error, because the error crosses layers that render their cause as text, and a
+// string comparison is not a way to know what happened.
+func (s *Shell) execWatchingForInterrupt(ctx context.Context, p promptSession, input string) error {
+	runCtx, stopWatch := p.WatchInterrupt(ctx)
+	defer stopWatch()
+
+	err := s.execInteractive(runCtx, input)
+	if err == nil {
+		return nil
+	}
+	// A session context that is already done means the shell itself is stopping
+	// (a signal, a closed parent), which is not the user canceling a statement.
+	if runCtx.Err() != nil && ctx.Err() == nil {
+		fmt.Fprintf(config.Stderr, "^C\ncanceled: %s\n", previewStatement(input))
+		return nil
+	}
+	return err
 }
 
 // sqlyKeyMap returns the prompt key map with the Emacs-style control shortcuts

@@ -627,3 +627,39 @@ scenarios:
           stdout:
             contains: "Bob"
             not_contains: "...>"
+
+  # Ctrl-C stops a statement that is already running. The prompt holds the
+  # terminal in raw mode, where Ctrl-C is a byte rather than a signal, and
+  # between prompts nothing was reading it: the key could not reach a running
+  # statement at all, so it waited in the buffer while the statement ran to
+  # completion and was then read as the next line.
+  #
+  # The statement counts to two billion, which takes minutes. The scenario
+  # timeout is what makes this an assertion: a shell that does not cancel it
+  # cannot finish in time. The interrupt is sent right behind the Enter rather
+  # than after a pause — the byte waits in the input the shell is not reading
+  # yet, which is exactly the case that used to be lost.
+  - name: Ctrl-C stops a running statement and the session continues
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT count(*) AS counted FROM (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 2000000000) SELECT x FROM c);\r"
+            - send: { key: ctrl-c }
+            - expect: "canceled"
+            - expect: '\(table\)\$'
+            # The connection the statement was canceled on still answers, and
+            # the marker is concatenated so it cannot match the echoed line.
+            - send: "SELECT 'STILL' || '_ALIVE' AS a;\r"
+            - expect: "STILL_ALIVE"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0 # canceling a statement is not a failed session
+          stdout:
+            contains: "STILL_ALIVE"

@@ -1282,6 +1282,11 @@ type fakePromptSession struct {
 	// resultIndex is the next entry of results to hand out. It trails runCalls
 	// whenever runErrs answered a call.
 	resultIndex int
+	// cancelWatch marks, by 0-based WatchInterrupt call index, the submissions
+	// whose watch reports an interrupt: Ctrl-C pressed while that statement was
+	// running. watchCalls counts the calls.
+	cancelWatch map[int]bool
+	watchCalls  int
 }
 
 func (f *fakePromptSession) AddHistory(history string) {
@@ -1315,6 +1320,21 @@ func (f *fakePromptSession) Run() (string, error) {
 
 func (f *fakePromptSession) SetPrefix(prefix string) {
 	f.prefixes = append(f.prefixes, prefix)
+}
+
+// WatchInterrupt models the real session's watch over the terminal while a
+// statement runs. An entry in cancelWatch marks a submission the user
+// interrupted: that watch hands back an already-canceled context, which is what
+// the shell sees when Ctrl-C arrives mid-statement.
+func (f *fakePromptSession) WatchInterrupt(parent context.Context) (context.Context, context.CancelFunc) {
+	call := f.watchCalls
+	f.watchCalls++
+
+	ctx, cancel := context.WithCancel(parent)
+	if f.cancelWatch[call] {
+		cancel()
+	}
+	return ctx, cancel
 }
 
 func captureOSStdout(t *testing.T, f func()) string {
@@ -1574,6 +1594,102 @@ func TestShellCommunicate_CtrlCDiscardsTheLineAndKeepsTheSession(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "interrupted") {
 		t.Errorf("stderr reported the interrupt as a failure: %q", stderr.String())
+	}
+}
+
+// longRunningQuery counts to a number no machine reaches quickly, so a test that
+// finishes at all proves the statement was canceled rather than awaited.
+const longRunningQuery = "SELECT count(*) AS counted FROM (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 2000000000) SELECT x FROM c);"
+
+// TestShellCommunicate_CtrlCCancelsTheRunningStatement covers Ctrl-C pressed
+// while a statement is running. The statement stops, the shell says so, and the
+// session is still there for the next query.
+//
+// Before this the key could not reach a running statement at all: the prompt
+// holds the terminal in raw mode, so Ctrl-C is a byte rather than a signal and
+// nothing was reading it until the statement had finished.
+func TestShellCommunicate_CtrlCCancelsTheRunningStatement(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	fakePrompt := &fakePromptSession{
+		results:     []string{longRunningQuery, "SELECT 'after_cancel' AS marker;", ".exit"},
+		cancelWatch: map[int]bool{0: true}, // the first submission is interrupted
+	}
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		fakePrompt.initialPrefix = prefix
+		return fakePrompt, nil
+	}
+
+	backupStdout := config.Stdout
+	backupStderr := config.Stderr
+	defer func() {
+		config.Stdout = backupStdout
+		config.Stderr = backupStderr
+	}()
+	var stdout, stderr bytes.Buffer
+	config.Stdout = &stdout
+	config.Stderr = &stderr
+
+	captureOSStdout(t, func() {
+		if err := shell.communicate(context.Background()); err != nil {
+			t.Fatalf("communicate returned %v after an interrupted statement, want a session that continues", err)
+		}
+	})
+
+	if !strings.Contains(stderr.String(), "canceled") {
+		t.Errorf("stderr does not report the cancellation: %q", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "counted") {
+		t.Errorf("the canceled statement printed a result:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "after_cancel") {
+		t.Errorf("the query typed after the cancellation did not run: %q", stdout.String())
+	}
+}
+
+// TestShellCommunicate_UninterruptedStatementSaysNothing keeps the quiet path
+// quiet: a statement nobody interrupted must not be reported as canceled.
+func TestShellCommunicate_UninterruptedStatementSaysNothing(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	fakePrompt := &fakePromptSession{results: []string{"SELECT 'plain' AS marker;", ".exit"}}
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		fakePrompt.initialPrefix = prefix
+		return fakePrompt, nil
+	}
+
+	backupStdout := config.Stdout
+	backupStderr := config.Stderr
+	defer func() {
+		config.Stdout = backupStdout
+		config.Stderr = backupStderr
+	}()
+	var stdout, stderr bytes.Buffer
+	config.Stdout = &stdout
+	config.Stderr = &stderr
+
+	captureOSStdout(t, func() {
+		if err := shell.communicate(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if strings.Contains(stderr.String(), "canceled") {
+		t.Errorf("a statement nobody interrupted was reported as canceled: %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "plain") {
+		t.Errorf("the statement did not run: %q", stdout.String())
+	}
+	if fakePrompt.watchCalls != 2 {
+		t.Errorf("WatchInterrupt called %d times, want 2 (one per submission)", fakePrompt.watchCalls)
 	}
 }
 

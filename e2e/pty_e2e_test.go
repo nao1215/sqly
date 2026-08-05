@@ -659,34 +659,47 @@ func TestInteractivePTY_PasteKeepsTabsAndRunsOnce(t *testing.T) {
 	}
 }
 
-// TestInteractivePTY_CtrlCDuringQueryLeavesSessionUsable covers the worst shape
-// of the interrupt bug. The prompt holds the terminal in raw mode, so Ctrl-C
-// pressed while a statement runs is not a signal and does not stop the query: it
-// waits in the input buffer. It used to be read as the next line and end the
-// shell, discarding the session once the query finally returned. The query still
-// runs to completion — that part is unchanged — but the session must survive.
-func TestInteractivePTY_CtrlCDuringQueryLeavesSessionUsable(t *testing.T) {
+// TestInteractivePTY_CtrlCStopsARunningStatement covers the interrupt that had
+// nowhere to go. The prompt holds the terminal in raw mode, so Ctrl-C is a byte
+// rather than a signal, and between prompts nothing was reading it: the key
+// could not stop a running statement at all. It waited in the input buffer, the
+// statement ran however long it took, and the byte was then read as the next
+// line.
+//
+// The statement below counts to two billion, which takes minutes. The test
+// asserts it stops in seconds, so a shell that merely survived the interrupt
+// without canceling anything would fail on the deadline rather than pass slowly.
+func TestInteractivePTY_CtrlCStopsARunningStatement(t *testing.T) {
 	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
 	t.Cleanup(s.close)
 	s.waitReady(startupTimeout)
 
-	// A recursive CTE long enough that the interrupt below lands while it runs.
-	s.write("SELECT count(*) AS counted FROM (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 20000000) SELECT x FROM c);\r")
+	s.write("SELECT count(*) AS counted FROM (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 2000000000) SELECT x FROM c);\r")
+	// Long enough to be sure the statement is running, short enough that the
+	// deadline below cannot be met by the statement finishing on its own.
 	time.Sleep(1500 * time.Millisecond)
+
+	interrupted := time.Now()
 	s.write("\x03")
-
-	s.waitFor("20000000", 60*time.Second)
-	s.write("SELECT 'usable_after_interrupt';\r")
-	s.waitFor("usable_after_interrupt", ioTimeout)
-
-	if strings.Contains(s.output(), "interrupted") {
-		t.Errorf("interactive shell: the buffered interrupt was reported as a failure:\n%s", s.output())
+	s.waitFor("canceled", 20*time.Second)
+	if took := time.Since(interrupted); took > 15*time.Second {
+		t.Errorf("interactive shell: the statement took %s to stop after Ctrl-C", took.Round(time.Millisecond))
 	}
+	// The rendered result would carry the column name inside a box-drawn row;
+	// the typed statement is echoed too, but it has no "|" anywhere in it.
+	if strings.Contains(s.output(), "| counted") {
+		t.Errorf("interactive shell: the canceled statement printed its result:\n%s", s.output())
+	}
+
+	// The session is still there, and the connection it canceled a statement on
+	// still answers.
+	s.write("SELECT 'usable' || '_after_interrupt';\r")
+	s.waitFor("usable_after_interrupt", ioTimeout)
 
 	time.Sleep(300 * time.Millisecond)
 	s.sendEOF()
 	if code := s.waitExit(exitTimeout); code != 0 {
-		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+		t.Fatalf("interactive shell: exit code = %d after canceling a statement, want 0", code)
 	}
 }
 
