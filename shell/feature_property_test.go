@@ -43,19 +43,48 @@ func TestSplitCompletionPrefixProperties(t *testing.T) {
 	}
 }
 
+// sqlSafeBody strips from a generated string everything that can leave a
+// statement open at its end: quotes, the characters that open a comment, and
+// the ";" and newline that would make the input more than one line of one
+// statement. What remains is ordinary code, so a ";" appended to it always ends
+// the statement.
+func sqlSafeBody(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\'', '"', '`', '[', ']', '-', '/', '*', ';', '\n', '\r':
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // TestSQLInputCompleteProperties checks the invariants of the interactive
-// multiline submit predicate: a ";"-terminated statement is always complete, a
-// blank continuation line always force-submits, and a bare single-line query
-// (no ";", not a dot-command) is never treated as complete on its own.
+// multiline submit predicate: a ";" that closes a statement always completes it,
+// a blank continuation line always force-submits, a bare single-line query
+// (no ";", not a dot-command) is never treated as complete on its own, and an
+// input left inside a string literal is never complete.
 func TestSQLInputCompleteProperties(t *testing.T) {
 	t.Parallel()
 
 	terminated := func(body string, trailing uint8) bool {
-		in := body + ";" + strings.Repeat(" ", int(trailing%4))
+		in := sqlSafeBody(body) + ";" + strings.Repeat(" ", int(trailing%4))
 		return sqlInputComplete(in)
 	}
 	if err := quick.Check(terminated, featureQuickConfig()); err != nil {
-		t.Errorf("semicolon-terminated input must be complete: %v", err)
+		t.Errorf("input whose semicolon ends the statement must be complete: %v", err)
+	}
+
+	// A ";" inside an unclosed literal is text, not a terminator. Submitting
+	// there handed SQLite a fragment; the buffer must keep collecting instead.
+	openLiteralContinues := func(body, tail string) bool {
+		in := sqlSafeBody(body) + "'" + sqlSafeBody(tail) + ";"
+		if strings.TrimSpace(in) == "" || strings.HasPrefix(strings.TrimSpace(in), ".") {
+			return true // empty and dot-commands are complete by design
+		}
+		return !sqlInputComplete(in)
+	}
+	if err := quick.Check(openLiteralContinues, featureQuickConfig()); err != nil {
+		t.Errorf("input left inside a string literal must continue: %v", err)
 	}
 
 	blankLineSubmits := func(body string) bool {

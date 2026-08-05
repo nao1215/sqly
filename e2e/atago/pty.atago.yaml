@@ -510,3 +510,120 @@ scenarios:
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0
+
+  # Ctrl-C abandons the line being typed and nothing else. It used to end the
+  # session with a non-zero status, so a half-typed query could not be dropped
+  # without losing the shell.
+  - name: Ctrl-C discards the line and the session keeps working
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT 'NEVER_RUN"
+            - expect: "NEVER_RUN"
+            - send: { key: ctrl-c }
+            - expect: '\^C' # the interrupt was taken; only Ctrl-C prints this
+            - expect: '\(table\)\$' # a fresh prompt, not an exit
+            - send: "SELECT name FROM people WHERE age = 25;\r"
+            - expect: "Bob" # a result token: the typed line does not contain it
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-c } # and again from an empty prompt
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0 # an interrupt is not a failure
+          stdout:
+            contains: "Bob"
+
+  # A line can hold more than one statement, which is what pasting a snippet
+  # produces. Every statement runs and every result is printed; the line used to
+  # reach the engine as a single query, which kept one result and dropped the
+  # rest.
+  - name: every statement of a multi-statement line prints its result
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            # Both markers are concatenated by the engine, so each string exists
+            # only in a printed result and never in the echo of the line typed.
+            - send: "SELECT 'FIRST' || '_RESULT' AS a; SELECT 'SECOND' || '_RESULT' AS b;\r"
+            - expect: "FIRST_RESULT"
+            - expect: "SECOND_RESULT"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "FIRST_RESULT"
+              - "SECOND_RESULT"
+
+  # A ";" ends a statement only where SQLite ends one. Inside a trigger body it
+  # separates the body's statements without ending the CREATE TRIGGER holding
+  # them, so the buffer keeps collecting until END; — the shell submitted at the
+  # first inner ";" and no trigger could be typed at all.
+  - name: a trigger body buffers past its own semicolons
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "CREATE TABLE audit (msg TEXT);\r"
+            - expect: "statement executed successfully"
+            - expect: '\(table\)\$'
+            - send: "CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN\r"
+            - expect: '\.\.\.>' # the statement is unfinished, so it buffers
+            # The body's own ";" must not submit. Waiting for the echoed body line
+            # is what proves the send landed: the continuation marker is already
+            # on screen from the line before, so expecting it again would match
+            # without anything having happened.
+            - send: "INSERT INTO audit VALUES ('BODY_LINE');\r"
+            - expect: "BODY_LINE"
+            - send: "END;\r"
+            # The count is computed by the engine, so this string cannot be
+            # matched against the CREATE TRIGGER line echoed earlier. It is 1 only
+            # if the whole trigger reached SQLite as one statement.
+            - send: "SELECT 'TRIGGERS=' || COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger';\r"
+            - expect: "TRIGGERS=1"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "TRIGGERS=1"
+
+  # A comment after the terminator does not delay the statement it follows. The
+  # shell asked whether the line ended with ";", so this one waited on a
+  # continuation for a rest that was never coming.
+  - name: a statement with a trailing comment runs on that Enter
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 25; -- a note\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+            not_contains: "...>"

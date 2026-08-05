@@ -26,14 +26,56 @@ line even when sqly rejected it, so the up-arrow brings it back to be fixed.
 
 ## Multi-line statements
 
-A statement is buffered until it ends with `;`, so a pasted or typed multi-line query runs as one statement. The prompt becomes `...>` while it is buffering:
+A statement is buffered until a `;` ends it, so a pasted or typed multi-line query runs as one statement. The prompt becomes `...>` while it is buffering:
 
 ```text
 sqly:~/sqly(table)$ SELECT user_name,
    ...> identifier FROM user;
 ```
 
+A `;` ends a statement where SQLite ends one, and nowhere else. Inside a string
+literal, a quoted identifier, or a comment it is ordinary text; inside a trigger
+body it separates the body's own statements without ending the `CREATE TRIGGER`
+that contains them. In each case the buffer keeps collecting:
+
+```text
+sqly:~/sqly(table)$ CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN
+   ...>   INSERT INTO log VALUES ('written');
+   ...> END;
+statement executed successfully
+```
+
+A complete comment after the terminator does not delay anything: `SELECT 1; -- note`
+runs on that Enter. An unclosed `/*` still buffers, because the statement after it
+has not been read yet.
+
+One line may hold several statements. Each runs in order and each result is
+printed, which is what pasting a snippet usually needs:
+
+```text
+sqly:~/sqly(table)$ CREATE TABLE t (a); INSERT INTO t VALUES (1); SELECT a FROM t;
+```
+
 Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
+
+## Keys
+
+| Key | Does |
+|:--|:--|
+| `Enter` | run the statement, or continue it on the next line while it is unfinished |
+| `Ctrl-C` | throw away the line being typed; the session stays open |
+| `Ctrl-D` | quit, like `.exit` |
+| `Tab` | complete keywords, tables, columns, paths, and dot-command arguments |
+| `Esc` | close the completion list |
+| `↑` / `↓`, `Ctrl-P` / `Ctrl-N` | walk history |
+| `Ctrl-R` | search history |
+| `Ctrl-A` / `Ctrl-E` | start or end of line |
+| `Ctrl-F` / `Ctrl-B` | forward or back one character |
+| `Ctrl-K` / `Ctrl-U` / `Ctrl-W` | delete to end of line, the whole line, the previous word |
+| `Ctrl-L` | clear the screen |
+
+Ctrl-C does not stop a statement that is already running; it takes effect at the
+prompt.
 
 ## Dot-commands
 

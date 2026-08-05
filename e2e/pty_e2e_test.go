@@ -512,3 +512,203 @@ func copySmokeFixture(t *testing.T, source, destination string) {
 		t.Fatal(err)
 	}
 }
+
+// typeKeys types each character as its own write, the way a person does. The
+// helpers that send a whole line in one burst deliberately avoid the completer;
+// these tests must not, because the defects below only appear when the shell
+// processes keystrokes one at a time.
+func (s *ptySession) typeKeys(keys string) {
+	s.t.Helper()
+	for _, r := range keys {
+		s.write(string(r))
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession covers what Ctrl-C means
+// at a prompt: throw away the line being typed, keep the session. The keystrokes
+// are sent one at a time, and Ctrl-C on its own, because that is how the key
+// arrives from a keyboard.
+//
+// Before the fix the interrupt ended the shell with status 1, so a half-typed
+// query could not be abandoned without losing the session.
+func TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	s.typeKeys("SELECT 'never_ru")
+	s.write("\x03")
+
+	// The session must still serve the next query. Every marker below is built by
+	// concatenation so the string waited for exists only in a result: the typed
+	// text is echoed back too, and matching that would pass without executing
+	// anything.
+	s.typeKeys("SELECT 'alive' || '_after_ctrl_c';")
+	s.write("\r")
+	s.waitFor("alive_after_ctrl_c", ioTimeout)
+	// The abandoned line held an unclosed literal, so running it would have
+	// produced SQLite's tokenizer error. Its absence is what says the line was
+	// discarded rather than submitted; the typed text itself is echoed either
+	// way and cannot tell the two apart.
+	if strings.Contains(s.output(), "unrecognized token") {
+		t.Errorf("interactive shell: the interrupted line was executed:\n%s", s.output())
+	}
+
+	// A second interrupt, this time at an empty prompt, must also leave the shell
+	// running, so EOF is what ends it.
+	s.write("\x03")
+	time.Sleep(300 * time.Millisecond)
+	s.typeKeys("SELECT 'alive' || '_after_empty_ctrl_c';")
+	s.write("\r")
+	s.waitFor("alive_after_empty_ctrl_c", ioTimeout)
+
+	// Raw mode must still have been entered once for the whole session. An
+	// interrupt that dropped the terminal and re-acquired it would reopen the
+	// mode-switch window where input is lost, at the moment the user is typing.
+	if got := s.rawCount(bracketedPasteEnable); got != 1 {
+		t.Errorf("interactive shell: raw mode entered %d times across two interrupts, want 1", got)
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d after Ctrl-C, want 0 (an interrupt is not a failure)", code)
+	}
+}
+
+// TestInteractivePTY_MultiStatementLineRunsEveryStatement covers a line holding
+// several statements, which is what pasting a snippet produces. Every result
+// must be printed; the line used to reach SQLite as one query, so all but one
+// result was silently dropped.
+func TestInteractivePTY_MultiStatementLineRunsEveryStatement(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// Concatenated markers so each string appears only in a printed result, never
+	// in the echo of the line that produced it.
+	s.submitLine("SELECT 'first' || '_result' AS a; SELECT 'second' || '_result' AS b;")
+	s.waitFor("first_result", ioTimeout)
+	s.waitFor("second_result", ioTimeout)
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_TerminatorIsSQLAware covers where a ";" ends a statement.
+// A trigger body's inner ";" does not, and a trailing comment after one does not
+// stop it from having ended. Both were decided by "does the text end with ;",
+// which made a trigger impossible to type and left a commented line unsubmitted.
+func TestInteractivePTY_TerminatorIsSQLAware(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// A statement finished with a trailing comment runs on that Enter alone.
+	s.submitLine("SELECT 'comment' || '_then_run' AS a; -- a note")
+	s.waitFor("comment_then_run", ioTimeout)
+
+	// A trigger body spans lines and holds its own ";" — each Enter continues.
+	s.submitLine("CREATE TABLE audit (msg TEXT);")
+	s.waitFor("statement executed successfully", ioTimeout)
+	s.submitLine("CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN")
+	s.submitLine("  SELECT 1;")
+	s.submitLine("END;")
+	s.waitFor("statement executed successfully", ioTimeout)
+
+	// The trigger exists, and the count proves it: the marker is computed, so it
+	// cannot be matched against the CREATE TRIGGER line echoed earlier.
+	s.submitLine("SELECT 'triggers=' || COUNT(*) AS n FROM sqlite_master WHERE type = 'trigger';")
+	s.waitFor("triggers=1", ioTimeout)
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_PasteKeepsTabsAndRunsOnce covers a bracketed paste holding
+// a TAB: the TAB is content, not the completion key, and the pasted statement
+// runs when Enter follows. The TAB used to run completion, which deleted it from
+// the buffer and could rewrite the pasted word.
+func TestInteractivePTY_PasteKeepsTabsAndRunsOnce(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// The pasted literal holds a TAB, so its length is 3 only if the TAB reached
+	// the buffer; a TAB eaten by completion leaves 2. The length is computed by
+	// the engine, so the assertion is about what ran, not about what was echoed.
+	s.write("\x1b[200~SELECT 'len=' || length('a\tb') AS n;\x1b[201~")
+	time.Sleep(300 * time.Millisecond)
+	s.write("\r")
+	s.waitFor("len=3", ioTimeout)
+	if strings.Contains(s.output(), "len=2") {
+		t.Errorf("interactive shell: the pasted TAB was dropped:\n%s", s.output())
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_CtrlCDuringQueryLeavesSessionUsable covers the worst shape
+// of the interrupt bug. The prompt holds the terminal in raw mode, so Ctrl-C
+// pressed while a statement runs is not a signal and does not stop the query: it
+// waits in the input buffer. It used to be read as the next line and end the
+// shell, discarding the session once the query finally returned. The query still
+// runs to completion — that part is unchanged — but the session must survive.
+func TestInteractivePTY_CtrlCDuringQueryLeavesSessionUsable(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// A recursive CTE long enough that the interrupt below lands while it runs.
+	s.write("SELECT count(*) AS counted FROM (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 20000000) SELECT x FROM c);\r")
+	time.Sleep(1500 * time.Millisecond)
+	s.write("\x03")
+
+	s.waitFor("20000000", 60*time.Second)
+	s.write("SELECT 'usable_after_interrupt';\r")
+	s.waitFor("usable_after_interrupt", ioTimeout)
+
+	if strings.Contains(s.output(), "interrupted") {
+		t.Errorf("interactive shell: the buffered interrupt was reported as a failure:\n%s", s.output())
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
+
+// TestInteractivePTY_LiteralSpanningLinesKeepsBuffering covers a string literal
+// typed across lines with a ";" inside it. The first Enter used to submit
+// "SELECT 'multi;", which SQLite rejects as an unterminated token.
+func TestInteractivePTY_LiteralSpanningLinesKeepsBuffering(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	s.submitLine("SELECT 'multi;")
+	s.submitLine("line' AS s;")
+	s.waitFor("multi;", ioTimeout)
+	s.waitFor("line", ioTimeout)
+	if strings.Contains(s.output(), "unrecognized token") {
+		t.Errorf("interactive shell: the literal was submitted before it closed:\n%s", s.output())
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}

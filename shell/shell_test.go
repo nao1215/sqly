@@ -1275,6 +1275,13 @@ type fakePromptSession struct {
 	// exhaustErr is returned once results are exhausted. It defaults to io.EOF,
 	// modeling Ctrl-D; set it to prompt.ErrEOF to model a closed input stream.
 	exhaustErr error
+	// runErrs maps a 0-based Run call index to an error returned instead of a
+	// result, so a test can model Ctrl-C (prompt.ErrInterrupted) arriving in the
+	// middle of a session rather than only at its end.
+	runErrs map[int]error
+	// resultIndex is the next entry of results to hand out. It trails runCalls
+	// whenever runErrs answered a call.
+	resultIndex int
 }
 
 func (f *fakePromptSession) AddHistory(history string) {
@@ -1287,15 +1294,22 @@ func (f *fakePromptSession) Close() error {
 }
 
 func (f *fakePromptSession) Run() (string, error) {
-	if f.runCalls >= len(f.results) {
+	call := f.runCalls
+	f.runCalls++
+
+	if err, ok := f.runErrs[call]; ok {
+		return "", err
+	}
+
+	if f.resultIndex >= len(f.results) {
 		if f.exhaustErr != nil {
 			return "", f.exhaustErr
 		}
 		return "", io.EOF
 	}
 
-	result := f.results[f.runCalls]
-	f.runCalls++
+	result := f.results[f.resultIndex]
+	f.resultIndex++
 	return result, nil
 }
 
@@ -1510,6 +1524,167 @@ func TestShellCommunicate_EOFExitsCleanly(t *testing.T) {
 				t.Errorf("prompt close calls = %d, want 1 (session closed on EOF exit)", fakePrompt.closeCalls)
 			}
 		})
+	}
+}
+
+// TestShellCommunicate_CtrlCDiscardsTheLineAndKeepsTheSession covers Ctrl-C at
+// the interactive prompt. It abandons the line being typed, nothing else: the
+// session must still be there for the next query, and the shell must not end
+// with an error. Before this, prompt.ErrInterrupted reached the caller as a
+// failure and the shell exited non-zero, so pressing Ctrl-C to drop a half-typed
+// query — or to give up on a long-running one — ended the session instead.
+func TestShellCommunicate_CtrlCDiscardsTheLineAndKeepsTheSession(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Run 0 is interrupted, run 1 must still be served, run 2 exits.
+	fakePrompt := &fakePromptSession{
+		results: []string{"SELECT 'after_ctrl_c' AS marker;", ".exit"},
+		runErrs: map[int]error{0: prompt.ErrInterrupted},
+	}
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		fakePrompt.initialPrefix = prefix
+		return fakePrompt, nil
+	}
+
+	backupStdout := config.Stdout
+	backupStderr := config.Stderr
+	defer func() {
+		config.Stdout = backupStdout
+		config.Stderr = backupStderr
+	}()
+	var stdout, stderr bytes.Buffer
+	config.Stdout = &stdout
+	config.Stderr = &stderr
+
+	captureOSStdout(t, func() {
+		if err := shell.communicate(context.Background()); err != nil {
+			t.Fatalf("communicate returned %v after Ctrl-C, want a session that continues", err)
+		}
+	})
+
+	if fakePrompt.runCalls != 3 {
+		t.Errorf("prompt run calls = %d, want 3 (interrupt, query, exit)", fakePrompt.runCalls)
+	}
+	if !strings.Contains(stdout.String(), "after_ctrl_c") {
+		t.Errorf("the query typed after Ctrl-C did not run: stdout=%q", stdout.String())
+	}
+	if strings.Contains(stderr.String(), "interrupted") {
+		t.Errorf("stderr reported the interrupt as a failure: %q", stderr.String())
+	}
+}
+
+// TestShellCommunicate_RunsEveryStatementOfOneLine covers a line holding more
+// than one statement, which is what pasting a snippet produces. Every statement
+// runs and every result is printed; the whole line was previously handed to
+// SQLite as one query, which kept only one result and silently dropped the rest.
+func TestShellCommunicate_RunsEveryStatementOfOneLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{
+			name:  "two queries on one line print both results",
+			input: "SELECT 'first_marker' AS a; SELECT 'second_marker' AS b;",
+			want:  []string{"first_marker", "second_marker"},
+		},
+		{
+			name:  "a query after DDL and DML still prints its rows",
+			input: "CREATE TABLE m (a); INSERT INTO m VALUES ('inserted_marker'); SELECT a FROM m;",
+			want:  []string{"inserted_marker"},
+		},
+		{
+			name:  "statements pasted across lines all run",
+			input: "SELECT 'line_one' AS a;\nSELECT 'line_two' AS b;\n",
+			want:  []string{"line_one", "line_two"},
+		},
+		{
+			name:  "a bare semicolon runs nothing and reports no failure",
+			input: ";",
+			want:  nil,
+		},
+		{
+			// Pasting a script that opens with a helper command: the dot line is a
+			// command and the lines after it are SQL, rather than the whole
+			// submission being read as one very long command.
+			name:  "a pasted script mixing a dot command and SQL runs both",
+			want:  []string{"mixed_marker"},
+			input: ".mode table\nSELECT 'mixed_marker' AS a;\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			fakePrompt := &fakePromptSession{results: []string{tt.input, ".exit"}}
+			shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+				fakePrompt.initialPrefix = prefix
+				return fakePrompt, nil
+			}
+
+			backupStdout := config.Stdout
+			defer func() { config.Stdout = backupStdout }()
+			var stdout bytes.Buffer
+			config.Stdout = &stdout
+
+			captureOSStdout(t, func() {
+				if err := shell.communicate(context.Background()); err != nil {
+					t.Fatalf("communicate returned %v, want the line to run", err)
+				}
+			})
+
+			for _, want := range tt.want {
+				if !strings.Contains(stdout.String(), want) {
+					t.Errorf("output is missing %q, so a statement was dropped:\n%s", want, stdout.String())
+				}
+			}
+		})
+	}
+}
+
+// TestShellCommunicate_MultiStatementLineIsOneHistoryEntry keeps the up-arrow
+// honest: history holds the line as it was typed, not the statements it was
+// split into.
+func TestShellCommunicate_MultiStatementLineIsOneHistoryEntry(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	const line = "SELECT 1 AS a; SELECT 2 AS b;"
+	fakePrompt := &fakePromptSession{results: []string{line, ".exit"}}
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		fakePrompt.initialPrefix = prefix
+		return fakePrompt, nil
+	}
+
+	backupStdout := config.Stdout
+	defer func() { config.Stdout = backupStdout }()
+	config.Stdout = &bytes.Buffer{}
+
+	captureOSStdout(t, func() {
+		if err := shell.communicate(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	histories, err := shell.usecases.history.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded := histories.ToStringList()
+	if len(recorded) != 2 || recorded[0] != line {
+		t.Errorf("history = %#v, want the typed line %q recorded once, then %q", recorded, line, ".exit")
 	}
 }
 
@@ -4108,6 +4283,27 @@ func TestSQLInputComplete(t *testing.T) {
 		{"blank continuation line force-submits buffered query", "SELECT 1\n", true},
 		{"blank continuation line with spaces force-submits", "SELECT 1\n   ", true},
 		{"open paren without terminator continues", "SELECT * FROM (", false},
+		// A ";" only ends a statement where SQLite ends one. Inside a literal, a
+		// comment, or a trigger body it is ordinary text, and submitting there
+		// sent SQLite a fragment it could only reject.
+		{"semicolon inside an unclosed string literal continues", "SELECT 'a;", false},
+		{"semicolon inside an unclosed identifier continues", `SELECT "a;`, false},
+		{"closed literal containing a semicolon submits", "SELECT 'a;b';", true},
+		{"doubled quote inside a literal keeps the literal open", "SELECT 'it''s;", false},
+		{"doubled quote inside a closed literal submits", "SELECT 'it''s;';", true},
+		{"statement continued after a literal holding a semicolon", "SELECT 'a;b'", false},
+		{"trailing line comment after the terminator submits", "SELECT 1; -- note", true},
+		{"trailing block comment after the terminator submits", "SELECT 1; /* note */", true},
+		{"unclosed block comment after the terminator continues", "SELECT 1; /* note", false},
+		{"semicolon inside a line comment continues", "SELECT 1 -- ;", false},
+		{"semicolon inside a block comment continues", "SELECT 1 /* ; */", false},
+		{"comment-only line continues", "-- note", false},
+		{"second statement without a terminator continues", "SELECT 1; SELECT 2", false},
+		{"two terminated statements submit", "SELECT 1; SELECT 2;", true},
+		{"bare semicolon submits as an empty statement", ";", true},
+		{"repeated semicolons submit", ";;", true},
+		{"trigger body semicolon continues", "CREATE TRIGGER t AFTER INSERT ON x BEGIN\nSELECT 1;", false},
+		{"trigger closed by END submits", "CREATE TRIGGER t AFTER INSERT ON x BEGIN\nSELECT 1;\nEND;", true},
 	}
 
 	for _, tt := range tests {
