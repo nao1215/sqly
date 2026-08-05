@@ -194,6 +194,17 @@ scenarios:
           stderr:
             not_contains: "download the file first"
 
+  # The path is meant to be pasted, so what a URL spells as %20 has to come back
+  # as the space it stands for.
+  - name: decodes the path it tells the caller to use
+    steps:
+      - run:
+          command: sqly --sql "SELECT 1" "file:///tmp/my%20file.csv"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "and pass /tmp/my file.csv"
+
   # Every other scheme keeps the advice that does apply to it.
   - name: still says to download an input it cannot fetch
     steps:

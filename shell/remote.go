@@ -163,18 +163,27 @@ func localPathFromFileURL(raw string) (string, bool) {
 	if !strings.HasPrefix(strings.ToLower(raw), prefix) {
 		return "", false
 	}
-	rest := raw[len(prefix):]
-	if after, ok := strings.CutPrefix(rest, "/"); ok {
-		// "file:///C:/data.csv" is a Windows path once the separator that stands
-		// for the empty authority is removed; "file:///etc/hostname" is not.
-		if isWindowsDrivePath(after) {
-			return after, true
-		}
-		return "/" + after, true
+	after, ok := strings.CutPrefix(raw[len(prefix):], "/")
+	if !ok {
+		// No third slash: what follows is an authority. Only an empty one is
+		// local, and an empty one leaves nothing here at all.
+		return "", false
 	}
-	// No third slash: what follows is an authority. Only an empty one is local,
-	// and an empty one leaves nothing here at all.
-	return "", false
+	// "file:///C:/data.csv" is a Windows path once the separator that stands for
+	// the empty authority is removed; "file:///etc/hostname" is not.
+	local := "/" + after
+	if isWindowsDrivePath(after) {
+		local = after
+	}
+	// A URL spells a space as %20, and what this returns is a path to paste, so a
+	// percent sequence left in it would name a file that does not exist. A
+	// sequence that is not valid escaping is not a path anyone can be handed, so
+	// it falls back to the general "this scheme is not downloaded" message.
+	decoded, err := url.PathUnescape(local)
+	if err != nil {
+		return "", false
+	}
+	return decoded, true
 }
 
 // isWindowsDrivePath reports whether p starts with a drive letter and a colon,
