@@ -74,21 +74,21 @@ export PATH
 # either pass surfaces; the last successful run's exit status is the script's.
 #
 # The interactive-shell pty specs (e2e/atago/pty.atago.yaml drives sqly's readline
-# REPL over a pty) are split from the rest of the suite. The prompt is re-rendered a
-# beat before its read loop is ready, so a keystroke sent right after can be lost
-# when the pty sessions are starved of CPU by the other scenarios running in
-# parallel. The rest of the suite runs in parallel; the pty specs then run on their
-# own with --parallel 1 so each session gets uncontended CPU, and with extra
-# retries.
+# REPL over a pty) run on their own, serially, so each session has the terminal to
+# itself. Nothing here retries: a lost keystroke is a bug to fix, not a verdict to
+# tolerate.
 #
-# Only the pty pass retries, and only it accepts a flaky verdict. As of atago
-# v0.18.0 a recovered scenario fails the run unless --allow-flaky says the
-# instability is expected, which is exactly the split wanted here: the pty
-# sessions lose keystrokes under CPU starvation and that is known, while the
-# non-pty specs assert fixed output from a subprocess and have no timing to lose.
+# They used to run with five retries and --allow-flaky, because a keystroke sent
+# right after the prompt appeared could be lost when the sessions were starved of
+# CPU. The cause was in the prompt library, not in the timing: measuring the
+# terminal went through go-tty's Size, which asks the terminal for its pixel size
+# by writing an escape sequence and reading the reply back out of the input
+# handle. Every redraw spent up to 100ms in that read and swallowed whatever was
+# typed while it waited. prompt v0.0.14 measures with an ioctl instead, and the
+# suite went from 74 seconds to under one — the seconds were the lost keystrokes.
 #
-# Before that split, one --retry-failed covered the whole suite and quietly
-# extended tolerance to every spec: filesql built an LTSV table's column list by
+# A retry budget hides the next such bug. One --retry-failed once covered the
+# whole suite and did exactly that: filesql built an LTSV table's column list by
 # ranging over a map, so `SELECT *` answered in a different order on every run,
 # and the retries turned that into "flaky, PASSED" instead of a failure.
 PTY_SPEC="$ROOT/e2e/atago/pty.atago.yaml"
@@ -174,11 +174,11 @@ if spec_group_matches_filter $NON_PTY_SPECS; then
 fi
 if spec_group_matches_filter "$PTY_SPEC"; then
 	ran_any=true
-	atago run --ci --parallel 1 --retry-failed 5 --allow-flaky "$@" "$PTY_SPEC"
+	atago run --ci --parallel 1 --retry-failed 0 "$@" "$PTY_SPEC"
 fi
 if [ "$ran_any" = false ]; then
 	# Neither group matched, so nothing was selected; run everything and let atago
-	# report the empty selection. The pty retry count applies because this pass
-	# includes the pty spec.
-	atago run --ci --parallel 1 --retry-failed 5 --allow-flaky "$@" $NON_PTY_SPECS "$PTY_SPEC"
+	# report the empty selection. It runs serially because this pass includes the
+	# pty spec.
+	atago run --ci --parallel 1 --retry-failed 0 "$@" $NON_PTY_SPECS "$PTY_SPEC"
 fi
