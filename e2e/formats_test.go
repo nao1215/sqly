@@ -282,3 +282,53 @@ func TestSmoke_DocumentedOutputFormatExamples(t *testing.T) {
 		}
 	})
 }
+
+// TestSmoke_ParquetExportKeepsValuesSQLCannotParse covers a value that is data
+// to the engine but syntax to the SQL parser. The Parquet export stages the
+// result in a temporary SQLite database, and it used to build that INSERT as SQL
+// text with every value quoted into it. A NUL byte ends a statement as far as
+// SQLite's tokenizer is concerned, so a CSV carrying one — which every other
+// format exports without complaint — failed the export with an "unrecognized
+// token" error naming a token the user never typed.
+func TestSmoke_ParquetExportKeepsValuesSQLCannotParse(t *testing.T) {
+	dir := t.TempDir()
+	// A NUL between two letters, plus an apostrophe and a statement separator:
+	// three things a quoted-into-SQL value gets wrong.
+	source := writeFixture(t, dir, "odd.csv", "id,payload\n1,A\x00B\n2,it's; DROP TABLE t; --\n")
+	out := filepath.Join(dir, "odd.parquet")
+
+	_, stderr, code := run(t, "", "--output-format", "parquet", "--output", out, "--sql", "SELECT * FROM odd", source)
+	if code != 0 {
+		t.Fatalf("parquet export exit code = %d, want 0\nstderr: %s", code, stderr)
+	}
+
+	// Reading it back through sqly is the check that matters: the bytes are
+	// compared as hex so a NUL is visible rather than swallowed by the terminal.
+	got := runQueryAs(t, "reimport", "csv", "SELECT hex(payload) AS h FROM odd ORDER BY id", out)
+	records := parseCSVRecords(t, "reimport", got, ',')
+	if len(records) != 3 {
+		t.Fatalf("reimported %d records (with header), want 3:\n%s", len(records), got)
+	}
+	if want := strings.ToUpper(hexOf("A\x00B")); records[1][0] != want {
+		t.Errorf("row 1 payload = %s, want %s (the NUL byte must survive)", records[1][0], want)
+	}
+	if want := strings.ToUpper(hexOf("it's; DROP TABLE t; --")); records[2][0] != want {
+		t.Errorf("row 2 payload = %s, want %s", records[2][0], want)
+	}
+}
+
+// hexOf renders s the way SQLite's hex() does, so a test can state the bytes it
+// expects without embedding an unreadable literal.
+func hexOf(s string) string {
+	var b strings.Builder
+	for _, c := range []byte(s) {
+		b.WriteString(strconv.FormatInt(int64(c), 16))
+		if c < 16 {
+			// FormatInt drops the leading zero hex() keeps.
+			last := b.String()
+			b.Reset()
+			b.WriteString(last[:len(last)-1] + "0" + last[len(last)-1:])
+		}
+	}
+	return b.String()
+}
