@@ -34,11 +34,12 @@ Choosing a non-SQLite dialect says so once, on stderr:
 Warning: PostgreSQL syntax is translated to SQLite; execution uses SQLite semantics, not PostgreSQL semantics.
 ```
 
-It is printed once per session, not once per statement: at the first statement
-run under a `--dialect` given on the command line, or at the moment `.dialect`
-switches to a non-SQLite dialect in the shell. A run that translates nothing —
-a script of only dot-commands — says nothing, and in the shell the warning
-arrives with the first query. Switching back to
+It is printed once per session, not once per statement, and at the moment the
+choice is made: `.dialect` says it as it switches, and a `--dialect` given on
+the command line says it at the first statement that runs under it. So a
+`--script-file` of nothing but dot-commands, which translates no SQL, says
+nothing, and the shell's banner is no longer preceded by a warning about a query
+nobody has typed yet. Switching back to
 SQLite and out again does not repeat it, and `sqlite` never triggers it. It goes
 to stderr and never to stdout, so JSON, NDJSON, CSV, TSV, and the `--inspect`
 report are unaffected and stay parseable. `--help`, `--version`, and a rejected

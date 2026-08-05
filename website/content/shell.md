@@ -113,8 +113,7 @@ EOF
 
 A failing statement stops the script and exits non-zero, naming the statement and
 its line. `--sql` carries one statement, so its failure names neither: there is
-no line to return to and no run to stop, and the report is the one line about
-what went wrong.
+no line to return to and no run to stop.
 
 A helper command must start its own line; `SELECT 1; .save ./out` is rejected,
 because reading it as two things depends on knowing where the statement ended,
