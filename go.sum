@@ -80,8 +80,6 @@ github.com/nao1215/fileparser v0.5.2 h1:IXhH5m3UJf/TMidfTcVen8CSlZ4KEFEgBz6+2o+5
 github.com/nao1215/fileparser v0.5.2/go.mod h1:Jb16QbtYfgzQ2BR+UOVNSa1WeKMP2o+xnwBYFUNAG2Y=
 github.com/nao1215/filesql v0.34.0 h1:Z2u2jU+q+d3Fc4V3rNsurxIm5xiKoc47vGBAqRzyUX8=
 github.com/nao1215/filesql v0.34.0/go.mod h1:eL54cR7WUkLU8uskeLy5xFCp3PywFyDghAfGhCJU6R4=
-github.com/nao1215/prompt v0.0.14 h1:/Lrnw0z9juWaXRJlqF5RleE4+llJABiPksBxdn1j2QE=
-github.com/nao1215/prompt v0.0.14/go.mod h1:jcU0SPfCTCBHDQ4Uu0n7ZLrV/+hGXVJ64YRV2aKnqxA=
 github.com/nao1215/prompt v0.0.15 h1:1lhKHEmCdJjPNg6n7Wic3pg7LjnMOF1hQiNI/yiIlkE=
 github.com/nao1215/prompt v0.0.15/go.mod h1:jcU0SPfCTCBHDQ4Uu0n7ZLrV/+hGXVJ64YRV2aKnqxA=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=

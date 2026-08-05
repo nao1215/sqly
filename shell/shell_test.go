@@ -1607,6 +1607,14 @@ func TestShellCommunicate_RunsEveryStatementOfOneLine(t *testing.T) {
 			input: ";",
 			want:  nil,
 		},
+		{
+			// Pasting a script that opens with a helper command: the dot line is a
+			// command and the lines after it are SQL, rather than the whole
+			// submission being read as one very long command.
+			name:  "a pasted script mixing a dot command and SQL runs both",
+			want:  []string{"mixed_marker"},
+			input: ".mode table\nSELECT 'mixed_marker' AS a;\n",
+		},
 	}
 
 	for _, tt := range tests {

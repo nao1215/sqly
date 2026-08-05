@@ -1170,9 +1170,11 @@ func (s *Shell) execInteractive(ctx context.Context, input string) error {
 	}
 	s.recordHistory(ctx, req)
 
-	// A helper command is a whole line by definition and is never SQL, so it goes
-	// straight to the dispatcher instead of through the statement scanner.
-	if looksLikeCommand(req) {
+	// A helper command is one line by definition and is never SQL, so a single
+	// line beginning with "." goes straight to the dispatcher rather than through
+	// the statement scanner. A submission of several lines is parsed even when it
+	// opens with one, because the lines after it are their own elements.
+	if looksLikeCommand(req) && !strings.ContainsAny(req, "\r\n") {
 		return s.dispatch(ctx, req)
 	}
 
