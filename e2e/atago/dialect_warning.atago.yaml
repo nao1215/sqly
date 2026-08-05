@@ -208,12 +208,15 @@ scenarios:
             line: 1
             equals: "id,name"
 
+  # --inspect runs no user SQL, so it says nothing about a dialect. An explicit
+  # --dialect is refused before it gets this far (e2e/atago/v1_0_bugs.atago.yaml),
+  # which leaves the default.
   - name: keeps the warning out of the --inspect report
     env: *hist
     steps:
       - fixture: *users
       - run:
-          command: sqly --dialect postgresql --inspect users.csv
+          command: sqly --inspect users.csv
       - assert:
           exit_code: 0
           stdout:

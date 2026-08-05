@@ -420,13 +420,15 @@ func TestShellExec(t *testing.T) {
 		}
 		defer cleanup()
 
-		// A missing mode name is a command error so batch mode fails fast.
-		err = shell.exec(context.Background(), ".mode")
-		if err == nil {
-			t.Fatal(".mode without a mode name returned nil, want an error")
-		}
-		if !strings.Contains(err.Error(), ".mode requires a mode name") {
-			t.Errorf("error = %q, want it to mention the missing mode name", err.Error())
+		// Asking is not a mistake: .mode alone reports the mode in effect and
+		// succeeds, the way .dialect and .row-mismatch do.
+		stderr := captureStderr(t, func() {
+			if err := shell.exec(context.Background(), ".mode"); err != nil {
+				t.Fatalf(".mode without a mode name = %v, want the current mode", err)
+			}
+		})
+		if !strings.Contains(stderr, "current output mode: table") {
+			t.Errorf("stderr = %q, want it to report the current mode", stderr)
 		}
 	})
 
@@ -2429,7 +2431,6 @@ func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
 		{"schema", func() error { return shell.commands.schemaCommand(context.Background(), shell, nil) }, ".schema requires"},
 		{"header", func() error { return shell.commands.headerCommand(context.Background(), shell, nil) }, ".header requires"},
 		{"describe", func() error { return shell.commands.describeCommand(context.Background(), shell, nil) }, ".describe requires"},
-		{"mode", func() error { return shell.commands.modeCommand(context.Background(), shell, nil) }, ".mode requires"},
 		{"dump", func() error { return shell.commands.dumpCommand(context.Background(), shell, nil) }, ".dump requires"},
 		{"save", func() error { return shell.commands.saveCommand(context.Background(), shell, nil) }, ".save requires"},
 		{"import", func() error { return shell.commands.importCommand(context.Background(), shell, nil) }, ".import requires"},

@@ -51,6 +51,15 @@ func (s *Shell) runScriptElements(ctx context.Context, elements []scriptElement)
 			if errors.Is(runErr, ErrExitSqly) {
 				break
 			}
+			// --sql is one statement, so there is no position to report and no run
+			// to stop: "batch statement 1 failed at line 1" and "batch stopped"
+			// describe a script the user did not write, and the statement text
+			// already arrives once inside the error. The failure is returned bare,
+			// and main prints it.
+			if s.plan.mode == modeInlineSQL {
+				failErr = runErr
+				break
+			}
 			loc := fmt.Sprintf("line %d", element.startLine)
 			if element.endLine > element.startLine {
 				loc = fmt.Sprintf("lines %d-%d", element.startLine, element.endLine)

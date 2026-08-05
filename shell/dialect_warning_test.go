@@ -265,12 +265,14 @@ func TestDialectWarning_MachineReadableStdoutStaysParseable(t *testing.T) {
 }
 
 // TestDialectWarning_InspectIsSilent keeps the warning to the runs where a
-// dialect means something. --inspect never translates user SQL.
+// dialect means something. --inspect never translates user SQL, so it says
+// nothing about the dialect it did not use. An explicit --dialect is rejected
+// before this point (see validateInspectFlags), which leaves the default.
 func TestDialectWarning_InspectIsSilent(t *testing.T) {
 	dir := t.TempDir()
 	csv := writeCSV(t, dir, "x.csv", "a\n1\n")
 
-	stdout, stderr := runDialect(t, "", "sqly", "--dialect", "postgresql", "--inspect", csv)
+	stdout, stderr := runDialect(t, "", "sqly", "--inspect", csv)
 
 	if got := countDialectWarnings(stderr); got != 0 {
 		t.Errorf("--inspect printed %d dialect warning(s), want 0:\n%s", got, stderr)
@@ -358,19 +360,23 @@ func TestDialectWarning_UsesNoPackageState(t *testing.T) {
 	}
 }
 
-func TestDialectDisplayName(t *testing.T) {
-	for _, tc := range []struct {
-		in   dialect.Dialect
-		want string
-	}{
-		{dialect.SQLite, "SQLite"},
-		{"mysql", "MySQL"},
-		{"postgresql", "PostgreSQL"},
-		{"googlesql", "GoogleSQL"},
-		{"something-new", "something-new"},
-	} {
-		if got := dialectDisplayName(tc.in); got != tc.want {
-			t.Errorf("dialectDisplayName(%q) = %q, want %q", tc.in, got, tc.want)
+// TestDialectWarning_NamesEveryNonSQLiteDialect is the drift guard for the
+// warning's wording: a dialect added to filesql must be announced by the name
+// its own project uses, not by its lowercase wire value.
+func TestDialectWarning_NamesEveryNonSQLiteDialect(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "x.csv", "a\n1\n")
+
+	for _, d := range dialect.Dialects() {
+		if d == dialect.SQLite {
+			continue
 		}
+		t.Run(string(d), func(t *testing.T) {
+			_, stderr := runDialect(t, "",
+				"sqly", "--dialect", string(d), "--output-format", "csv", "--sql", "SELECT * FROM x", csv)
+			if !strings.Contains(stderr, d.DisplayName()) {
+				t.Errorf("warning for %q = %q, want it to name %q", d, stderr, d.DisplayName())
+			}
+		})
 	}
 }

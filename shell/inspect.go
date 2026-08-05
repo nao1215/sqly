@@ -108,6 +108,11 @@ func (s *Shell) validateInspectFlags() error {
 	// --output-format csv is, and only the default nobody asked for is silent.
 	case s.argument.IsExplicit("output-format"):
 		return &invocationError{Err: fmt.Errorf("--inspect cannot be combined with --output-format %s", outputModeFlagName(s.argument.Output))}
+	// --dialect translates user SQL, and --inspect runs none: it reads the
+	// imported tables and prints their shape. The default nobody typed stays
+	// silent, for the same reason --output-format's does.
+	case s.argument.IsExplicit("dialect"):
+		return &invocationError{Err: fmt.Errorf("--inspect cannot be combined with --dialect %s", s.argument.Dialect)}
 	}
 	return nil
 }

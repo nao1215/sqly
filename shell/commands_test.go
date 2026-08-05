@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/interactor/mock"
@@ -39,6 +40,7 @@ func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	history := mock.NewMockHistoryUsecase(ctrl)
 	query := mock.NewMockQueryUsecase(ctrl)
+	query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
 
 	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
 		model.Record([]string{"1"}),
@@ -78,6 +80,7 @@ func TestExec_HistoryWriteDoesNotScanHistory(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	history := mock.NewMockHistoryUsecase(ctrl)
 	query := mock.NewMockQueryUsecase(ctrl)
+	query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
 
 	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
 		model.Record([]string{"1"}),
@@ -99,6 +102,86 @@ func TestExec_HistoryWriteDoesNotScanHistory(t *testing.T) {
 
 	if !s.historyEnabled {
 		t.Error("historyEnabled should remain true after a successful history write")
+	}
+}
+
+func TestExec_SQLReachesTheEngineWithQuotesInItsComments(t *testing.T) {
+	// Shell quoting rules belong to the dot-commands. A SQL statement is not a
+	// command line: an apostrophe inside a comment is text, and refusing the
+	// statement for it means valid SQL never reaches the engine.
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"apostrophe in a line comment", "SELECT 1 AS x -- don't panic"},
+		{"apostrophe in a block comment", "SELECT 1 AS x /* it's fine */"},
+		{"double quote in a line comment", `SELECT 1 AS x -- say "hi`},
+		{"apostrophe in a block comment spanning lines", "SELECT 1 AS x\n/* it's\n   fine */"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			query := mock.NewMockQueryUsecase(ctrl)
+			query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
+			table := model.NewTable("t", model.NewHeader([]string{"x"}), []model.Record{
+				model.Record([]string{"1"}),
+			})
+			query.EXPECT().ExecSQL(gomock.Any(), tt.input).Return(table, int64(0), nil)
+
+			s := newBoundaryTestShell(t, Usecases{query: query})
+			_ = captureStdout(t, func() {
+				if err := s.exec(context.Background(), tt.input); err != nil {
+					t.Fatalf("exec(%q) = %v, want the statement to run", tt.input, err)
+				}
+			})
+		})
+	}
+}
+
+func TestExec_DotCommandQuotingIsStillParsed(t *testing.T) {
+	// The other half of the same rule: a line that starts with "." is a command
+	// line, so its quoting is parsed and an unterminated quote is an error.
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{"unterminated single quote", ".import 'oops", "unterminated single quote in command"},
+		{"unterminated double quote", `.import "oops`, "unterminated double quote in command"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newBoundaryTestShell(t, Usecases{})
+			err := s.exec(context.Background(), tt.input)
+			if err == nil {
+				t.Fatalf("exec(%q) = nil, want %q", tt.input, tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("exec(%q) = %v, want it to mention %q", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestExec_RecordsHistoryForAnInputItCannotParse(t *testing.T) {
+	// History is what the up-arrow edits. A line rejected before it ran is the
+	// one most worth recalling, so the record happens before the parse rather
+	// than after it.
+	ctrl := gomock.NewController(t)
+	history := mock.NewMockHistoryUsecase(ctrl)
+	const input = ".import 'oops"
+	history.EXPECT().Create(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, h model.History) error {
+			if h.Request != input {
+				t.Errorf("history recorded %q, want %q", h.Request, input)
+			}
+			return nil
+		})
+
+	s := newBoundaryTestShell(t, Usecases{history: history})
+	s.historyEnabled = true
+	if err := s.exec(context.Background(), input); err == nil {
+		t.Fatal("exec accepted an unterminated quote")
 	}
 }
 
@@ -629,6 +712,7 @@ func TestShell_execSQL_dependsOnQueryUsecase(t *testing.T) {
 	t.Run("DELETE prints affected row count", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		query := mock.NewMockQueryUsecase(ctrl)
+		query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
 		query.EXPECT().ExecSQL(gomock.Any(), "DELETE FROM users").Return(nil, int64(3), nil)
 
 		s := &Shell{usecases: Usecases{query: query}}
@@ -646,6 +730,7 @@ func TestShell_execSQL_dependsOnQueryUsecase(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		wantErr := errors.New("boom")
 		query := mock.NewMockQueryUsecase(ctrl)
+		query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
 		query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(nil, int64(0), wantErr)
 
 		s := &Shell{usecases: Usecases{query: query}}

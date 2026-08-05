@@ -21,6 +21,9 @@ sqly:~/data(table)$ .dialect
 current dialect: mysql (available: sqlite, mysql, postgresql, googlesql)
 ```
 
+Both lines go to stderr, so a script that switches dialect still writes only its
+rows to stdout.
+
 Loading a file always uses SQLite. Only the query text is translated.
 
 ## This is translation, not emulation
@@ -31,13 +34,17 @@ Choosing a non-SQLite dialect says so once, on stderr:
 Warning: PostgreSQL syntax is translated to SQLite; execution uses SQLite semantics, not PostgreSQL semantics.
 ```
 
-It is printed once per session, not once per statement: on the first run of user
-SQL for a `--dialect` given on the command line, or at the moment `.dialect`
-switches to a non-SQLite dialect in the shell. Switching back to SQLite and out
-again does not repeat it, and `sqlite` never triggers it. It goes to stderr and
-never to stdout, so JSON, NDJSON, CSV, TSV, and the `--inspect` report are
-unaffected and stay parseable. `--help`, `--version`, a rejected command line,
-and `--inspect` say nothing about a dialect they do not use.
+It is printed once per session, not once per statement, and at the moment the
+choice is made: `.dialect` says it as it switches, and a `--dialect` given on
+the command line says it at the first statement that runs under it. So
+`--dialect mysql` with a `--script-file` of nothing but `.tables` says nothing,
+because no statement runs under it, and the shell's banner is no longer preceded
+by a warning about a query nobody has typed yet. Switching back to
+SQLite and out again does not repeat it, and `sqlite` never triggers it. It goes
+to stderr and never to stdout, so JSON, NDJSON, CSV, TSV, and the `--inspect`
+report are unaffected and stay parseable. `--help`, `--version`, and a rejected
+command line say nothing about a dialect they do not use, and `--inspect` runs no
+user SQL: it refuses an explicit `--dialect` rather than discarding it.
 
 The warning is the short form of what this section says: sqly rewrites the
 *syntax* and then runs the result on SQLite. It does not emulate the source
@@ -82,8 +89,12 @@ A construct with no SQLite equivalent fails with an error that names it, rather 
 
 ```shell
 $ sqly --dialect postgresql --sql "SELECT DISTINCT ON (g) g, v FROM t" t.csv
+Warning: PostgreSQL syntax is translated to SQLite; execution uses SQLite semantics, not PostgreSQL semantics.
 translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported: SELECT DISTINCT ON (g) g, v FROM t
 ```
+
+That output is asserted against the binary by
+[`e2e/atago/v1_0_bugs.atago.yaml`](https://github.com/nao1215/sqly/blob/main/e2e/atago/v1_0_bugs.atago.yaml).
 
 | Dialect | Rejected |
 |:--|:--|

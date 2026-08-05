@@ -3,7 +3,6 @@ package shell
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/nao1215/filesql/dialect"
 	"github.com/nao1215/sqly/config"
@@ -18,8 +17,7 @@ import (
 // --sql/--sql-file/batch) are translated.
 func (c CommandList) dialectCommand(_ context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		fmt.Fprintf(config.Stdout, "current dialect: %s (available: %s)\n",
-			s.usecases.query.Dialect(), strings.Join(dialectNames(), ", "))
+		printSessionSetting(settingDialect, string(s.usecases.query.Dialect()), config.DialectNameList())
 		return nil
 	}
 	if len(argv) > 1 {
@@ -28,49 +26,16 @@ func (c CommandList) dialectCommand(_ context.Context, s *Shell, argv []string) 
 
 	d, err := dialect.Parse(argv[0])
 	if err != nil {
-		return fmt.Errorf("unknown SQL dialect %q (available: %s)", argv[0], strings.Join(dialectNames(), ", "))
+		return fmt.Errorf("unknown SQL dialect %q (available: %s)", argv[0], config.DialectNameList())
 	}
 	s.usecases.query.SetDialect(d)
-	fmt.Fprintf(config.Stdout, "dialect set to %s\n", d)
+	fmt.Fprintf(config.Stderr, "dialect set to %s\n", d)
 	// Say what the choice means, at the moment it is made rather than at the
 	// moment it bites. The switch itself is the answer to "why did my query
 	// behave like SQLite?", and by the time a result looks wrong the connection
 	// between the two is gone.
 	s.warnDialectTranslationOnce(d)
 	return nil
-}
-
-// The dialect names, in both spellings each is used in. The wire value is a
-// lowercase identifier, which is right for parsing a flag and wrong in a
-// sentence; the display name is how the project itself spells it. Both are named
-// here so the flag, the completion list, and the warning cannot drift apart.
-const (
-	dialectMySQL      dialect.Dialect = "mysql"
-	dialectPostgreSQL dialect.Dialect = "postgresql"
-	dialectGoogleSQL  dialect.Dialect = "googlesql"
-
-	displaySQLite     = "SQLite"
-	displayMySQL      = "MySQL"
-	displayPostgreSQL = "PostgreSQL"
-	displayGoogleSQL  = "GoogleSQL"
-)
-
-// dialectDisplayNames spells each dialect the way its own project does, for the
-// one message a user reads about it.
-var dialectDisplayNames = map[dialect.Dialect]string{
-	dialect.SQLite:    displaySQLite,
-	dialectMySQL:      displayMySQL,
-	dialectPostgreSQL: displayPostgreSQL,
-	dialectGoogleSQL:  displayGoogleSQL,
-}
-
-// dialectDisplayName returns the human spelling of a dialect, falling back to
-// the wire value so a dialect added upstream still reads sensibly.
-func dialectDisplayName(d dialect.Dialect) string {
-	if name, ok := dialectDisplayNames[d]; ok {
-		return name
-	}
-	return string(d)
 }
 
 // warnDialectTranslationOnce tells the user, on stderr and at most once per
@@ -97,19 +62,10 @@ func (s *Shell) warnDialectTranslationOnce(d dialect.Dialect) {
 		return
 	}
 	s.dialectWarned = true
-	name := dialectDisplayName(d)
+	// The spelling comes from filesql, which owns the dialect: a dialect added
+	// there arrives already knowing how its own project writes its name.
+	name := d.DisplayName()
 	fmt.Fprintf(config.Stderr,
 		"Warning: %s syntax is translated to SQLite; execution uses SQLite semantics, not %s semantics.\n",
 		name, name)
-}
-
-// dialectNames returns the built-in dialect names in a stable order for help and
-// error messages.
-func dialectNames() []string {
-	ds := dialect.Dialects()
-	names := make([]string, 0, len(ds))
-	for _, d := range ds {
-		names = append(names, string(d))
-	}
-	return names
 }

@@ -96,17 +96,20 @@ scenarios:
           stderr:
             contains: "Change row-mismatch policy from error to pad"
 
-  - name: .row-mismatch with no argument reports usage and fails the batch
+  # .row-mismatch alone reports the policy in effect and succeeds, the way
+  # .mode and .dialect do. A policy name that is wrong is still rejected.
+  - name: .row-mismatch with no argument reports the current policy
     steps:
       - run:
           command: sqly
           stdin: ".row-mismatch\n"
       - assert:
-          exit_code: 1
+          exit_code: 0
+          stdout:
+            equals: ""
+      - assert:
           stderr:
-            contains:
-              - ".row-mismatch requires a policy name"
-              - "current policy=error"
+            contains: "current row-mismatch policy: error (available: error, skip, pad)"
 
   # The policy only applies to delimited text (CSV/TSV). The scenarios below pin
   # down that it is a no-op for every other format: LTSV, JSON, JSONL, Parquet,

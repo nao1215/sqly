@@ -1832,3 +1832,89 @@ func TestImportCompletionAbsolutePathThenImportSucceeds(t *testing.T) {
 		t.Errorf("imported tables = %v, want to include %q", names, "actors")
 	}
 }
+
+// TestArgumentCompletionIsCommandAware pins that a command's argument is
+// completed against that command's values and nothing else. Every command's
+// argument used to be completed against everything sqly knows: ".dialect "
+// offered fifty-five candidates, ".dialect m" answered "markdown" as well as
+// "mysql", ".mode m" answered "mysql" as well as "markdown", and
+// ".row-mismatch s" answered SELECT and SET but never "skip".
+func TestArgumentCompletionIsCommandAware(t *testing.T) {
+	// Note: cannot use t.Parallel() with t.Chdir().
+	tmpDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Cleanup(func() { t.Chdir(orig) })
+
+	if err := os.WriteFile("sample.csv", []byte("id,name\n1,Alice\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, cleanup, shellErr := newShell(t, []string{"sqly"})
+	if shellErr != nil {
+		t.Fatal(shellErr)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{"sample.csv"}); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{".dialect offers every dialect and nothing else", ".dialect ", []string{"sqlite", "mysql", "postgresql", "googlesql"}},
+		{".dialect m narrows to the dialect, not the output format", ".dialect m", []string{"mysql"}},
+		{".mode offers every output format and nothing else", ".mode ", []string{"table", "vertical", "csv", "tsv", "ltsv", "json", "jsonl", "markdown", "excel", "parquet"}},
+		{".mode m narrows to the format, not the dialect", ".mode m", []string{"markdown"}},
+		{".row-mismatch offers its three policies", ".row-mismatch ", []string{"error", "skip", "pad"}},
+		{".row-mismatch s reaches skip", ".row-mismatch s", []string{"skip"}},
+		{".header offers table names only", ".header ", []string{"sample"}},
+		{".schema offers table names only", ".schema ", []string{"sample"}},
+		{".describe offers table names only", ".describe ", []string{"sample"}},
+		{".dump names a table first", ".dump ", []string{"sample"}},
+		{".pwd takes no argument", ".pwd ", nil},
+		{".tables takes no argument", ".tables ", nil},
+		{".clear takes no argument", ".clear ", nil},
+		{".exit takes no argument", ".exit ", nil},
+		{".help takes no argument", ".help ", nil},
+		{".dialect takes one argument only", ".dialect mysql ", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := completionTexts(shell.getCompletions(context.Background(), tt.input))
+			if len(got) == 0 {
+				got = nil
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("completions for %q = %v, want exactly %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCompletionOrderIsDeterministic pins the candidate order. The helper
+// commands live in a map, and ranging over it directly reshuffled the list on
+// every keystroke: ".cd" led one call and trailed the next, in one process.
+func TestCompletionOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	for _, input := range []string{"", ".", ".d", "SELECT "} {
+		first := completionTexts(shell.getCompletions(context.Background(), input))
+		for i := range 20 {
+			got := completionTexts(shell.getCompletions(context.Background(), input))
+			if !slices.Equal(got, first) {
+				t.Fatalf("completion %d for %q reordered:\n got %v\nwant %v", i+2, input, got, first)
+			}
+		}
+	}
+}

@@ -116,14 +116,17 @@ scenarios:
           stdout:
             contains: sqly_e2e_space
 
-  - name: .mode fails on a missing mode name but still lists the modes
+  - name: .mode with no mode name lists the modes on stderr
     steps:
       - fixture: *user
       - run:
           command: sqly user.csv
           stdin: ".mode\n"
       - assert:
-          exit_code: 1
+          exit_code: 0
+          stdout:
+            equals: ""
+      - assert:
           stderr:
             contains:
               - json

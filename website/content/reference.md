@@ -353,6 +353,9 @@ A format a person reads carries the count with everything else they are
 watching. A format a program parses keeps stdout to data alone, so a status line
 there would have to be skipped by every consumer; it goes to stderr instead.
 
+The session settings — `.mode`, `.dialect`, `.row-mismatch` — answer on stderr
+in every format, for the same reason: a setting is not data.
+
 ### What `--output` guarantees
 
 The result is written to a temporary file beside the destination and moved into
@@ -434,10 +437,13 @@ when it has been handed a file nobody has read yet — an agent, a wrapper, a CI
 job. "Tell me what this is" must not answer with the contents.
 
 `--inspect` prints a report instead of running a query, so it is rejected together
-with `--sql`, `--sql-file`, `--output`, and `--output-format`: each of those asks
-for a different action or a different shape, and honoring one silently would mean
-ignoring the other. `--inspect-sample` without `--inspect` is rejected too, as is
-a negative count; both exit `2` before anything is read.
+with `--sql`, `--sql-file`, `--output`, `--output-format`, and `--dialect`: each
+of those asks for a different action, a different shape, or a translation of SQL
+that `--inspect` never runs, and honoring one silently would mean ignoring the
+other. A flag left at its default is not rejected, so `sqly --inspect data.csv`
+is unaffected.
+`--inspect-sample` without `--inspect` is rejected too, as is a negative count;
+both exit `2` before anything is read.
 
 The report is one JSON document on stdout and nothing else, so it can be piped
 straight into `jq` or a program. Import progress and warnings go to stderr, and a

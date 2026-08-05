@@ -372,10 +372,17 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
+            contains: "Alice"
+      - assert:
+          stdout:
+            not_contains: "dialect"
+      # Both lines are quoted verbatim by website/content/dialects.md, and
+      # docs_drift_test.go requires the page and this file to hold the same text.
+      - assert:
+          stderr:
             contains:
               - "dialect set to mysql"
-              - "Alice"
-              - "current dialect: mysql"
+              - "current dialect: mysql (available: sqlite, mysql, postgresql, googlesql)"
 
   - name: "batch .dialect applies to later stdin SQL statements"
     description: "The non-TTY batch reader must carry a .dialect change forward to the next SQL statement in the same stdin script."
@@ -390,9 +397,10 @@ scenarios:
       - assert:
           exit_code: 0
           stdout:
-            contains:
-              - "dialect set to postgresql"
-              - "Alice"
+            contains: "Alice"
+      - assert:
+          stderr:
+            contains: "dialect set to postgresql"
 
   - name: "mysql --sql-file translates a multiline query file"
     description: "Covers the --sql-file path under a non-SQLite dialect, so multiline script parsing and MySQL rewriting are exercised together."

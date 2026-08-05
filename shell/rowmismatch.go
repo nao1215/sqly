@@ -3,6 +3,7 @@ package shell
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
@@ -14,18 +15,12 @@ import (
 // used by subsequent .import commands.
 func (c CommandList) rowMismatchCommand(_ context.Context, s *Shell, argv []string) error {
 	if len(argv) == 0 {
-		// A missing policy name is a command error, not a no-op, so a batch script
-		// that meant ".row-mismatch pad" fails visibly instead of exiting 0 under the
-		// wrong policy. The current policy and the list ride on the error path, so an
-		// interactive user still sees them (on stderr).
-		return fmt.Errorf(".row-mismatch requires a policy name\n"+
-			"[Usage]\n"+
-			"  .row-mismatch POLICY   ※ applies to CSV/TSV only; current policy=%s\n"+
-			"[Policy list]\n"+
-			"  error ※ fail the import when a row's field count differs from the header (default)\n"+
-			"  skip ※ drop such rows and import the rest\n"+
-			"  pad ※ pad short rows with empty values; fail on long rows",
-			s.state.rowMismatch)
+		// Reporting the policy is the answer to the question ".row-mismatch" asks.
+		// See sessionsetting.go for why this is not an error and why it is on
+		// stderr.
+		printSessionSetting(settingRowMismatch, s.state.rowMismatch.String(),
+			strings.Join(model.RowMismatchPolicyNames, ", "))
+		return nil
 	}
 	if len(argv) > 1 {
 		return fmt.Errorf(".row-mismatch accepts a single policy name, got %d arguments", len(argv))

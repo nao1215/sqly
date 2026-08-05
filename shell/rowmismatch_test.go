@@ -41,7 +41,6 @@ func TestCommandList_rowMismatchCommand_Errors(t *testing.T) {
 		name string
 		argv []string
 	}{
-		{name: "no argument reports usage as an error", argv: nil},
 		{name: "unknown policy is rejected", argv: []string{"keep"}},
 		{name: "more than one argument is rejected", argv: []string{"skip", "pad"}},
 	}

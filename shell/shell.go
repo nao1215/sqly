@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -358,15 +359,6 @@ func (s *Shell) Run(ctx context.Context) error {
 	// onto an empty database while claiming the files were read.
 	if err := s.init(ctx); err != nil {
 		return err
-	}
-
-	// A non-SQLite dialect is announced once, here: after the run has proved it
-	// will execute user SQL, and before the first statement of it runs or the
-	// prompt opens. --help, --version, a rejected command line, and --inspect
-	// never reach this point, so none of them says anything about a dialect they
-	// do not use. See warnDialectTranslationOnce.
-	if s.plan.mode != modeInspect {
-		s.warnDialectTranslationOnce(s.usecases.query.Dialect())
 	}
 
 	switch s.plan.mode {
@@ -895,6 +887,11 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 				return keepDirsOnly(s.getFilePathCompletions(currentWord), dirsOnly)
 			}
 		}
+		// The commands whose argument is a value rather than a path: the completion
+		// offers that command's values and nothing else. See argumentCompletions.
+		if suggestions, ok := s.argumentCompletions(ctx, completed); ok {
+			return filterHasPrefix(suggestions, currentWord)
+		}
 	}
 
 	// Check if we're dealing with a file path (contains / or \ or starts with common path patterns)
@@ -997,28 +994,13 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "LIMIT", Description: "SQL: upper Limit of records"},
 		{Text: "OFFSET", Description: "SQL: identify the starting point to return result rows"},
 		{Text: "CASE", Description: "SQL: branching by conditions"},
-		{Text: string(dialect.SQLite), Description: "sqly command argument: SQLite query dialect (default)"},
-		{Text: string(dialectMySQL), Description: "sqly command argument: MySQL query dialect"},
-		{Text: string(dialectPostgreSQL), Description: "sqly command argument: PostgreSQL query dialect"},
-		{Text: string(dialectGoogleSQL), Description: "sqly command argument: GoogleSQL query dialect"},
 	}
 
-	// Every output format is offered, read from the same registry --output-format
-	// and .mode resolve against, so a format cannot exist for one of the three and
-	// not the others.
-	for _, m := range model.PrintModes() {
-		suggest = append(suggest, Suggest{
-			Text:        m.String(),
-			Description: "sqly command argument: " + outputFormatDescription(m),
-		})
-	}
-
-	for _, v := range s.commands {
-		suggest = append(suggest, Suggest{
-			Text:        v.name,
-			Description: "sqly command: " + v.description,
-		})
-	}
+	// A command's argument values — dialects, output formats, row-mismatch
+	// policies — are offered at that command's argument position and nowhere
+	// else; see argumentCompletions. Listing them here made ".dialect m" answer
+	// "mysql, markdown" and ".mode m" the same pair, each half wrong.
+	suggest = append(suggest, s.commandSuggestions()...)
 
 	// A line still typing a dot-command (no argument yet) never references tables
 	// or columns, so skip the table/column metadata entirely for it.
@@ -1121,16 +1103,20 @@ func (s *Shell) invalidateCompletionCache() {
 }
 
 // exec execute sqly helper command or sql query.
+//
+// Only a dot-command line is split by shell quoting rules. SQL is handed to the
+// engine as typed: shell quoting is not SQL quoting, and running the two
+// together made a comment's apostrophe — "SELECT 1 -- don't panic" — an
+// unterminated quote that stopped a valid statement before it reached SQLite.
 func (s *Shell) exec(ctx context.Context, request string) error {
 	req := strings.TrimSpace(request)
-	argv, err := splitArgs(req)
-	if err != nil {
-		return err
-	}
-	if len(argv) == 0 || argv[0] == "" {
+	if req == "" {
 		return nil // user only input enter, space tab
 	}
 
+	// History is recorded before the line is parsed, so an input rejected for its
+	// syntax is still recallable with the up-arrow.
+	//
 	// Skip history persistence when it is disabled so a read-only history DB
 	// cannot fail the requested command. History is best-effort: a runtime
 	// failure after startup disables history for the rest of the session and
@@ -1141,18 +1127,21 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 		}
 	}
 
-	if s.commands.hasCmd(argv[0]) {
-		return s.commands[argv[0]].execute(ctx, s, argv[1:])
-	}
-
 	if looksLikeCommand(req) {
+		argv, err := splitArgs(req)
+		if err != nil {
+			return err
+		}
+		if len(argv) == 0 || argv[0] == "" {
+			return nil
+		}
+		if s.commands.hasCmd(argv[0]) {
+			return s.commands[argv[0]].execute(ctx, s, argv[1:])
+		}
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 
-	if err := s.execSQL(ctx, req); err != nil {
-		return err
-	}
-	return nil
+	return s.execSQL(ctx, req)
 }
 
 // runScript runs a multi-statement script that prints to stdout.
@@ -1233,6 +1222,12 @@ func (s *Shell) runSQLFileToOutput(ctx context.Context, elements []scriptElement
 
 // execSQL execute SQL query.
 func (s *Shell) execSQL(ctx context.Context, req string) error {
+	// A non-SQLite dialect is announced here, at the first statement it applies
+	// to, rather than at startup. Announced at startup it reached runs that never
+	// translate anything — a script of nothing but dot-commands — and in the
+	// interactive shell it printed above sqly's own banner. See
+	// warnDialectTranslationOnce.
+	s.warnDialectTranslationOnce(s.usecases.query.Dialect())
 	req = strings.TrimRight(req, ";")
 	table, affectedRows, err := s.usecases.query.ExecSQL(ctx, req)
 	if err != nil {
@@ -1665,6 +1660,163 @@ func pathCommandSpec(cmd string) (pathArg int, multi, dirsOnly, ok bool) {
 		return 2, false, false, true
 	}
 	return 0, false, false, false
+}
+
+// argumentValues names what a helper command takes as its first argument, for
+// the commands whose argument is a value rather than a filesystem path.
+type argumentValues int
+
+const (
+	// argNone is a command that takes no argument at all.
+	argNone argumentValues = iota
+	// argDialect is a SQL dialect name.
+	argDialect
+	// argOutputMode is an output format name.
+	argOutputMode
+	// argRowMismatch is a row-mismatch policy name.
+	argRowMismatch
+	// argTable is the name of an imported table.
+	argTable
+)
+
+// valueCommandSpec reports what a helper command's first argument is. ok is
+// false for a command this table says nothing about, which falls back to the
+// general completion.
+//
+// This is pathCommandSpec's sibling: that one knows which commands take a path,
+// this one knows which take a value from a fixed set. Without it every command's
+// argument was completed against everything sqly knows — ".dialect " offered
+// fifty-five candidates, ".row-mismatch s" offered SELECT and SET but never
+// "skip" — because the argument position was not part of the question.
+func valueCommandSpec(cmd string) (argumentValues, bool) {
+	switch cmd {
+	case dialectCommand:
+		return argDialect, true
+	case modeCommand:
+		return argOutputMode, true
+	case rowMismatchCommand:
+		return argRowMismatch, true
+	// .dump names a table first and a path second; the path half is
+	// pathCommandSpec's, and only the table half arrives here.
+	case headerCommand, schemaCommand, describeCommand, dumpCommand:
+		return argTable, true
+	case pwdCommand, tablesCommand, clearCommand, exitCommand, helpCommand:
+		return argNone, true
+	}
+	return argNone, false
+}
+
+// argumentCompletions returns the suggestions for the argument being typed after
+// a helper command, and whether the command is one this knows. A command that
+// takes no argument, and an argument position past the one the command accepts,
+// return no suggestions rather than falling back to the general list: there is
+// nothing valid to type there, and offering SQL keywords for it is noise.
+func (s *Shell) argumentCompletions(ctx context.Context, completed []string) ([]Suggest, bool) {
+	kind, ok := valueCommandSpec(completed[0])
+	if !ok {
+		return nil, false
+	}
+	if len(completed) != 1 { // the in-progress word is the command's first argument
+		return nil, true
+	}
+	switch kind {
+	case argDialect:
+		return dialectSuggestions(), true
+	case argOutputMode:
+		return outputModeSuggestions(), true
+	case argRowMismatch:
+		return rowMismatchSuggestions(), true
+	case argTable:
+		return s.tableNameSuggestions(ctx), true
+	case argNone:
+		return nil, true
+	}
+	return nil, true
+}
+
+// dialectSuggestions offers every dialect filesql knows, spelled in the message
+// the way its own project spells it.
+func dialectSuggestions() []Suggest {
+	dialects := dialect.Dialects()
+	out := make([]Suggest, 0, len(dialects))
+	for _, d := range dialects {
+		out = append(out, Suggest{
+			Text:        string(d),
+			Description: d.DisplayName() + " query dialect",
+		})
+	}
+	return out
+}
+
+// outputModeSuggestions offers every output format, read from the same registry
+// --output-format and .mode resolve against, so a format cannot exist for one of
+// them and not the others.
+func outputModeSuggestions() []Suggest {
+	modes := model.PrintModes()
+	out := make([]Suggest, 0, len(modes))
+	for _, m := range modes {
+		out = append(out, Suggest{Text: m.String(), Description: outputFormatDescription(m)})
+	}
+	return out
+}
+
+// rowMismatchSuggestions offers the policies .row-mismatch accepts, each saying
+// what it does to a row whose field count differs from the header.
+func rowMismatchSuggestions() []Suggest {
+	out := make([]Suggest, 0, len(model.RowMismatchPolicyNames))
+	for _, name := range model.RowMismatchPolicyNames {
+		out = append(out, Suggest{Text: name, Description: rowMismatchDescription(name)})
+	}
+	return out
+}
+
+// rowMismatchDescription is what completion says a row-mismatch policy does.
+func rowMismatchDescription(name string) string {
+	switch name {
+	case model.RowMismatchSkip.String():
+		return "drop such rows and import the rest"
+	case model.RowMismatchPad.String():
+		return "pad short rows with empty values; fail on long rows"
+	default:
+		return "fail the import when a row's field count differs from the header (default)"
+	}
+}
+
+// tableNameSuggestions offers the imported table names, and only those: a
+// command that names a table (.header, .schema, .describe, .dump) cannot take a
+// column or a SQL keyword there.
+func (s *Shell) tableNameSuggestions(ctx context.Context) []Suggest {
+	tables, err := s.usecases.metadata.TablesName(ctx)
+	if err != nil {
+		return nil
+	}
+	out := make([]Suggest, 0, len(tables))
+	for _, t := range tables {
+		out = append(out, Suggest{Text: t.Name(), Description: "table: " + t.Name()})
+	}
+	return out
+}
+
+// commandSuggestions lists the helper commands in name order.
+//
+// The order is fixed here because CommandList is a map: ranging over it directly
+// reordered the candidates on every keystroke, so the list under the cursor
+// reshuffled while the user was reading it.
+func (s *Shell) commandSuggestions() []Suggest {
+	names := make([]string, 0, len(s.commands))
+	for name := range s.commands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	out := make([]Suggest, 0, len(names))
+	for _, name := range names {
+		out = append(out, Suggest{
+			Text:        s.commands[name].name,
+			Description: "sqly command: " + s.commands[name].description,
+		})
+	}
+	return out
 }
 
 // keepDirsOnly drops file suggestions when a command targets a directory (.cd,
