@@ -18,7 +18,11 @@ enter "SQL query" or "sqly command that begins with a dot".
 sqly:~/sqly(table)$ SELECT * FROM user LIMIT 1;
 ```
 
-The prompt shows the working directory and the current output mode. Tab completes SQL keywords, table names, column names, and paths. History persists across sessions.
+The prompt shows the working directory and the current output mode. Tab
+completes SQL keywords, table names, column names, and paths, and after a
+dot-command it completes that command's arguments: `.dialect m` reaches `mysql`,
+`.mode m` reaches `markdown`. History persists across sessions, and records a
+line even when sqly rejected it, so the up-arrow brings it back to be fixed.
 
 ## Multi-line statements
 
@@ -38,10 +42,26 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.help` | show the command list |
-| `.mode MODE` | change the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown`, `excel`, `parquet` |
+| `.mode [MODE]` | show or set the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown`, `excel`, `parquet` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
+| `.row-mismatch [POLICY]` | show or set how a CSV/TSV row whose field count differs from the header is imported: `error` fails the import, `skip` drops the row, `pad` fills a short row with empty values and fails on a long one |
 | `.clear` | clear the screen |
 | `.exit` | quit (so does `Ctrl-D`) |
+
+`.mode`, `.dialect`, and `.row-mismatch` are the session settings. Called with
+no argument each reports and succeeds:
+
+```text
+sqly:~/data(table)$ .mode
+current output mode: table (available: table, vertical, csv, tsv, ltsv, json, jsonl, markdown, excel, parquet)
+```
+
+Two of them used to fail instead, so a script that meant `.mode csv` would not
+continue in the wrong mode. A value the setting does not accept is still
+rejected, so that typo is still caught.
+
+Every one of those lines goes to stderr, so a script that names its dialect
+still pipes into `jq`.
 
 ### Navigate
 
@@ -65,7 +85,6 @@ Dot-commands are single-line and run on Enter. To run a query without typing `;`
 | Command | Does |
 |:--|:--|
 | `.import PATH...` | load files, directories, or `http(s)` URLs into the session |
-| `.row-mismatch POLICY` | how to handle a CSV/TSV row whose field count differs from the header: `error` fails the import, `skip` drops the row, `pad` fills a short row with empty values and fails on a long one |
 | `.dump TABLE FILE` | export one table; the format follows `.mode`, or the file extension when the mode is `table` |
 | `.save DIR` | write every changed table into `DIR`, leaving the sources alone |
 | `.save --in-place` | overwrite each table's source file |
@@ -92,7 +111,10 @@ SELECT COUNT(*) FROM extra;
 EOF
 ```
 
-A failing statement stops the script and exits non-zero, naming the statement and its line.
+A failing statement stops the script and exits non-zero, naming the statement and
+its line. `--sql` carries one statement, so its failure names neither: there is
+no line to return to and no run to stop, and the report is the one line about
+what went wrong.
 
 A helper command must start its own line; `SELECT 1; .save ./out` is rejected,
 because reading it as two things depends on knowing where the statement ended,

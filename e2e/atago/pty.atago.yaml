@@ -356,3 +356,97 @@ scenarios:
           exit_code: 0
           stdout:
             contains: "Bob"
+
+  # A comment's apostrophe is text, not an unterminated quote. The prompt is
+  # where a person meets this most often: the line looks right and sqly says the
+  # quoting is wrong.
+  - name: runs a statement whose comment holds an apostrophe
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name /* it's fine */ FROM people WHERE age = 25;\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: ""
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+
+  # A line sqly rejected is the one most worth editing again, so it is in the
+  # history: the up-arrow brings it back.
+  - name: recalls a rejected line with the up-arrow
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".import 'oops\r"
+            - expect: "unterminated single quote in command"
+            - expect: '\(table\)\$'
+            - send: { key: up }
+            - expect: "\\.import 'oops"
+            # Clear the recalled line before EOF: Ctrl-D on a line with text is
+            # not an end of input.
+            - send: { key: ctrl-u }
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+
+  # Completion knows which command it is completing. ".row-mismatch s" used to
+  # answer SELECT and SET — the SQL keywords — and never "skip", the only value
+  # that prefix names.
+  - name: completes a row-mismatch policy, not a SQL keyword
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".row-mismatch s\t"
+            - expect: "skip"
+            - send: "\r"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "skip"
+
+  # The same prefix means different things after different commands: "m" is
+  # mysql after .dialect and markdown after .mode. Both used to be offered for
+  # both.
+  - name: completes a dialect after .dialect and a format after .mode
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".dialect m\t"
+            - expect: "mysql"
+            - send: "\r"
+            - expect: '\(table\)\$'
+            - send: ".mode m\t"
+            - expect: "markdown"
+            - send: "\r"
+            - expect: '\(markdown\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0

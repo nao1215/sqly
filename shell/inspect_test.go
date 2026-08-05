@@ -165,6 +165,34 @@ func TestInspect_RejectsPlainJSON(t *testing.T) {
 	}
 }
 
+func TestInspect_RejectsAnExplicitDialect(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
+
+	// --dialect translates user SQL and --inspect runs none, so the flag would be
+	// discarded in silence. The default nobody typed still passes.
+	shell, cleanup, err := newShell(t, []string{"sqly", "--inspect", "--dialect", "mysql", csv})
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanup()
+
+	var runErr error
+	stdout := captureStdout(t, func() { runErr = shell.Run(context.Background()) })
+	if runErr == nil {
+		t.Fatal("--inspect --dialect mysql was accepted, want a usage error")
+	}
+	if got := ExitCode(runErr); got != ExitUsage {
+		t.Errorf("exit code = %d, want %d", got, ExitUsage)
+	}
+	if !strings.Contains(runErr.Error(), "--inspect cannot be combined with --dialect mysql") {
+		t.Errorf("error = %v, want it to name both flags", runErr)
+	}
+	if stdout != "" {
+		t.Errorf("a rejected --inspect wrote %q to stdout, want nothing", stdout)
+	}
+}
+
 func TestInspect_SampleRowsAreLimited(t *testing.T) {
 	dir := t.TempDir()
 	// 10 rows; the sample must be capped below the row count.

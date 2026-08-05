@@ -2083,6 +2083,24 @@ func TestDocs_QuotedMessagesAreTheOnesTheBinaryPrints(t *testing.T) {
 			spec:    "e2e/atago/error_hygiene.atago.yaml",
 		},
 		{
+			name:    "the construct a dialect rejects rather than passing to SQLite",
+			message: "translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported: SELECT DISTINCT ON (g) g, v FROM t",
+			doc:     "website/content/dialects.md",
+			spec:    "e2e/atago/v1_0_bugs.atago.yaml",
+		},
+		{
+			name:    "the dialect a session is in",
+			message: "current dialect: mysql (available: sqlite, mysql, postgresql, googlesql)",
+			doc:     "website/content/dialects.md",
+			spec:    "e2e/atago/dialect.atago.yaml",
+		},
+		{
+			name:    "the confirmation that the dialect changed",
+			message: "dialect set to mysql",
+			doc:     "website/content/dialects.md",
+			spec:    "e2e/atago/dialect.atago.yaml",
+		},
+		{
 			name:    "the line that says where a result was written",
 			message: "Output sql result to user.json (output mode=json)",
 			doc:     "README.md",

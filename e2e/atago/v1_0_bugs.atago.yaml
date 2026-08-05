@@ -1,0 +1,438 @@
+# Binary-level regressions for the v1.0.0 pre-release review of the shell and
+# the dialect surface. Every scenario here failed against the v0.25 binary.
+#
+# What the review found, and what is pinned below:
+#   1. shell quoting was applied to SQL, so an apostrophe in a comment
+#      ("-- don't panic") aborted a valid statement before it ran
+#   2. .dialect wrote its control lines to stdout, breaking every
+#      machine-readable format
+#   3, 4. completion answered for the wrong command, and in a random order —
+#      both need a terminal and live in pty.atago.yaml
+#   5. --inspect accepted --dialect and discarded it
+#   6. --sql, which takes one statement, reported failures as a "batch"
+#   7. the dialect list was written out by hand in three places
+#   8. .dialect, .mode, and .row-mismatch answered an argument-less call three
+#      different ways
+#   9. the dialect warning fired before any user SQL ran
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly v1.0.0 shell and dialect regressions
+
+scenarios:
+  # 1. SQL is not a command line. Its quoting is SQLite's to judge, and only a
+  # line that starts with "." is parsed by shell quoting rules.
+  - name: runs a statement whose line comment holds an apostrophe
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - fixture: &t
+          file: t.csv
+          content: |
+            g,v
+            a,10
+      - run:
+          command: sqly --output-format csv --sql "SELECT 1 AS x -- don't panic" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "x"
+      - assert:
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: runs a statement whose block comment holds an apostrophe
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --output-format csv --sql "SELECT 1 AS x /* it's fine */" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: runs a statement whose comment holds an unbalanced double quote
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --output-format csv --sql 'SELECT 1 AS x -- say "hi' t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: runs an apostrophe comment from a --sql-file
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture:
+          file: q.sql
+          content: |
+            -- don't panic
+            SELECT 1 AS x /* it's fine */;
+      - run:
+          command: sqly --output-format csv --sql-file q.sql t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: runs an apostrophe comment from a --script-file
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture:
+          file: s.sqly
+          content: |
+            .tables
+            SELECT 1 AS x -- don't panic
+            ;
+      - run:
+          command: sqly --output-format csv --script-file s.sqly t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1"
+
+  - name: runs an apostrophe comment piped in as a batch script
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --output-format csv t.csv
+          stdin: |
+            SELECT 1 AS x -- don't panic
+            ;
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  # The other half of the same rule: a dot-command line is still parsed by shell
+  # quoting rules, so an unterminated quote in one is still an error.
+  - name: still rejects an unterminated quote in a dot-command
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly t.csv
+          stdin: ".import 'oops\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unterminated single quote in command"
+
+  - name: still rejects an unterminated double quote in a dot-command
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly t.csv
+          stdin: '.import "oops'
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "unterminated double quote in command"
+
+  # 2. A session setting is not data. stdout carries the rows a program parses,
+  # so a script that names its dialect still produces a parseable document.
+  - name: keeps a .dialect script's JSON stdout parseable
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture: &dialectScript
+          file: d.sqly
+          content: |
+            .dialect mysql
+            SELECT g, v FROM t;
+      - run:
+          command: sh -c "sqly --output-format json --script-file d.sqly t.csv 2>err.txt | python3 -c 'import json,sys; print(json.load(sys.stdin)[0][\"g\"])'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "a"
+
+  - name: reports the dialect change on stderr, not stdout
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture: *dialectScript
+      - run:
+          command: sqly --output-format csv --script-file d.sqly t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "g,v"
+      - assert:
+          stdout:
+            not_contains: "dialect set to"
+      - assert:
+          stderr:
+            contains: "dialect set to mysql"
+
+  - name: keeps .dialect out of csv, tsv, ltsv, and jsonl stdout
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture: *dialectScript
+      # Written out rather than looped: a shell variable in the command is
+      # interpolated before sh sees it, so "$f" would reach sqly empty.
+      - run:
+          command: sh -c "{ sqly --output-format csv --script-file d.sqly t.csv; sqly --output-format tsv --script-file d.sqly t.csv; sqly --output-format ltsv --script-file d.sqly t.csv; sqly --output-format jsonl --script-file d.sqly t.csv; } 2>/dev/null | grep -c dialect || true"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "0"
+
+  - name: reports the current dialect on stderr
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --output-format csv t.csv
+          stdin: ".dialect\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: ""
+      - assert:
+          stderr:
+            contains: "current dialect: sqlite (available: sqlite, mysql, postgresql, googlesql)"
+
+  # 5. --dialect translates user SQL and --inspect runs none.
+  - name: rejects --inspect combined with an explicit --dialect
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --inspect --dialect mysql t.csv
+      - assert:
+          exit_code: 2
+          stdout:
+            equals: ""
+      - assert:
+          stderr:
+            contains: "--inspect cannot be combined with --dialect mysql"
+
+  - name: accepts --inspect on its own
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sh -c "sqly --inspect t.csv | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"tables\"][0][\"name\"])'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "t"
+
+  # 6. --sql takes one statement, so there is no batch to number or to stop.
+  - name: reports a --sql failure without batch wording
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --sql "SELECT * FROM nope" t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            not_contains:
+              - "batch statement"
+              - "batch stopped"
+      - assert:
+          stderr:
+            line: 1
+            contains: "no such table: nope"
+      - assert:
+          stderr:
+            line: 2
+            contains: 'hint: this session has no table "nope"'
+
+  - name: names the statement once in a --sql failure
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sh -c "sqly --sql 'SELECT * FROM nope' t.csv 2>&1 >/dev/null | grep -o 'SELECT \\* FROM nope' | wc -l | tr -d ' '"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "1"
+
+  # A file of several statements keeps saying which one failed: without it there
+  # is no way back to the line that stopped the run.
+  - name: keeps the failing position for a multi-statement --sql-file
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture:
+          file: multi.sql
+          content: |
+            SELECT 1;
+            SELECT * FROM nope;
+      - run:
+          command: sqly --output-format csv --sql-file multi.sql t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - 'batch statement 2 failed at line 2: "SELECT * FROM nope"'
+              - "batch stopped: statement failed"
+
+  # 7. One list of dialects, read from filesql, reaches every message.
+  - name: names every dialect in the --dialect error
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --dialect oracle t.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: 'unknown SQL dialect "oracle": want one of: sqlite, mysql, postgresql, googlesql'
+
+  - name: names every dialect in the .dialect error
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly t.csv
+          stdin: ".dialect oracle\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: 'unknown SQL dialect "oracle" (available: sqlite, mysql, postgresql, googlesql)'
+
+  # --help wraps the option column, so the list is matched name by name rather
+  # than as one string.
+  - name: names every dialect in --help
+    steps:
+      - run:
+          command: sh -c "sqly --help | sed -n '/--dialect NAME/,+2p' | tr -s ' \\n' ' '"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "one of: sqlite, mysql, postgresql, googlesql;"
+
+  # 8. Three settings of one family, answering an argument-less call one way:
+  # report the value in effect, on stderr, and succeed.
+  - name: reports the current output mode instead of failing
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly --output-format csv t.csv
+          stdin: ".mode\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: ""
+      - assert:
+          stderr:
+            line: 1
+            equals: "current output mode: csv (available: table, vertical, csv, tsv, ltsv, json, jsonl, markdown, excel, parquet)"
+
+  - name: reports the current row-mismatch policy instead of failing
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly t.csv
+          stdin: ".row-mismatch\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: ""
+      - assert:
+          stderr:
+            line: 1
+            equals: "current row-mismatch policy: error (available: error, skip, pad)"
+
+  - name: reports the current dialect instead of failing
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sqly t.csv
+          stdin: ".dialect\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: ""
+      - assert:
+          stderr:
+            line: 1
+            equals: "current dialect: sqlite (available: sqlite, mysql, postgresql, googlesql)"
+
+  # 9. The warning is about the SQL a run translates, so a run that translates
+  # nothing says nothing.
+  - name: says nothing about a dialect for a script of only dot-commands
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture:
+          file: dots.sqly
+          content: |
+            .tables
+      - run:
+          command: sqly --dialect mysql --script-file dots.sqly t.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "SQLite semantics"
+
+  - name: warns at the first statement a --script-file translates
+    env: *hist
+    steps:
+      - fixture: *t
+      - fixture:
+          file: mixed.sqly
+          content: |
+            .tables
+            SELECT g FROM t;
+      - run:
+          command: sqly --dialect mysql --output-format csv --script-file mixed.sqly t.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "MySQL syntax is translated to SQLite"
+
+  # The rejection example in website/content/dialects.md, quoted whole. The doc
+  # showed a line the binary had stopped printing; this fails if either moves.
+  - name: matches the rejection example the dialect docs print
+    env: *hist
+    steps:
+      - fixture: *t
+      - run:
+          command: sh -c "sqly --dialect postgresql --sql 'SELECT DISTINCT ON (g) g, v FROM t' t.csv 2>&1 >/dev/null | grep -v 'SQLite semantics'"
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported: SELECT DISTINCT ON (g) g, v FROM t"
+      - assert:
+          stdout:
+            not_contains:
+              - "batch statement"
+              - "batch stopped"

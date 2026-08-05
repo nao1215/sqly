@@ -168,7 +168,7 @@ func newArg(args []string) (*Arg, error) {
 	query := flag.StringP("sql", "s", "", "run one SQL statement, then exit")
 	sqlFile := flag.StringP("sql-file", "f", "", "run every SQL statement in this file, then exit; a dot-command is rejected, so use --script-file for those; printing several results needs --output-format table, vertical, or markdown")
 	scriptFile := flag.String("script-file", "", "run this sqly script, then exit: SQL statements and dot-commands, exactly as when piped in; use it to script .save and .import from a file")
-	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: sqlite, mysql, postgresql, googlesql; sqly translates it to SQLite")
+	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: "+DialectNameList()+"; sqly translates it to SQLite")
 	// Output.
 	output := flag.StringP("output", "o", "", "write the one query result to this file instead of stdout")
 	outputFormat := flag.String("output-format", model.PrintModeTable.String(), "print the query result as one of: "+model.PrintModeNames()+"; excel and parquet need --output")
@@ -262,7 +262,7 @@ func newArg(args []string) (*Arg, error) {
 	// so a typo fails fast with the list of supported dialects.
 	sqlDialectValue, err := dialect.Parse(*sqlDialect)
 	if err != nil {
-		return nil, fmt.Errorf("unknown SQL dialect %q: want sqlite, mysql, postgresql, or googlesql", *sqlDialect)
+		return nil, fmt.Errorf("unknown SQL dialect %q: want one of: %s", *sqlDialect, DialectNameList())
 	}
 	outputMode, err := parseOutputFormat(*outputFormat)
 	if err != nil {

@@ -96,7 +96,10 @@ scenarios:
           stderr:
             contains: ".describe requires"
 
-  - name: fails batch mode when .mode is missing its mode name
+  # .mode alone used to fail the batch. It now reports the mode in effect and
+  # succeeds, like .dialect and .row-mismatch; a mode name that is wrong is
+  # still rejected, which is the case the failure was for.
+  - name: reports the current mode when .mode has no mode name
     env: *hist
     steps:
       - fixture: *user
@@ -104,9 +107,21 @@ scenarios:
           command: sqly user.csv
           stdin: ".mode\n"
       - assert:
+          exit_code: 0
+          stderr:
+            contains: "current output mode: table"
+
+  - name: fails batch mode when .mode names a mode that does not exist
+    env: *hist
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly user.csv
+          stdin: ".mode csvv\n"
+      - assert:
           exit_code: 1
           stderr:
-            contains: ".mode requires"
+            contains: 'invalid output mode "csvv"'
 
   - name: fails batch mode when .dump is missing its destination
     env: *hist

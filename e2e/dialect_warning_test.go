@@ -210,7 +210,9 @@ func TestDialectWarningBinary_InspectAndMetaFlagsAreSilent(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"--inspect", []string{"--dialect", "postgresql", "--inspect", csv}},
+		// --inspect refuses an explicit --dialect, so the run that reaches the
+		// report is the one that named no dialect at all.
+		{"--inspect", []string{"--inspect", csv}},
 		{"--help", []string{"--dialect", "postgresql", "--help"}},
 		{"--version", []string{"--dialect", "mysql", "--version"}},
 	} {
