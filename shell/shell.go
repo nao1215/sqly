@@ -117,8 +117,7 @@ type Shell struct {
 	// dataChanged is set when an executed statement actually changed table data
 	// (a DML that affected at least one row, or a DML RETURNING that returned at
 	// least one row). A non-interactive run only writes back when data changed, so
-	// an EXPLAIN or a zero-row DML leaves source files untouched.,
-	//,.
+	// an EXPLAIN or a zero-row DML leaves source files untouched.
 	dataChanged bool
 	// importBaseline maps an imported file-backed table name to a fingerprint of
 	// its content as loaded, and never moves. It answers "has this session changed
@@ -1237,8 +1236,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		return s.withMissingNameHint(ctx, err)
 	}
 	// Track whether this statement actually changed data, so write-back runs only
-	// for a run that modified a table (not an EXPLAIN or a zero-row DML).,
-	//,,.
+	// for a run that modified a table (not an EXPLAIN or a zero-row DML).
 	if statementModifiesData(req) {
 		if table != nil {
 			if table.RowCount() > 0 {
