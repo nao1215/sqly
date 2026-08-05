@@ -663,3 +663,36 @@ scenarios:
           exit_code: 0 # canceling a statement is not a failed session
           stdout:
             contains: "STILL_ALIVE"
+
+  # What the screen shows after a statement typed across a continuation line.
+  # The prompt that follows a result used to reach up into it: the renderer
+  # erased one row per row the entry had occupied, so a two-line statement ate
+  # the last line printed for it while the same query typed on one line kept it.
+  #
+  # The check is on the screen rather than the stream, because the erased line is
+  # still in the stream — erasing is what the terminal does with it. csv mode
+  # makes the last printed line a row of data, so the line at risk carries a
+  # marker of its own; in table mode it would be a border, indistinguishable
+  # from the two above it.
+  - name: a result typed across two lines keeps its last line on screen
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".mode csv\r"
+            - expect: '\(csv\)\$'
+            # Unfinished, so Enter continues the statement instead of running it.
+            - send: "SELECT 'LAST' || '_ROW' AS r FROM people LIMIT 1\r"
+            - expect: '\.\.\.>'
+            - send: ";\r"
+            - expect: "LAST_ROW"
+            - expect_screen:
+                contains: "LAST_ROW"
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0

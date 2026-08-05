@@ -792,3 +792,48 @@ func TestInteractivePTY_InterruptedImportLeavesNoHalfTable(t *testing.T) {
 		t.Fatalf("interactive shell: exit code = %d after an interrupted import, want 0", code)
 	}
 }
+
+// cursorUp matches the ANSI "move up" the prompt emits when it erases a block it
+// drew across several rows.
+var cursorUp = regexp.MustCompile(`\x1b\[\d*A`)
+
+// TestInteractivePTY_MultilineResultKeepsItsLastLine covers what the screen
+// shows after a statement typed across a continuation line. The prompt that
+// follows the result must not reach up into it: it used to erase one row per row
+// the entry had occupied, so a two-line statement ate the last line printed for
+// it and the result table lost its bottom border — while the same query typed on
+// one line kept it.
+func TestInteractivePTY_MultilineResultKeepsItsLastLine(t *testing.T) {
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	// Typed across two lines: Enter on an unfinished statement continues it. The
+	// marker is computed, so waiting for it waits for the result rather than for
+	// the echo of the line that asks for it.
+	s.submitLine("SELECT 'id=' || identifier AS r FROM user LIMIT 2")
+	s.waitFor("...>", ioTimeout)
+	s.submitLine(";")
+	s.waitFor("id=2", ioTimeout)
+
+	// Everything the shell wrote from the result onward. The prompt redraw that
+	// follows it must not move the cursor up, which is what erases into it.
+	raw := s.rawOutput()
+	start := strings.LastIndex(raw, "+-")
+	if start < 0 {
+		t.Fatalf("interactive shell: no result table in the output:\n%s", s.output())
+	}
+	if got := raw[start:]; cursorUp.MatchString(got) {
+		t.Errorf("interactive shell: the prompt after a two-line statement moved up into its result: %q", got)
+	}
+
+	// What the screen ends up showing is asserted by the atago pty suite, which
+	// renders one: the erased line is still in this stream, because erasing is
+	// something the terminal does with it.
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d, want 0", code)
+	}
+}
