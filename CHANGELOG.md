@@ -2,7 +2,7 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc4` is the current release candidate, and it is not the final contract
+`v1.0.0-rc5` is the current release candidate, and it is not the final contract
 either. Breaking changes are still being made, and they are being made now
 rather than after v1.0.0.
 
@@ -14,16 +14,33 @@ rather than after v1.0.0.
   Changes below.
 
 The final RC is announced as the final one in its release notes. That is the
-point to pin a version against; none of rc1 through rc4 is it.
+point to pin a version against; none of rc1 through rc5 is it.
 
 Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
-## [Unreleased]
+## [v1.0.0-rc5](https://github.com/nao1215/sqly/compare/v1.0.0-rc4...v1.0.0-rc5) (2026-08-06)
+
+A release candidate for v1.0.0, not the final one. Everything below is a change
+from rc4.
+
+Upgrading from rc4: [doc/migration.md](doc/migration.md).
+
+The theme of this one is the interactive shell, and what an export does with a
+value it cannot write. Ctrl-C could not reach a running statement and ended the
+session instead of the line; a ";" was a terminator wherever it appeared, so a
+trigger could not be typed and a trailing comment was never submitted; a line
+holding several statements printed one of their results. Two exports answered an
+unwritable value by failing with a parser error nobody could act on, or by
+changing the value and saying nothing. And a URL's password was printed back on
+both streams.
+
+### Breaking Changes
+
+* Exporting to Excel refuses a value XLSX cannot carry, where it used to change it. XLSX is XML, and XML 1.0 has no way to write a control character other than tab, newline, and carriage return, nor the noncharacters `U+FFFE` and `U+FFFF`; the writer substituted `U+FFFD` for the rest, so the export succeeded, the file appeared, and the byte was gone. It now exits `4`, names the character, and leaves the destination exactly as it was — the contract every other format already followed, and the one the exit-code table already documented. A pipeline that exported such data and got a file now gets a failure; csv, tsv, and json carry the same values unchanged.
+* A password carried in a remote URL is redacted in everything sqly prints. `--inspect` wrote it into the `source` field on stdout — the document people commit, attach, and paste — and every message about a download repeated the URL as given on stderr, alongside Go's own error, which redacts it. All of them now show `user:xxxxx@`. A program that read `source` and re-fetched from it has to keep the URL it passed in; the redaction is a display of the source, not a handle to it. Command history still records the line as typed, so the up-arrow returns something runnable.
 
 ### Bug Fixes
 
-* A password carried in a remote URL is no longer printed back. Every message about a download repeated the URL as given, so a failed import wrote the secret to stderr — undoing the redaction Go's own transport error performs — and the `--inspect` report wrote it to stdout, the document people attach and paste. Messages, the `--allow-remote` refusal, and the report now show `user:xxxxx@`. Command history still records the line as typed, which the shell page now says.
-* Exporting to Excel refuses a value XLSX cannot carry instead of changing it. XLSX is XML, and XML 1.0 has no way to write most control characters, so the writer substituted `U+FFFD`: the export succeeded, the file appeared, and the byte was gone. It now fails with exit code 4, names the character, and leaves the destination exactly as it was — the contract every other format already followed, and the one the reference documents. Tab, newline, and carriage return are the three XML keeps, so a value holding them still exports.
 * Exporting to Parquet no longer fails on a value SQLite cannot parse as a literal. The export stages the result in a temporary database, and it built that INSERT as SQL text with every value quoted into it, so a NUL byte — which ends a statement as far as SQLite's tokenizer is concerned — left the literal unclosed: a CSV carrying one exported to every other format and failed Parquet with `unrecognized token`, naming a token nobody typed. Values are bound now, which also parses the statement once for the export instead of once per row.
 * A result printed for a statement typed across a continuation line keeps its last line. The prompt that followed it erased one row per row the entry had occupied, so a two-line statement ate the last line of its own result — a table lost its bottom border, while the same query typed on one line kept it. Fixed in prompt v0.0.17.
 * Ctrl-C now stops a statement that is already running. The prompt holds the terminal in raw mode, where Ctrl-C is a byte rather than a signal, and between prompts nothing was reading it: the key could not reach a running statement at all. It waited in the input buffer while the query ran to completion, however long that took, and was then read as the next line. A canceled statement rolls back and the session carries on, so canceling is not a failure and the session still exits 0. Needs prompt v0.0.16.

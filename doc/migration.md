@@ -7,6 +7,58 @@ The [CHANGELOG](../CHANGELOG.md) records every change. This file records the one
 that require an edit to a command line, a script, or a program that reads sqly's
 output.
 
+## v1.0.0-rc4 → v1.0.0-rc5
+
+### An Excel export refuses a value XLSX cannot carry
+
+XLSX is XML, and XML 1.0 has no way to write a control character other than tab,
+newline, and carriage return, nor the noncharacters `U+FFFE` and `U+FFFF`. The
+writer used to substitute `U+FFFD` for them, so the export succeeded and the byte
+was gone.
+
+```text
+Before rc5:
+  printf 'id,v\n1,A\x01B\n' > ctl.csv
+  sqly --output-format excel --output out.xlsx --sql "SELECT * FROM ctl" ctl.csv
+  # exit 0, and out.xlsx holds "A\uFFFDB"
+
+From rc5:
+  # excel: value for column "v" contains the character U+0001,
+  # which XLSX cannot represent; remove it or export to csv/tsv/json
+  # exit 4, and out.xlsx is untouched
+```
+
+**What to change:** a pipeline that exported such data and got a file now has to
+handle a failure. Strip the character in SQL — `replace(v, char(1), '')` — or
+export to csv, tsv, or json, which carry it unchanged. Tab, newline, and carriage
+return still export.
+
+### A password in a remote URL is redacted in what sqly prints
+
+`--inspect` wrote the URL as given into `tables[].source`, and every message about
+a download repeated it. Both now show what `url.Redacted` gives.
+
+```text
+Before rc5:
+  sqly --allow-remote --inspect "https://user:secret@host/data.csv"
+  # "source": "https://user:secret@host/data.csv"
+
+From rc5:
+  # "source": "https://user:xxxxx@host/data.csv"
+```
+
+**What to change:** a program that read `source` and fetched from it keeps the URL
+it passed in instead. The field is a display of where a table came from, not a
+handle to re-open it. A local path is unaffected — only `http` and `https` are
+rewritten, so a Windows path keeps its drive letter.
+
+### Ctrl-C in the interactive shell
+
+Not a change to a command line, but to what the key does. It used to end the
+session with exit code `1`; it now discards the line being typed, and stops a
+statement that is already running. A canceled statement rolls back and the
+session carries on, so a session that ends normally afterward still exits `0`.
+
 ## v1.0.0-rc3 → v1.0.0-rc4
 
 ### `excel_sheets[].source` is an absolute path
