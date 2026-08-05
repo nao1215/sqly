@@ -34,8 +34,9 @@ sqly:~/sqly(table)$ SELECT user_name,
 ```
 
 A `;` ends a statement where SQLite ends one, and nowhere else. Inside a string
-literal, a quoted identifier, a comment, or a trigger body it is ordinary text
-and the statement keeps buffering:
+literal, a quoted identifier, or a comment it is ordinary text; inside a trigger
+body it separates the body's own statements without ending the `CREATE TRIGGER`
+that contains them. In each case the buffer keeps collecting:
 
 ```text
 sqly:~/sqly(table)$ CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN
@@ -44,8 +45,9 @@ sqly:~/sqly(table)$ CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN
 statement executed successfully
 ```
 
-A comment after the terminator does not delay anything: `SELECT 1; -- note` runs
-on that Enter.
+A complete comment after the terminator does not delay anything: `SELECT 1; -- note`
+runs on that Enter. An unclosed `/*` still buffers, because the statement after it
+has not been read yet.
 
 One line may hold several statements. Each runs in order and each result is
 printed, which is what pasting a snippet usually needs:

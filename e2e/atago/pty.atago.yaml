@@ -568,8 +568,9 @@ scenarios:
               - "SECOND_RESULT"
 
   # A ";" ends a statement only where SQLite ends one. Inside a trigger body it
-  # is ordinary text, so the buffer keeps collecting until END; — the shell
-  # submitted at the first inner ";" and no trigger could be typed at all.
+  # separates the body's statements without ending the CREATE TRIGGER holding
+  # them, so the buffer keeps collecting until END; — the shell submitted at the
+  # first inner ";" and no trigger could be typed at all.
   - name: a trigger body buffers past its own semicolons
     steps:
       - fixture: *capability_people

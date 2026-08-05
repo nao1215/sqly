@@ -844,10 +844,12 @@ func sqlInputComplete(input string) bool {
 //
 // Asking whether the text ends with ";" was not the same question. A ";" is a
 // terminator only where SQLite treats it as one, so that test submitted a
-// fragment for every ";" inside a string literal ("SELECT 'a;"), inside an
-// identifier, or inside a trigger body, where it is ordinary text — and refused
-// to submit a finished statement that carried a trailing comment
-// ("SELECT 1; -- note"), which left the shell waiting with nothing to wait for.
+// fragment for every ";" inside a string literal ("SELECT 'a;") or an
+// identifier, where it is ordinary text, and for every ";" inside a trigger
+// body, where it separates the body's statements without ending the CREATE
+// TRIGGER holding them — and it refused to submit a finished statement carrying
+// a trailing comment ("SELECT 1; -- note"), leaving the shell waiting for
+// nothing.
 // The batch reader has always answered this with the same scanner, which is why
 // a script could do what could not be typed.
 func endsAtStatementBoundary(input string) bool {

@@ -547,7 +547,11 @@ func TestInteractivePTY_CtrlCDiscardsLineAndKeepsSession(t *testing.T) {
 	s.typeKeys("SELECT 'alive' || '_after_ctrl_c';")
 	s.write("\r")
 	s.waitFor("alive_after_ctrl_c", ioTimeout)
-	if strings.Contains(s.output(), "never_run") {
+	// The abandoned line held an unclosed literal, so running it would have
+	// produced SQLite's tokenizer error. Its absence is what says the line was
+	// discarded rather than submitted; the typed text itself is echoed either
+	// way and cannot tell the two apart.
+	if strings.Contains(s.output(), "unrecognized token") {
 		t.Errorf("interactive shell: the interrupted line was executed:\n%s", s.output())
 	}
 
