@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [main]
 
+# The suite only reads the repository and runs the binary it builds.
+permissions:
+  contents: read
+
 jobs:
   atago:
     name: atago (binary e2e)
