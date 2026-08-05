@@ -108,6 +108,12 @@ query against it returns.
 
 ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `.save` does, not `--output`.
 
+A format that cannot represent a value refuses the export rather than writing
+something else. LTSV has no way to hold a tab or a newline inside a value, and
+XLSX — being XML — has no way to hold a control character other than tab,
+newline, and carriage return, nor the two noncharacters `U+FFFE` and `U+FFFF`. Either one names the column and exits `4`, leaving
+the destination as it was; csv, tsv, and json carry all of them.
+
 ## Compression
 
 CSV, TSV, LTSV, JSON, JSONL, Parquet, and Excel are read through `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4` — so `data.csv.gz` is table `data`, with nothing to declare.
