@@ -195,8 +195,11 @@ func (s *Shell) inspectTable(ctx context.Context, name string, sampleLimit int) 
 	}
 
 	return inspectTable{
-		Name:       name,
-		Source:     s.tableSources[name],
+		Name: name,
+		// The report is stdout, and a remote source can carry a password. The
+		// stored source keeps the URL as given, because write-back and re-import
+		// match on it; only what is printed is redacted.
+		Source:     redactURL(s.tableSources[name]),
 		RowCount:   rowCount,
 		Columns:    columns,
 		SampleRows: sample,

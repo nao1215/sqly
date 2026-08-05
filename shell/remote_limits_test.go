@@ -368,3 +368,79 @@ func TestDownloadRemoteInput_NamesTheFileFromTheRedirectTarget(t *testing.T) {
 		t.Errorf("staged file = %q, want it named after the redirect target (sales.csv)", got)
 	}
 }
+
+// TestRemoteErrorsRedactCredentials covers what an error message is allowed to
+// repeat back. A URL can carry a password, and every message about a download
+// interpolated the URL as given, so a failed import printed the secret to
+// stderr — the stream people paste into bug reports. Go's own transport error
+// already redacts it, so sqly was undoing that.
+func TestRemoteErrorsRedactCredentials(t *testing.T) {
+	t.Parallel()
+
+	const secret = "hunter2"
+
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+	}{
+		{
+			name: "an HTTP status the download cannot use",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			},
+		},
+		{
+			name: "a body whose format cannot be named",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				fmt.Fprint(w, "not a table")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(tt.handler)
+			defer server.Close()
+
+			s, cleanup := newLimitShell(t, server)
+			defer cleanup()
+
+			withCredentials := strings.Replace(server.URL, "http://", "http://user:"+secret+"@", 1)
+			_, done, err := s.downloadRemoteInput(context.Background(), withCredentials)
+			if done != nil {
+				done()
+			}
+			if err == nil {
+				t.Fatal("download succeeded, want an error to inspect")
+			}
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("error repeats the password back: %q", err.Error())
+			}
+			if !strings.Contains(err.Error(), "user:xxxxx@") {
+				t.Errorf("error = %q, want the URL with its password redacted", err.Error())
+			}
+		})
+	}
+}
+
+// TestRemoteRefusalRedactsCredentials covers the message a session without
+// --allow-remote prints. It names the URL it will not fetch, and that URL is the
+// one place a password is most likely to be: the refusal is printed before any
+// request is made, so it is often the first thing a user sees.
+func TestRemoteRefusalRedactsCredentials(t *testing.T) {
+	t.Parallel()
+
+	err := remoteCapabilityError([]string{"https://user:hunter2@example.com/data.csv"})
+	if err == nil {
+		t.Fatal("a remote input without --allow-remote was accepted, want a refusal")
+	}
+	if strings.Contains(err.Error(), "hunter2") {
+		t.Errorf("refusal repeats the password back: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "user:xxxxx@") {
+		t.Errorf("refusal = %q, want the URL with its password redacted", err.Error())
+	}
+}
