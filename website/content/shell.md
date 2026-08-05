@@ -86,7 +86,7 @@ sqly:~/data(table)$
 
 A canceled statement changes nothing: its transaction rolls back, and the
 session carries on. Canceling is not a failure, so a session that ends normally
-afterwards still exits 0.
+afterward still exits 0.
 
 ## Dot-commands
 

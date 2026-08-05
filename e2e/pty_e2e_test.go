@@ -745,13 +745,13 @@ func (s *ptySession) waitForAny(want []string, timeout time.Duration) string {
 	return ""
 }
 
-// TestInteractivePTY_InterruptedImportLeavesNoHalfTable covers what cancelling
+// TestInteractivePTY_InterruptedImportLeavesNoHalfTable covers what canceling
 // can reach besides a query. An import is a statement like any other, so Ctrl-C
 // stops it too — and stopping a load halfway is exactly how a table ends up with
 // some of its rows.
 //
 // The assertion holds whichever way the race goes: the import either finished
-// before the key arrived, in which case every row is there, or it was cancelled,
+// before the key arrived, in which case every row is there, or it was canceled,
 // in which case there is no table at all. A count between the two would be the
 // bug.
 func TestInteractivePTY_InterruptedImportLeavesNoHalfTable(t *testing.T) {
