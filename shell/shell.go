@@ -57,9 +57,6 @@ const (
 	msgImportableFile = "Importable file"
 	msgImportableDir  = "Directory"
 	msgExcelSheet     = "Excel sheet"
-	// formatNameTable is the default output format's name, used where a literal
-	// would otherwise repeat across completion, schema output, and help.
-	formatNameTable = "table"
 )
 
 // errNoStatements is returned by a non-interactive run that reads stdin in batch
@@ -740,19 +737,6 @@ func (s *Shell) remapStdinTableSources(stdinAbsPath string) {
 	}
 }
 
-// stdinFormatExtensions maps the --stdin-format format names to file extensions. The
-// format-name keys intentionally repeat strings used by unrelated features
-// (completion, mode names), so goconst is suppressed here.
-//
-//nolint:goconst // format-name registry keys
-var stdinFormatExtensions = map[string]string{
-	"csv":   model.ExtCSV,
-	"tsv":   model.ExtTSV,
-	"ltsv":  model.ExtLTSV,
-	"json":  model.ExtJSON,
-	"jsonl": model.ExtJSONL,
-}
-
 // stageStdinDataset reads all of stdin into a temporary file named after the
 // stdin table so filesql imports it like a normal file. Why a temp file:
 // filesql loads by path, and staging keeps the import path identical to file
@@ -760,9 +744,9 @@ var stdinFormatExtensions = map[string]string{
 // temp directory; it is safe to call after import because the data is already
 // copied into the shared database.
 func (s *Shell) stageStdinDataset(ctx context.Context) (string, func(), error) {
-	ext, ok := stdinFormatExtensions[s.argument.StdinFormat]
+	ext, ok := model.StdinFormatExtension(s.argument.StdinFormat)
 	if !ok {
-		return "", nil, fmt.Errorf("unsupported --stdin-format value %q: want csv, tsv, ltsv, json, or jsonl", s.argument.StdinFormat)
+		return "", nil, fmt.Errorf("unsupported --stdin-format value %q: want %s", s.argument.StdinFormat, model.StdinFormatNames())
 	}
 
 	dir, err := os.MkdirTemp("", "sqly-stdin-")
@@ -1012,19 +996,20 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "LIMIT", Description: "SQL: upper Limit of records"},
 		{Text: "OFFSET", Description: "SQL: identify the starting point to return result rows"},
 		{Text: "CASE", Description: "SQL: branching by conditions"},
-		{Text: formatNameTable, Description: "sqly command argument: table output format"},
-		{Text: "markdown", Description: "sqly command argument: markdown table output format"},
-		{Text: "csv", Description: "sqly command argument: csv output format"},
-		{Text: "tsv", Description: "sqly command argument: tsv output format"},
-		{Text: "ltsv", Description: "sqly command argument: ltsv output format"},
-		{Text: "json", Description: "sqly command argument: json output format"},
-		{Text: "jsonl", Description: "sqly command argument: jsonl (newline-delimited JSON) output format"},
-		{Text: "excel", Description: "sqly command argument: excel output format"},
-		{Text: "parquet", Description: "sqly command argument: parquet export format"},
 		{Text: string(dialect.SQLite), Description: "sqly command argument: SQLite query dialect (default)"},
 		{Text: string(dialectMySQL), Description: "sqly command argument: MySQL query dialect"},
 		{Text: string(dialectPostgreSQL), Description: "sqly command argument: PostgreSQL query dialect"},
 		{Text: string(dialectGoogleSQL), Description: "sqly command argument: GoogleSQL query dialect"},
+	}
+
+	// Every output format is offered, read from the same registry --output-format
+	// and .mode resolve against, so a format cannot exist for one of the three and
+	// not the others.
+	for _, m := range model.PrintModes() {
+		suggest = append(suggest, Suggest{
+			Text:        m.String(),
+			Description: "sqly command argument: " + outputFormatDescription(m),
+		})
 	}
 
 	for _, v := range s.commands {
@@ -1049,6 +1034,23 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		currentWord = input
 	}
 	return filterHasPrefix(suggest, currentWord, true)
+}
+
+// outputFormatDescription is what completion says a format does. Most say only
+// their own name, so the default is derived from it and a format added to the
+// registry needs nothing here; the three whose name does not describe what
+// happens say more.
+func outputFormatDescription(mode model.PrintMode) string {
+	switch mode {
+	case model.PrintModeMarkdownTable:
+		return "markdown table output format"
+	case model.PrintModeJSONL:
+		return "jsonl (newline-delimited JSON) output format"
+	case model.PrintModeParquet:
+		return "parquet export format"
+	default:
+		return mode.String() + " output format"
+	}
 }
 
 // isTypingDotCommand reports whether input is a helper dot-command name still

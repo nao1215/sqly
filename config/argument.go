@@ -119,38 +119,6 @@ type Arg struct {
 	Version func()
 }
 
-// validStdinFormats is the set --stdin-format accepts. It mirrors the shell's
-// stdinFormatExtensions; a value that parses here but has no extension there
-// would stage a file the importer cannot classify.
-var validStdinFormats = map[string]bool{
-	outputFormatCSV:   true,
-	outputFormatTSV:   true,
-	outputFormatLTSV:  true,
-	outputFormatJSON:  true,
-	outputFormatJSONL: true,
-}
-
-const (
-	outputFormatTable    = "table"
-	outputFormatVertical = "vertical"
-	outputFormatCSV      = "csv"
-	outputFormatTSV      = "tsv"
-	outputFormatLTSV     = "ltsv"
-	outputFormatJSON     = "json"
-	outputFormatJSONL    = "jsonl"
-	outputFormatMarkdown = "markdown"
-	outputFormatExcel    = "excel"
-	outputFormatParquet  = "parquet"
-	// outputFormatHelp lists the formats in the order --help shows them: the
-	// screen formats first, then the two that only make sense written to a file.
-	// The values are comma-separated so a terminal can wrap the list; a
-	// pipe-separated run of ten names is one unbreakable 58-column token.
-	outputFormatHelp = outputFormatTable + ", " + outputFormatVertical + ", " + outputFormatCSV + ", " + outputFormatTSV + ", " + outputFormatLTSV + ", " + outputFormatJSON + ", " + outputFormatJSONL + ", " + outputFormatMarkdown + ", " + outputFormatExcel + ", " + outputFormatParquet
-	// stdinFormatHelp lists the formats stdin can be read as. A piped dataset has
-	// no file name, so the format cannot be inferred and must be named.
-	stdinFormatHelp = outputFormatCSV + ", " + outputFormatTSV + ", " + outputFormatLTSV + ", " + outputFormatJSON + ", " + outputFormatJSONL
-)
-
 // NewArg return *Arg that is assigned the result of parsing os.Args.
 // NOTE: Adding options directly to the pflag package results in a double
 // option definition error when NewArg() is called multiple times.
@@ -184,7 +152,7 @@ func newArg(args []string) (*Arg, error) {
 	// the flag, and an unknown flag fails fast with a clear parse error.
 	flag.SetInterspersed(true)
 	// Input.
-	stdinFormat := flag.String("stdin-format", "", "read stdin as a dataset instead of as SQL; one of: "+stdinFormatHelp)
+	stdinFormat := flag.String("stdin-format", "", "read stdin as a dataset instead of as SQL; one of: "+model.StdinFormatNames())
 	stdinTable := flag.String("stdin-table", defaultStdinTable, "table name for the --stdin-format dataset")
 	importEncoding := flag.String("encoding", model.TextEncodingUTF8.String(), "decode every csv, tsv, ltsv, json, and jsonl input that has no BOM as one of: "+strings.ReplaceAll(model.TextEncodingHelp(), "|", ", "))
 	rowMismatch := flag.String("row-mismatch", model.RowMismatchError.String(), "for csv and tsv, what to do with a row whose field count differs from the header: error (fail the import), skip (drop the row), pad (fill a short row, fail on a long one)")
@@ -203,7 +171,7 @@ func newArg(args []string) (*Arg, error) {
 	sqlDialect := flag.String("dialect", string(dialect.SQLite), "write the query in one of: sqlite, mysql, postgresql, googlesql; sqly translates it to SQLite")
 	// Output.
 	output := flag.StringP("output", "o", "", "write the one query result to this file instead of stdout")
-	outputFormat := flag.String("output-format", outputFormatTable, "print the query result as one of: "+outputFormatHelp+"; excel and parquet need --output")
+	outputFormat := flag.String("output-format", model.PrintModeTable.String(), "print the query result as one of: "+model.PrintModeNames()+"; excel and parquet need --output")
 	// Inspection.
 	flag.BoolVar(&arg.InspectFlag, "inspect", false, "print one JSON report of the imported tables (schema, row counts, source) and exit; no row data unless --inspect-sample asks for it")
 	inspectSample := flag.Int("inspect-sample", DefaultInspectSample, "sample rows per table in the --inspect report; 0 keeps the report schema-only")
@@ -239,8 +207,8 @@ func newArg(args []string) (*Arg, error) {
 	// values that exist.
 	if *stdinFormat != "" {
 		normalized := strings.ToLower(strings.TrimSpace(*stdinFormat))
-		if !validStdinFormats[normalized] {
-			return nil, fmt.Errorf("unsupported --stdin-format value %q: want %s", *stdinFormat, stdinFormatHelp)
+		if _, ok := model.StdinFormatExtension(normalized); !ok {
+			return nil, fmt.Errorf("unsupported --stdin-format value %q: want %s", *stdinFormat, model.StdinFormatNames())
 		}
 		// Store what was validated, not what was typed. Accepting " CSV " here and
 		// passing the raw string on left the staging step looking it up in a map
@@ -380,30 +348,11 @@ func isValidTableIdentifier(name string) bool {
 }
 
 func parseOutputFormat(name string) (model.PrintMode, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case outputFormatTable:
-		return model.PrintModeTable, nil
-	case outputFormatCSV:
-		return model.PrintModeCSV, nil
-	case outputFormatTSV:
-		return model.PrintModeTSV, nil
-	case outputFormatLTSV:
-		return model.PrintModeLTSV, nil
-	case outputFormatExcel:
-		return model.PrintModeExcel, nil
-	case outputFormatMarkdown:
-		return model.PrintModeMarkdownTable, nil
-	case outputFormatJSON:
-		return model.PrintModeJSON, nil
-	case outputFormatJSONL:
-		return model.PrintModeJSONL, nil
-	case outputFormatParquet:
-		return model.PrintModeParquet, nil
-	case outputFormatVertical:
-		return model.PrintModeVertical, nil
-	default:
-		return model.PrintModeTable, fmt.Errorf("invalid output format %q: want %s", name, outputFormatHelp)
+	mode, ok := model.ParsePrintMode(name)
+	if !ok {
+		return model.PrintModeTable, fmt.Errorf("invalid output format %q: want %s", name, model.PrintModeNames())
 	}
+	return mode, nil
 }
 
 // newOutput returns the output destination and its selected format.
