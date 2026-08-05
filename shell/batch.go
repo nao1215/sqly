@@ -351,24 +351,6 @@ func endsInsideBlockComment(s string) bool {
 	return inBlockComment
 }
 
-// scriptModifiesData reports whether any SQL statement in a batch script is a
-// data-modifying statement (INSERT, UPDATE, DELETE, REPLACE, or a WITH that feeds
-// one). Helper commands (lines beginning with "." at a statement boundary) are
-// not SQL, so they are dropped before classification; otherwise a script like
-// ".mode csv\nUPDATE t SET x=1;" would hide the UPDATE behind the dot-line.
-// Classification is per statement so an EXPLAIN of a DML statement counts as
-// read-only. It lets a non-interactive run skip write-back preflight for a
-// read-only script. Whether write-back actually runs is
-// decided dynamically by the rows a statement changes (see Shell.dataChanged).
-func scriptModifiesData(elements []scriptElement) bool {
-	for _, stmt := range sqlStatements(elements) {
-		if statementModifiesData(stmt) {
-			return true
-		}
-	}
-	return false
-}
-
 // statementSaveCompatible reports whether a non-interactive write-back run
 // can handle a statement: a read-only query (which skips write-back) or a
 // row-modifying DML on an imported table (which write-back persists). Any other

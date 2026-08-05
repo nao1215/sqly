@@ -44,17 +44,6 @@ func NewCell(v any) Cell {
 	return Cell{value: v}
 }
 
-// NewTextCell returns a Cell holding s as a TEXT value. The empty string yields
-// a non-NULL empty TEXT cell, not a NULL.
-func NewTextCell(s string) Cell {
-	return Cell{value: s}
-}
-
-// NullCell returns the SQL NULL cell.
-func NullCell() Cell {
-	return Cell{}
-}
-
 // IsNull reports whether the cell is SQL NULL.
 func (c Cell) IsNull() bool {
 	return c.value == nil

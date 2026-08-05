@@ -116,7 +116,7 @@ func TestWithCompressedWriterErrors(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	table := model.NewTable("t", model.NewHeader([]string{"a"}), []model.Record{
-		model.NewRecord([]string{"1"}),
+		model.Record([]string{"1"}),
 	})
 
 	t.Run("create failure on nonexistent directory", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestWithCompressedWriterErrors(t *testing.T) {
 	t.Run("write failure from duplicate JSON columns", func(t *testing.T) {
 		t.Parallel()
 		dup := model.NewTable("t", model.NewHeader([]string{"a", "a"}), []model.Record{
-			model.NewRecord([]string{"1", "2"}),
+			model.Record([]string{"1", "2"}),
 		})
 		out := filepath.Join(t.TempDir(), "out.json")
 		if err := exp.DumpTable(out, dup, model.ExportJSON, model.CompressionNone); err == nil {

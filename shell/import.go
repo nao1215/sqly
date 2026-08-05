@@ -110,26 +110,6 @@ func (s *Shell) runImport(ctx context.Context, argv, labels []string) error {
 	return nil
 }
 
-// importDirectory loads every supported file under a directory as one atomic
-// import, reporting whether it produced any table.
-//
-// It is a thin wrapper on importCommand, kept because a directory import is
-// worth naming and because it is the entry point the directory tests drive.
-// The work — resolution, the collision preflight, one transaction, and the
-// bookkeeping that follows a commit — is importCommand's, so a directory and a
-// list of files cannot drift into behaving differently.
-func (s *Shell) importDirectory(ctx context.Context, cleanPath, displayPath string) (bool, error) {
-	if err := s.runImport(ctx, []string{cleanPath}, []string{displayPath}); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// importFile loads a single file as an import of one, for the same reason.
-func (s *Shell) importFile(ctx context.Context, cleanPath, displayPath string) error {
-	return s.runImport(ctx, []string{cleanPath}, []string{displayPath})
-}
-
 // describeLoadFailure turns filesql's error into one that names the input the
 // user typed. A staged download or a re-encoded copy has a temp path filesql
 // quotes, and a user cannot act on a path they never wrote.
@@ -216,18 +196,6 @@ func (s *Shell) reportImportFailure(err error) error {
 		return err
 	}
 	return &importFailedError{failed: 1, summary: err.Error()}
-}
-
-// mustTables returns the current table names, or nil on error. importDirectory
-// already validated the session by an earlier GetTableNames call in the same
-// loop iteration, so a transient error here degrades to "no new tables" (the
-// overwrite fallback) rather than aborting a successful import.
-func mustTables(ctx context.Context, s *Shell) []*model.Table {
-	tables, err := s.usecases.importer.GetTableNames(ctx)
-	if err != nil {
-		return nil
-	}
-	return tables
 }
 
 // supportedFilesInDir returns the supported files under dir in deterministic

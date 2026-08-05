@@ -1,7 +1,6 @@
 package interactor
 
 import (
-	"slices"
 	"strings"
 )
 
@@ -10,10 +9,6 @@ const (
 	sqlINSERT    = "INSERT"
 	sqlUPDATE    = "UPDATE"
 	sqlDELETE    = "DELETE"
-	sqlCREATE    = "CREATE"
-	sqlDROP      = "DROP"
-	sqlALTER     = "ALTER"
-	sqlREINDEX   = "REINDEX"
 	sqlEXPLAIN   = "EXPLAIN"
 	sqlWITH      = "WITH"
 	sqlVALUES    = "VALUES"
@@ -31,89 +26,20 @@ const (
 	sqlDETACH    = "DETACH"
 )
 
-// ddl is Data Definition Language List
-type ddl []string
-
-// dml is Data Manipulation Language List
-type dml []string
-
-// tcl is Transaction Control Language List
-type tcl []string
-
-// dcl is Data Control Language List
-type dcl []string
-
-// SQL is sql information
-type SQL struct {
-	ddl ddl
-	dml dml
-	tcl tcl
-	dcl dcl
-}
+// SQL classifies the statements a session runs.
+//
+// It holds nothing. Classification reads the statement itself — its leading
+// keyword, and for a WITH the verb its CTEs feed — so there is no keyword table
+// to carry: a category list would have to agree with what leadingKeyword and
+// mainStatementVerb already decide, and two spellings of the same rule is one
+// more than a rule can have. The type stays because it names where "what kind
+// of statement is this" is answered, and because the interactor is wired with
+// it.
+type SQL struct{}
 
 // NewSQL return *SQL
 func NewSQL() *SQL {
-	return &SQL{
-		ddl: []string{sqlCREATE, sqlDROP, sqlALTER, sqlREINDEX},
-		dml: []string{sqlSELECT, sqlINSERT, sqlUPDATE, sqlDELETE, sqlEXPLAIN, sqlWITH},
-		tcl: []string{sqlBEGIN, sqlCOMMIT, sqlEND, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE},
-		dcl: []string{"GRANT", "REVOKE"},
-	}
-}
-
-// isDDL return wherther string is ddl or not.
-func (sql *SQL) isDDL(s string) bool {
-	return contains(sql.ddl, strings.ToUpper(s))
-}
-
-// isDML return wherther string is dml or not.
-func (sql *SQL) isDML(s string) bool {
-	return contains(sql.dml, strings.ToUpper(s))
-}
-
-// isTCL return wherther string is tcl or not.
-func (sql *SQL) isTCL(s string) bool {
-	return contains(sql.tcl, strings.ToUpper(s))
-}
-
-// isDCL returns true if the given string represents a Data Control Language (DCL) statement.
-func (sql *SQL) isDCL(s string) bool {
-	return contains(sql.dcl, strings.ToUpper(s))
-}
-
-// isSelect returns true if the given string represents a SELECT statement.
-func (sql *SQL) isSelect(s string) bool {
-	return strings.ToUpper(s) == sqlSELECT
-}
-
-// isInsert returns true if the given string represents an INSERT statement.
-func (sql *SQL) isInsert(s string) bool {
-	return strings.ToUpper(s) == sqlINSERT
-}
-
-// isUpdate returns true if the given string represents an UPDATE statement.
-func (sql *SQL) isUpdate(s string) bool {
-	return strings.ToUpper(s) == sqlUPDATE
-}
-
-// isDelete returns true if the given string represents a DELETE statement.
-func (sql *SQL) isDelete(s string) bool {
-	return strings.ToUpper(s) == sqlDELETE
-}
-
-// isExplain returns true if the given string represents an EXPLAIN statement.
-func (sql *SQL) isExplain(s string) bool {
-	return strings.ToUpper(s) == sqlEXPLAIN
-}
-
-// isWithCTE checks if the statement is a WITH (CTE) query.
-func (sql *SQL) isWithCTE(s string) bool {
-	return strings.ToUpper(s) == sqlWITH
-}
-
-// contains checks if a string exists in a slice of strings.
-func contains(list []string, v string) bool {
-	return slices.Contains(list, v)
+	return &SQL{}
 }
 
 // hasReturningClause reports whether a DML statement contains a RETURNING
@@ -193,11 +119,6 @@ func hasReturningClause(stmt string) bool {
 		}
 	}
 	return false
-}
-
-// trimWordGaps trims extra spaces between words in a string.
-func trimWordGaps(s string) string {
-	return strings.Join(strings.Fields(s), " ")
 }
 
 // stripSQLNoise removes a leading UTF-8 BOM, any leading line ("--") or block

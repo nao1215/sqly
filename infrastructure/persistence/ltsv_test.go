@@ -2,7 +2,6 @@ package persistence
 
 import (
 	"encoding/csv"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,84 +11,8 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/infrastructure"
 	"github.com/nao1215/sqly/testutil"
 )
-
-func TestLtsvRepositoryLabelAndData(t *testing.T) {
-	t.Parallel()
-
-	type args struct {
-		s string
-	}
-	tests := []struct {
-		name    string
-		lr      *ltsvRepository
-		args    args
-		want    string
-		want1   string
-		wantErr bool
-	}{
-		{
-			name: "get label and data",
-			lr:   &ltsvRepository{},
-			args: args{
-				s: "label:data",
-			},
-			want:    "label",
-			want1:   "data",
-			wantErr: false,
-		},
-		{
-			name: "error happen because data with out label",
-			lr:   &ltsvRepository{},
-			args: args{
-				s: "",
-			},
-			want:    "",
-			want1:   "",
-			wantErr: true,
-		},
-		{
-			name: "error happen because string has only delimiter':'",
-			lr:   &ltsvRepository{},
-			args: args{
-				s: ":",
-			},
-			want:    "",
-			want1:   "",
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			lr := &ltsvRepository{}
-			got, got1, err := lr.labelAndData(tt.args.s)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ltsvRepository.labelAndField() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("ltsvRepository.labelAndField() got = %v, want %v", got, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("ltsvRepository.labelAndField() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-
-	t.Run("failed to get label data returns ErrNoLabel", func(t *testing.T) {
-		t.Parallel()
-
-		lr := &ltsvRepository{}
-		_, _, err := lr.labelAndData("")
-		if !errors.Is(err, infrastructure.ErrNoLabel) {
-			t.Errorf("expected ErrNoLabel, got: %v", err)
-		}
-	})
-}
 
 func TestLtsvRepositoryDump(t *testing.T) {
 	t.Parallel()

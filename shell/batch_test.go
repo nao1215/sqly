@@ -3,6 +3,7 @@ package shell
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,10 +88,12 @@ func TestRunBatchReaderLineByLine(t *testing.T) {
 	}
 }
 
-// TestScriptModifiesData verifies that write-back intent detection is statement
-// aware: an EXPLAIN of a DML statement is read-only, while a real
-// DML or a WITH that feeds one is data-modifying.
-func TestScriptModifiesData(t *testing.T) {
+// TestStatementModifiesData verifies that write-back intent detection is
+// statement aware: an EXPLAIN of a DML statement is read-only, while a real DML
+// or a WITH that feeds one is data-modifying. Scripts are fed through
+// sqlStatements first, the way the save-compatibility scan does, so a helper
+// command cannot hide the statement after it.
+func TestStatementModifiesData(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -110,8 +113,7 @@ func TestScriptModifiesData(t *testing.T) {
 		{"identifier update_log does not match", "SELECT * FROM update_log", false},
 		{"multiple statements, one modifies", "SELECT 1;\nUPDATE t SET x=1;", true},
 		{"explain then select stays read-only", "EXPLAIN UPDATE t SET x=1;\nSELECT 1;", false},
-		// A helper command line is not SQL, so it must not hide a following DML. Ref
-		// CodeRabbit review of.
+		// A helper command line is not SQL, so it must not hide a following DML.
 		{"helper command before UPDATE still detects modification", ".mode csv\nUPDATE t SET x=1;", true},
 		{"helper command before SELECT stays read-only", ".mode csv\nSELECT 1;", false},
 	}
@@ -119,8 +121,9 @@ func TestScriptModifiesData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := scriptModifiesData(mustParse(t, tt.script)); got != tt.want {
-				t.Errorf("scriptModifiesData(%q) = %v, want %v", tt.script, got, tt.want)
+			got := slices.ContainsFunc(sqlStatements(mustParse(t, tt.script)), statementModifiesData)
+			if got != tt.want {
+				t.Errorf("statementModifiesData over %q = %v, want %v", tt.script, got, tt.want)
 			}
 		})
 	}

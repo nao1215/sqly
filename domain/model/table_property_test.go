@@ -228,8 +228,8 @@ func TestHeaderRecordEqual_ReflexiveProperty(t *testing.T) {
 	}
 
 	recordProp := func(s []string) bool {
-		r := NewRecord(s)
-		cp := NewRecord(append([]string(nil), s...))
+		r := Record(s)
+		cp := Record(append([]string(nil), s...))
 		return r.Equal(cp) && cp.Equal(r)
 	}
 	if err := quick.Check(recordProp, quickConfig()); err != nil {

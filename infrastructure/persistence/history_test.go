@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/testutil"
 )
 
 func TestHistoryRepositoryCreateTable(t *testing.T) {
@@ -15,7 +15,7 @@ func TestHistoryRepositoryCreateTable(t *testing.T) {
 	t.Run("create history table and check history", func(t *testing.T) {
 		t.Parallel()
 
-		historyDB, cleanup, err := config.NewInMemHistoryDB()
+		historyDB, cleanup, err := testutil.NewInMemHistoryDB()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +45,7 @@ func TestHistoryRepositoryCreateTable(t *testing.T) {
 	t.Run("auto-assigns sequential ids when the caller supplies none", func(t *testing.T) {
 		t.Parallel()
 
-		historyDB, cleanup, err := config.NewInMemHistoryDB()
+		historyDB, cleanup, err := testutil.NewInMemHistoryDB()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -80,7 +80,7 @@ func TestHistoryRepositoryCreateTable(t *testing.T) {
 }
 
 func BenchmarkHistoryRepositoryCreate(b *testing.B) {
-	historyDB, cleanup, err := config.NewInMemHistoryDB()
+	historyDB, cleanup, err := testutil.NewInMemHistoryDB()
 	if err != nil {
 		b.Fatal(err)
 	}

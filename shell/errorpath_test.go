@@ -16,7 +16,7 @@ import (
 // value so a later call is the one that fails.
 func covErrTable() *model.Table {
 	return model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
-		model.NewRecord([]string{"1"}),
+		model.Record([]string{"1"}),
 	})
 }
 
@@ -246,5 +246,5 @@ func TestShellInspectSampleBoundaries(t *testing.T) {
 }
 
 func covErrTableWithValue(value string) *model.Table {
-	return model.NewTable("t", model.NewHeader([]string{"count"}), []model.Record{model.NewRecord([]string{value})})
+	return model.NewTable("t", model.NewHeader([]string{"count"}), []model.Record{model.Record([]string{value})})
 }

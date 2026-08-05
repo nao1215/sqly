@@ -451,7 +451,7 @@ func TestShellExec(t *testing.T) {
 			t.Errorf(".help output should flag .save --in-place as destructive:\n%s", out)
 		}
 		// Every command still appears, so .help stays a complete reference.
-		for _, name := range shell.commands.sortCommandNameKey() {
+		for name := range shell.commands {
 			if !strings.Contains(out, name) {
 				t.Errorf(".help output is missing command %q:\n%s", name, out)
 			}
@@ -1131,7 +1131,7 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
-	historyDB, cleanup2, err := config.NewInMemHistoryDB()
+	historyDB, cleanup2, err := testutil.NewInMemHistoryDB()
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -1809,8 +1809,8 @@ func TestShell_outputToFile(t *testing.T) {
 	// Test CSV output
 	header := model.NewHeader([]string{"id", "name"})
 	records := []model.Record{
-		model.NewRecord([]string{"1", "John"}),
-		model.NewRecord([]string{"2", "Jane"}),
+		model.Record([]string{"1", "John"}),
+		model.Record([]string{"2", "Jane"}),
 	}
 	table := model.NewTable("test", header, records)
 

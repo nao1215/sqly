@@ -8,7 +8,6 @@ import (
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
-	"github.com/nao1215/sqly/infrastructure"
 )
 
 // _ interface implementation check
@@ -55,13 +54,4 @@ func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
 		}
 	}
 	return w.Flush()
-}
-
-// labelAndData split label and data.
-func (lr *ltsvRepository) labelAndData(s string) (string, string, error) {
-	idx := strings.Index(s, ":")
-	if idx == -1 || idx == 0 {
-		return "", "", infrastructure.ErrNoLabel
-	}
-	return s[:idx], s[idx+1:], nil
 }

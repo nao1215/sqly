@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/testutil"
 )
 
 // covPerClosedHistoryRepo returns a history repository whose backing in-memory
@@ -14,7 +14,7 @@ import (
 // closed database so parallel subtests never share state.
 func covPerClosedHistoryRepo(t *testing.T) *historyRepository {
 	t.Helper()
-	historyDB, cleanup, err := config.NewInMemHistoryDB()
+	historyDB, cleanup, err := testutil.NewInMemHistoryDB()
 	if err != nil {
 		t.Fatal(err)
 	}

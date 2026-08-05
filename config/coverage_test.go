@@ -81,23 +81,6 @@ func TestNewConfigCreatesDefaultDir(t *testing.T) {
 	}
 }
 
-// TestNewInMemHistoryDBUsable covers NewInMemHistoryDB by opening the in-memory
-// history database and exercising it end to end.
-func TestNewInMemHistoryDBUsable(t *testing.T) {
-	t.Parallel()
-
-	db, cleanup, err := NewInMemHistoryDB()
-	if err != nil {
-		t.Fatalf("NewInMemHistoryDB() error = %v", err)
-	}
-	defer cleanup()
-
-	sqlDB := (*sql.DB)(db)
-	if _, err := sqlDB.ExecContext(context.Background(), "CREATE TABLE h (id INTEGER)"); err != nil {
-		t.Fatalf("failed to use in-memory history DB: %v", err)
-	}
-}
-
 // TestSqliteDriverOpenInvalidPath covers the error branch of sqliteDriver.Open:
 // opening a database file whose directory does not exist makes the underlying
 // driver Open fail, so no connection can be established.

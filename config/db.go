@@ -43,20 +43,6 @@ func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
 	return HistoryDB(db), func() { _ = db.Close() }, nil // #nosec G104
 }
 
-// NewInMemHistoryDB creates an in-memory history DB for testing.
-// This avoids file I/O overhead that is especially costly on Windows.
-// The pool is pinned to a single connection because SQLite's ":memory:"
-// creates a separate database per connection.
-func NewInMemHistoryDB() (HistoryDB, func(), error) {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		return nil, nil, err
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	return HistoryDB(db), func() { _ = db.Close() }, nil // #nosec G104
-}
-
 // sqlite3RegisterOnce is package-level rather than function-local so repeated
 // InitSQLite3 calls register the sqlite3 driver exactly once; database/sql
 // panics with "Register called twice" otherwise.
