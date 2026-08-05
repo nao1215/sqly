@@ -279,6 +279,30 @@ func TestShellExec(t *testing.T) {
 		}
 	})
 
+	// .mode resolves its argument the way --output-format resolves its value, so
+	// a name typed in another case reaches the same mode. It used to be rejected
+	// as invalid, which said nothing about what a valid name looked like. The
+	// banner names the mode rather than the typed string, so it reads identically
+	// to the lowercase run above.
+	t.Run("execute .mode: an upper-cased name selects the same mode", func(t *testing.T) {
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Error(err)
+		}
+		defer cleanup()
+
+		got, err := getExecStdErrOutput(t, shell.exec, ".mode CSV")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assertShellFixture(t, "mode_table_to_csv.golden", got)
+
+		if shell.state.mode.PrintMode != model.PrintModeCSV {
+			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeCSV.String())
+		}
+	})
+
 	t.Run("execute .mode: table to markdown", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly"})
 		if err != nil {

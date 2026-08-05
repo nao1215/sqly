@@ -12,6 +12,11 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
+// schemaTableColumn names the column of the structured `.schema` result that
+// carries the table's name. It is unrelated to the "table" output format that
+// happens to spell the same word.
+const schemaTableColumn = "table"
+
 // schemaCommand prints the CREATE TABLE statement of a table.
 //
 // In JSON/NDJSON mode it emits a structured `{table, schema}` object so the
@@ -35,7 +40,7 @@ func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string)
 	}
 
 	if isStructuredMode(s.state.mode.PrintMode) {
-		t := model.NewTable("schema", model.Header{formatNameTable, "schema"}, []model.Record{{tableName, createSQL}})
+		t := model.NewTable("schema", model.Header{schemaTableColumn, "schema"}, []model.Record{{tableName, createSQL}})
 		return t.Print(config.Stdout, s.state.mode.PrintMode)
 	}
 	fmt.Fprintln(config.Stdout, createSQL)

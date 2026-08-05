@@ -114,52 +114,44 @@ func (m *mode) displayName() string {
 // stdout, so a banner there would corrupt it; keeping the status message on
 // stderr preserves stdout purity for every mode.
 func (m *mode) changeOutputModeIfNeeded(modeName string) error {
+	// Resolve the requested name before mutating anything, so an invalid name
+	// leaves the current mode untouched. The name is resolved the same way
+	// --output-format resolves its value, so the two flags of one setting cannot
+	// disagree about which spellings name a format.
+	target, ok := model.ParsePrintMode(modeName)
+	if !ok {
+		return fmt.Errorf("invalid output mode %q: want %s", modeName, model.PrintModeNames())
+	}
+
 	// Selecting the mode that is already in effect is what the caller asked for,
 	// so it succeeds silently. Reporting it as an error made a batch script fatal
 	// on a line that changed nothing: `sqly --output-format csv data.csv` fed a script opening
 	// with `.mode csv` died before running a single query, and so did any script
 	// that set the mode defensively. The banner is skipped because nothing
-	// changed; an unknown name still fails below.
-	if modeName == m.displayName() {
+	// changed.
+	if target == m.PrintMode {
 		return nil
 	}
 
-	// Resolve the requested name to a target PrintMode before
-	// mutating anything, so an invalid name leaves the current mode untouched. The
-	// banner suffix flags the dump-only formats whose on-screen output is CSV.
-	var (
-		target model.PrintMode
-		suffix string
-	)
-	switch modeName {
-	case model.PrintModeTable.String():
-		target = model.PrintModeTable
-	case model.PrintModeMarkdownTable.String():
-		target = model.PrintModeMarkdownTable
-		suffix = " table"
-	case model.PrintModeCSV.String():
-		target = model.PrintModeCSV
-	case model.PrintModeTSV.String():
-		target = model.PrintModeTSV
-	case model.PrintModeLTSV.String():
-		target = model.PrintModeLTSV
-	case model.PrintModeJSON.String():
-		target = model.PrintModeJSON
-	case model.PrintModeJSONL.String():
-		target = model.PrintModeJSONL
-	case model.PrintModeExcel.String():
-		target = model.PrintModeExcel
-		suffix = " (active only when executing .dump, otherwise same as csv mode)"
-	case model.PrintModeParquet.String():
-		target = model.PrintModeParquet
-		suffix = " (active only when executing .dump, otherwise same as csv mode)"
-	case model.PrintModeVertical.String():
-		target = model.PrintModeVertical
-	default:
-		return fmt.Errorf("invalid output mode %q: want table, vertical, csv, tsv, ltsv, json, jsonl, markdown, excel, or parquet", modeName)
-	}
-
-	fmt.Fprintf(config.Stderr, "Change output mode from %s to %s%s\n", m.displayName(), modeName, suffix)
+	// The banner names the mode, not the string that was typed, so it reads the
+	// same however the user spelled it.
+	fmt.Fprintf(config.Stderr, "Change output mode from %s to %s%s\n",
+		m.displayName(), target, modeBannerSuffix(target))
 	m.PrintMode = target
 	return nil
+}
+
+// modeBannerSuffix is what the .mode banner adds after the new mode's name, for
+// the modes whose name does not describe what the screen will show: markdown
+// renders a table, and the two dump-only formats render as CSV until a .dump or
+// --output gives them a file to be written to.
+func modeBannerSuffix(mode model.PrintMode) string {
+	switch mode {
+	case model.PrintModeMarkdownTable:
+		return " table"
+	case model.PrintModeExcel, model.PrintModeParquet:
+		return " (active only when executing .dump, otherwise same as csv mode)"
+	default:
+		return ""
+	}
 }

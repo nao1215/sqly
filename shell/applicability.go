@@ -82,8 +82,10 @@ func (s *Shell) hasAnyInput() bool {
 // not known until the import runs, and rejecting a run over what a directory
 // might not contain would be worse than letting an option go unused there.
 func (s *Shell) hasInputMatching(extensions map[string]bool) bool {
-	if s.argument.StdinFormat != "" && extensions[stdinFormatExtensions[s.argument.StdinFormat]] {
-		return true
+	if s.argument.StdinFormat != "" {
+		if ext, ok := model.StdinFormatExtension(s.argument.StdinFormat); ok && extensions[ext] {
+			return true
+		}
 	}
 	for _, path := range s.argument.FilePaths {
 		if isRemoteURL(path) {
