@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [main]
 
+# The suite only reads the repository and runs the binary it builds.
+permissions:
+  contents: read
+
 jobs:
   atago:
     name: atago (binary e2e)
@@ -50,8 +54,12 @@ jobs:
   # has open, which is every in-place save, and no Unix run can show that.
   #
   # The pty specs run as a second, serialized pass. atago >= v0.7.0 drives a
-  # ConPTY on Windows, and the concurrent sessions starve each other otherwise;
-  # --retry-failed is a safety net against CPU-starvation flakes.
+  # ConPTY on Windows, and the concurrent sessions starve each other otherwise.
+  # That pass does not retry: a keystroke this platform loses is a bug to fix.
+  # It used to, because ConPTY dropped input delivered while the prompt was being
+  # redrawn — the prompt library spent up to 100ms of every redraw reading the
+  # input handle for a terminal size reply, and swallowed what was typed into it.
+  # prompt v0.0.14 stopped doing that.
   atago-windows:
     name: atago (binary e2e) (windows-latest)
     runs-on: windows-latest
@@ -97,4 +105,4 @@ jobs:
           export USERPROFILE="$HOME"
           export SQLY_HISTORY_DB_PATH="$RUNNER_TEMP/history.db"
           mkdir -p "$HOME"
-          atago run --ci --parallel 1 --retry-failed 5 ./e2e/atago/pty.atago.yaml
+          atago run --ci --parallel 1 --retry-failed 0 ./e2e/atago/pty.atago.yaml
