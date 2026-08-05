@@ -265,9 +265,10 @@ when the script has a side effect such as `.save`. `--script-file` rejects
 
 ![sql-file demo](./doc/img/sql-file-demo.gif)
 
-Both are runnable in [`examples/`](./examples/). The
-[reference](https://nao1215.github.io/sqly/reference/) compares them in full and
-the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
+Both are runnable in [`examples/`](./examples/), along with `join.sql`, which
+answers one query over a CSV and a JSONL at once. The
+[reference](https://nao1215.github.io/sqly/reference/) compares the script flags
+in full and the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
 
 ## The shell
 

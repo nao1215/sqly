@@ -57,6 +57,88 @@ scenarios:
             line: 4
             equals: "ASIA,1650"
 
+  # The cross-format join is sqly's headline capability, so the example that
+  # shows it is run here in full: two files, two formats, one query.
+  - name: examples/join.sql joins a CSV with a JSONL
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: &regions
+          file: regions.jsonl
+          from: ../../examples/data/regions.jsonl
+      - fixture: &join
+          file: join.sql
+          from: ../../examples/join.sql
+      - run:
+          command: sqly --output-format csv --sql-file join.sql sales.csv regions.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              region_name,lead,total
+              "Europe, Middle East & Africa",nadia,2650
+              Americas,dana,2400
+              Asia Pacific,kenji,1650
+
+  - name: examples/join.sql prints the table the README shows
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: *regions
+      - fixture: *join
+      - run:
+          command: sqly --sql-file join.sql sales.csv regions.jsonl
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              +------------------------------+-------+-------+
+              |         region_name          | lead  | total |
+              +------------------------------+-------+-------+
+              | Europe, Middle East & Africa | nadia |  2650 |
+              | Americas                     | dana  |  2400 |
+              | Asia Pacific                 | kenji |  1650 |
+              +------------------------------+-------+-------+
+
+  # The join is only a join if both files are needed. Given one of them, the
+  # query has to fail on the missing table rather than quietly answer from half
+  # the data.
+  - name: examples/join.sql needs both inputs
+    env: *hist
+    steps:
+      - fixture: *sales
+      - fixture: *join
+      - run:
+          command: sqly --sql-file join.sql sales.csv
+      - assert:
+          exit_code: 1
+          stdout:
+            empty: true
+          stderr:
+            contains: "no such table: regions"
+
+  # examples/README.md shows this report being read by jq. jq is not run here —
+  # a spec that skips itself where jq is missing proves nothing where it is
+  # present — so the two fields the jq program reads are asserted out of the
+  # JSON directly. The example's output line is pinned by what they hold.
+  - name: examples/data/sales.csv inspects as the README says
+    env: *hist
+    steps:
+      - fixture: *sales
+      - run:
+          command: sqly --inspect sales.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].name"
+              equals: sales
+      - assert:
+          stdout:
+            json:
+              path: "$.tables[0].row_count"
+              equals: 6
+
   - name: examples/update.sqly rewrites a region and saves the result
     env: *hist
     steps:
