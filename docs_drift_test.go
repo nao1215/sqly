@@ -1032,6 +1032,8 @@ func TestExamples_ExistAndAreReachable(t *testing.T) {
 	required := []string{
 		"examples/README.md",
 		"examples/data/sales.csv",
+		"examples/data/regions.jsonl",
+		"examples/join.sql",
 		"examples/report.sql",
 		"examples/update.sqly",
 	}
@@ -1057,7 +1059,7 @@ func TestExamples_AreRunByTheE2ESuite(t *testing.T) {
 
 	const spec = "e2e/atago/examples.atago.yaml"
 	body := readDoc(t, spec)
-	for _, file := range []string{"report.sql", "update.sqly", "sales.csv"} {
+	for _, file := range []string{"report.sql", "join.sql", "update.sqly", "sales.csv", "regions.jsonl"} {
 		if !strings.Contains(body, file) {
 			t.Errorf("%s does not run examples/%s against the real binary", spec, file)
 		}

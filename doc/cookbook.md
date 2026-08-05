@@ -489,7 +489,12 @@ sqly --output-format csv --sql-file report.sql --output report.csv sales.csv
 ```
 
 Both files are in [`examples/`](https://github.com/nao1215/sqly/tree/main/examples)
-and can be run straight from a clone.
+and can be run straight from a clone, along with `join.sql`, which answers one
+query over a CSV and a JSONL at once:
+
+```shell
+sqly --sql-file examples/join.sql examples/data/sales.csv examples/data/regions.jsonl
+```
 
 ## Analytics
 
