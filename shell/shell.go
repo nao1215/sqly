@@ -804,7 +804,7 @@ func (s *Shell) prompt(p promptSession) (string, error) {
 const continuationPrefix = "   ...> "
 
 func (s *Shell) promptPrefix() string {
-	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.displayName())
+	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String())
 }
 
 // sqlInputComplete reports whether the interactive buffer holds a statement
@@ -1145,7 +1145,7 @@ func (s *Shell) exec(ctx context.Context, request string) error {
 		return s.commands[argv[0]].execute(ctx, s, argv[1:])
 	}
 
-	if s.commands.hasCmdPrefix(req) {
+	if looksLikeCommand(req) {
 		return errors.New("no such sqly command: " + color.CyanString(req))
 	}
 

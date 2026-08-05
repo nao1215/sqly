@@ -685,12 +685,24 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
 
 	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
-	exporter.EXPECT().DumpTable(normalizedPath, table, model.ExportCSV, model.CompressionNone).Return(nil)
+	// The exporter writes a scratch file beside the destination, which is then
+	// moved onto it, so the path it is handed is not the one the user named. The
+	// scratch file has to be created for the commit to have something to move, and
+	// the assertion that the destination is the path the user named is the stderr
+	// line below plus TestDumpWrite_SucceedsToANewPath.
+	var staged string
+	exporter.EXPECT().
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone).
+		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression) error {
+			staged = path
+			return os.WriteFile(path, []byte("id,name\n"), 0o600)
+		})
 
 	s := newBoundaryTestShell(t, Usecases{
 		metadata: metadata,
 		export:   exporter,
 	})
+	s.files = defaultFileOps()
 
 	// The dump status line is control-plane output and goes to stderr.
 	out := captureStderr(t, func() {
@@ -703,5 +715,15 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 	}
 	if !strings.Contains(out, normalizedPath) {
 		t.Fatalf("stderr %q does not include normalized csv path %q", out, normalizedPath)
+	}
+	if staged == normalizedPath {
+		t.Error("the exporter wrote straight to the destination; a failure part-way would destroy it")
+	}
+	if filepath.Dir(staged) != filepath.Dir(normalizedPath) {
+		t.Errorf("staged at %q, want it beside the destination %q so the commit is a rename within one filesystem",
+			staged, normalizedPath)
+	}
+	if _, err := os.Stat(normalizedPath); err != nil {
+		t.Errorf("the destination was not created: %v", err)
 	}
 }

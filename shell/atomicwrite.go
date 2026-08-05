@@ -52,7 +52,7 @@ func (s *Shell) writeFileAtomically(dest string, write func(path string) error) 
 	}()
 
 	if err := write(staging); err != nil {
-		return errors.New(renamePathInMessage(err.Error(), staging, dest))
+		return &stagedWriteError{message: renamePathInMessage(err.Error(), staging, dest), Err: err}
 	}
 
 	// The backup is taken only if it is about to be needed. A rename replaces the
@@ -113,6 +113,21 @@ func (s *Shell) restoreFromBackup(dest, backup string) error {
 	}
 	return nil
 }
+
+// stagedWriteError is a failure to serialize into the scratch file, reported
+// with the scratch path rewritten to the destination.
+//
+// It is a type rather than a fresh errors.New for one reason: rewriting a
+// message must not cost the error underneath it. A caller asking errors.Is
+// whether the export hit a format it could not represent is asking about the
+// failure, not about which path was in its text.
+type stagedWriteError struct {
+	message string
+	Err     error
+}
+
+func (e *stagedWriteError) Error() string { return e.message }
+func (e *stagedWriteError) Unwrap() error { return e.Err }
 
 // renamePathInMessage rewrites every mention of the scratch path as the
 // destination. The serializer names the path it was writing, which is the

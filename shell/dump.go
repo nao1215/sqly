@@ -84,7 +84,21 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	if name, aliased := s.outputAliasesImportedSource(filePath); aliased {
 		return &outputPathError{Path: filePath, Err: fmt.Errorf(".dump destination %s is the source file for table %q; use .save --in-place to overwrite a source", filePath, name)}
 	}
-	if err := s.usecases.export.DumpTable(filePath, table, exportFmt, compression); err != nil {
+	// The result is serialized beside the destination and moved onto it, the same
+	// way --output and .save write.
+	//
+	// The export was never the exposure: the exporter stages into a temp file of
+	// its own and opens the destination only once serializing has succeeded, so a
+	// format that rejects a value part-way leaves the destination alone. The step
+	// after it was. That temp file lives in the OS temp directory, so reaching the
+	// destination was always a truncate and a copy, and a copy that fails half way
+	// — a full disk, an I/O error — leaves the destination holding whatever
+	// reached it, with nothing to put back. Going through writeFileAtomically
+	// makes the last step a rename inside the destination's own directory, with a
+	// copy only where the platform refuses one and a backup taken before it runs.
+	if err := s.writeFileAtomically(filePath, func(staging string) error {
+		return s.usecases.export.DumpTable(staging, table, exportFmt, compression)
+	}); err != nil {
 		return &outputPathError{Path: filePath, Err: err}
 	}
 	// .dump writes data to a file, so its status line is control-plane output

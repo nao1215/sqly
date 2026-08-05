@@ -1,10 +1,11 @@
 package shell
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -272,7 +273,7 @@ func primaryKeyColumns(cols *model.Table) []string {
 		}
 		pks = append(pks, pkCol{name: rec.At(1), pos: pos})
 	}
-	sort.Slice(pks, func(i, j int) bool { return pks[i].pos < pks[j].pos })
+	slices.SortFunc(pks, func(a, b pkCol) int { return cmp.Compare(a.pos, b.pos) })
 	names := make([]string, len(pks))
 	for i, p := range pks {
 		names[i] = p.name

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -329,7 +329,7 @@ func (s *Shell) recordImportedTables(ctx context.Context, claims []claimedTables
 		s.warnKeywordTableNames(owned)
 		imported = append(imported, owned...)
 	}
-	sort.Strings(imported)
+	slices.Sort(imported)
 	return imported
 }
 

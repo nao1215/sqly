@@ -48,7 +48,9 @@ func (c CommandList) hasCmd(key string) bool {
 	return ok
 }
 
-// hasCmdPrefix returns whether s has dot prefix or not
-func (c CommandList) hasCmdPrefix(s string) bool {
+// looksLikeCommand reports whether s was meant as a helper command: it starts
+// with a dot. It is what tells "no such sqly command" apart from a SQL statement
+// the engine should be given a chance to reject on its own terms.
+func looksLikeCommand(s string) bool {
 	return strings.HasPrefix(s, ".")
 }

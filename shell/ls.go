@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/nao1215/sqly/config"
 )
@@ -59,7 +59,7 @@ func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error
 		}
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		fmt.Fprintln(config.Stdout, name)
 	}

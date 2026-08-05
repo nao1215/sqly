@@ -26,7 +26,7 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 			"  jsonl\n"+
 			"  excel ※ active only when executing .dump, otherwise same as csv mode\n"+
 			"  parquet ※ active only when executing .dump, otherwise same as csv mode",
-			s.state.mode.displayName())
+			s.state.mode.String())
 	}
 	if len(argv) > 1 {
 		return fmt.Errorf(".mode accepts a single mode name, got %d arguments", len(argv))

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 
 	"github.com/nao1215/sqly/config"
@@ -142,7 +142,7 @@ func (s *Shell) runInspect(ctx context.Context) error {
 		names = append(names, t.Name())
 	}
 	// Sort by name so the report is deterministic regardless of import order.
-	sort.Strings(names)
+	slices.Sort(names)
 
 	report := inspectReport{
 		SchemaVersion: InspectSchemaVersion,

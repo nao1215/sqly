@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/interactor/mock"
+	"go.uber.org/mock/gomock"
 )
 
 // The failure these tests reproduce is the one a mock that returns an error
@@ -387,5 +391,109 @@ func TestOutputWrite_FollowsASymlink(t *testing.T) {
 	}
 	if got := readFile(t, target); got != updated {
 		t.Errorf("the file the link points at holds %q, want %q", got, updated)
+	}
+}
+
+// TestDumpWrite_FallbackCopyFailurePreservesTheDestination holds `.dump` to the
+// contract `--output` and `.save` already met.
+//
+// The export itself was never the exposure: the exporter serializes into a
+// temp file of its own and only opens the destination once that succeeded, so a
+// format that rejects a value part-way leaves the destination alone. The
+// exposure was the step after it. That temp file is in the OS temp directory,
+// so reaching the destination is always a truncate-and-copy — os.O_TRUNC, then
+// io.Copy — and a failure during the copy leaves the destination holding
+// whatever had been written, with nothing to put back.
+//
+// Going through writeFileAtomically makes the last step a rename inside the
+// destination's own directory, with the copy only as the fallback for platforms
+// that refuse one, and a backup taken before that fallback runs. This is that
+// fallback failing: the rename is refused, the copy truncates the destination,
+// writes a prefix, and fails.
+func TestDumpWrite_FallbackCopyFailurePreservesTheDestination(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "report.csv")
+	const original = "id,name\n1,alice\n2,bob\n"
+	if err := os.WriteFile(dest, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	exporter := mock.NewMockExportUsecase(ctrl)
+
+	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
+	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
+	// The exporter succeeds, as the real one does whenever the format can hold
+	// every value. Only the commit fails.
+	exporter.EXPECT().
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone).
+		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression) error {
+			return os.WriteFile(path, []byte("id,name\n9,carol\n"), 0o600)
+		})
+
+	ops := defaultFileOps()
+	s := newBoundaryTestShell(t, Usecases{metadata: metadata, export: exporter})
+	s.files = ops
+	s.files.Rename = alwaysFailRename(errors.New("rename refused, as on Windows"))
+	copyFailure := errors.New("no space left on device")
+	// The backup is taken only once the rename has been refused, so call 1 is the
+	// backup and call 2 is the fallback: the one that damages.
+	s.files.Copy = truncatingCopy(ops.Copy, 2, "id,na", copyFailure)
+
+	err := s.commands.dumpCommand(context.Background(), s, []string{"users", dest})
+	if err == nil {
+		t.Fatal(".dump succeeded although the commit copy failed")
+	}
+	if !errors.Is(err, copyFailure) {
+		t.Errorf("the copy failure must survive: %v", err)
+	}
+	if got := readFile(t, dest); got != original {
+		t.Errorf("the destination was left damaged:\n got %q\nwant %q", got, original)
+	}
+	if extra := leftoverFiles(t, dir, "report.csv"); len(extra) > 0 {
+		t.Errorf("staging or backup files left behind: %v", extra)
+	}
+}
+
+// TestDumpWrite_SucceedsToANewPath is the ordinary case, kept beside the failure
+// one so staging cannot be "fixed" into never committing: the bytes the exporter
+// wrote have to end up at the destination the user named.
+func TestDumpWrite_SucceedsToANewPath(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "report.csv")
+
+	ctrl := gomock.NewController(t)
+	metadata := mock.NewMockMetadataUsecase(ctrl)
+	exporter := mock.NewMockExportUsecase(ctrl)
+
+	table := model.NewTable("users", model.NewHeader([]string{"id"}), nil)
+	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
+
+	const written = "id\n1\n"
+	exporter.EXPECT().
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone).
+		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression) error {
+			return os.WriteFile(path, []byte(written), 0o600)
+		})
+
+	s := newBoundaryTestShell(t, Usecases{metadata: metadata, export: exporter})
+	s.files = defaultFileOps()
+
+	captureStderr(t, func() {
+		if err := s.commands.dumpCommand(context.Background(), s, []string{"users", dest}); err != nil {
+			t.Fatalf("dumpCommand: %v", err)
+		}
+	})
+
+	if got := readFile(t, dest); got != written {
+		t.Errorf("the destination holds %q, want %q", got, written)
+	}
+	if extra := leftoverFiles(t, dir, "report.csv"); len(extra) > 0 {
+		t.Errorf("staging files left behind: %v", extra)
 	}
 }

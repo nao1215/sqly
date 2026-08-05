@@ -95,17 +95,6 @@ func newMode(w io.Writer, m model.PrintMode) *mode {
 	}
 }
 
-// AllowsMultipleResults reports whether the current output format can carry more
-// than one result set in one stream.
-func (m *mode) AllowsMultipleResults() bool {
-	return m.PrintMode.AllowsMultipleResults()
-}
-
-// displayName returns the user-facing name of the current mode.
-func (m *mode) displayName() string {
-	return m.String()
-}
-
 // changeOutputModeIfNeeded change output mode.
 // modeName is new output mode (e.g. table).
 //
@@ -136,7 +125,7 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	// The banner names the mode, not the string that was typed, so it reads the
 	// same however the user spelled it.
 	fmt.Fprintf(config.Stderr, "Change output mode from %s to %s%s\n",
-		m.displayName(), target, modeBannerSuffix(target))
+		m.String(), target, modeBannerSuffix(target))
 	m.PrintMode = target
 	return nil
 }

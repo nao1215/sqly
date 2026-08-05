@@ -2,7 +2,7 @@ package shell
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/nao1215/sqly/domain/model"
 )
@@ -139,7 +139,7 @@ func (s *Shell) excelSheetReports() []inspectExcelSheet {
 		}
 		latest[record.source] = record
 	}
-	sort.Strings(sources)
+	slices.Sort(sources)
 
 	var reports []inspectExcelSheet
 	for _, source := range sources {
