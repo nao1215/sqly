@@ -725,3 +725,70 @@ func TestInteractivePTY_LiteralSpanningLinesKeepsBuffering(t *testing.T) {
 		t.Fatalf("interactive shell: exit code = %d, want 0", code)
 	}
 }
+
+// waitForAny polls until one of want appears and returns it, so a test can
+// accept either of two legitimate outcomes without accepting a third.
+func (s *ptySession) waitForAny(want []string, timeout time.Duration) string {
+	s.t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		out := s.output()
+		for _, w := range want {
+			if strings.Contains(out, w) {
+				return w
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	s.t.Fatalf("interactive shell: timed out after %s waiting for any of %q.\n--- visible output ---\n%s",
+		timeout, want, s.output())
+	return ""
+}
+
+// TestInteractivePTY_InterruptedImportLeavesNoHalfTable covers what cancelling
+// can reach besides a query. An import is a statement like any other, so Ctrl-C
+// stops it too — and stopping a load halfway is exactly how a table ends up with
+// some of its rows.
+//
+// The assertion holds whichever way the race goes: the import either finished
+// before the key arrived, in which case every row is there, or it was cancelled,
+// in which case there is no table at all. A count between the two would be the
+// bug.
+func TestInteractivePTY_InterruptedImportLeavesNoHalfTable(t *testing.T) {
+	const rows = 400000
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "big.csv")
+	var csv strings.Builder
+	csv.WriteString("id,name,note\n")
+	for i := range rows {
+		fmt.Fprintf(&csv, "%d,name%d,note value %d\n", i, i, i)
+	}
+	if err := os.WriteFile(source, []byte(csv.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s := startPTYSession(t, filepath.Join("testdata", "user.csv"))
+	t.Cleanup(s.close)
+	s.waitReady(startupTimeout)
+
+	s.write(".import " + source + "\r")
+	time.Sleep(250 * time.Millisecond)
+	s.write("\x03")
+
+	// "imported=" is computed by the engine, so neither string can be matched
+	// against the echo of the line that asks for it.
+	s.write("SELECT 'imported=' || COUNT(*) AS n FROM big;\r")
+	got := s.waitForAny([]string{fmt.Sprintf("imported=%d", rows), "no such table"}, ioTimeout)
+	t.Logf("interrupted import ended as: %s", got)
+
+	// Whatever happened to the import, the session is unharmed.
+	s.write("SELECT 'usable' || '_after_import';\r")
+	s.waitFor("usable_after_import", ioTimeout)
+
+	time.Sleep(300 * time.Millisecond)
+	s.sendEOF()
+	if code := s.waitExit(exitTimeout); code != 0 {
+		t.Fatalf("interactive shell: exit code = %d after an interrupted import, want 0", code)
+	}
+}
