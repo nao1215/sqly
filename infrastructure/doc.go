@@ -1,2 +1,2 @@
-// Package infrastructure manage sqly infrastructure logic.
+// Package infrastructure manages sqly infrastructure logic.
 package infrastructure
