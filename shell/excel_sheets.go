@@ -27,7 +27,9 @@ import (
 // into a temp directory that the import's cleanup removes, and re-reading the
 // URL would be a second download that could return something else entirely.
 type excelWorkbookImport struct {
-	// source is the path or URL the user named, not the staged copy.
+	// source is the workbook the user named, not the staged copy, normalized the
+	// way tables[].source is (see absoluteSource) so the two fields of the
+	// --inspect report name it identically.
 	source string
 	// sheets is every sheet the workbook held, in workbook order.
 	sheets []model.ExcelSheet
@@ -70,7 +72,7 @@ func (s *Shell) recordExcelSheets(loadPath, displayPath string) {
 	}
 
 	s.excelWorkbooks = append(s.excelWorkbooks, excelWorkbookImport{
-		source: displayPath,
+		source: absoluteSource(displayPath),
 		sheets: sheets,
 		tables: tables,
 	})
@@ -107,8 +109,10 @@ func (s *Shell) warnSkippedExcelSheets(loadPath, displayPath string) {
 }
 
 // lastExcelWorkbook returns the most recent record for a source, which is the
-// one the import that just ran produced.
+// one the import that just ran produced. The argument is the path as the caller
+// has it, so it is normalized here to match how records are keyed.
 func (s *Shell) lastExcelWorkbook(source string) (excelWorkbookImport, bool) {
+	source = absoluteSource(source)
 	for i := len(s.excelWorkbooks) - 1; i >= 0; i-- {
 		if s.excelWorkbooks[i].source == source {
 			return s.excelWorkbooks[i], true
@@ -119,11 +123,13 @@ func (s *Shell) lastExcelWorkbook(source string) (excelWorkbookImport, bool) {
 
 // excelSheetReports renders every recorded workbook for the --inspect report,
 // in a fixed order: sources sorted by name, sheets in the order the workbook
-// stores them.
+// stores them. The name sorted on is the normalized source, so the order does
+// not depend on how each workbook happened to be spelled.
 //
 // Re-importing the same source replaces its earlier record rather than adding a
 // second one, so a session that imported a workbook twice reports it once, as
-// it stands now.
+// it stands now. Because records are keyed by the normalized path, importing one
+// workbook as "book.xlsx" and again as an absolute path is one source, not two.
 func (s *Shell) excelSheetReports() []inspectExcelSheet {
 	latest := make(map[string]excelWorkbookImport, len(s.excelWorkbooks))
 	sources := make([]string, 0, len(s.excelWorkbooks))

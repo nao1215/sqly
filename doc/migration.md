@@ -9,6 +9,29 @@ output.
 
 ## v1.0.0-rc3 → v1.0.0-rc4
 
+### `excel_sheets[].source` is an absolute path
+
+The `--inspect` report names a workbook twice: once as the source of each table
+it produced, and once as the source of each sheet it held. The second one was the
+path as it was typed, so the two did not match.
+
+```text
+Before rc4:
+  sqly --inspect book.xlsx
+  # tables[0].source       = "/abs/path/book.xlsx"
+  # excel_sheets[0].source = "book.xlsx"
+
+From rc4:
+  # both are "/abs/path/book.xlsx"
+```
+
+**What to change:** a consumer that keyed `excel_sheets` on the relative path
+keys on the absolute one, or joins the two arrays on `source` now that they
+agree. A remote workbook still reports the URL it was downloaded from.
+
+`schema_version` stays `1`. The field's type and meaning did not change; the
+implementation caught up with what the schema described.
+
 ### Four failures moved off exit code `1`
 
 `1` means a statement ran and failed, so a wrapper reading it goes back to the

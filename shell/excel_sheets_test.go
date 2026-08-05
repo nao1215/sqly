@@ -372,6 +372,56 @@ func TestInspect_ReportsEverySheetWithItsVisibility(t *testing.T) {
 	}
 }
 
+// TestInspect_NamesAWorkbookTheSameWayInBothFields pins the join a consumer of
+// the report depends on: excel_sheets[].source and the tables[].source of the
+// tables that workbook produced are the same string. They used to differ —
+// tables were made absolute and sheets kept whatever was typed — so the two
+// fields named one file in two ways and nothing could match them up.
+//
+// It also covers the consequence of keying records on the typed path: a workbook
+// imported twice under two spellings became two sources in the report.
+func TestInspect_NamesAWorkbookTheSameWayInBothFields(t *testing.T) {
+	dir := t.TempDir()
+	// The workdir is resolved because macOS reaches its temp directories through
+	// a symlink, while the absolute path sqly computes comes from the working
+	// directory the kernel reports. Without this the two spellings below would
+	// differ for a reason that has nothing to do with what is being tested.
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	path := mixedWorkbook(t, dir)
+	t.Chdir(dir)
+
+	s, cleanup, err := newShell(t, []string{"sqly", "--inspect", path})
+	if err != nil {
+		t.Fatalf("newShell: %v", err)
+	}
+	defer cleanup()
+
+	s.recordTableSources(context.Background(), []string{"book_Visible"}, "book.xlsx")
+	// The same workbook, reached twice by two different spellings.
+	s.recordExcelSheets(path, path)
+	s.recordExcelSheets(path, "book.xlsx")
+
+	reports := s.excelSheetReports()
+	if len(reports) == 0 {
+		t.Fatal("no sheets were reported for a workbook that was recorded twice")
+	}
+	want := s.tableSources["book_Visible"]
+	for _, report := range reports {
+		if report.Source != want {
+			t.Errorf("sheet %q reports source=%q, want the table's source %q", report.Name, report.Source, want)
+		}
+	}
+	// Four sheets, recorded twice: a report holding eight means the two spellings
+	// were kept as two workbooks.
+	const sheetsInTheWorkbook = 4
+	if len(reports) != sheetsInTheWorkbook {
+		t.Errorf("the report holds %d sheets, want %d; the two spellings were not recognized as one workbook",
+			len(reports), sheetsInTheWorkbook)
+	}
+}
+
 // TestInspect_OmitsExcelSheetsWithoutAWorkbook is the additive half of the
 // contract: a consumer reading only tables must see what it always saw.
 func TestInspect_OmitsExcelSheetsWithoutAWorkbook(t *testing.T) {
