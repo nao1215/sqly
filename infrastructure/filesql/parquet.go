@@ -61,11 +61,21 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	if err != nil {
 		return fmt.Errorf("begin staging transaction: %w", err)
 	}
+	stmt, err := tx.PrepareContext(ctx, parquetInsertStatement(table))
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("prepare staging insert: %w", err)
+	}
 	for rowIdx := range table.RowCount() {
-		if _, err = tx.ExecContext(ctx, parquetInsertStatement(table, rowIdx)); err != nil {
+		if _, err = stmt.ExecContext(ctx, parquetInsertArgs(table, rowIdx)...); err != nil {
+			_ = stmt.Close()
 			_ = tx.Rollback()
 			return fmt.Errorf("insert into staging table: %w", err)
 		}
+	}
+	if err = stmt.Close(); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("close staging insert: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit staging transaction: %w", err)
@@ -111,27 +121,43 @@ func parquetStagingCreateTable(t *model.Table) string {
 	return b.String()
 }
 
-// parquetInsertStatement builds the INSERT for one staged row, emitting SQL NULL
-// for cells the table marks as NULL. The shared GenerateInsertStatement only sees
-// the []string record and single-quotes every cell, which collapses a NULL into
-// an empty string; consulting table.IsNull here keeps NULL and "" distinct
-// through the parquet round-trip.
-func parquetInsertStatement(t *model.Table, rowIdx int) string {
-	record, _ := t.Row(rowIdx)
+// parquetInsertStatement builds the staging INSERT, one placeholder per column.
+//
+// The values are bound rather than written into the statement. Quoting them into
+// SQL text made the export depend on every value being parsable as a SQL
+// literal, and a value is data: a NUL byte ends a statement as far as SQLite's
+// tokenizer is concerned, so a row carrying one — which CSV and every other
+// format export without complaint — left the literal unclosed and failed the
+// export with "unrecognized token". Binding also parses the statement once for
+// the whole export instead of once per row.
+func parquetInsertStatement(t *model.Table) string {
 	var b strings.Builder
 	b.WriteString("INSERT INTO " + infra.Quote(t.Name()) + " VALUES (")
 	for col := range t.Header() {
 		if col > 0 {
 			b.WriteString(", ")
 		}
-		if t.IsNull(rowIdx, col) {
-			b.WriteString("NULL")
-			continue
-		}
-		b.WriteString(infra.SingleQuote(record.At(col)))
+		b.WriteString("?")
 	}
 	b.WriteString(");")
 	return b.String()
+}
+
+// parquetInsertArgs returns one row's bind values, nil for the cells the table
+// marks as NULL. The shared GenerateInsertStatement only sees the []string
+// record and cannot tell a NULL from an empty string; consulting table.IsNull
+// here keeps the two distinct through the parquet round-trip.
+func parquetInsertArgs(t *model.Table, rowIdx int) []any {
+	record, _ := t.Row(rowIdx)
+	args := make([]any, 0, len(t.Header()))
+	for col := range t.Header() {
+		if t.IsNull(rowIdx, col) {
+			args = append(args, nil)
+			continue
+		}
+		args = append(args, record.At(col))
+	}
+	return args
 }
 
 // copyFile copies src to dst. A copy (not rename) is used because the temporary

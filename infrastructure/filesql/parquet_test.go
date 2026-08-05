@@ -221,3 +221,51 @@ func TestDumpTableToParquet_EmptyResult(t *testing.T) {
 		t.Errorf("error = %q, want it to mention the empty result", err.Error())
 	}
 }
+
+// TestDumpTableToParquet_PreservesValuesSQLCannotParse covers values that are
+// data to the driver but syntax to the SQL parser. The staging INSERT used to be
+// assembled as SQL text with every value quoted into it, so a NUL byte — which
+// SQLite's tokenizer treats as the end of the statement — left the literal
+// unclosed and the export failed with "unrecognized token". The same value
+// exports through every other format, so nothing about it is unexportable.
+func TestDumpTableToParquet_PreservesValuesSQLCannotParse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "a NUL byte ends the SQL literal but not the value", value: "A\x00B"},
+		{name: "an apostrophe is data, not the end of a literal", value: "it's"},
+		{name: "a doubled apostrophe is two characters", value: "it''s"},
+		{name: "a backslash is not an escape", value: `back\slash`},
+		{name: "a statement separator is data", value: "one; DROP TABLE t; --"},
+		{name: "a newline inside a value", value: "line\nbreak"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			table, err := model.NewTableFromCells("odd", model.Header{"v"}, [][]model.Cell{
+				{model.NewCell(tt.value)},
+			})
+			if err != nil {
+				t.Fatalf("NewTableFromCells: %v", err)
+			}
+			out := filepath.Join(t.TempDir(), "odd.parquet")
+
+			if err := DumpTableToParquet(out, table); err != nil {
+				t.Fatalf("DumpTableToParquet: %v", err)
+			}
+
+			got := reimportColumn(t, out, "odd", "v")
+			if len(got) != 1 {
+				t.Fatalf("reimported %d rows, want 1", len(got))
+			}
+			if !got[0].Valid || got[0].String != tt.value {
+				t.Errorf("value = %#v, want %q", got[0], tt.value)
+			}
+		})
+	}
+}
