@@ -444,3 +444,39 @@ func TestRemoteRefusalRedactsCredentials(t *testing.T) {
 		t.Errorf("refusal = %q, want the URL with its password redacted", err.Error())
 	}
 }
+
+// TestRedactURL covers what the redaction may and may not touch. It runs over
+// every kind of source string a message can name, because the function sees them
+// all: only the schemes sqly downloads are rewritten, and everything else has to
+// come back byte for byte. A Windows path is the case that proves it — it parses
+// as a URL whose scheme is its drive letter, and re-serializing lowercases that.
+func TestRedactURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "http password is replaced", raw: "http://user:hunter2@host/data.csv", want: "http://user:xxxxx@host/data.csv"},
+		{name: "https password is replaced", raw: "https://user:hunter2@host/data.csv", want: "https://user:xxxxx@host/data.csv"},
+		{name: "a username without a password is kept", raw: "https://user@host/data.csv", want: "https://user@host/data.csv"},
+		{name: "a plain URL is unchanged", raw: "https://host/data.csv", want: "https://host/data.csv"},
+		{name: "a Windows path keeps its drive letter", raw: `C:\data\people.csv`, want: `C:\data\people.csv`},
+		{name: "a Windows path with forward slashes", raw: "C:/data/people.csv", want: "C:/data/people.csv"},
+		{name: "an absolute Unix path", raw: "/var/data/people.csv", want: "/var/data/people.csv"},
+		{name: "a relative path", raw: "testdata/people.csv", want: "testdata/people.csv"},
+		{name: "the stdin source name", raw: "stdin", want: "stdin"},
+		{name: "a file URL is not a download", raw: "file:///data/people.csv", want: "file:///data/people.csv"},
+		{name: "an empty source", raw: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := redactURL(tt.raw); got != tt.want {
+				t.Errorf("redactURL(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}

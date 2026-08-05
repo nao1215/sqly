@@ -395,13 +395,20 @@ func filenameFromContentType(header string) string {
 // bug report or a CI log. Go's own transport error already redacts it, so
 // repeating the raw URL alongside undid that.
 //
-// What cannot be parsed as a URL is returned unchanged: sqly never fetched it,
-// so it holds no credentials sqly put in flight, and mangling it would only
-// obscure the message.
+// Only the schemes sqly downloads are rewritten. Everything else is returned
+// exactly as given: a local path holds no credentials sqly put in flight, and
+// re-serializing one damages it — "C:\\data\\x.csv" parses as a URL whose scheme
+// is "C", which comes back lowercased as "c:\\data\\x.csv" and no longer names the
+// file the message is about.
 func redactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return raw
 	}
-	return u.Redacted()
+	switch u.Scheme {
+	case "http", "https":
+		return u.Redacted()
+	default:
+		return raw
+	}
 }
