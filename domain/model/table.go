@@ -584,7 +584,7 @@ func (t *Table) printTable(out io.Writer) error {
 
 // markdownCell renders a cell for a Markdown table. A "|" is escaped so it does
 // not start a new column, and an embedded newline is replaced with "<br>" so a
-// multi-line value stays on one physical row instead of breaking the table. Ref
+// multi-line value stays on one physical row instead of breaking the table.
 func markdownCell(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
@@ -676,8 +676,7 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 // printLTSV print all record with header; output format is ltsv. LTSV has no
 // escaping mechanism: a tab separates fields and a newline ends a record, so a
 // value containing either cannot be represented losslessly. Reject such a value
-// up front instead of emitting output that no longer round-trips as LTSV. Ref
-// ,.
+// up front instead of emitting output that no longer round-trips as LTSV.
 func (t *Table) printLTSV(out io.Writer) error {
 	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
 		return err

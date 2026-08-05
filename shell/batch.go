@@ -37,11 +37,11 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 //
 // Execution is fail-fast: the first failed statement or helper command stops
 // the run and returns an error, so later statements never execute and their
-// output cannot leak into a pipeline that the process then reports as failed
-// (). A ".exit" command stops early with success, mirroring the
-// interactive shell. ranAny reports whether at least one statement or command
-// was executed, so callers can skip post-run side effects (e.g. a .save
-// write-back) for an empty batch ().
+// output cannot leak into a pipeline that the process then reports as failed.
+// A ".exit" command stops early with success, mirroring the interactive shell.
+// ranAny reports whether at least one statement or command was executed, so
+// callers can skip post-run side effects (e.g. a .save write-back) for an empty
+// batch.
 func (s *Shell) runScriptElements(ctx context.Context, elements []scriptElement) (ranAny bool, err error) {
 	var failErr error
 	for i, element := range elements {
@@ -549,10 +549,6 @@ func withMainVerb(stmt string) string {
 	return ""
 }
 
-// readSQLFile reads the SQL script at path for --sql-file. It returns a clear
-// error for a missing or unreadable file (wrapping the OS error so callers can
-// inspect it with errors.Is) and rejects a file with no SQL, so an empty or
-// whitespace-only script fails loudly instead of running nothing.
 // readScriptFile reads a --script-file. It is the sibling of readSQLFile and
 // differs in what counts as empty: a script whose only content is dot-commands
 // has no SQL statement and is perfectly valid, so the "no executable SQL" check
@@ -571,6 +567,10 @@ func readScriptFile(path string) (string, error) {
 	return content, nil
 }
 
+// readSQLFile reads the SQL script at path for --sql-file. It returns a clear
+// error for a missing or unreadable file (wrapping the OS error so callers can
+// inspect it with errors.Is) and rejects a file with no SQL, so an empty or
+// whitespace-only script fails loudly instead of running nothing.
 func readSQLFile(path string) (string, error) {
 	// The two kinds of failure below are told apart deliberately. A path that
 	// cannot be read is a problem with the file, like any other input; a file that

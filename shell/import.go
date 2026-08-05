@@ -593,12 +593,12 @@ func validatePath(path string) (string, error) {
 	cleanPath := filepath.Clean(path)
 
 	// No directory-depth limit: sqly is a local CLI run with the user's own
-	// permissions, so legitimate deeply nested workspace paths must import. Ref
+	// permissions, so legitimate deeply nested workspace paths must import.
 
 	// Check for dangerous patterns that could indicate path traversal attacks.
 	// URL-encoded sequences (..%2f, ..%5c) are intentionally NOT matched: the
 	// filesystem never URL-decodes a path, so those bytes only ever appear in a
-	// legitimate literal filename, and matching them rejected real files. Ref
+	// legitimate literal filename, and matching them rejected real files.
 	dangerousPatterns := []string{
 		"../../../",    // Multiple levels up
 		"..\\..\\..\\", // Windows path traversal

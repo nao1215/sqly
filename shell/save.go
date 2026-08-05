@@ -275,8 +275,8 @@ func (s *Shell) applySymlinkPolicy(destDir string, targets []writeTarget, follow
 // planWriteBack validates that every current table can be written and returns the
 // resolved write targets. It reports all problems at once and writes nothing, so
 // a session is never partially saved. For .save DIR it also rejects a
-// destination that resolves to the source file () and a destination that
-// already exists ().
+// destination that resolves to the source file, and one that already exists.
+//
 // skipUnchanged selects whether an unchanged table is dropped from the plan. An
 // actual save passes true (persist only real changes); preflight passes false
 // (validate every file-backed table up front, before any change has happened).
