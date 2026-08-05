@@ -72,6 +72,11 @@ func TestExcelRepositoryDump(t *testing.T) {
 			{name: "start of heading", value: "A\x01B"},
 			{name: "vertical tab", value: "A\x0bB"},
 			{name: "unit separator", value: "A\x1fB"},
+			// XML 1.0 stops the BMP at U+FFFD, so the two noncharacters above it
+			// are as unwritable as a control character and are substituted the
+			// same way.
+			{name: "noncharacter U+FFFE", value: "A\ufffeB"},
+			{name: "noncharacter U+FFFF", value: "A\uffffB"},
 		}
 
 		for _, tt := range tests {
@@ -86,13 +91,29 @@ func TestExcelRepositoryDump(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Dump(%q) = nil error, want a refusal", tt.value)
 				}
-				if !strings.Contains(err.Error(), "excel") || !strings.Contains(err.Error(), "control character") {
-					t.Errorf("error = %q, want it to name excel and the control character", err.Error())
+				if !strings.Contains(err.Error(), "excel") || !strings.Contains(err.Error(), "U+") {
+					t.Errorf("error = %q, want it to name excel and the character", err.Error())
 				}
 				if _, statErr := os.Stat(out); statErr == nil {
 					t.Errorf("a refused export left %s behind", out)
 				}
 			})
+		}
+	})
+
+	// A column name is written into the same XML as a value, so it is checked the
+	// same way rather than reaching the writer to be substituted.
+	t.Run("a column name XLSX cannot represent is refused", func(t *testing.T) {
+		t.Parallel()
+
+		for _, label := range []string{"a\x01b", "a\ufffeb", "a\uffffb"} {
+			r := NewExcelRepository()
+			table := model.NewTable("t", model.Header{label}, []model.Record{{"v"}})
+			out := filepath.Join(t.TempDir(), "header.xlsx")
+
+			if err := r.Dump(out, table); err == nil {
+				t.Errorf("Dump with header %q = nil error, want a refusal", label)
+			}
 		}
 	})
 

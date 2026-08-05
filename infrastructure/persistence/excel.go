@@ -116,23 +116,39 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 // ensureExcelRepresentable reports an error when a value holds a character XLSX
 // cannot carry, so the export is refused before a file is written.
 //
-// XLSX is XML, and XML 1.0 allows only three characters below U+0020: tab, line
-// feed, and carriage return. Nothing above it is refused — DEL and U+FFFD itself
-// are written unchanged. The writer substitutes U+FFFD for the rest, which
-// makes an export silent data loss — the file appears, the process succeeds, and
-// the value is gone. LTSV already refuses what it cannot represent rather than
-// writing something that cannot be read back; this is the same rule for the same
-// reason. The replacement character also has a meaning in sqly's output already:
-// it says a file was read with the wrong --encoding, and an export that produces
-// it on its own would make that signal a guess.
+// XLSX is XML, and XML 1.0's Char production is the whole rule: of the
+// characters below U+0020 it allows only tab, line feed, and carriage return,
+// and it stops the BMP at U+FFFD, excluding the two noncharacters above it. The
+// writer substitutes U+FFFD for everything outside that, which makes an export
+// silent data loss — the file appears, the process succeeds, and the value is
+// gone. LTSV already refuses what it cannot represent rather than writing
+// something that cannot be read back; this is the same rule for the same reason.
+// The replacement character also has a meaning in sqly's output already: it says
+// a file was read with the wrong --encoding, and an export that produces it on
+// its own would make that signal a guess.
+//
+// Everything else passes: DEL and U+FFFD itself are written unchanged.
 func ensureExcelRepresentable(label, value string) error {
 	for _, r := range value {
-		if r == '\t' || r == '\n' || r == '\r' {
-			continue // the three XML keeps
-		}
-		if r < 0x20 {
-			return fmt.Errorf("excel: value for column %q contains the control character U+%04X, which XLSX cannot represent; remove it or export to csv/tsv/json", label, r)
+		if !xmlCanCarry(r) {
+			return fmt.Errorf("excel: value for column %q contains the character U+%04X, which XLSX cannot represent; remove it or export to csv/tsv/json", label, r)
 		}
 	}
 	return nil
+}
+
+// xmlCanCarry reports whether XML 1.0 can hold r, following its Char production.
+// A Go string never yields a surrogate when ranged over — invalid bytes decode to
+// U+FFFD — so that half of the production cannot be reached from here.
+func xmlCanCarry(r rune) bool {
+	switch {
+	case r == '\t' || r == '\n' || r == '\r':
+		return true
+	case r < 0x20:
+		return false
+	case r == 0xFFFE || r == 0xFFFF:
+		return false
+	default:
+		return true
+	}
 }
