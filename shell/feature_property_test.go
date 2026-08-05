@@ -14,7 +14,7 @@ func featureQuickConfig() *quick.Config {
 	}
 }
 
-// TestSplitCompletionPrefixProperties checks the invariants splitCompletionPrefix
+// TestSplitCompletionPrefixProperties checks the invariants splitPathPrefix
 // must hold for any typed prefix: the kept base concatenated with the partial
 // reconstructs the input exactly, the partial never spans a directory separator,
 // and the base is either empty or ends on a separator. These guarantee that
@@ -23,7 +23,7 @@ func TestSplitCompletionPrefixProperties(t *testing.T) {
 	t.Parallel()
 
 	property := func(prefix string) bool {
-		readDir, base, partial := splitCompletionPrefix(prefix)
+		readDir, base, partial := splitPathPrefix(prefix, lastUnescapedSeparator)
 
 		if base+partial != prefix {
 			return false

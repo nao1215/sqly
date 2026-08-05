@@ -133,9 +133,9 @@ func TestSplitCompletionPrefix_SplitsAtRealSeparator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, base, partial := splitCompletionPrefix(tt.prefix)
+			_, base, partial := splitPathPrefix(tt.prefix, lastUnescapedSeparator)
 			if base != tt.wantBase || partial != tt.wantPartial {
-				t.Errorf("splitCompletionPrefix(%q) = base %q, partial %q; want base %q, partial %q",
+				t.Errorf("splitPathPrefix(%q, lastUnescapedSeparator) = base %q, partial %q; want base %q, partial %q",
 					tt.prefix, base, partial, tt.wantBase, tt.wantPartial)
 			}
 		})

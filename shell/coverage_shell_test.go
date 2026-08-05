@@ -14,10 +14,13 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-// TestSplitDecodedPrefix_Branches exercises the three shapes splitDecodedPrefix
-// can return: no separator, a normal directory prefix, and a leading separator
-// whose empty base falls back to the filesystem root.
-func TestSplitDecodedPrefix_Branches(t *testing.T) {
+// TestSplitPathPrefix_QuotedBranches exercises the shapes splitPathPrefix can
+// return for a quoted path: no separator, a normal directory prefix, a leading
+// separator, and a Windows-style separator. readDir is asserted after
+// toScanPath, which is what the caller reads the filesystem with — the split
+// returns the directory as typed, and turning it into a real path is a separate
+// step because what an escape means depends on how the path was written.
+func TestSplitPathPrefix_QuotedBranches(t *testing.T) {
 	t.Parallel()
 
 	root := string(os.PathSeparator)
@@ -43,7 +46,7 @@ func TestSplitDecodedPrefix_Branches(t *testing.T) {
 			wantPartial: "sa",
 		},
 		{
-			name:        "leading separator -> empty base becomes filesystem root",
+			name:        "leading separator -> base is the separator itself",
 			in:          "/sample",
 			wantReadDir: root,
 			wantBase:    "/",
@@ -60,10 +63,10 @@ func TestSplitDecodedPrefix_Branches(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			readDir, base, partial := splitDecodedPrefix(tt.in)
-			if readDir != tt.wantReadDir || base != tt.wantBase || partial != tt.wantPartial {
-				t.Errorf("splitDecodedPrefix(%q) = (%q, %q, %q), want (%q, %q, %q)",
-					tt.in, readDir, base, partial, tt.wantReadDir, tt.wantBase, tt.wantPartial)
+			readDir, base, partial := splitPathPrefix(tt.in, lastAnySeparator)
+			if got := toScanPath(readDir); got != tt.wantReadDir || base != tt.wantBase || partial != tt.wantPartial {
+				t.Errorf("splitPathPrefix(%q, lastAnySeparator) = (%q, %q, %q), want (%q, %q, %q)",
+					tt.in, got, base, partial, tt.wantReadDir, tt.wantBase, tt.wantPartial)
 			}
 		})
 	}
@@ -148,17 +151,17 @@ func TestOpenQuotePrefix_Branches(t *testing.T) {
 	}
 }
 
-// TestSplitCompletionPrefix_LeadingSeparator covers the leading-separator branch
-// where the empty base falls back to the filesystem root.
-func TestSplitCompletionPrefix_LeadingSeparator(t *testing.T) {
+// TestSplitPathPrefix_LeadingSeparator covers a path rooted at "/". base always
+// holds at least the separator, so a rooted path needs no special case.
+func TestSplitPathPrefix_LeadingSeparator(t *testing.T) {
 	t.Parallel()
 
 	// lastUnescapedSeparator treats "/" as a path separator on every platform, so
 	// the split is "/" + "foo" and readDir mirrors the non-empty base "/". This is
 	// independent of os.PathSeparator, which is "\\" on Windows.
-	readDir, base, partial := splitCompletionPrefix("/foo")
+	readDir, base, partial := splitPathPrefix("/foo", lastUnescapedSeparator)
 	if readDir != "/" || base != "/" || partial != "foo" {
-		t.Errorf("splitCompletionPrefix(%q) = (%q, %q, %q), want (%q, %q, %q)",
+		t.Errorf("splitPathPrefix(%q, lastUnescapedSeparator) = (%q, %q, %q), want (%q, %q, %q)",
 			"/foo", readDir, base, partial, "/", "/", "foo")
 	}
 }
@@ -510,6 +513,62 @@ func TestGetQuotedFilePathCompletions_DirAndBadDir(t *testing.T) {
 		got := shell.getQuotedFilePathCompletions("no_such_dir_here/", '"')
 		if len(got) != 0 {
 			t.Fatalf("getQuotedFilePathCompletions(bad dir) = %#v, want none", got)
+		}
+	})
+
+	// The quoted and escaped paths differ in how a suggestion is written, never in
+	// which entries are offered. They read one directory through one function, so
+	// the two lists must name the same entries in the same order; a completion
+	// rule added to one and not the other is what this catches.
+	t.Run("quoted and escaped completion offer the same entries", func(t *testing.T) {
+		quoted := shell.getQuotedFilePathCompletions("testdata/", '"')
+		escaped := shell.getFilePathCompletions("testdata/")
+		if len(quoted) != len(escaped) {
+			t.Fatalf("quoted offered %d entries, escaped offered %d", len(quoted), len(escaped))
+		}
+		for i := range quoted {
+			// Strip the rendering each style adds: the opening quote, and the
+			// closing one a file gets.
+			bare := strings.TrimSuffix(strings.TrimPrefix(quoted[i].Text, `"`), `"`)
+			if bare != escaped[i].Text {
+				t.Errorf("entry %d: quoted %q, escaped %q; the two must offer the same entries",
+					i, quoted[i].Text, escaped[i].Text)
+			}
+			if quoted[i].Description != escaped[i].Description {
+				t.Errorf("entry %d: quoted describes %q, escaped describes %q",
+					i, quoted[i].Description, escaped[i].Description)
+			}
+		}
+	})
+
+	// Hidden entries are skipped unless the user types a leading dot, in both
+	// styles. This is the rule the two copies of the scan each carried.
+	t.Run("a leading dot reveals hidden entries in both styles", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, ".hidden.csv"), []byte("a\n1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "shown.csv"), []byte("a\n1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		for _, tc := range []struct {
+			style string
+			all   []Suggest
+			dot   []Suggest
+		}{
+			{"escaped", shell.getFilePathCompletions(dir + "/"), shell.getFilePathCompletions(dir + "/.")},
+			{"quoted", shell.getQuotedFilePathCompletions(dir+"/", '"'), shell.getQuotedFilePathCompletions(dir+"/.", '"')},
+		} {
+			if len(tc.all) != 1 {
+				t.Errorf("%s: offered %d entries without a leading dot, want only the visible one", tc.style, len(tc.all))
+			}
+			if len(tc.dot) != 1 {
+				t.Errorf("%s: offered %d entries after a leading dot, want only the hidden one", tc.style, len(tc.dot))
+			}
+			if len(tc.dot) == 1 && !strings.Contains(tc.dot[0].Text, ".hidden.csv") {
+				t.Errorf("%s: a leading dot offered %q, want the hidden entry", tc.style, tc.dot[0].Text)
+			}
 		}
 	})
 }

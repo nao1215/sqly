@@ -880,13 +880,13 @@ func TestCompleterDebug(t *testing.T) {
 		{Text: "testdata/", Description: "directory: testdata"},
 	}
 
-	filtered := filterHasPrefix(suggestions, "testdata", true)
+	filtered := filterHasPrefix(suggestions, "testdata")
 	t.Logf("filterHasPrefix results with 'testdata': %d", len(filtered))
 	for i, f := range filtered {
 		t.Logf("  %d: Text='%s'", i, f.Text)
 	}
 
-	filtered2 := filterHasPrefix(suggestions, "testd", true)
+	filtered2 := filterHasPrefix(suggestions, "testd")
 	t.Logf("filterHasPrefix results with 'testd': %d", len(filtered2))
 	for i, f := range filtered2 {
 		t.Logf("  %d: Text='%s'", i, f.Text)
@@ -898,10 +898,10 @@ func TestCompleterDebug(t *testing.T) {
 		{Text: "sample.csv", Description: "file: sample.csv"},
 	}
 
-	filteredEmpty := filterHasPrefix(actors, "", true)
+	filteredEmpty := filterHasPrefix(actors, "")
 	t.Logf("filterHasPrefix with empty string: %d", len(filteredEmpty))
 
-	filteredA := filterHasPrefix(actors, "a", true)
+	filteredA := filterHasPrefix(actors, "a")
 	t.Logf("filterHasPrefix with 'a': %d", len(filteredA))
 	for i, f := range filteredA {
 		t.Logf("  %d: Text='%s'", i, f.Text)
@@ -952,7 +952,7 @@ func TestGoPromptCompletionBehavior(t *testing.T) {
 			{Text: tc.suggestionText, Description: "test completion"},
 		}
 
-		filtered := filterHasPrefix(suggestions, tc.currentWord, true)
+		filtered := filterHasPrefix(suggestions, tc.currentWord)
 		t.Logf("  FilterHasPrefix result: %d matches", len(filtered))
 		if len(filtered) > 0 {
 			t.Logf("    -> Text: '%s'", filtered[0].Text)
@@ -1729,9 +1729,9 @@ func TestSplitCompletionPrefixWindowsDriveLetter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			readDir, base, partial := splitCompletionPrefix(tt.prefix)
+			readDir, base, partial := splitPathPrefix(tt.prefix, lastUnescapedSeparator)
 			if readDir != tt.wantReadDir || base != tt.wantBase || partial != tt.wantPartial {
-				t.Errorf("splitCompletionPrefix(%q) = (%q, %q, %q), want (%q, %q, %q)",
+				t.Errorf("splitPathPrefix(%q, lastUnescapedSeparator) = (%q, %q, %q), want (%q, %q, %q)",
 					tt.prefix, readDir, base, partial, tt.wantReadDir, tt.wantBase, tt.wantPartial)
 			}
 		})
