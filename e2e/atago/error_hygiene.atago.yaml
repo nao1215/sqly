@@ -102,13 +102,13 @@ scenarios:
     steps:
       - fixture: *staff
       - run:
-          command: sqly --sql "SELECT nmae FROM staff" staff.csv
+          command: sqly --sql "SELECT nam FROM staff" staff.csv
       - assert:
           exit_code: 1
           stdout:
             empty: true
           stderr:
-            contains: 'hint: no column "nmae". Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.'
+            contains: 'hint: no column "nam". Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.'
 
   # The hint is a diagnostic, so it belongs on stderr with the error it explains.
   - name: keeps the hint off stdout and out of the exit code

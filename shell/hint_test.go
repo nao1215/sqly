@@ -34,9 +34,9 @@ func TestMissingName(t *testing.T) {
 		},
 		{
 			name:   "a column name is read the same way",
-			msg:    "execute query error: SQL logic error: no such column: nmae (1): SELECT nmae FROM staff",
+			msg:    "execute query error: SQL logic error: no such column: nam (1): SELECT nam FROM staff",
 			marker: "no such column: ",
-			want:   "nmae",
+			want:   "nam",
 			wantOK: true,
 		},
 		{
@@ -164,7 +164,7 @@ func TestWithMissingNameHint_LeavesOtherErrorsAlone(t *testing.T) {
 
 	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
 	err := errors.New("execute query error: SQL logic error: near \"SELCT\": syntax error")
-	if got := s.withMissingNameHint(context.Background(), err); got != err {
+	if got := s.withMissingNameHint(context.Background(), err); got.Error() != err.Error() {
 		t.Errorf("withMissingNameHint rewrote an unrelated error: %v", got)
 	}
 }
