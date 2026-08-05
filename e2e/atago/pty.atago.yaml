@@ -510,3 +510,112 @@ scenarios:
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0
+
+  # Ctrl-C abandons the line being typed and nothing else. It used to end the
+  # session with a non-zero status, so a half-typed query could not be dropped
+  # without losing the shell.
+  - name: Ctrl-C discards the line and the session keeps working
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT 'NEVER_RUN"
+            - expect: "NEVER_RUN"
+            - send: { key: ctrl-c }
+            - expect: '\(table\)\$' # a fresh prompt, not an exit
+            - send: "SELECT name FROM people WHERE age = 25;\r"
+            - expect: "Bob" # the session still answers
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-c } # and again from an empty prompt
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0 # an interrupt is not a failure
+          stdout:
+            contains: "Bob"
+
+  # A line can hold more than one statement, which is what pasting a snippet
+  # produces. Every statement runs and every result is printed; the line used to
+  # reach the engine as a single query, which kept one result and dropped the
+  # rest.
+  - name: every statement of a multi-statement line prints its result
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT 'FIRST_RESULT' AS a; SELECT 'SECOND_RESULT' AS b;\r"
+            - expect: "FIRST_RESULT"
+            - expect: "SECOND_RESULT"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "FIRST_RESULT"
+              - "SECOND_RESULT"
+
+  # A ";" ends a statement only where SQLite ends one. Inside a trigger body it
+  # is ordinary text, so the buffer keeps collecting until END; — the shell
+  # submitted at the first inner ";" and no trigger could be typed at all.
+  - name: a trigger body buffers past its own semicolons
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "CREATE TABLE audit (msg TEXT);\r"
+            - expect: "statement executed successfully"
+            - expect: '\(table\)\$'
+            - send: "CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN\r"
+            - expect: '\.\.\.>'
+            - send: "INSERT INTO audit VALUES ('x');\r"
+            - expect: '\.\.\.>' # the inner ";" continued the statement
+            - send: "END;\r"
+            - expect: "statement executed successfully"
+            - expect: '\(table\)\$'
+            - send: "SELECT name AS created FROM sqlite_master WHERE type = 'trigger';\r"
+            - expect: "audit_trg"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "audit_trg"
+
+  # A comment after the terminator does not delay the statement it follows. The
+  # shell asked whether the line ended with ";", so this one waited on a
+  # continuation for a rest that was never coming.
+  - name: a statement with a trailing comment runs on that Enter
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 25; -- a note\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+            not_contains: "...>"
