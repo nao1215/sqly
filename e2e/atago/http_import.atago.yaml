@@ -109,3 +109,69 @@ scenarios:
           stderr:
             contains: "path does not exist"
             not_contains: "only http and https URLs"
+
+  # A server describing what it sent — a redirect, a Content-Disposition header —
+  # used to decide the table name, so a query written against the URL the user
+  # typed could not find its own table. The URL names the table now.
+  - name: keeps the table named after the URL through a redirect
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: serve_redirect.py
+          content: |
+            import http.server, socketserver, threading, time
+            CSV = b"a,b\n1,x\n"
+            class H(http.server.BaseHTTPRequestHandler):
+                def log_message(self, *a): pass
+                def do_GET(self):
+                    if self.path == "/sales.csv":
+                        self.send_response(302)
+                        self.send_header("Location", "/elsewhere.csv")
+                        self.end_headers()
+                    elif self.path == "/named.csv":
+                        self.send_response(200)
+                        self.send_header("Content-Disposition", 'attachment; filename="renamed.csv"')
+                        self.end_headers(); self.wfile.write(CSV)
+                    elif self.path == "/elsewhere.csv":
+                        self.send_response(200); self.end_headers(); self.wfile.write(CSV)
+                    else:
+                        self.send_response(404); self.end_headers()
+            socketserver.TCPServer.allow_reuse_address = True
+            srv = socketserver.TCPServer(("127.0.0.1", 18089), H)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            time.sleep(120)
+      - run:
+          command: sh -c 'python3 serve_redirect.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18089)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT a FROM sales" http://127.0.0.1:18089/sales.csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"
+
+  - name: keeps the table named after the URL despite a Content-Disposition header
+    skip:
+      os: windows
+    steps:
+      - fixture:
+          file: serve_named.py
+          content: |
+            import http.server, socketserver, threading, time
+            CSV = b"a,b\n1,x\n"
+            class H(http.server.BaseHTTPRequestHandler):
+                def log_message(self, *a): pass
+                def do_GET(self):
+                    self.send_response(200)
+                    self.send_header("Content-Disposition", 'attachment; filename="renamed.csv"')
+                    self.end_headers(); self.wfile.write(CSV)
+            socketserver.TCPServer.allow_reuse_address = True
+            srv = socketserver.TCPServer(("127.0.0.1", 18090), H)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            time.sleep(120)
+      - run:
+          command: sh -c 'python3 serve_named.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18090)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT a FROM sales" http://127.0.0.1:18090/sales.csv'
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1"

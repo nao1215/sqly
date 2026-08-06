@@ -315,6 +315,17 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 // landing on `sales.csv` gave a table named after the Content-Type fallback
 // rather than after the file that actually arrived.
 func (s *Shell) remoteDownloadFilename(rawURL string, resp *http.Response) (string, error) {
+	// The URL the caller typed decides the name whenever it carries one. A server
+	// can describe the file it is sending — a Content-Disposition header, a
+	// redirect to a different path — and those are worth having when the URL says
+	// nothing, but they must not rename the table: a query written against the URL
+	// the user typed has to find the table that URL produced. Left to the order
+	// below, a redirect turned "SELECT * FROM sales" against sales.csv into "no
+	// such table", and a header could name the table anything it liked.
+	if base := filepath.Base(remoteFilenameHint(rawURL)); s.usecases.importer.IsSupportedFile(base) {
+		return base, nil
+	}
+
 	finalURL := rawURL
 	if resp.Request != nil && resp.Request.URL != nil {
 		finalURL = resp.Request.URL.String()
