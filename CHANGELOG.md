@@ -2,7 +2,7 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc5` is the current release candidate, and it is not the final contract
+`v1.0.0-rc6` is the current release candidate, and it is not the final contract
 either. Breaking changes are still being made, and they are being made now
 rather than after v1.0.0.
 
@@ -14,11 +14,24 @@ rather than after v1.0.0.
   Changes below.
 
 The final RC is announced as the final one in its release notes. That is the
-point to pin a version against; none of rc1 through rc5 is it.
+point to pin a version against; none of rc1 through rc6 is it.
 
 Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
-## [Unreleased]
+## [v1.0.0-rc6](https://github.com/nao1215/sqly/compare/v1.0.0-rc5...v1.0.0-rc6) (2026-08-06)
+
+A release candidate for v1.0.0, not the final one. Everything below is a change
+from rc5.
+
+Upgrading from rc5: [doc/migration.md](doc/migration.md).
+
+The theme of this one is what sqly writes and what it says about it, found by
+running the rc5 binary rather than by reading it. Two paths lost rows and said
+nothing: a one-column CSV or TSV result piped to a file, and an Excel export
+whose last row was empty. A column could be declared a type its own values were
+not stored as. Three refusals reported an exit code that named the wrong thing
+to fix, and four messages described sqly's insides rather than the query.
+
 
 ### Breaking Changes
 
