@@ -554,12 +554,34 @@ func (t *Table) printTSV(out io.Writer) error {
 	return t.writeDelimited(out, '\t')
 }
 
+// loneEmptyField is how a record of one empty field is written.
+//
+// Written plainly it is a blank line, and a blank line is not a record: a reader
+// skips it. SELECT v FROM t giving alice, an empty value, bob printed three rows
+// and read back as two. The quotes say "one field, and it is empty", which
+// cannot be read as anything else. encoding/csv's writer does not quote an empty
+// field, because it has no way to know it is the only one on the line.
+const loneEmptyField = `""`
+
 // writeDelimited writes the header and records as delimiter-separated values
-// using encoding/csv, so the stdout path matches the file-export path exactly.
+// using encoding/csv. Every delimited destination goes through here, stdout and
+// file export alike.
 func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	w := csv.NewWriter(out)
 	w.Comma = comma
-	if err := w.Write([]string(t.Header())); err != nil {
+	writeRecord := func(record []string) error {
+		if len(record) == 1 && record[0] == "" {
+			// Flushing first keeps the two writers' output in order.
+			w.Flush()
+			if err := w.Error(); err != nil {
+				return err
+			}
+			_, err := io.WriteString(out, loneEmptyField+"\n")
+			return err
+		}
+		return w.Write(record)
+	}
+	if err := writeRecord([]string(t.Header())); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 	// One buffer, refilled per row: encoding/csv needs a []string, and the view
@@ -567,7 +589,7 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	buf := make([]string, 0, t.ColumnCount())
 	for _, v := range t.Rows {
 		buf = v.AppendTo(buf[:0])
-		if err := w.Write(buf); err != nil {
+		if err := writeRecord(buf); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}
 	}

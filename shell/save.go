@@ -227,6 +227,10 @@ func (s *Shell) writeBack(ctx context.Context, destDir string, followSymlinks bo
 		return err
 	}
 	if len(targets) == 0 {
+		// Nothing to write is a save that succeeded, so the counts held back for
+		// the write-back are released here; held to the end of the run they
+		// printed after the results of every later statement.
+		s.flushPendingAffected()
 		fmt.Fprintln(config.Stderr, "no imported table changed in this session; nothing to save")
 		return nil
 	}

@@ -450,8 +450,12 @@ leading zeros and `true` stays a string.
 
 An empty field in a CSV is an empty string, not a NULL — above, `note` is `""`.
 A NULL comes from SQL: an outer join with no match, an explicit `NULL`, an
-aggregate over no rows. The two print as blank in `table` and `csv` alike, so
-JSON is where they are distinguishable as `""` and `null`.
+aggregate over no rows. The two print the same in `table` and `csv`, so JSON is
+where they separate: `""` and `null`.
+
+In `csv` and `tsv`, a one-column result writes an empty value as `""`: a blank
+line is not a record, and a reader would skip it. A row of several columns needs
+no marking — its delimiters already say how many fields there are.
 
 `tsv`, `ltsv`, `markdown`, `jsonl`, `vertical`, `excel`, and `parquet` are the
 remaining formats; see the [reference](/reference/#output-formats).

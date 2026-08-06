@@ -119,6 +119,8 @@ scenarios:
       answer a plausible non-NULL string with no error — a query written to find
       rows with a missing field reported them as complete. PostgreSQL's concat()
       genuinely does ignore NULLs, so it keeps SQLite's behavior.
+      The NULL reaches CSV as "" — see lone_empty_field.atago.yaml for why a
+      blank line will not do.
     steps:
       - run:
           command: sqly --output-format csv --dialect mysql --sql "SELECT CONCAT('a', 'b') AS v"
@@ -133,14 +135,14 @@ scenarios:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
       - run:
           command: sqly --output-format csv --dialect bigquery --sql "SELECT CONCAT('a', NULL) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
       - run:
           command: sqly --output-format csv --dialect postgres --sql "SELECT CONCAT('a', NULL) AS v"
       - assert:

@@ -2,6 +2,9 @@
 # sqly's CLI. SAFE_CAST is the headline: it exists to turn a bad value into
 # NULL, and before filesql v0.20.0 it returned SQLite's fallback instead.
 #
+# CSV cannot spell a NULL, only an empty field, and a record of one empty field
+# is written "" — see lone_empty_field.atago.yaml for why a blank line will not do.
+#
 # Run with: make test-e2e
 version: "1"
 
@@ -18,28 +21,28 @@ scenarios:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
       - run:
           command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('abc' AS FLOAT64) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
       - run:
           command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('2026-13-40' AS DATE) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
       - run:
           command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_CAST('not-a-timestamp' AS TIMESTAMP) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
 
   - name: "googlesql SAFE_CAST to BOOL should preserve a valid literal"
     description: "SAFE_CAST('true' AS BOOL) is true and SAFE_CAST('nope' AS BOOL) is NULL. SQLite's INTEGER affinity would answer 0 for both, leaving a valid true indistinguishable from a parse failure. SQLite has no boolean type, so a true comes back as the integer 1."
@@ -180,14 +183,14 @@ scenarios:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
       - run:
           command: sqly --output-format csv --dialect bigquery --sql "SELECT SAFE_MULTIPLY(9223372036854775807, 2) AS v"
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: ""
+            equals: '""'
 
   - name: "googlesql EXTRACT(DATE FROM timestamp) should work"
     description: "BigQuery allows DATE, TIME, and DATETIME as EXTRACT parts, not just the numeric fields. EXTRACT is rewritten to DATE_PART, so DATE_PART has to understand those parts too."

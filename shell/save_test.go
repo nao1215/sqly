@@ -542,6 +542,37 @@ func TestWriteBack_FailedWriteBackKeepsStdoutClean(t *testing.T) {
 	}
 }
 
+// TestWriteBack_NothingToSaveKeepsCountsInStatementOrder pins that a .save with
+// nothing to write still releases the buffered DML counts, so statement 2's
+// count does not print after statement 4's result.
+func TestWriteBack_NothingToSaveKeepsCountsInStatementOrder(t *testing.T) {
+	dir := t.TempDir()
+	src := writeCSV(t, dir, "user.csv", "user_name,identifier,first_name,last_name\na,1,A,One\n")
+
+	// The UPDATE reports a row count but leaves the data as it was, so the save
+	// has nothing to write and the run keeps going.
+	script := "SELECT 'first' AS marker;\n" +
+		"UPDATE user SET first_name = first_name;\n" +
+		".save --in-place\n" +
+		"SELECT 'third' AS marker;\n"
+
+	stdout, runErr := runScript(t, script, src)
+	if runErr != nil {
+		t.Fatalf("run failed: %v (stdout=%q)", runErr, stdout)
+	}
+	affectedAt := strings.Index(stdout, "affected is 1 row(s)")
+	if affectedAt < 0 {
+		t.Fatalf("stdout lost the affected count entirely: %q", stdout)
+	}
+	thirdAt := strings.Index(stdout, "third")
+	if thirdAt < 0 {
+		t.Fatalf("stdout lost the last statement's result: %q", stdout)
+	}
+	if affectedAt > thirdAt {
+		t.Errorf("the count for statement 2 printed after statement 4's result:\n%s", stdout)
+	}
+}
+
 func TestWriteBack_ReadOnlyQuerySkipsWriteBack(t *testing.T) {
 	// A read-only query before .save --in-place must not rewrite the source file.
 	dir := t.TempDir()

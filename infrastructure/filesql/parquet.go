@@ -52,7 +52,8 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	}()
 
 	ctx := context.Background()
-	if _, err = db.ExecContext(ctx, parquetStagingCreateTable(table)); err != nil {
+	stagingTypes := parquetStagingTypes(table)
+	if _, err = db.ExecContext(ctx, parquetStagingCreateTable(table, stagingTypes)); err != nil {
 		return fmt.Errorf("create staging table: %w", err)
 	}
 	// Insert in a single transaction; one implicit transaction per row is slow
@@ -67,7 +68,7 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 		return fmt.Errorf("prepare staging insert: %w", err)
 	}
 	for rowIdx := range table.RowCount() {
-		if _, err = stmt.ExecContext(ctx, parquetInsertArgs(table, rowIdx)...); err != nil {
+		if _, err = stmt.ExecContext(ctx, parquetInsertArgs(table, rowIdx, stagingTypes)...); err != nil {
 			_ = stmt.Close()
 			_ = tx.Rollback()
 			return fmt.Errorf("insert into staging table: %w", err)
@@ -100,25 +101,36 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 	return nil
 }
 
-// parquetStagingCreateTable builds the staging CREATE TABLE for a parquet export
-// with every column typed TEXT. The shared GenerateCreateTableStatement infers an
-// INTEGER column when all values parse as numbers, which makes SQLite's column
-// affinity rewrite numeric-looking text such as a leading-zero code ("007") or a
-// decimal string ("1.00") into a number before the parquet writer sees it.
-// Staging every column as TEXT keeps the original text verbatim through the
-// round-trip; re-import still types a canonical number when the reader asks for
-// typed output.
-func parquetStagingCreateTable(t *model.Table) string {
+// parquetStagingCreateTable builds the staging CREATE TABLE for a parquet
+// export, one declared type per column. The shared
+// GenerateCreateTableStatement is not used because it infers an INTEGER column
+// when all values parse as numbers, which makes SQLite's column affinity
+// rewrite numeric-looking text such as a leading-zero code ("007") or a decimal
+// string ("1.00") into a number before the parquet writer sees it.
+// parquetStagingColumnType decides instead.
+func parquetStagingCreateTable(t *model.Table, types []string) string {
 	var b strings.Builder
 	b.WriteString("CREATE TABLE " + infra.Quote(t.Name()) + " (")
 	for i, col := range t.Header() {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(infra.Quote(col) + " " + parquetStagingColumnType(t, i))
+		b.WriteString(infra.Quote(col) + " " + types[i])
 	}
 	b.WriteString(");")
 	return b.String()
+}
+
+const parquetTextType = "TEXT"
+
+// parquetStagingTypes is the staging type of every column, computed once because
+// both the CREATE TABLE and the bind values depend on it.
+func parquetStagingTypes(t *model.Table) []string {
+	types := make([]string, t.ColumnCount())
+	for i := range types {
+		types[i] = parquetStagingColumnType(t, i)
+	}
+	return types
 }
 
 // parquetStagingColumnType is the SQL type the staging table declares for one
@@ -131,7 +143,7 @@ func parquetStagingCreateTable(t *model.Table) string {
 // it is, because SQLite types values rather than columns, and a column that
 // mixes a number with text has to keep the text.
 func parquetStagingColumnType(t *model.Table, col int) string {
-	const text = "TEXT"
+	const text = parquetTextType
 	declared := ""
 	for row := range t.RowCount() {
 		cell, ok := t.NativeCell(row, col)
@@ -192,12 +204,19 @@ func parquetInsertStatement(t *model.Table) string {
 // marks as NULL. The shared GenerateInsertStatement only sees the []string
 // record and cannot tell a NULL from an empty string; consulting table.IsNull
 // here keeps the two distinct through the parquet round-trip.
-func parquetInsertArgs(t *model.Table, rowIdx int) []any {
+func parquetInsertArgs(t *model.Table, rowIdx int, types []string) []any {
 	record, _ := t.Row(rowIdx)
 	args := make([]any, 0, len(t.Header()))
 	for col := range t.Header() {
 		if t.IsNull(rowIdx, col) {
 			args = append(args, nil)
+			continue
+		}
+		// Binding the driver's value into a TEXT column would hand the
+		// conversion to SQLite, whose rendering of a real is not sqly's: a
+		// result printed as 100000 was exported as "100000.0".
+		if types[col] == parquetTextType {
+			args = append(args, record.At(col))
 			continue
 		}
 		// Bind the driver's own value when there is one, so an INTEGER stays an
