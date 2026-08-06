@@ -450,7 +450,7 @@ leading zeros and `true` stays a string.
 
 An empty field in a CSV is an empty string, not a NULL — above, `note` is `""`.
 A NULL comes from SQL: an outer join with no match, an explicit `NULL`, an
-aggregate over no rows. Both print as blank in `table` and `csv`, so JSON is
+aggregate over no rows. The two print the same in `table` and `csv`, so JSON is
 where they separate: `""` and `null`.
 
 In `csv` and `tsv`, a one-column result writes an empty value as `""`: a blank
