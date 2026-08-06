@@ -57,8 +57,8 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	// --follow-symlinks` reads as though it changes something about the export,
 	// and there is nothing there for it to change.
 	if followSymlinks && argv[0] != inPlaceArg {
-		return fmt.Errorf(".save %s applies to %s only; .save DIR writes elsewhere and never follows a source link",
-			followSymlinksArg, inPlaceArg)
+		return &invocationError{Err: fmt.Errorf(".save %s applies to %s only; .save DIR writes elsewhere and never follows a source link",
+			followSymlinksArg, inPlaceArg)}
 	}
 	// Reject an empty destination so `.save ""` is not silently treated as an
 	// in-place save, which the user never asked for.
@@ -69,7 +69,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	// they want created. Taking it as a destination would silently write a
 	// directory named after the flag instead of doing what was asked.
 	if argv[0] != inPlaceArg && strings.HasPrefix(argv[0], "-") {
-		return fmt.Errorf(".save does not have a %s option; write to a directory with .save DIR, or overwrite the sources with .save %s", argv[0], inPlaceArg)
+		return &invocationError{Err: fmt.Errorf(".save does not have a %s option; write to a directory with .save DIR, or overwrite the sources with .save %s", argv[0], inPlaceArg)}
 	}
 	// An empty session has no tables at all (forgot to .import, or a prior import
 	// failed), which is a different mistake from a read-only session below. Save is

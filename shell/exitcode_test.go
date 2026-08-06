@@ -361,6 +361,43 @@ func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
 			run: func(c CommandList, s *Shell, a []string) error { return c.cdCommand(context.Background(), s, a) }},
 		{name: ".save with no argument", argv: nil,
 			run: func(c CommandList, s *Shell, a []string) error { return c.saveCommand(context.Background(), s, a) }},
+
+		// The other direction. The first pass at this fix wrapped only the
+		// missing-argument branches, and the table had one case per command, so it
+		// agreed. Every command that counts its arguments can be wrong in both
+		// directions, and both are the same class.
+		{name: ".header with an extra argument", argv: []string{"t", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.headerCommand(context.Background(), s, a) }},
+		{name: ".describe with an extra argument", argv: []string{"t", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.describeCommand(context.Background(), s, a) }},
+		{name: ".schema with an extra argument", argv: []string{"t", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.schemaCommand(context.Background(), s, a) }},
+		{name: ".dump with an extra argument", argv: []string{"t", "out.csv", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.dumpCommand(context.Background(), s, a) }},
+		{name: ".mode with an extra argument", argv: []string{"csv", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.modeCommand(context.Background(), s, a) }},
+		{name: ".row-mismatch with an extra argument", argv: []string{"skip", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error {
+				return c.rowMismatchCommand(context.Background(), s, a)
+			}},
+		{name: ".save with two arguments", argv: []string{"a", "b"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.saveCommand(context.Background(), s, a) }},
+		{name: ".save with an unknown option", argv: []string{"--unknown"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.saveCommand(context.Background(), s, a) }},
+		{name: ".save DIR with --follow-symlinks", argv: []string{"./out", "--follow-symlinks"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.saveCommand(context.Background(), s, a) }},
+
+		// The commands that take nothing at all can still be given something.
+		{name: ".tables with an argument", argv: []string{"extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.tablesCommand(context.Background(), s, a) }},
+		{name: ".pwd with an argument", argv: []string{"extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.pwdCommand(context.Background(), s, a) }},
+		{name: ".clear with an argument", argv: []string{"extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.clearCommand(context.Background(), s, a) }},
+		{name: ".exit with an argument", argv: []string{"extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.exitCommand(context.Background(), s, a) }},
+		{name: ".help with an argument", argv: []string{"extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.helpCommand(context.Background(), s, a) }},
 	}
 
 	for _, tt := range tests {

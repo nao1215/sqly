@@ -31,7 +31,7 @@ func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string)
 		return &invocationError{Err: errors.New(".schema requires a table name\n[Usage]\n  .schema TABLE_NAME")}
 	}
 	if len(argv) > 1 {
-		return fmt.Errorf(".schema accepts a single table name, got %d arguments", len(argv))
+		return &invocationError{Err: fmt.Errorf(".schema accepts a single table name, got %d arguments", len(argv))}
 	}
 	tableName := argv[0]
 

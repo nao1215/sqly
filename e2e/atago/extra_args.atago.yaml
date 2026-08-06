@@ -17,7 +17,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".schema user extra\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".schema"
 
@@ -28,7 +28,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".describe user extra\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".describe"
 
@@ -39,7 +39,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".tables extra\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".tables"
 
@@ -50,7 +50,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".mode csv extra\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".mode"
 
@@ -61,7 +61,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".pwd extra\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".pwd"
 
@@ -72,7 +72,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".clear extra\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".clear"
 
@@ -83,6 +83,6 @@ scenarios:
           command: sqly user.csv
           stdin: ".exit extra\nSELECT 1;\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".exit"

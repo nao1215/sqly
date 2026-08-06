@@ -11,7 +11,7 @@ import (
 // pwdCommand print current working directory.
 func (c CommandList) pwdCommand(_ context.Context, _ *Shell, argv []string) error {
 	if len(argv) > 0 {
-		return fmt.Errorf(".pwd takes no arguments, got %d", len(argv))
+		return &invocationError{Err: fmt.Errorf(".pwd takes no arguments, got %d", len(argv))}
 	}
 	dir, err := os.Getwd()
 	if err != nil {

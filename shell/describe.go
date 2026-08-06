@@ -19,7 +19,7 @@ func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []strin
 		return &invocationError{Err: errors.New(".describe requires a table name\n[Usage]\n  .describe TABLE_NAME")}
 	}
 	if len(argv) > 1 {
-		return fmt.Errorf(".describe accepts a single table name, got %d arguments", len(argv))
+		return &invocationError{Err: fmt.Errorf(".describe accepts a single table name, got %d arguments", len(argv))}
 	}
 	tableName := argv[0]
 
