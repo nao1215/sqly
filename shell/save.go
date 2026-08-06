@@ -407,9 +407,9 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 			problems = append(problems, fmt.Sprintf("%s: shares source %s with the other sheets of that workbook", name, source))
 			continue
 		}
-		format, comp, supported := writableExportTarget(source)
-		if !supported {
-			problems = append(problems, fmt.Sprintf("%s: write-back to %s is not supported (use csv, tsv, ltsv, or parquet)", name, filepath.Base(source)))
+		format, comp, reason := exportTargetFor(source)
+		if reason != nil {
+			problems = append(problems, fmt.Sprintf("%s: cannot write back to %s: %v", name, filepath.Base(source), reason))
 			continue
 		}
 
@@ -881,6 +881,22 @@ func resolveFilePath(p string) string {
 // source's compression), and Parquet. JSON/JSONL (stored in a single data
 // column), Excel, ACH, and Fedwire are not.
 func writableExportTarget(source string) (model.ExportFormat, model.Compression, bool) {
+	format, comp, err := exportTargetFor(source)
+	if err != nil {
+		return 0, model.CompressionNone, false
+	}
+	return format, comp, true
+}
+
+// exportTargetFor is writableExportTarget with the reason it said no.
+//
+// Three different things make a source unwritable, and they need three different
+// answers. Reporting them all as "write-back to data.csv.bz2 is not supported
+// (use csv, tsv, ltsv, or parquet)" told a user holding a CSV to use CSV, and a
+// user holding a Parquet to use Parquet: the format was never the problem in
+// either case, the compression was. The reason is named here so the caller can
+// say which one it hit.
+func exportTargetFor(source string) (model.ExportFormat, model.Compression, error) {
 	comp := model.CompressionNone
 	base := source
 	if c, ok := model.CompressionFromExtension(filepath.Ext(source)); ok {
@@ -889,23 +905,34 @@ func writableExportTarget(source string) (model.ExportFormat, model.Compression,
 	}
 	format, ok := model.ExportFormatFromExtension(filepath.Ext(base))
 	if !ok {
-		return 0, model.CompressionNone, false
+		return 0, model.CompressionNone, errUnwritableFormat
 	}
 	// bzip2 has no writer, so a .bz2 source cannot be written back. Reject it here
 	// during preflight, before any destination file is created or truncated, so a
 	// failed write-back never leaves an empty or corrupted file behind.
 	if comp == model.CompressionBzip2 {
-		return 0, model.CompressionNone, false
+		return 0, model.CompressionNone, errUnwritableBzip2
 	}
 	switch format {
 	case model.ExportCSV, model.ExportTSV, model.ExportLTSV:
-		return format, comp, true
+		return format, comp, nil
 	case model.ExportParquet:
 		if comp != model.CompressionNone {
-			return 0, model.CompressionNone, false
+			return 0, model.CompressionNone, errUnwritableCompressedParquet
 		}
-		return format, model.CompressionNone, true
+		return format, model.CompressionNone, nil
 	default:
-		return 0, model.CompressionNone, false
+		return 0, model.CompressionNone, errUnwritableFormat
 	}
 }
+
+// The reasons a source cannot be written back, each with the next step that
+// actually applies to it.
+var (
+	errUnwritableFormat = errors.New(
+		"sqly reads this format but cannot write it back; export the table with .dump instead")
+	errUnwritableBzip2 = errors.New(
+		"the format is writable but bzip2 has no writer in Go, so the file cannot be rebuilt; export the table with .dump instead")
+	errUnwritableCompressedParquet = errors.New(
+		"the format is writable but a compressed parquet cannot be rebuilt; export the table with .dump instead")
+)

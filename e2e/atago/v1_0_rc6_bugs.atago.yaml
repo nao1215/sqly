@@ -307,6 +307,42 @@ scenarios:
             line: 1
             equals: "amt::text"
 
+  # The label pass that keeps the caller's column name must not add a second one.
+  # An expression the dialect rewrites that already carried an implicit alias
+  # came back as "strict_concat(c,c) z AS \"CONCAT(c,c) z\"", which does not
+  # parse — a query that worked before the label pass existed stopped working.
+  - name: keeps an implicit alias on a rewritten expression
+    env: *hist
+    steps:
+      - fixture: &labels
+          file: labels.csv
+          content: |
+            a,b,c
+            1,2,x
+      - run:
+          command: sqly --dialect mysql --output-format csv --sql "SELECT CONCAT(c,c) z FROM labels" labels.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "z"
+      - assert:
+          stdout:
+            line: 2
+            equals: "xx"
+
+  - name: keeps an implicit alias on a rewritten cast
+    env: *hist
+    steps:
+      - fixture: *labels
+      - run:
+          command: sqly --dialect postgresql --output-format csv --sql "SELECT CAST(a AS text) label FROM labels" labels.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "label"
+
   # Parquet states the type of every column, and the import discarded it: every
   # column arrived as TEXT, so a numeric predicate compared digit strings and
   # matched rows it should not have.

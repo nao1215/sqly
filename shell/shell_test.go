@@ -4436,3 +4436,38 @@ func assertShellFixture(t *testing.T, name string, got []byte) {
 	t.Helper()
 	testutil.AssertFileEquals(t, filepath.Join("testdata", "golden", name), got)
 }
+
+// TestShellInputName checks that a message naming an input calls the staged
+// --stdin-format dataset "stdin" rather than quoting its temp path. The path is
+// sqly's own scratch file: a reader cannot rename it to resolve a collision, and
+// it is gone by the time they read the message.
+func TestShellInputName(t *testing.T) {
+	t.Parallel()
+	const staged = "/tmp/sqly-stdin-85800075/stdin.csv"
+	s := &Shell{argument: &config.Arg{StdinFormat: "csv"}, stdinStagedPath: staged}
+
+	t.Run("the staged stdin dataset is named stdin", func(t *testing.T) {
+		t.Parallel()
+		got := s.inputName(importTarget{loadPath: staged, displayPath: staged})
+		if got != "stdin (--stdin-format csv)" {
+			t.Errorf("inputName(staged) = %q, want the stdin label", got)
+		}
+	})
+
+	t.Run("a real file keeps the path the user wrote", func(t *testing.T) {
+		t.Parallel()
+		got := s.inputName(importTarget{loadPath: "/abs/data.csv", displayPath: "data.csv"})
+		if got != "data.csv" {
+			t.Errorf("inputName(file) = %q, want %q", got, "data.csv")
+		}
+	})
+
+	t.Run("a session with no staged stdin never claims one", func(t *testing.T) {
+		t.Parallel()
+		plain := &Shell{argument: &config.Arg{}}
+		got := plain.inputName(importTarget{loadPath: "", displayPath: "data.csv"})
+		if got != "data.csv" {
+			t.Errorf("inputName = %q, want %q", got, "data.csv")
+		}
+	})
+}

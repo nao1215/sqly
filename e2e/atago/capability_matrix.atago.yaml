@@ -41,7 +41,9 @@ scenarios:
       - assert:
           exit_code: 4
           stderr:
-            contains: "write-back to rows.json is not supported"
+            contains: "cannot write back to rows.json: sqly reads this format but cannot write it back"
+
+
 
   - name: refuses to write an excel source back
     steps:
@@ -125,7 +127,12 @@ scenarios:
       - assert:
           exit_code: 4
           stderr:
-            contains: "not supported"
+            # The compression is what stops it, not the format. The message used
+            # to name the format and tell a user holding a parquet to use parquet.
+            contains: "compressed parquet cannot be rebuilt"
+      - assert:
+          stderr:
+            not_contains: "use csv, tsv, ltsv, or parquet"
 
   # A bzip2 source cannot be written back at all: there is no bzip2 writer, and
   # the refusal comes before anything is touched.
@@ -146,7 +153,11 @@ scenarios:
       - assert:
           exit_code: 4
           stderr:
-            contains: "not supported"
+            # Again the compression, not the format: this is a CSV.
+            contains: "bzip2 has no writer"
+      - assert:
+          stderr:
+            not_contains: "use csv, tsv, ltsv, or parquet"
 
   # Binary result formats have no on-screen form and say so rather than printing
   # something else.

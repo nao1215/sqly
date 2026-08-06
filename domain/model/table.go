@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
@@ -706,12 +707,40 @@ func ensureLTSVValueRepresentable(label, value string) error {
 // were already on stdout, which reads as a truncated document rather than as a
 // failure.
 func (t *Table) EnsureJSONWritable() error {
-	for i, record := range t.Rows {
-		if _, err := t.rowToJSONObject(i, record); err != nil {
-			return err
+	for row := range t.Rows {
+		for col := range t.Columns {
+			var value any
+			if cell, ok := t.cell(row, col); ok {
+				value = cell.Value()
+			}
+			if err := jsonRenderableValue(value); err != nil {
+				return fmt.Errorf("failed to encode value for column %q: %w", t.ColumnName(col), err)
+			}
 		}
 	}
 	return nil
+}
+
+// jsonRenderableValue reports whether the JSON writer can render a cell. It is
+// the one place that decides, so the check above and the writer below cannot
+// drift apart and disagree about which values are writable.
+//
+// It is a type test rather than a trial encoding because the check runs over
+// every cell before the first byte goes out. Encoding each row to find out
+// whether it encodes made a 200k-row --output-format json run about a fifth
+// slower for a failure that only a driver handing back an exotic Go type can
+// cause. Every type a database/sql driver produces is listed; anything else is
+// refused, which is the same answer json.Marshal would give.
+func jsonRenderableValue(value any) error {
+	switch value.(type) {
+	case nil, string, []byte, bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64, time.Time:
+		return nil
+	default:
+		return fmt.Errorf("cannot render %T as JSON", value)
+	}
 }
 
 // EnsureLTSVWritable reports whether the whole table can be written as LTSV: a
@@ -792,6 +821,9 @@ func jsonScalarToken(value any) ([]byte, error) {
 	}
 	if token, ok := jsonNonFiniteToken(value); ok {
 		return token, nil
+	}
+	if err := jsonRenderableValue(value); err != nil {
+		return nil, err
 	}
 	// A string holding bytes that are not UTF-8 keeps encoding/json's U+FFFD.
 	// That is deliberate and is not the XLSX case: a text column arrives that way

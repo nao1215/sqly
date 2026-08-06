@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -928,4 +929,74 @@ func TestSaveWriteFailureClassifiesAsAnOutputFailure(t *testing.T) {
 			t.Errorf("ExitCode(%v) = %d, want %d (a destination that could not be written)", saveErr, got, ExitOutput)
 		}
 	})
+}
+
+// TestExportTargetForNamesTheReason pins which of the three reasons a source is
+// unwritable, because they need three different next steps.
+//
+// All of them used to be reported as "write-back to data.csv.bz2 is not
+// supported (use csv, tsv, ltsv, or parquet)". That advice is right for a JSON
+// source and wrong for the other two: a bz2 CSV is already a CSV and a
+// compressed Parquet is already a Parquet, and in both the compression is what
+// stops the write, not the format.
+func TestExportTargetForNamesTheReason(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		want   error
+	}{
+		{name: "a plain csv is writable", source: "data.csv", want: nil},
+		{name: "a gzipped csv is writable", source: "data.csv.gz", want: nil},
+		{name: "an xz tsv is writable", source: "data.tsv.xz", want: nil},
+		{name: "a plain parquet is writable", source: "data.parquet", want: nil},
+		{
+			name:   "a json source is a format sqly cannot write",
+			source: "data.json",
+			want:   errUnwritableFormat,
+		},
+		{
+			name:   "an excel source is a format sqly cannot write",
+			source: "data.xlsx",
+			want:   errUnwritableFormat,
+		},
+		{
+			name:   "a bz2 csv is stopped by its compression, not its format",
+			source: "data.csv.bz2",
+			want:   errUnwritableBzip2,
+		},
+		{
+			name:   "a compressed parquet is stopped by its compression",
+			source: "data.parquet.gz",
+			want:   errUnwritableCompressedParquet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, _, got := exportTargetFor(tt.source)
+			if !errors.Is(got, tt.want) {
+				t.Errorf("exportTargetFor(%q) reason = %v, want %v", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUnwritableReasonsPointAtSomethingThatWorks checks the advice each reason
+// gives is advice the tool can actually follow. The first attempt at these
+// messages suggested saving to a directory, which is refused for exactly the
+// same sources — advice that fails is the bug it replaced.
+func TestUnwritableReasonsPointAtSomethingThatWorks(t *testing.T) {
+	t.Parallel()
+
+	for _, err := range []error{errUnwritableFormat, errUnwritableBzip2, errUnwritableCompressedParquet} {
+		if !strings.Contains(err.Error(), ".dump") {
+			t.Errorf("reason %q names no way forward; .dump is the one that works for all three", err)
+		}
+		if strings.Contains(err.Error(), ".save") {
+			t.Errorf("reason %q suggests .save, which refuses these sources too", err)
+		}
+	}
 }

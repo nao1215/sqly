@@ -5,8 +5,10 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -1227,5 +1229,35 @@ func TestTablePrintRefusesBeforeWritingAnything(t *testing.T) {
 				t.Errorf("Print wrote %q before failing; a refused export writes nothing", out.String())
 			}
 		})
+	}
+}
+
+// TestEnsureJSONWritableAgreesWithTheWriter keeps the pre-write check and the
+// writer from drifting: a value one accepts and the other rejects would either
+// pass validation and fail mid-document, or refuse a value that writes fine.
+func TestEnsureJSONWritableAgreesWithTheWriter(t *testing.T) {
+	t.Parallel()
+
+	values := []any{
+		nil, "text", []byte("bytes"), []byte{0xff}, true,
+		int64(1), int(2), int32(3), uint64(4), float64(1.5), float32(2.5),
+		math.Inf(1), math.NaN(), time.Now(),
+		make(chan int), func() {}, struct{ A int }{1},
+	}
+
+	for _, v := range values {
+		table, err := NewTableFromCells("t", NewHeader([]string{"v"}), [][]Cell{{NewCell(v)}})
+		if err != nil {
+			t.Fatalf("NewTableFromCells(%T): %v", v, err)
+		}
+		checkErr := table.EnsureJSONWritable()
+		var buf bytes.Buffer
+		writeErr := table.Print(&buf, PrintModeJSONL)
+		if (checkErr == nil) != (writeErr == nil) {
+			t.Errorf("%T: EnsureJSONWritable err = %v, but writing gave %v", v, checkErr, writeErr)
+		}
+		if checkErr != nil && buf.Len() != 0 {
+			t.Errorf("%T: refused but wrote %q", v, buf.String())
+		}
 	}
 }
