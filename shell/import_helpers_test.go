@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,6 +123,9 @@ func TestRemoteFilenameHelpers(t *testing.T) {
 	}{
 		{name: "content type fallback", url: "https://example.test/download", header: "text/csv", want: "download.csv"},
 		{name: "unsupported URL falls back to content type", url: "https://example.test/download.unsupported", header: "application/json", want: "download.json"},
+		// A URL that names a supported file names the table, and no header may
+		// take that over: a query written against sales.csv has to find "sales".
+		{name: "a named URL beats a content type that disagrees", url: "https://example.test/sales.csv", header: "application/json", want: "sales.csv"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			resp := &http.Response{Header: http.Header{"Content-Type": []string{test.header}}}
@@ -131,6 +135,43 @@ func TestRemoteFilenameHelpers(t *testing.T) {
 			}
 		})
 	}
+	t.Run("a server cannot rename a table the URL already named", func(t *testing.T) {
+		// Content-Disposition and a redirect are both the server describing what
+		// it sent. Either used to win over the URL, so "SELECT * FROM sales"
+		// against sales.csv became "no such table: sales" — and which name to use
+		// instead was only discoverable by inspecting the download.
+		redirected, err := url.Parse("https://example.test/somewhere-else.csv")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp := &http.Response{
+			Header:  http.Header{"Content-Disposition": []string{`attachment; filename="renamed.csv"`}},
+			Request: &http.Request{URL: redirected},
+		}
+		got, err := s.remoteDownloadFilename("https://example.test/sales.csv", resp)
+		if err != nil {
+			t.Fatalf("remoteDownloadFilename: %v", err)
+		}
+		if got != "sales.csv" {
+			t.Errorf("remoteDownloadFilename = %q, want %q: the URL names the table", got, "sales.csv")
+		}
+	})
+
+	t.Run("a URL with no name still takes the server's", func(t *testing.T) {
+		// The other half of the rule: where the URL carries no filename, the
+		// server's is all there is, and it is still used.
+		resp := &http.Response{
+			Header: http.Header{"Content-Disposition": []string{`attachment; filename="report.csv"`}},
+		}
+		got, err := s.remoteDownloadFilename("https://example.test/download", resp)
+		if err != nil {
+			t.Fatalf("remoteDownloadFilename: %v", err)
+		}
+		if got != "report.csv" {
+			t.Errorf("remoteDownloadFilename = %q, want %q", got, "report.csv")
+		}
+	})
+
 	if _, err := s.remoteDownloadFilename("https://example.test/", &http.Response{}); err == nil {
 		t.Error("remoteDownloadFilename with no usable hint returned nil error")
 	}
