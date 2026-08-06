@@ -68,7 +68,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".schema\nSELECT 1;\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".schema requires"
 
@@ -80,7 +80,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".header\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".header requires"
 
@@ -92,7 +92,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".describe\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".describe requires"
 
@@ -119,7 +119,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".mode csvv\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: 'invalid output mode "csvv"'
 
@@ -131,7 +131,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".dump\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".dump requires"
 
@@ -155,7 +155,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".save\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".save requires"
 

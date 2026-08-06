@@ -22,7 +22,7 @@ import (
 // the result is deterministic across supported operating systems.
 func (c CommandList) lsCommand(_ context.Context, _ *Shell, argv []string) error {
 	if len(argv) > 1 {
-		return errors.New("too many arguments")
+		return &invocationError{Err: errors.New(".ls takes at most one path\n[Usage]\n  .ls [DIRECTORY]")}
 	}
 	path := "."
 	if len(argv) > 0 {

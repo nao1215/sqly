@@ -93,7 +93,7 @@ scenarios:
           command: sqly t.csv
           stdin: ".mode nope\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: 'invalid output mode "nope"'
 
@@ -104,4 +104,4 @@ scenarios:
           command: sqly t.csv
           stdin: ".row-mismatch nope\n"
       - assert:
-          exit_code: 1
+          exit_code: 2

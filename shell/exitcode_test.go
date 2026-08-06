@@ -322,3 +322,64 @@ func TestRun_StdinScriptReadObservesCancellation(t *testing.T) {
 		t.Fatal("Run did not return after the context was canceled; the stdin read ignores cancellation")
 	}
 }
+
+// TestDotCommandUsageErrorsAreUsageErrors pins one rule across every dot-command
+// that validates its arguments: a command written wrong did not run, so it is a
+// `2` and not the `1` that means a statement ran and failed.
+//
+// Only .import followed the rule, and its own comment claimed it was keeping
+// malformed input "in the usage class with every other 'you typed it wrong'" —
+// which the other nine were not. A wrapper reading the code to decide whether to
+// retry could not tell a typo in a script from a query that failed on the data.
+func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		argv []string
+		run  func(CommandList, *Shell, []string) error
+	}{
+		{name: ".import with no path", argv: nil,
+			run: func(c CommandList, s *Shell, a []string) error { return c.importCommand(context.Background(), s, a) }},
+		{name: ".header with no table", argv: nil,
+			run: func(c CommandList, s *Shell, a []string) error { return c.headerCommand(context.Background(), s, a) }},
+		{name: ".describe with no table", argv: nil,
+			run: func(c CommandList, s *Shell, a []string) error { return c.describeCommand(context.Background(), s, a) }},
+		{name: ".schema with no table", argv: nil,
+			run: func(c CommandList, s *Shell, a []string) error { return c.schemaCommand(context.Background(), s, a) }},
+		{name: ".dump with no destination", argv: []string{"t"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.dumpCommand(context.Background(), s, a) }},
+		{name: ".mode with an unknown mode", argv: []string{"nope"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.modeCommand(context.Background(), s, a) }},
+		{name: ".row-mismatch with an unknown policy", argv: []string{"nope"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.rowMismatchCommand(context.Background(), s, a) }},
+		{name: ".ls with two paths", argv: []string{"a", "b"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.lsCommand(context.Background(), s, a) }},
+		{name: ".cd with two paths", argv: []string{"a", "b"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.cdCommand(context.Background(), s, a) }},
+		{name: ".save with no argument", argv: nil,
+			run: func(c CommandList, s *Shell, a []string) error { return c.saveCommand(context.Background(), s, a) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			backup := config.Stderr
+			config.Stderr = &strings.Builder{}
+			defer func() { config.Stderr = backup }()
+
+			err = tt.run(shell.commands, shell, tt.argv)
+			if err == nil {
+				t.Fatal("the command accepted its arguments, want a usage error")
+			}
+			if got := ExitCode(err); got != ExitUsage {
+				t.Errorf("ExitCode(%v) = %d, want %d (the invocation was not accepted)", err, got, ExitUsage)
+			}
+		})
+	}
+}

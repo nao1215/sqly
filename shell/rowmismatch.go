@@ -23,12 +23,12 @@ func (c CommandList) rowMismatchCommand(_ context.Context, s *Shell, argv []stri
 		return nil
 	}
 	if len(argv) > 1 {
-		return fmt.Errorf(".row-mismatch accepts a single policy name, got %d arguments", len(argv))
+		return &invocationError{Err: fmt.Errorf(".row-mismatch accepts a single policy name, got %d arguments", len(argv))}
 	}
 
 	policy, err := model.ParseRowMismatchPolicy(argv[0])
 	if err != nil {
-		return err
+		return &invocationError{Err: err}
 	}
 	// Selecting the policy already in effect is a no-op, not a failure: an error
 	// here made a script fatal on a line that changed nothing, including the

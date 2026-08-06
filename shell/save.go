@@ -43,7 +43,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 		// A missing or extra argument is a command error so a batch script fails
 		// fast instead of skipping the save and exiting 0. The usage and note ride
 		// on the error path.
-		return errors.New(".save requires a single argument: a directory or --in-place\n" +
+		return &invocationError{Err: errors.New(".save requires a single argument: a directory or --in-place\n" +
 			"[Usage]\n" +
 			"  .save DIRECTORY   write each table into DIRECTORY (originals untouched)\n" +
 			"  .save --in-place  overwrite each table's source file\n" +
@@ -51,7 +51,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 			"[Note]\n" +
 			"  csv/tsv/ltsv/parquet sources are written; compression is preserved.\n" +
 			"  A whole ACH/Fedwire set is reconstructed back into a single .ach/.fed file\n" +
-			"  when all of that source's tables are still present")
+			"  when all of that source's tables are still present")}
 	}
 	// The option only means anything for the destructive form. `.save DIR
 	// --follow-symlinks` reads as though it changes something about the export,
@@ -63,7 +63,7 @@ func (c CommandList) saveCommand(ctx context.Context, s *Shell, argv []string) e
 	// Reject an empty destination so `.save ""` is not silently treated as an
 	// in-place save, which the user never asked for.
 	if argv[0] != inPlaceArg && strings.TrimSpace(argv[0]) == "" {
-		return errors.New(".save requires a non-empty directory; use .save --in-place to overwrite the sources")
+		return &invocationError{Err: errors.New(".save requires a non-empty directory; use .save --in-place to overwrite the sources")}
 	}
 	// Anything else beginning with "-" is a flag the user meant, not a directory
 	// they want created. Taking it as a destination would silently write a

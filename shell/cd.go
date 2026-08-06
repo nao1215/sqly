@@ -12,7 +12,7 @@ import (
 // If there are multiple arguments, return an error.
 func (c CommandList) cdCommand(_ context.Context, s *Shell, argv []string) error {
 	if len(argv) > 1 {
-		return errors.New("too many arguments")
+		return &invocationError{Err: errors.New(".cd takes at most one path\n[Usage]\n  .cd [DIRECTORY]")}
 	}
 
 	var target string

@@ -19,7 +19,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 		// A missing or extra argument is a command error so a batch script fails
 		// fast instead of skipping the dump and exiting 0. The usage and notes ride
 		// on the error path.
-		return errors.New(".dump requires a table name and a destination path\n" +
+		return &invocationError{Err: errors.New(".dump requires a table name and a destination path\n" +
 			"[Usage]\n" +
 			"  .dump TABLE_NAME FILE_PATH\n" +
 			"[Note]\n" +
@@ -30,7 +30,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 			"  A path with no extension gets the format's own: .dump t out writes out.csv.\n" +
 			"  Compression is inferred from the path (.gz, .xz, .zst, .z, .snappy, .s2, .lz4).\n" +
 			"  A .mode that disagrees with the extension is rejected instead of normalizing.\n" +
-			"  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format")
+			"  ACH/Fedwire tables can be dumped to csv/tsv/xlsx, but not back to .ach/.fed format")}
 	}
 
 	tableName := argv[0]
@@ -39,7 +39,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// Reject an empty destination so `.dump table ""` does not write a file
 	// named ".csv" into the current directory.
 	if strings.TrimSpace(userPath) == "" {
-		return errors.New(".dump requires a non-empty destination path")
+		return &invocationError{Err: errors.New(".dump requires a non-empty destination path")}
 	}
 
 	// Expand a leading "~" so `.dump table ~/out.csv` writes under the home
