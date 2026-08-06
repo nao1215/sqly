@@ -25,3 +25,28 @@ scenarios:
           exit_code: 3
           stderr:
             contains: collision
+
+  # A staged --stdin-format dataset lives at a random temp path. Naming it in the
+  # collision was an answer nobody could act on: the reader cannot rename that
+  # file, and it is gone by the time they read about it. Import failures already
+  # called it "stdin (--stdin-format csv)"; the pre-import checks did not.
+  - name: names standard input as stdin when it collides with a file
+    steps:
+      - fixture:
+          file: staff.csv
+          content: |
+            id,name
+            1,A
+      - run:
+          command: sh -c 'sqly --stdin-format csv --stdin-table staff --sql "SELECT 1" staff.csv < staff.csv'
+          shell: true
+      - assert:
+          exit_code: 3
+          stderr:
+            contains:
+              - "table-name collision"
+              - "stdin (--stdin-format csv)"
+              - "staff.csv"
+      - assert:
+          stderr:
+            not_contains: "sqly-stdin-"

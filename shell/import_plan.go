@@ -45,6 +45,18 @@ type importTarget struct {
 	fromDirectory bool
 }
 
+// inputName is what to call an input in a message. A staged --stdin-format
+// dataset lives at a random temp path, which is sqly's business and not an
+// answer to "which two inputs collided": the reader cannot rename it, and the
+// path is gone by the time they read about it. Import failures already scrub it;
+// this gives the same name to the checks that run before the import.
+func (s *Shell) inputName(target importTarget) string {
+	if s.stdinStagedPath != "" && target.loadPath == s.stdinStagedPath {
+		return fmt.Sprintf("stdin (--stdin-format %s)", s.argument.StdinFormat)
+	}
+	return target.displayPath
+}
+
 // importPlan is a resolved import: every file it will read, in order, and the
 // cleanups owed for the temporary copies resolution made.
 type importPlan struct {
@@ -245,7 +257,7 @@ func (s *Shell) preflightTableNames(ctx context.Context, plan *importPlan) ([]cl
 			if previous, taken := claimedBy[key]; taken {
 				return nil, fmt.Errorf(
 					"table-name collision: %s and %s both map to table %q; rename one of them or import them separately",
-					previous.displayPath, target.displayPath, table)
+					s.inputName(previous), s.inputName(target), table)
 			}
 			claimedBy[key] = target
 		}
