@@ -240,3 +240,70 @@ func TestExcelDumpKeepsCharactersXLSXCanCarry(t *testing.T) {
 		t.Errorf("round-tripped value = %q, want %q", rows, value)
 	}
 }
+
+// TestExcelDumpRefusesInvalidUTF8 pins the hole in the character guard. XLSX is
+// XML and cannot hold a byte that is not valid UTF-8, and the writer replaced
+// each one with U+FFFD: the export succeeded, the file appeared, and the byte
+// was gone. The guard could not see it, because ranging over a Go string decodes
+// an invalid byte as U+FFFD before the check ever runs.
+func TestExcelDumpRefusesInvalidUTF8(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		table *model.Table
+	}{
+		{
+			name:  "in a value",
+			table: model.NewTable("t", model.Header{"v"}, []model.Record{{"bad\xffbyte"}}),
+		},
+		{
+			name:  "in a column name",
+			table: model.NewTable("t", model.Header{"bad\xffname"}, []model.Record{{"ok"}}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			out := filepath.Join(t.TempDir(), "out.xlsx")
+			err := NewExcelRepository().Dump(out, tt.table)
+			if err == nil {
+				t.Fatal("Dump succeeded, want a refusal: the invalid byte would be written as U+FFFD")
+			}
+			if !strings.Contains(err.Error(), "not valid UTF-8") {
+				t.Errorf("error = %v, want it to name the invalid UTF-8", err)
+			}
+			if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+				t.Errorf("Dump left a file behind at %s; a refused export writes nothing", out)
+			}
+		})
+	}
+}
+
+// TestExcelDumpKeepsARealReplacementCharacter checks the refusal does not catch
+// a U+FFFD the data genuinely contains. The byte sequence is valid UTF-8, and
+// XML can carry the character, so it is written unchanged.
+func TestExcelDumpKeepsARealReplacementCharacter(t *testing.T) {
+	t.Parallel()
+
+	const value = "a�b"
+	out := filepath.Join(t.TempDir(), "out.xlsx")
+	table := model.NewTable("t", model.Header{"v"}, []model.Record{{value}})
+	if err := NewExcelRepository().Dump(out, table); err != nil {
+		t.Fatalf("Dump: %v", err)
+	}
+
+	f, err := excelize.OpenFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	rows, err := f.GetRows("t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[1][0] != value {
+		t.Errorf("round-tripped value = %q, want %q", rows, value)
+	}
+}

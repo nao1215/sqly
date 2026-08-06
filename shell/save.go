@@ -202,7 +202,24 @@ type writeTarget struct {
 // ACH or Fedwire source are reconstructed together into the one file they came
 // from. Anything that cannot be written that way is rejected before the first
 // byte is written, so a session is never partially saved.
-func (s *Shell) writeBack(ctx context.Context, destDir string, followSymlinks bool) error {
+func (s *Shell) writeBack(ctx context.Context, destDir string, followSymlinks bool) (err error) {
+	// Whatever stopped a save, it stopped a write, and the exit code says so.
+	// The classification is applied here rather than at each failure because
+	// every one of them is the same class: a save that could not create its
+	// directory, could not stage a file, or could not move one into place is a
+	// destination that could not be written, which is a 4. Most of them were
+	// plain fmt.Errorf and fell through to the generic 1, so a wrapper could not
+	// tell "your SQL was wrong" from "the disk is read-only".
+	defer func() {
+		if err == nil {
+			return
+		}
+		var already *writeBackError
+		if !errors.As(err, &already) {
+			err = &writeBackError{Err: err}
+		}
+	}()
+
 	// Both destinations skip a table the session did not change, and they mean
 	// different things by "did not change" — see planWriteBack.
 	targets, err := s.planWriteBack(ctx, destDir, true)

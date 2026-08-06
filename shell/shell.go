@@ -470,11 +470,23 @@ func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 	}
 
 	// --sql runs one statement. Two would mean printing one result and dropping
-	// the other, so the count is checked against the same parse that would run it.
-	if s.plan.mode == modeInlineSQL && len(elements) > 1 {
-		return nil, &invocationError{Err: fmt.Errorf(
-			"--sql accepts a single SQL statement, but got %d; run one statement per invocation, or use --sql-file for a script",
-			len(elements))}
+	// the other, and none would mean exiting 0 having done nothing, which is
+	// indistinguishable from a run that worked. Both are checked against the same
+	// parse that would run it.
+	//
+	// An empty --sql is already refused by the flag parser, which sees the string.
+	// This is what is left after parsing: whitespace, a lone semicolon, or a
+	// comment. --sql-file rejects the same content for the same reason.
+	if s.plan.mode == modeInlineSQL {
+		if len(elements) == 0 {
+			return nil, &invocationError{Err: errors.New(
+				"--sql contains no executable SQL statement; it is blank, a comment, or a bare semicolon")}
+		}
+		if len(elements) > 1 {
+			return nil, &invocationError{Err: fmt.Errorf(
+				"--sql accepts a single SQL statement, but got %d; run one statement per invocation, or use --sql-file for a script",
+				len(elements))}
+		}
 	}
 	return elements, nil
 }
@@ -1535,8 +1547,25 @@ func ensureWritableDestination(path string) error {
 	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(os.PathSeparator)) {
 		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q ends with a path separator; specify a file path, not a directory", path)}
 	}
-	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q is a directory; specify a file path", path)}
+	if info, err := os.Stat(path); err == nil {
+		if info.IsDir() {
+			return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q is a directory; specify a file path", path)}
+		}
+		// A FIFO, a device, or a socket is not a file that can be replaced. The
+		// write stages a scratch file beside the destination and renames it into
+		// place, and a rename replaces the name: pointed at a named pipe it
+		// unlinked the pipe, left a regular file where it had been, and reported
+		// success while the reader waiting on the other end received nothing.
+		// Pointed at /dev/null it tried to create a scratch file in /dev and
+		// failed with a permission error naming a path the user never wrote.
+		//
+		// Streams are not what --output is for; stdout is. So say that, and leave
+		// what is there alone.
+		if !info.Mode().IsRegular() {
+			return &outputPathError{Path: path, Err: fmt.Errorf(
+				"output destination %q is a %s, not a regular file; --output replaces a file, so write to stdout and redirect instead",
+				path, describeFileMode(info.Mode()))}
+		}
 	}
 	// The parent must already exist. sqly does not create directories for an
 	// output path: a typo in a directory name would otherwise leave a tree of
@@ -1551,6 +1580,23 @@ func ensureWritableDestination(path string) error {
 		return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q: %q is not a directory", path, parent)}
 	}
 	return nil
+}
+
+// describeFileMode names what a non-regular destination is, so the refusal says
+// which kind of thing is in the way rather than "not a regular file".
+func describeFileMode(mode os.FileMode) string {
+	switch {
+	case mode&os.ModeNamedPipe != 0:
+		return "named pipe"
+	case mode&os.ModeSocket != 0:
+		return "socket"
+	case mode&os.ModeCharDevice != 0:
+		return "character device"
+	case mode&os.ModeDevice != 0:
+		return "device"
+	default:
+		return "special file"
+	}
 }
 
 // recordUserRequest record user request in DB.

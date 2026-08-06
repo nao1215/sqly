@@ -156,6 +156,19 @@ func (t *Table) cell(row, col int) (Cell, bool) {
 	return t.cells[idx], true
 }
 
+// NativeCell returns the driver's scalar for the cell at (row, col), and whether
+// the table carries native values at all. A Table built from strings — an
+// imported file, a synthesized report — has none, and every cell is its display
+// string.
+//
+// It is what a typed destination needs. The JSON writer already reads these
+// values so an INTEGER column is a JSON number; a Parquet export needs them for
+// the same reason, and writing the display strings instead handed the file a
+// column of digits typed as text.
+func (t *Table) NativeCell(row, col int) (Cell, bool) {
+	return t.cell(row, col)
+}
+
 // IsNull reports whether the cell at (row, col) is a known SQL NULL, as opposed
 // to an empty string. It returns false when no NULL information is available
 // (the table did not come from a query).
@@ -566,16 +579,18 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 // value containing either cannot be represented losslessly. Reject such a value
 // up front instead of emitting output that no longer round-trips as LTSV.
 func (t *Table) printLTSV(out io.Writer) error {
-	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
+	// Every value is checked before the first one is written. Checking row by row
+	// as they went out meant a value LTSV cannot hold in row 500 left 499 rows on
+	// stdout and then failed: the reader on the other end of the pipe had already
+	// taken a truncated document for a complete one. Writing to a file was atomic
+	// because it stages, so stdout was the one destination without the guarantee.
+	if err := t.EnsureLTSVWritable(); err != nil {
 		return err
 	}
 	for _, v := range t.Rows {
 		r := make(Record, 0, v.Len())
 		for i := range v.Len() {
 			label, data := t.ColumnName(i), v.At(i)
-			if err := ensureLTSVValueRepresentable(label, data); err != nil {
-				return err
-			}
 			r = append(r, label+":"+data)
 		}
 		if _, err := fmt.Fprintln(out, strings.Join(r, "\t")); err != nil {
@@ -685,6 +700,38 @@ func ensureLTSVValueRepresentable(label, value string) error {
 	return nil
 }
 
+// EnsureJSONWritable reports whether every value in the table can be written as
+// JSON. It is checked in full before any output is produced: a value that could
+// not be encoded used to fail after the opening bracket and the rows before it
+// were already on stdout, which reads as a truncated document rather than as a
+// failure.
+func (t *Table) EnsureJSONWritable() error {
+	for i, record := range t.Rows {
+		if _, err := t.rowToJSONObject(i, record); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// EnsureLTSVWritable reports whether the whole table can be written as LTSV: a
+// valid, unique header, and no value holding a tab or a newline. It is checked
+// in full before any output is produced, so a value LTSV cannot carry fails the
+// export rather than truncating it.
+func (t *Table) EnsureLTSVWritable() error {
+	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
+		return err
+	}
+	for _, v := range t.Rows {
+		for i := range v.Len() {
+			if err := ensureLTSVValueRepresentable(t.ColumnName(i), v.At(i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // rowToJSONObject builds a JSON object for one record, preserving the header
 // column order. Each value is taken from the row's native cell when the Table
 // came from a query, so an INTEGER or REAL column is a JSON number and a NULL is
@@ -746,6 +793,14 @@ func jsonScalarToken(value any) ([]byte, error) {
 	if token, ok := jsonNonFiniteToken(value); ok {
 		return token, nil
 	}
+	// A string holding bytes that are not UTF-8 keeps encoding/json's U+FFFD.
+	// That is deliberate and is not the XLSX case: a text column arrives that way
+	// when a file was read with the wrong --encoding, and the replacement
+	// character is the signal that says so. Base64, which the []byte path above
+	// uses, would hide the mojibake behind something unreadable, and refusing
+	// would make --output-format json fail on a file the user is still working
+	// out the encoding of. csv and tsv carry the bytes through unchanged for a
+	// caller that needs them exactly.
 	return json.Marshal(value)
 }
 
@@ -797,6 +852,9 @@ func (t *Table) printJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
 		return fmt.Errorf("json output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
 	}
+	if err := t.EnsureJSONWritable(); err != nil {
+		return err
+	}
 	if t.RowCount() == 0 {
 		_, err := fmt.Fprintln(out, "[]")
 		return err
@@ -826,6 +884,9 @@ func (t *Table) printJSON(out io.Writer) error {
 func (t *Table) printNDJSON(out io.Writer) error {
 	if dup := t.duplicateColumnName(); dup != "" {
 		return fmt.Errorf("jsonl output requires unique column names, but %q appears more than once; alias the duplicate columns", dup)
+	}
+	if err := t.EnsureJSONWritable(); err != nil {
+		return err
 	}
 	for i, record := range t.Rows {
 		obj, err := t.rowToJSONObject(i, record)

@@ -137,19 +137,25 @@ Each of the four fails that test for its own reason:
 - `SUBSTR` from position 0 is an off-by-one each dialect resolves its own way, so reproducing it means one helper that knows every dialect's rule, not a MySQL special case bolted onto a shared function.
 - The boolean cast is only recoverable where the expression is syntactically a boolean. `CAST(col AS STRING)` over a column of 0 and 1 is not, because SQLite has no boolean type and nothing downstream can tell that column from a plain integer one.
 
-## A translated expression is named after what it became
+## A translated expression keeps the name you wrote
 
-An expression sqly rewrites carries the name of the SQLite form it was rewritten
-into, and that name is what the result is labeled with — a JSON key, a CSV
-header, a column in a table:
+SQLite names an unaliased result column after the text of the expression that
+produced it, so rewriting the expression would rename the column. sqly puts the
+original text back, and that is what the result is labeled with — a JSON key, a
+CSV header, a column in a table:
 
 ```shell
 $ sqly --output-format json --dialect postgresql --sql "SELECT salary::text FROM staff" staff.csv
-[{"postgresql_cast(salary, 'text')":"120"}]
+[{"salary::text":"120"}]
 
 $ sqly --output-format json --dialect mysql --sql "SELECT CONCAT(name,'-',dept) FROM staff" staff.csv
-[{"strict_concat(name,'-',dept)":"alice-eng"}]
+[{"CONCAT(name,'-',dept)":"alice-eng"}]
 ```
+
+The label is the expression as written, not the name the source database would
+derive: PostgreSQL calls `salary::text` just `salary`, and MySQL and GoogleSQL
+each name a bare cast their own way. One rule that shows your own syntax back is
+more predictable than three that still all differ from SQLite.
 
 Name the column when the output is going to be read by something:
 
@@ -158,9 +164,8 @@ $ sqly --output-format json --dialect postgresql --sql "SELECT salary::text AS s
 [{"salary_text":"120"}]
 ```
 
-Every example on this page uses `AS` for that reason. The internal name is not a
-promise: it is whatever the translation currently produces, and it can change
-without the query changing.
+Every example on this page uses `AS` for that reason: an explicit name is a
+promise the query makes, and it does not depend on how the expression is spelled.
 
 ## When to reach for something else
 

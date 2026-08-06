@@ -11,13 +11,14 @@ require (
 	github.com/klauspost/compress v1.19.1
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
-	github.com/nao1215/filesql v0.34.0
+	github.com/nao1215/filesql v0.35.0
 	github.com/nao1215/prompt v0.0.17
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/pflag v1.0.10
 	github.com/xuri/excelize/v2 v2.11.0
 	go.uber.org/mock v0.6.0
+	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
 	golang.org/x/text v0.40.0
 	modernc.org/sqlite v1.55.0
@@ -67,7 +68,6 @@ require (
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260625142307-59b4966ccb57 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

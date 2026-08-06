@@ -308,10 +308,25 @@ func TestStatementLineSpan(t *testing.T) {
 	}
 }
 
+// withSave ends a script with a .save, which is what makes save compatibility a
+// question at all. The terminating semicolon matters: a dot-command is only a
+// dot-command at a statement boundary, so without it the .save line would be
+// read as more of the SQL statement above it.
+func withSave(script string) string {
+	if !strings.HasSuffix(strings.TrimSpace(script), ";") {
+		script += ";"
+	}
+	return script + "\n.save ./out"
+}
+
 // TestFirstSaveIncompatibleStatement verifies that a non-interactive save run is
 // allowed only for read-only queries and row-modifying DML; any DDL, schema, or
 // maintenance statement is reported as save-incompatible so the run fails loudly
-// instead of exiting 0 while leaving the source unchanged.,
+// instead of exiting 0 while leaving the source unchanged.
+//
+// Each script here ends with a .save, because that is what makes the question
+// apply: without one there is no write-back for a statement to be incompatible
+// with. What comes after the last .save is covered separately below.
 func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	t.Parallel()
 
@@ -328,7 +343,7 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	for _, script := range compatible {
 		t.Run("compatible: "+firstLine(script), func(t *testing.T) {
 			t.Parallel()
-			if got := firstSaveIncompatibleStatement(mustParse(t, script)); got != "" {
+			if got := firstSaveIncompatibleStatement(mustParse(t, withSave(script))); got != "" {
 				t.Errorf("firstSaveIncompatibleStatement(%q) = %q, want \"\"", script, got)
 			}
 		})
@@ -354,8 +369,64 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	for _, script := range incompatible {
 		t.Run("incompatible: "+firstLine(script), func(t *testing.T) {
 			t.Parallel()
-			if got := firstSaveIncompatibleStatement(mustParse(t, script)); got == "" {
+			if got := firstSaveIncompatibleStatement(mustParse(t, withSave(script))); got == "" {
 				t.Errorf("firstSaveIncompatibleStatement(%q) = \"\", want a non-empty incompatible statement", script)
+			}
+		})
+	}
+}
+
+// TestSaveIncompatibleIsNotADiagnosisOfEverythingUnrecognized pins the two ways
+// the check used to overreach. A statement it did not recognize was reported as
+// a schema change, so a typo was explained as one and the real SQL error never
+// reached the user. And every statement in the script was examined, including
+// the ones after the last .save, which cannot affect what that save wrote.
+func TestSaveIncompatibleIsNotADiagnosisOfEverythingUnrecognized(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		script string
+		want   string
+	}{
+		{
+			name:   "a syntax error is left for execution to report",
+			script: "SELEC bad;\n.save ./out",
+			want:   "",
+		},
+		{
+			name:   "an unrecognized statement is left for execution to report",
+			script: "FROBNICATE user;\n.save ./out",
+			want:   "",
+		},
+		{
+			name:   "a schema change after the last save does not block it",
+			script: "UPDATE user SET x=1;\n.save ./out\nCREATE TABLE scratch (id INTEGER);",
+			want:   "",
+		},
+		{
+			name:   "a schema change before the save still blocks it",
+			script: "CREATE TABLE scratch (id INTEGER);\n.save ./out",
+			want:   "CREATE TABLE scratch (id INTEGER)",
+		},
+		{
+			name:   "a schema change between two saves blocks the second",
+			script: "UPDATE user SET x=1;\n.save ./a\nDROP TABLE user;\n.save ./b",
+			want:   "DROP TABLE user",
+		},
+		{
+			name:   "a script with no save has nothing to be incompatible with",
+			script: "CREATE TABLE scratch (id INTEGER);",
+			want:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := firstSaveIncompatibleStatement(mustParse(t, tt.script))
+			if got != tt.want {
+				t.Errorf("firstSaveIncompatibleStatement(%q) = %q, want %q", tt.script, got, tt.want)
 			}
 		})
 	}

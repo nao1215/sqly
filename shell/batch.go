@@ -20,6 +20,8 @@ const (
 	kwDelete  = "DELETE"
 	kwReplace = "REPLACE"
 	kwValues  = "VALUES"
+	kwAnalyze = "ANALYZE"
+	kwReindex = "REINDEX"
 )
 
 // utf8BOM is the UTF-8 byte order mark stripped from the start of batch input
@@ -218,6 +220,18 @@ func atStatementBoundary(pending string) bool {
 // (PRAGMA incremental_vacuum), or rowset (PRAGMA journal_mode=OFF) PRAGMA only
 // changes the transient in-memory session, with no file representation, so a save
 // run that includes one must fail rather than imply a durable effect.
+// The statements this refuses are named rather than inferred from what it does
+// not recognize. A typo is not a schema change, and reporting one as ".save
+// cannot persist ... it changes schema" sent the reader looking for a schema
+// change that was never there while hiding the syntax error that actually
+// stopped the run. An unrecognized statement is left to run and to fail with
+// SQLite's own message.
+var saveIncompatibleKeywords = map[string]bool{
+	"CREATE": true, "DROP": true, "ALTER": true, "RENAME": true,
+	kwReindex: true, kwAnalyze: true, "PRAGMA": true, "VACUUM": true,
+	"ATTACH": true, "DETACH": true, "GRANT": true, "REVOKE": true,
+}
+
 func statementSaveCompatible(stmt string) bool {
 	if statementModifiesData(stmt) {
 		return true
@@ -228,12 +242,7 @@ func statementSaveCompatible(stmt string) bool {
 	if createsTempTable(stmt) {
 		return true
 	}
-	switch sqltext.LeadingKeyword(stmt) {
-	case kwSelect, kwValues, "WITH", "EXPLAIN", "TABLE":
-		return true
-	default:
-		return false
-	}
+	return !saveIncompatibleKeywords[sqltext.LeadingKeyword(stmt)]
 }
 
 // createsTempTable reports whether a statement creates a temporary table or
@@ -247,10 +256,24 @@ func createsTempTable(stmt string) bool {
 }
 
 // firstSaveIncompatibleStatement returns the first statement a non-interactive
-// save run cannot persist, or "" when every statement is a read-only query or a
-// row-modifying DML.
+// save run cannot persist, or "" when every statement a save could reach is a
+// read-only query or a row-modifying DML.
+//
+// Only the statements before the last .save are looked at. A .save writes what
+// the session has changed by the time it runs, so a statement after the final
+// one cannot alter what was written: a script that saves and then builds a
+// scratch table was refused outright, and the save it asked for never happened.
 func firstSaveIncompatibleStatement(elements []scriptElement) string {
-	for _, stmt := range sqlStatements(elements) {
+	last := -1
+	for i, e := range elements {
+		if e.commandName() == saveCommand {
+			last = i
+		}
+	}
+	if last < 0 {
+		return ""
+	}
+	for _, stmt := range sqlStatements(elements[:last]) {
 		if !statementSaveCompatible(stmt) {
 			return stmt
 		}

@@ -273,7 +273,7 @@ scenarios:
             DELETE FROM products;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 4
           stdout:
             empty: true
           stderr:

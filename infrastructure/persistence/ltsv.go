@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -27,9 +26,10 @@ func NewLTSVRepository() repository.LTSVRepository {
 // with a tab delimiter) keeps the output re-importable, since a CSV writer would
 // quote the whole "label:value" token and break the label/value split.
 func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
-	// Reject invalid or duplicate LTSV labels before writing, so the exported file
-	// stays a valid, round-trippable LTSV record set.
-	if err := model.EnsureLTSVHeaderWritable(table.Header()); err != nil {
+	// Reject invalid labels and unrepresentable values before writing, so the
+	// exported file stays a valid, round-trippable LTSV record set and a value
+	// this cannot hold fails the export whole rather than part way through.
+	if err := table.EnsureLTSVWritable(); err != nil {
 		return err
 	}
 	w := bufio.NewWriter(f)
@@ -37,9 +37,6 @@ func (lr *ltsvRepository) Dump(f io.Writer, table *model.Table) error {
 		for i := range v.Len() {
 			data := v.At(i)
 			label := table.ColumnName(i)
-			if strings.ContainsAny(data, "\t\n\r") {
-				return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
-			}
 			if i > 0 {
 				if err := w.WriteByte('\t'); err != nil {
 					return err
