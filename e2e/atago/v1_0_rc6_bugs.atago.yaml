@@ -398,7 +398,8 @@ scenarios:
       - assert:
           exit_code: 0
           stderr:
-            matches: '(?s)warning: table "t" now reads .*two/t\.csv.*it was .*one/t\.csv'
+            # "." for the separator: Windows spells the same path with a backslash.
+            matches: '(?s)warning: table "t" now reads .*two.t\.csv.*it was .*one.t\.csv'
 
   - name: keeps quiet when .import reloads the same file
     steps:
