@@ -164,8 +164,9 @@ $ sqly --output-format json --dialect postgresql --sql "SELECT salary::text AS s
 [{"salary_text":"120"}]
 ```
 
-Every example on this page uses `AS` for that reason: an explicit name is a
-promise the query makes, and it does not depend on how the expression is spelled.
+Use `AS` wherever the label matters: an explicit name is a promise the query
+makes, and it does not depend on how the expression is spelled or on how sqly
+translates it.
 
 ## When to reach for something else
 
