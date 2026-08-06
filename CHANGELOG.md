@@ -36,6 +36,11 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 * A syntax error in a script that contains `.save` is reported as a syntax error. The preflight that refuses statements a save cannot persist treated every statement it did not recognize as a schema change, so a typo was explained as one — `.save cannot persist "SELEC bad": it changes schema` — and the real SQL error never reached the user. The refused statements are named now, and anything else is left to run and to fail with SQLite's own message.
 * A statement after the last `.save` no longer blocks the save. The preflight examined every statement in the script, including the ones a save cannot reach, so a script that saved and then built a scratch table was refused outright and the save it asked for never happened.
 
+### Bug Fixes
+
+* A write-back refusal says which of the three reasons it hit. A source can be unwritable because sqly cannot write that format, because bzip2 has no writer, or because a compressed Parquet cannot be rebuilt — and all three said `write-back to data.csv.bz2 is not supported (use csv, tsv, ltsv, or parquet)`. That advice is right for a JSON source and wrong for the other two: a `.bz2` CSV is already a CSV and a `.parquet.gz` is already a Parquet, so the reader was told to use what they already had. Each reason now names itself and points at `.dump`, which is what actually works for all three.
+* Checking a JSON export before writing it no longer encodes every row twice. The check that keeps a failed export from leaving a partial document on stdout was written as a trial encoding, which made a 200,000-row `--output-format json` run about a fifth slower. It is a type test now, sharing one decision with the writer so the two cannot disagree about which values are writable.
+
 ### Documentation
 
 * The `.save DIR` permission claim is corrected. README and the getting-started page said the permissions of each source are preserved "either way"; that holds for `.save --in-place`, which overwrites a file that already has them, but a copy into a directory is a new file and is created `0600`. The reference page always said so.
