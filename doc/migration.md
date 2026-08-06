@@ -7,6 +7,90 @@ The [CHANGELOG](../CHANGELOG.md) records every change. This file records the one
 that require an edit to a command line, a script, or a program that reads sqly's
 output.
 
+## v1.0.0-rc5 → v1.0.0-rc6
+
+### A one-column CSV or TSV result writes `""` for an empty value
+
+The rule already applied to `--output`; stdout wrote a blank line, and a blank
+line is not a record, so the row vanished when the stream was read back.
+
+```text
+Before rc6:
+  sqly --output-format csv --sql "SELECT v FROM t" data.csv > out.csv
+  # a row whose v is empty became a blank line
+  sqly --sql "SELECT COUNT(*) FROM out" out.csv   # 2, from 3 rows
+
+From rc6:
+  # the row is written ""
+  sqly --sql "SELECT COUNT(*) FROM out" out.csv   # 3
+```
+
+**What to change:** nothing, unless a consumer matched the blank line. A row of
+several columns is unaffected; only a result of exactly one column changes.
+
+### An Excel export refuses a result whose last row is empty in every column
+
+A workbook stores cells, not rows, so such a row leaves nothing behind to say it
+was there and a reader stops at the last row with a value.
+
+```text
+Before rc6:
+  # 3 rows exported, 2 rows read back, exit 0
+
+From rc6:
+  # excel: the last row is empty in every column, and a workbook has no way to
+  # store it: the file would read back one row short
+  # exit 4, and no file is written
+```
+
+**What to change:** export to csv, tsv, json, or parquet, which carry the row, or
+add a column that is not empty (`SELECT *, 1 AS n`). An empty row anywhere but
+last is unaffected.
+
+### Three refusals exit `4` or `2` where they exited `1`
+
+`1` means a statement ran and failed. None of these ran anything.
+
+```text
+--output out.csv.bz2, out.parquet.gz, out.xlsx.gz   1 → 4
+.dialect oracle, .dialect a b                       1 → 2
+```
+
+**What to change:** a wrapper that read `1` as "the SQL was wrong" now sees `4`
+for a destination it cannot write and `2` for a command line it cannot accept.
+`--dialect oracle` on the command line already exited `2`.
+
+### A non-finite number is spelled `Infinity` in every format
+
+`--output-format json` already wrote `"Infinity"`; the text formats wrote Go's
+`+Inf`.
+
+```text
+Before rc6:
+  sqly --output-format csv --sql "SELECT 1e400 AS v"   # +Inf
+From rc6:
+  # Infinity
+```
+
+**What to change:** a consumer matching `+Inf` matches `Infinity`, `-Infinity`,
+or `NaN` instead.
+
+### A column's declared type matches what is stored in it
+
+`1_000` and `0x1p4` are numbers to Go's parser and not to SQLite's numeric
+affinity, and a datetime beside a number used to lose to it. Either way the
+column was reported as `INTEGER` or `REAL` while its values were stored as text.
+
+```text
+Before rc6:
+  # a column of "1_000" reported "type": "REAL", typeof() said text
+From rc6:
+  # "type": "TEXT", which is what the storage always was
+```
+
+**What to change:** nothing, unless a program depended on the wrong type. The
+values themselves never changed.
+
 ## v1.0.0-rc4 → v1.0.0-rc5
 
 ### An Excel export refuses a value XLSX cannot carry

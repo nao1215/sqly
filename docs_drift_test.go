@@ -1880,6 +1880,57 @@ func TestMigrationGuide_ExplainsRc2ToRc3(t *testing.T) {
 	}
 }
 
+// TestMigrationGuide_ExplainsRc5ToRc6 holds the guide to the changes an rc5
+// command line or wrapper has to absorb. A breaking change recorded only in the
+// CHANGELOG leaves the person upgrading to work out the edit themselves.
+func TestMigrationGuide_ExplainsRc5ToRc6(t *testing.T) {
+	t.Parallel()
+
+	guide := readDoc(t, migrationGuideFile)
+	if !strings.Contains(guide, "## v1.0.0-rc5 → v1.0.0-rc6") {
+		t.Fatalf("%s has no rc5 to rc6 section", migrationGuideFile)
+	}
+	flat := flatten(section(guide, "## v1.0.0-rc5 → v1.0.0-rc6"))
+
+	for _, claim := range []string{
+		"one column",
+		"last row is empty in every column",
+		"1 → 4",
+		"1 → 2",
+		"Infinity",
+		"declared type",
+	} {
+		if !strings.Contains(flat, claim) {
+			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
+		}
+	}
+}
+
+// TestCHANGELOG_ListsTheRc6BreakingChanges is the rc5 check for the release
+// after it: what the guide tells someone to change, the release notes have to
+// record.
+func TestCHANGELOG_ListsTheRc6BreakingChanges(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "CHANGELOG.md")
+	rc6 := section(body, "## [v1.0.0-rc6]")
+	if rc6 == "" {
+		t.Fatal("CHANGELOG.md has no v1.0.0-rc6 section")
+	}
+	breaking := flatten(section(rc6, "### Breaking Changes"))
+	if breaking == "" {
+		t.Fatal("the v1.0.0-rc6 CHANGELOG entry has no Breaking Changes section")
+	}
+	for _, claim := range []string{"out.csv.bz2", "last row is empty", "Infinity", "`4`"} {
+		if !strings.Contains(breaking, claim) {
+			t.Errorf("the rc6 Breaking Changes section does not mention %s", claim)
+		}
+	}
+	if !strings.Contains(flatten(rc6), migrationGuideLink) {
+		t.Errorf("the rc6 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
+	}
+}
+
 // TestMigrationGuide_ExplainsRc4ToRc5 holds the guide to the changes an rc4
 // command line or wrapper has to absorb. A breaking change recorded only in the
 // CHANGELOG leaves the person upgrading to work out the edit themselves.
