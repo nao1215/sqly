@@ -167,6 +167,31 @@ scenarios:
             modified: []
             deleted: []
 
+  # The affected-row counts are buffered during a run that ends in .save, so a
+  # failed write-back cannot leave stdout claiming rows reached disk. A .save with
+  # nothing to write is not a failure, and holding its counts back anyway printed
+  # the count for statement 2 after the result of statement 4.
+  - name: keeps the affected-row count in statement order when .save writes nothing
+    steps:
+      - fixture: *u
+      - run:
+          command: sqly --output-format table u.csv
+          stdin: |
+            SELECT 'first' AS marker;
+            UPDATE u SET first_name = first_name;
+            .save --in-place
+            SELECT 'third' AS marker;
+      - assert:
+          exit_code: 0
+          stdout:
+            matches: '(?s)first.*affected is [0-9]+ row\(s\).*third'
+          stderr:
+            contains: "nothing to save"
+          changes:
+            created: []
+            modified: []
+            deleted: []
+
   - name: guides a batch .save with no imported tables toward passing input
     steps:
       - run:
