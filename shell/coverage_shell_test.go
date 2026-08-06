@@ -488,6 +488,13 @@ func TestRunSQLFileToOutput_ResultSetCount(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "result sets") {
 			t.Fatalf("runSQLFileToOutput two-result error = %v, want single-result error", err)
 		}
+		// --output-format is not a way out here, so the message must not offer it.
+		if strings.Contains(err.Error(), "--output-format table") {
+			t.Errorf("error advises a format that also fails with --output: %v", err)
+		}
+		if !strings.Contains(err.Error(), "--output") {
+			t.Errorf("error does not name the flag that imposes the limit: %v", err)
+		}
 	})
 }
 

@@ -21,12 +21,12 @@ func (c CommandList) dialectCommand(_ context.Context, s *Shell, argv []string) 
 		return nil
 	}
 	if len(argv) > 1 {
-		return fmt.Errorf(".dialect accepts a single dialect name, got %d arguments", len(argv))
+		return &invocationError{Err: fmt.Errorf(".dialect accepts a single dialect name, got %d arguments", len(argv))}
 	}
 
 	d, err := dialect.Parse(argv[0])
 	if err != nil {
-		return fmt.Errorf("unknown SQL dialect %q (available: %s)", argv[0], config.DialectNameList())
+		return &invocationError{Err: fmt.Errorf("unknown SQL dialect %q (available: %s)", argv[0], config.DialectNameList())}
 	}
 	s.usecases.query.SetDialect(d)
 	fmt.Fprintf(config.Stderr, "dialect set to %s\n", d)

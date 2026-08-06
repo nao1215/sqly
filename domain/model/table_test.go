@@ -965,6 +965,45 @@ func TestIsNumericValue(t *testing.T) {
 	}
 }
 
+// TestTablePrintAlignsOnTheValuesNotTheColumnName pins that table mode decides
+// alignment from what a column holds, not from what its name contains.
+func TestTablePrintAlignsOnTheValuesNotTheColumnName(t *testing.T) {
+	t.Parallel()
+
+	// The values are the same in every column, so any difference in alignment
+	// came from the name.
+	tbl := NewTable("t", Header{"message", "package", "total_label", "id", "name"}, []Record{
+		{"hi", "hi", "hi", "hi", "hi"},
+		{"longer text", "longer text", "longer text", "longer text", "longer text"},
+	})
+	var buf bytes.Buffer
+	if err := tbl.Print(&buf, PrintModeTable); err != nil {
+		t.Fatalf("Print table: %v", err)
+	}
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if !strings.Contains(line, "hi") {
+			continue
+		}
+		// Left-aligned "hi" is followed by padding before the next separator;
+		// right-aligned "hi" is preceded by it.
+		if strings.Contains(line, "|          hi ") {
+			t.Errorf("a text column was right aligned because of its name:\n%s", buf.String())
+		}
+	}
+
+	t.Run("a column of numbers is still right aligned", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"n"}, []Record{{"1"}, {"1000"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeTable); err != nil {
+			t.Fatalf("Print table: %v", err)
+		}
+		if !strings.Contains(buf.String(), "|    1 |") {
+			t.Errorf("a numeric column lost its right alignment:\n%s", buf.String())
+		}
+	})
+}
+
 // TestTablePrintEscaping covers the output-format bugs: CSV/TSV stdout must
 // stay valid when values contain the delimiter, quotes, or newlines; LTSV must
 // reject values it cannot represent losslessly; JSON/NDJSON must reject

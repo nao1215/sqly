@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -35,6 +36,48 @@ func TestCommandList_headerCommand_propagatesUsecaseError(t *testing.T) {
 	err := s.commands.headerCommand(context.Background(), s, []string{"user"})
 	if err == nil {
 		t.Fatal("want error when metadata.Header fails, got nil")
+	}
+}
+
+// TestHelperCommandsAgreeOnAMissingTable pins that all four helper commands
+// report a table the session does not have in the same words.
+func TestHelperCommandsAgreeOnAMissingTable(t *testing.T) {
+	tests := []struct {
+		name string
+		argv []string
+		run  func(CommandList, *Shell, []string) error
+	}{
+		{name: ".describe", argv: []string{"nope"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.describeCommand(context.Background(), s, a) }},
+		{name: ".schema", argv: []string{"nope"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.schemaCommand(context.Background(), s, a) }},
+		{name: ".header", argv: []string{"nope"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.headerCommand(context.Background(), s, a) }},
+		{name: ".dump", argv: []string{"nope", "out.csv"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.dumpCommand(context.Background(), s, a) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			t.Chdir(t.TempDir())
+
+			backup := config.Stderr
+			config.Stderr = &strings.Builder{}
+			defer func() { config.Stderr = backup }()
+
+			err = tt.run(shell.commands, shell, tt.argv)
+			if err == nil {
+				t.Fatal("the command accepted a table that does not exist, want an error")
+			}
+			if got, want := err.Error(), "no such table: nope"; got != want {
+				t.Errorf("error = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

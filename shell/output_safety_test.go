@@ -39,12 +39,12 @@ func TestEnsureNotDirectory(t *testing.T) {
 	})
 }
 
-// TestResolveOutputTarget_ClassifiesAFormatConflictAsUsage pins which of
-// ResolveOutputTarget's refusals is a command-line problem. A mode that
-// contradicts the destination extension is two things the user typed
-// disagreeing, so it exits 2; a destination that cannot carry the compression it
-// was given describes the file, and keeps the class it had.
-func TestResolveOutputTarget_ClassifiesAFormatConflictAsUsage(t *testing.T) {
+// TestResolveOutputTarget_ClassifiesEachRefusal pins which of
+// ResolveOutputTarget's refusals is which. A mode that contradicts the
+// destination extension is two things the user typed disagreeing, so it exits 2.
+// A destination that cannot carry the compression it was given describes the
+// file, so it is a destination error rather than a statement failure.
+func TestResolveOutputTarget_ClassifiesEachRefusal(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -62,11 +62,25 @@ func TestResolveOutputTarget_ClassifiesAFormatConflictAsUsage(t *testing.T) {
 			want:        ExitUsage,
 		},
 		{
-			name:        "compression a format cannot carry keeps its own class",
+			name:        "compression a format cannot carry is a destination error",
 			path:        "out.parquet.gz",
 			explicit:    model.ExportParquet,
 			explicitSet: true,
-			want:        ExitFailure,
+			want:        ExitOutput,
+		},
+		{
+			name:        "a codec with no writer is a destination error",
+			path:        "out.csv.bz2",
+			explicit:    model.ExportCSV,
+			explicitSet: true,
+			want:        ExitOutput,
+		},
+		{
+			name:        "a workbook cannot be compressed either",
+			path:        "out.xlsx.gz",
+			explicit:    model.ExportExcel,
+			explicitSet: true,
+			want:        ExitOutput,
 		},
 	}
 

@@ -91,6 +91,10 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 		return err
 	}
 
+	if err := ensureLastRowSurvives(table); err != nil {
+		return err
+	}
+
 	const excelRowOffset = 2
 	row := make([]string, 0, table.ColumnCount())
 	for i, record := range table.Rows {
@@ -112,6 +116,36 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 	// outputs so .xlsx files are plain data files. Why not pass excelize
 	// Options: SaveAs hard-codes the mode and ignores a permissions option.
 	return os.Chmod(excelFilePath, defaultFilePerm)
+}
+
+// ensureLastRowSurvives reports an error when the table's last row holds nothing
+// in every column, because a workbook cannot carry it.
+//
+// XLSX stores cells, not rows: a row whose every value is empty leaves no cell
+// behind to mark where it was, and a reader counting rows stops at the last one
+// that has a value. Writing such a table produced a file that read back a row
+// short, with the export reporting success — three rows written, two read.
+// Only the tail is at risk, since an empty row with data after it is found by
+// the rows that follow it.
+//
+// Refusing is what the character check below already does for a value XLSX
+// cannot carry: a file that cannot be read back is worse than an export that
+// says why it stopped.
+func ensureLastRowSurvives(table *model.Table) error {
+	if table.RowCount() == 0 {
+		return nil
+	}
+	last, ok := table.Row(table.RowCount() - 1)
+	if !ok {
+		return nil
+	}
+	for col := range table.ColumnCount() {
+		if last.At(col) != "" {
+			return nil
+		}
+	}
+	return errors.New(
+		"excel: the last row is empty in every column, and a workbook has no way to store it: the file would read back one row short; export to csv, tsv, json, or parquet instead, or add a column that is not empty")
 }
 
 // ensureExcelRepresentable reports an error when a value holds a character XLSX

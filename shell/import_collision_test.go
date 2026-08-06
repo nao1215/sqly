@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nao1215/sqly/config"
 )
 
 // runBatchShell builds a shell from args and feeds it batch input on stdin (no
@@ -61,6 +63,55 @@ func TestImportCollisionRegressions(t *testing.T) {
 		script := ".import " + standalone + "\n"
 		if err := runBatchShell(t, []string{"sqly", sub}, script); err != nil {
 			t.Errorf("standalone .import over a directory table failed: %v", err)
+		}
+	})
+
+	t.Run("replacing a table with another file says so", func(t *testing.T) {
+		// Allowed on purpose (a directory-imported table becomes a named one), but
+		// it rebinds the name and drops the session's edits, so it has to say so.
+		dir := t.TempDir()
+		first := filepath.Join(dir, "one")
+		second := filepath.Join(dir, "two")
+		for _, d := range []string{first, second} {
+			if err := os.Mkdir(d, 0o750); err != nil {
+				t.Fatal(err)
+			}
+		}
+		original := writeCSV(t, first, "user.csv", csv)
+		replacement := writeCSV(t, second, "user.csv", "id,name\n2,b\n")
+
+		backup := config.Stderr
+		var stderr strings.Builder
+		config.Stderr = &stderr
+		defer func() { config.Stderr = backup }()
+
+		script := ".import " + replacement + "\n"
+		if err := runBatchShell(t, []string{"sqly", original}, script); err != nil {
+			t.Fatalf(".import over an existing table failed: %v", err)
+		}
+		got := stderr.String()
+		for _, want := range []string{`table "user" now reads`, replacement, original, "is gone"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("stderr does not mention %q, got %q", want, got)
+			}
+		}
+	})
+
+	t.Run("re-importing the same file says nothing", func(t *testing.T) {
+		// A reload is not a replacement: the name still means the same file.
+		dir := t.TempDir()
+		src := writeCSV(t, dir, "user.csv", csv)
+
+		backup := config.Stderr
+		var stderr strings.Builder
+		config.Stderr = &stderr
+		defer func() { config.Stderr = backup }()
+
+		if err := runBatchShell(t, []string{"sqly", src}, ".import "+src+"\n"); err != nil {
+			t.Fatalf(".import of the same file failed: %v", err)
+		}
+		if strings.Contains(stderr.String(), "now reads") {
+			t.Errorf("a reload was reported as a replacement: %q", stderr.String())
 		}
 	})
 

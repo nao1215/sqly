@@ -32,6 +32,14 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 		return errors.New("cannot export an empty result to parquet: parquet export requires at least one row")
 	}
 
+	// A Parquet schema names each column once, and the staging database below
+	// rejects a repeat too — in its own words, which describe a database the user
+	// never opened: "create staging table: SQL logic error: duplicate column name:
+	// x (1)". Say it here instead, about the query that produced the columns.
+	if name, dup := duplicateColumnName(table); dup {
+		return fmt.Errorf("parquet: duplicate column name %q; a parquet schema names each column once, so alias one of them (SELECT a AS a1, b AS a2)", name)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "sqly-parquet-")
 	if err != nil {
 		return fmt.Errorf("create temp dir for parquet dump: %w", err)
@@ -119,6 +127,24 @@ func parquetStagingCreateTable(t *model.Table, types []string) string {
 	}
 	b.WriteString(");")
 	return b.String()
+}
+
+// duplicateColumnName returns the first column name that appears twice, and
+// reports whether there was one.
+//
+// Names are compared case-folded because that is how the staging table compares
+// them: "x" and "X" are one column to SQLite, so a check that told them apart
+// would pass the pair through to the error this one exists to replace.
+func duplicateColumnName(t *model.Table) (string, bool) {
+	seen := make(map[string]struct{}, t.ColumnCount())
+	for _, name := range t.Header() {
+		folded := strings.ToLower(name)
+		if _, ok := seen[folded]; ok {
+			return name, true
+		}
+		seen[folded] = struct{}{}
+	}
+	return "", false
 }
 
 const parquetTextType = "TEXT"
