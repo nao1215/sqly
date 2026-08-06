@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -841,6 +842,9 @@ func captureStreams(t *testing.T, fn func() error) (stdout, stderr string) {
 // read-only destination exited 1 — the code for a statement that ran and failed
 // — and a wrapper could not tell bad SQL from an unwritable disk.
 func TestSaveWriteFailureClassifiesAsAnOutputFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("windows does not apply the POSIX directory permissions this makes the write fail with")
+	}
 	if os.Getuid() == 0 {
 		t.Skip("root ignores directory permissions, so the write cannot be made to fail this way")
 	}

@@ -84,7 +84,7 @@ scenarios:
             "has
             newline"
       - run:
-          command: sh -c 'sqly --output-format ltsv --sql "SELECT * FROM multi" multi.csv > out.ltsv; echo "exit=$?"; echo "bytes=$(wc -c < out.ltsv)"'
+          command: sh -c 'sqly --output-format ltsv --sql "SELECT * FROM multi" multi.csv > out.ltsv; echo "exit=$?"; echo "bytes=$((`wc -c < out.ltsv`))"'
           shell: true
       - assert:
           exit_code: 0
@@ -313,9 +313,13 @@ scenarios:
   - name: compares a parquet numeric column as a number
     env: *hist
     steps:
-      - run:
-          command: sh -c 'printf "name,price\ncheap,9.99\nmid,100\npricey,1000.5\n" > goods.csv'
-          shell: true
+      - fixture:
+          file: goods.csv
+          content: |
+            name,price
+            cheap,9.99
+            mid,100
+            pricey,1000.5
       - run:
           command: sqly --output goods.parquet --sql "SELECT * FROM goods" goods.csv
       - assert:
