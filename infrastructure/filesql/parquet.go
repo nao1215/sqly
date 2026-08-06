@@ -115,10 +115,55 @@ func parquetStagingCreateTable(t *model.Table) string {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(infra.Quote(col) + " TEXT")
+		b.WriteString(infra.Quote(col) + " " + parquetStagingColumnType(t, i))
 	}
 	b.WriteString(");")
 	return b.String()
+}
+
+// parquetStagingColumnType is the SQL type the staging table declares for one
+// column, taken from the values the query actually produced.
+//
+// Every column used to be declared TEXT, and the display strings were bound into
+// it, so a numeric result reached Parquet as a column of digits typed as text —
+// and a reader that trusts the schema, which is what a typed format is for, then
+// compared and sorted it as text. A column is numeric only when every value in
+// it is, because SQLite types values rather than columns, and a column that
+// mixes a number with text has to keep the text.
+func parquetStagingColumnType(t *model.Table, col int) string {
+	const text = "TEXT"
+	declared := ""
+	for row := range t.RowCount() {
+		cell, ok := t.NativeCell(row, col)
+		if !ok {
+			// No native values at all: the table came from strings, so TEXT is
+			// what it holds.
+			return text
+		}
+		if cell.IsNull() {
+			continue
+		}
+		var kind string
+		switch cell.Value().(type) {
+		case int64:
+			kind = "INTEGER"
+		case float64:
+			kind = "REAL"
+		default:
+			return text
+		}
+		switch {
+		case declared == "":
+			declared = kind
+		case declared != kind:
+			// INTEGER and REAL in one column widen to REAL, which holds both.
+			declared = "REAL"
+		}
+	}
+	if declared == "" {
+		return text
+	}
+	return declared
 }
 
 // parquetInsertStatement builds the staging INSERT, one placeholder per column.
@@ -153,6 +198,14 @@ func parquetInsertArgs(t *model.Table, rowIdx int) []any {
 	for col := range t.Header() {
 		if t.IsNull(rowIdx, col) {
 			args = append(args, nil)
+			continue
+		}
+		// Bind the driver's own value when there is one, so an INTEGER stays an
+		// integer through the staging table and into the Parquet schema. The
+		// display string is the fallback for a table built from strings, where
+		// there is no other value to bind.
+		if cell, ok := t.NativeCell(rowIdx, col); ok {
+			args = append(args, cell.Value())
 			continue
 		}
 		args = append(args, record.At(col))

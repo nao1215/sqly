@@ -32,7 +32,7 @@ scenarios:
           command: sqly adebit.ach zdebit.ach
           stdin: "UPDATE adebit_entries SET individual_name = 'RENAMED';\nUPDATE zdebit_entries SET amount = 999999999999;\n.save --in-place\n"
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "does not match formatted value"
             not_contains: "Saved"
@@ -57,7 +57,7 @@ scenarios:
           command: sqly adebit.ach zwire.fed
           stdin: "UPDATE adebit_entries SET individual_name = 'RENAMED';\nUPDATE zwire_message SET amount = 'BADAMOUNT';\n.save --in-place\n"
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "incorrect amount format"
           changes:
@@ -77,7 +77,7 @@ scenarios:
             UPDATE adebit_entries SET amount = 999999999999;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 4
           changes:
             created: []
             modified: []
@@ -98,7 +98,7 @@ scenarios:
           command: sqly adebit.ach zdebit.ach
           stdin: "UPDATE adebit_entries SET individual_name = 'RENAMED';\nUPDATE zdebit_entries SET amount = 999999999999;\n.save out\n"
       - assert:
-          exit_code: 1
+          exit_code: 4
       - assert:
           file:
             path: out/adebit.ach

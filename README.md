@@ -298,9 +298,10 @@ printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./o
 ```
 
 `.save DIR` writes copies into `DIR` and leaves the sources alone; `.save
---in-place` overwrites them. Format, compression, and file permissions are
-preserved, a table the session did not change is not rewritten, and a save
-covering several files is all-or-nothing. See the [shell
+--in-place` overwrites them. Format and compression are preserved either way,
+and an in-place save keeps the source file's permissions; a copy into `DIR` is a
+new file and is created `0600`. A table the session did not change is not
+rewritten, and a save covering several files is all-or-nothing. See the [shell
 page](https://nao1215.github.io/sqly/shell/) for what it can and cannot write.
 
 Writing a *query result* somewhere is a different job, and that one is a flag:

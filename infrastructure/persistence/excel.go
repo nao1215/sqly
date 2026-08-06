@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -129,6 +130,15 @@ func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err er
 //
 // Everything else passes: DEL and U+FFFD itself are written unchanged.
 func ensureExcelRepresentable(label, value string) error {
+	// Bytes that are not UTF-8 at all are checked first, because ranging over a
+	// string cannot see them: Go decodes each invalid byte as U+FFFD, which
+	// xmlCanCarry then passes, and the writer wrote U+FFFD in its place. That is
+	// the substitution this function exists to stop, arriving through the one
+	// door it was not watching. Such a value is almost always a file read with
+	// the wrong --encoding, so the message says so.
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("excel: value for column %q is not valid UTF-8, so XLSX cannot carry it unchanged; re-read the input with the right --encoding, or export to csv/tsv", label)
+	}
 	for _, r := range value {
 		if !xmlCanCarry(r) {
 			return fmt.Errorf("excel: value for column %q contains the character U+%04X, which XLSX cannot represent; remove it or export to csv/tsv/json", label, r)
@@ -139,7 +149,9 @@ func ensureExcelRepresentable(label, value string) error {
 
 // xmlCanCarry reports whether XML 1.0 can hold r, following its Char production.
 // A Go string never yields a surrogate when ranged over — invalid bytes decode to
-// U+FFFD — so that half of the production cannot be reached from here.
+// U+FFFD — so that half of the production cannot be reached from here. The caller
+// rejects a value holding such bytes before this runs, so a U+FFFD reaching it is
+// one the data really contained.
 func xmlCanCarry(r rune) bool {
 	switch {
 	case r == '\t' || r == '\n' || r == '\r':

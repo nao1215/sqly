@@ -140,3 +140,74 @@ func TestSameFilePathSymlink(t *testing.T) {
 		t.Errorf("sameFilePath(unrelated, target) = true, want false")
 	}
 }
+
+// TestEnsureWritableDestinationRefusesNonRegularFiles pins what --output does
+// with a destination that is not a file it can replace.
+//
+// The write stages a scratch file beside the destination and renames it into
+// place. Pointed at a named pipe, the rename unlinked the pipe and left a
+// regular file where it had been: sqly reported success, and the reader blocked
+// on the other end received nothing at all. Pointed at a character device it
+// tried to create the scratch file in /dev and failed with a permission error
+// naming a path the user never wrote.
+func TestEnsureWritableDestinationRefusesNonRegularFiles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a named pipe is refused and left alone", func(t *testing.T) {
+		t.Parallel()
+		fifo := filepath.Join(t.TempDir(), "out.csv")
+		if err := makeFIFO(fifo); err != nil {
+			t.Skipf("cannot create a FIFO here: %v", err)
+		}
+
+		err := ensureWritableDestination(fifo)
+		if err == nil {
+			t.Fatal("ensureWritableDestination accepted a named pipe, want a refusal")
+		}
+		var pathErr *outputPathError
+		if !errors.As(err, &pathErr) {
+			t.Errorf("error = %v, want an *outputPathError so the run exits 4", err)
+		}
+
+		info, statErr := os.Lstat(fifo)
+		if statErr != nil {
+			t.Fatalf("the FIFO is gone: %v", statErr)
+		}
+		if info.Mode()&os.ModeNamedPipe == 0 {
+			t.Errorf("destination is now %v, want it left as a named pipe", info.Mode())
+		}
+	})
+
+	t.Run("a character device is refused", func(t *testing.T) {
+		t.Parallel()
+		if _, err := os.Stat(os.DevNull); err != nil {
+			t.Skipf("no %s here: %v", os.DevNull, err)
+		}
+		info, err := os.Stat(os.DevNull)
+		if err != nil || info.Mode().IsRegular() {
+			t.Skipf("%s is a regular file on this platform", os.DevNull)
+		}
+		if err := ensureWritableDestination(os.DevNull); err == nil {
+			t.Fatalf("ensureWritableDestination(%q) accepted a device, want a refusal", os.DevNull)
+		}
+	})
+
+	t.Run("a regular file is still accepted", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "out.csv")
+		if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := ensureWritableDestination(path); err != nil {
+			t.Errorf("ensureWritableDestination(%q) = %v, want nil", path, err)
+		}
+	})
+
+	t.Run("a path that does not exist yet is still accepted", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "new.csv")
+		if err := ensureWritableDestination(path); err != nil {
+			t.Errorf("ensureWritableDestination(%q) = %v, want nil", path, err)
+		}
+	})
+}

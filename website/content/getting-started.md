@@ -125,7 +125,7 @@ printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./o
 printf "DELETE FROM user WHERE identifier > 100;\n.save --in-place\n" | sqly user.csv
 ```
 
-`.save DIR` writes into a directory and leaves the sources alone. `.save --in-place` overwrites them. Either way the format, compression, and permissions of each source are preserved, a table the session did not change is not rewritten, and a save covering several files is all-or-nothing. Write-back is a shell command, not a flag, so it works the same interactively and in a piped script.
+`.save DIR` writes into a directory and leaves the sources alone. `.save --in-place` overwrites them. Either way the format and compression of each source are preserved. Permissions are kept by an in-place save, which is overwriting a file that already has them; a copy into `DIR` is a new file and is created `0600`. A table the session did not change is not rewritten, and a save covering several files is all-or-nothing. Write-back is a shell command, not a flag, so it works the same interactively and in a piped script.
 
 ## Next
 

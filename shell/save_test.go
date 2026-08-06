@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -833,4 +834,98 @@ func captureStreams(t *testing.T, fn func() error) (stdout, stderr string) {
 	defer func() { config.Stdout, config.Stderr = backupOut, backupErr }()
 	_ = fn()
 	return out.String(), errOut.String()
+}
+
+// TestSaveWriteFailureClassifiesAsAnOutputFailure pins the exit code a save that
+// could not write reports. The classification was applied only to the checks a
+// save runs before it writes; the write itself returned plain errors, so a
+// read-only destination exited 1 — the code for a statement that ran and failed
+// — and a wrapper could not tell bad SQL from an unwritable disk.
+func TestSaveWriteFailureClassifiesAsAnOutputFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("windows does not apply the POSIX directory permissions this makes the write fail with")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("root ignores directory permissions, so the write cannot be made to fail this way")
+	}
+
+	setup := func(t *testing.T) (*Shell, func()) {
+		t.Helper()
+		dir := t.TempDir()
+		src := filepath.Join(dir, "changed.csv")
+		if err := os.WriteFile(src, []byte("user_name,identifier\nalice,1"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := getExecStdOutput(t, shell.exec, "UPDATE changed SET identifier=2 WHERE user_name='alice'"); err != nil {
+			t.Fatal(err)
+		}
+		return shell, cleanup
+	}
+
+	t.Run("saving into a directory that cannot be written", func(t *testing.T) {
+		shell, cleanup := setup(t)
+		defer cleanup()
+
+		readOnly := filepath.Join(t.TempDir(), "ro")
+		if err := os.Mkdir(readOnly, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) }) //nolint:gosec // a directory needs its execute bit to be removable
+
+		backup := config.Stderr
+		config.Stderr = &strings.Builder{}
+		defer func() { config.Stderr = backup }()
+
+		err := shell.commands.saveCommand(context.Background(), shell, []string{readOnly})
+		if err == nil {
+			t.Fatal(".save into a read-only directory succeeded, want a failure")
+		}
+		if got := ExitCode(err); got != ExitOutput {
+			t.Errorf("ExitCode(%v) = %d, want %d (a destination that could not be written)", err, got, ExitOutput)
+		}
+	})
+
+	t.Run("saving in place under a directory that cannot be written", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "locked.csv")
+		if err := os.WriteFile(src, []byte("user_name,identifier\nalice,1"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		shell, cleanup, err := newShell(t, []string{"sqly"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := getExecStdOutput(t, shell.exec, "UPDATE locked SET identifier=2 WHERE user_name='alice'"); err != nil {
+			t.Fatal(err)
+		}
+		// The staging file is written next to the source, so a directory that
+		// refuses new files is what stops an in-place save.
+		if err := os.Chmod(dir, 0o500); err != nil { //nolint:gosec // a read-only directory still needs its execute bit
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) //nolint:gosec // a directory needs its execute bit to be removable
+
+		backup := config.Stderr
+		config.Stderr = &strings.Builder{}
+		defer func() { config.Stderr = backup }()
+
+		saveErr := shell.commands.saveCommand(context.Background(), shell, []string{inPlaceArg})
+		if saveErr == nil {
+			t.Fatal(".save --in-place under a read-only directory succeeded, want a failure")
+		}
+		if got := ExitCode(saveErr); got != ExitOutput {
+			t.Errorf("ExitCode(%v) = %d, want %d (a destination that could not be written)", saveErr, got, ExitOutput)
+		}
+	})
 }

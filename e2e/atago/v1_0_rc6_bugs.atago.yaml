@@ -1,0 +1,341 @@
+# Binary-level regressions from the adversarial review of the v1.0.0-rc5 binary.
+# Every scenario here failed against rc5.
+#
+# What the review found, and what is pinned below:
+#   1. an XLSX export replaced a byte that is not valid UTF-8 with U+FFFD and
+#      exited 0 — the substitution rc5 removed, arriving through the one door
+#      the guard did not watch
+#   2. json opened its array before encoding, so a value it could not encode
+#      left a bare "[" on stdout
+#   3. ltsv wrote the rows before the one it could not represent, so a pipeline
+#      read a truncated document as a complete one
+#   4. a .save that could not write exited 1, not the documented 4
+#   5. --output pointed at a named pipe unlinked it, wrote a regular file in its
+#      place, and reported success while the reader received nothing
+#   6. a script containing .save reported a syntax error as a schema change, and
+#      refused statements that came after the save
+#   7. --sql holding only whitespace, a semicolon, or a comment exited 0 having
+#      done nothing
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly v1.0.0-rc6 export fidelity and exit codes
+
+scenarios:
+  # 1. XLSX is XML, and XML cannot hold a byte that is not UTF-8. The writer
+  # substituted U+FFFD, so the export succeeded and the byte was gone. The guard
+  # ranged over the string, which decodes an invalid byte as U+FFFD before the
+  # check can see it.
+  - name: refuses an xlsx export of a value that is not valid UTF-8
+    skip:
+      os: windows
+    env: &hist
+      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+    steps:
+      - run:
+          command: sh -c 'printf "a,b\nbad\377byte,1\n" > bad.csv'
+          shell: true
+      - run:
+          command: sqly --output out.xlsx --sql "SELECT * FROM bad" bad.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "not valid UTF-8"
+      - assert:
+          file:
+            path: out.xlsx
+            exists: false
+
+  # csv and tsv are the formats that can carry such a value unchanged, so they
+  # still do. json keeps encoding/json's U+FFFD on purpose: that is the signal
+  # that a file was read with the wrong --encoding, and it is not a format sqly
+  # can hand the raw bytes to.
+  - name: still writes a value that is not valid UTF-8 as csv
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - run:
+          command: sh -c 'printf "a,b\nbad\377byte,1\n" > bad.csv'
+          shell: true
+      - run:
+          command: sh -c 'sqly --output-format csv --sql "SELECT * FROM bad" bad.csv | wc -c'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "15"
+
+  # 3. ltsv validated each value as it wrote it, so the rows before the bad one
+  # were already on stdout. Writing to a file was atomic because it stages; only
+  # stdout was without the guarantee.
+  - name: writes no ltsv row when a later row cannot be represented
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture:
+          file: multi.csv
+          content: |
+            a
+            clean
+            "has
+            newline"
+      - run:
+          command: sh -c 'sqly --output-format ltsv --sql "SELECT * FROM multi" multi.csv > out.ltsv; echo "exit=$?"; echo "bytes=$((`wc -c < out.ltsv`))"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "exit=4"
+              - "bytes=0"
+
+  # 4. The exit code table says a destination that could not be written is a 4,
+  # and says it holds for a .save inside a script exactly as on its own. Every
+  # save write failure returned a plain error and fell through to 1.
+  - name: exits 4 when a save cannot write its destination
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: &staff
+          file: staff.csv
+          content: |
+            name,dept
+            alice,eng
+      - run:
+          command: sh -c 'mkdir -p ro && chmod 500 ro'
+          shell: true
+      - fixture:
+          file: save.sqly
+          content: |
+            UPDATE staff SET dept = 'ops';
+            .save ./ro
+      - run:
+          command: sqly --script-file save.sqly staff.csv
+      - assert:
+          exit_code: 4
+      - run:
+          command: sh -c 'chmod 700 ro'
+          shell: true
+
+  - name: exits 4 when an in-place save cannot write its source
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - run:
+          command: sh -c 'mkdir -p locked && printf "name,dept\nalice,eng\n" > locked/staff.csv'
+          shell: true
+      - fixture:
+          file: inplace.sqly
+          content: |
+            UPDATE staff SET dept = 'ops';
+            .save --in-place
+      - run:
+          command: sh -c 'chmod 500 locked; sqly --script-file inplace.sqly locked/staff.csv; code=$?; chmod 700 locked; exit $code'
+          shell: true
+      - assert:
+          exit_code: 4
+
+  # 5. --output renames a staged file onto its destination, and a rename replaces
+  # a name rather than what it points at. A named pipe was unlinked, a regular
+  # file took its place, and the reader on the other end got nothing.
+  - name: refuses a named pipe destination and leaves the pipe in place
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *staff
+      - run:
+          command: sh -c 'mkfifo pipe.csv'
+          shell: true
+      - run:
+          command: sqly --output pipe.csv --sql "SELECT * FROM staff" staff.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "named pipe"
+      - run:
+          command: sh -c 'test -p pipe.csv && echo "still-a-pipe"'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "still-a-pipe"
+
+  - name: refuses a character device destination with a message about it
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --output /dev/null --output-format csv --sql "SELECT * FROM staff" staff.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "character device"
+
+  # 6. The preflight named every statement it did not recognize a schema change,
+  # so a typo was explained as one and the real SQL error never arrived.
+  - name: reports a syntax error in a save script as a syntax error
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *staff
+      - fixture:
+          file: typo.sqly
+          content: |
+            SELEC bad;
+            .save ./out
+      - run:
+          command: sqly --script-file typo.sqly staff.csv
+          stderr_to: err.log
+      - assert:
+          exit_code: 1
+      - run:
+          command: sh -c 'grep -c "syntax error" err.log; grep -c "changes schema" err.log'
+          shell: true
+      - assert:
+          stdout:
+            line: 1
+            equals: "1"
+      - assert:
+          stdout:
+            line: 2
+            equals: "0"
+
+  # A .save writes what changed by the time it runs, so a statement after the
+  # last one cannot affect it. The whole script was refused, and the save the
+  # script asked for never happened.
+  - name: saves when a schema change comes after the save
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *staff
+      - fixture:
+          file: after.sqly
+          content: |
+            UPDATE staff SET dept = 'ops';
+            .save ./out
+            CREATE TABLE scratch (id INTEGER);
+      - run:
+          command: sqly --script-file after.sqly staff.csv
+      - assert:
+          exit_code: 0
+      - assert:
+          file:
+            path: out/staff.csv
+            contains: "ops"
+
+  - name: still refuses a schema change that comes before the save
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *staff
+      - fixture:
+          file: before.sqly
+          content: |
+            CREATE TABLE scratch (id INTEGER);
+            .save ./out
+      - run:
+          command: sqly --script-file before.sqly staff.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "changes schema"
+
+  # 7. An empty --sql was refused by the flag parser, which sees the string. What
+  # was left after parsing — whitespace, a semicolon, a comment — ran nothing and
+  # exited 0, which a wrapper cannot tell from a run that worked.
+  - name: refuses a --sql holding only whitespace
+    env: *hist
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --sql "   " staff.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "no executable SQL statement"
+
+  - name: refuses a --sql holding only a semicolon
+    env: *hist
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --sql ";" staff.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "no executable SQL statement"
+
+  - name: refuses a --sql holding only a comment
+    env: *hist
+    steps:
+      - fixture: *staff
+      - run:
+          command: sqly --sql "-- nothing here" staff.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "no executable SQL statement"
+
+  # The dialect rewrite renamed the column it rewrote, because SQLite names an
+  # unaliased result column after the text of the expression. The header a
+  # pipeline reads is the caller's, not the translator's.
+  - name: keeps the caller's column name through a dialect cast
+    env: *hist
+    steps:
+      - fixture:
+          file: money.csv
+          content: |
+            name,amt
+            alice,10
+      - run:
+          command: sqly --dialect postgresql --output-format csv --sql "SELECT amt::text FROM money" money.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 1
+            equals: "amt::text"
+
+  # Parquet states the type of every column, and the import discarded it: every
+  # column arrived as TEXT, so a numeric predicate compared digit strings and
+  # matched rows it should not have.
+  - name: compares a parquet numeric column as a number
+    env: *hist
+    steps:
+      - fixture:
+          file: goods.csv
+          content: |
+            name,price
+            cheap,9.99
+            mid,100
+            pricey,1000.5
+      - run:
+          command: sqly --output goods.parquet --sql "SELECT * FROM goods" goods.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT name FROM goods WHERE price > 50" goods.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "mid"
+              - "pricey"
+      - run:
+          command: sqly --output-format csv --sql "SELECT MAX(price) AS m FROM goods" goods.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "1000.5"

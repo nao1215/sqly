@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1169,6 +1170,61 @@ func TestTablePrint_WriteError(t *testing.T) {
 			err := tbl.Print(errorWriter{}, mode)
 			if !errors.Is(err, errForcedWrite) {
 				t.Errorf("expected error %v, got %v", errForcedWrite, err)
+			}
+		})
+	}
+}
+
+// TestTablePrintRefusesBeforeWritingAnything pins the guarantee a failing export
+// owes a pipeline: nothing on the writer.
+//
+// LTSV checked each value as it wrote it, so a value it could not represent in
+// row 2 left row 1 on stdout and then failed. JSON opened its array before
+// encoding the first row, so an unencodable value left a bare "[" behind. Either
+// way the reader on the other end had already taken a truncated document for a
+// complete one, and only the exit code said otherwise.
+func TestTablePrintRefusesBeforeWritingAnything(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		table  *Table
+		mode   PrintMode
+		reason string
+	}{
+		{
+			name: "ltsv with a tab in the second row",
+			table: NewTable("t", Header{"a"}, []Record{
+				{"clean"},
+				{"has\ttab"},
+			}),
+			mode:   PrintModeLTSV,
+			reason: "a tab or newline",
+		},
+		{
+			name: "ltsv with a newline in the second row",
+			table: NewTable("t", Header{"a"}, []Record{
+				{"clean"},
+				{"has\nnewline"},
+			}),
+			mode:   PrintModeLTSV,
+			reason: "a tab or newline",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var out bytes.Buffer
+			err := tt.table.Print(&out, tt.mode)
+			if err == nil {
+				t.Fatal("Print succeeded, want a refusal")
+			}
+			if !strings.Contains(err.Error(), tt.reason) {
+				t.Errorf("error = %v, want it to mention %q", err, tt.reason)
+			}
+			if out.Len() != 0 {
+				t.Errorf("Print wrote %q before failing; a refused export writes nothing", out.String())
 			}
 		})
 	}
