@@ -31,6 +31,10 @@ scenarios:
   # file, and it is gone by the time they read about it. Import failures already
   # called it "stdin (--stdin-format csv)"; the pre-import checks did not.
   - name: names standard input as stdin when it collides with a file
+    # Needs a POSIX shell for the stdin redirect; the message itself is not
+    # platform-specific and is covered by the Go tests.
+    skip:
+      os: windows
     steps:
       - fixture:
           file: staff.csv
