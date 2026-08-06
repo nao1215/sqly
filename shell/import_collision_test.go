@@ -77,7 +77,7 @@ func TestImportCollisionRegressions(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		writeCSV(t, first, "user.csv", csv)
+		original := writeCSV(t, first, "user.csv", csv)
 		replacement := writeCSV(t, second, "user.csv", "id,name\n2,b\n")
 
 		backup := config.Stderr
@@ -86,12 +86,14 @@ func TestImportCollisionRegressions(t *testing.T) {
 		defer func() { config.Stderr = backup }()
 
 		script := ".import " + replacement + "\n"
-		if err := runBatchShell(t, []string{"sqly", filepath.Join(first, "user.csv")}, script); err != nil {
+		if err := runBatchShell(t, []string{"sqly", original}, script); err != nil {
 			t.Fatalf(".import over an existing table failed: %v", err)
 		}
 		got := stderr.String()
-		if !strings.Contains(got, "user") || !strings.Contains(got, replacement) {
-			t.Errorf("stderr did not report the replacement, got %q", got)
+		for _, want := range []string{`table "user" now reads`, replacement, original, "is gone"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("stderr does not mention %q, got %q", want, got)
+			}
 		}
 	})
 
@@ -108,7 +110,7 @@ func TestImportCollisionRegressions(t *testing.T) {
 		if err := runBatchShell(t, []string{"sqly", src}, ".import "+src+"\n"); err != nil {
 			t.Fatalf(".import of the same file failed: %v", err)
 		}
-		if strings.Contains(stderr.String(), "replaced") {
+		if strings.Contains(stderr.String(), "now reads") {
 			t.Errorf("a reload was reported as a replacement: %q", stderr.String())
 		}
 	})

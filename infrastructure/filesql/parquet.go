@@ -131,13 +131,18 @@ func parquetStagingCreateTable(t *model.Table, types []string) string {
 
 // duplicateColumnName returns the first column name that appears twice, and
 // reports whether there was one.
+//
+// Names are compared case-folded because that is how the staging table compares
+// them: "x" and "X" are one column to SQLite, so a check that told them apart
+// would pass the pair through to the error this one exists to replace.
 func duplicateColumnName(t *model.Table) (string, bool) {
 	seen := make(map[string]struct{}, t.ColumnCount())
 	for _, name := range t.Header() {
-		if _, ok := seen[name]; ok {
+		folded := strings.ToLower(name)
+		if _, ok := seen[folded]; ok {
 			return name, true
 		}
-		seen[name] = struct{}{}
+		seen[folded] = struct{}{}
 	}
 	return "", false
 }

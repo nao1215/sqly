@@ -78,9 +78,12 @@ func (c Cell) String() string {
 	case int64:
 		return strconv.FormatInt(v, 10)
 	case float64:
-		return formatFloat(v)
+		return formatFloat(v, 64)
 	case float32:
-		return formatFloat(float64(v))
+		// The value's own width, not float64's: formatting a float32 as 64 bits
+		// prints the error its conversion introduced (1.1 becomes
+		// 1.100000023841858).
+		return formatFloat(float64(v), 32)
 	default:
 		return fmt.Sprintf("%v", v)
 	}
@@ -95,8 +98,9 @@ const (
 	notANumberToken  = "NaN"
 )
 
-// formatFloat returns the shortest round-trip form, except for the three values above.
-func formatFloat(f float64) string {
+// formatFloat returns the shortest form that round-trips at bitSize, except for
+// the three values above.
+func formatFloat(f float64, bitSize int) string {
 	switch {
 	case math.IsInf(f, 1):
 		return infinityToken
@@ -105,5 +109,5 @@ func formatFloat(f float64) string {
 	case math.IsNaN(f):
 		return notANumberToken
 	}
-	return strconv.FormatFloat(f, 'g', -1, 64)
+	return strconv.FormatFloat(f, 'g', -1, bitSize)
 }

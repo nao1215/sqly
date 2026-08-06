@@ -33,6 +33,9 @@ func TestCellStringUsesDriverType(t *testing.T) {
 		{name: "bool", cell: NewCell(true), want: "true"},
 		{name: "bytes are text", cell: NewCell([]byte("blob")), want: "blob"},
 
+		// A float32 keeps its own precision: read as 64 bits it prints the error
+		// its conversion introduced, 1.100000023841858.
+		{name: "float32 keeps its width", cell: NewCell(float32(1.1)), want: "1.1"},
 		{name: "positive infinity", cell: NewCell(math.Inf(1)), want: "Infinity"},
 		{name: "negative infinity", cell: NewCell(math.Inf(-1)), want: "-Infinity"},
 		{name: "not a number", cell: NewCell(math.NaN()), want: "NaN"},

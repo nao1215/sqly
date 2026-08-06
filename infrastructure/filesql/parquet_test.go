@@ -251,18 +251,22 @@ func TestDumpTableToParquet_TextStagedColumnKeepsTheDisplayedNumber(t *testing.T
 func TestDumpTableToParquet_RefusesDuplicateColumnNames(t *testing.T) {
 	t.Parallel()
 
-	table := model.NewTable("dup", model.Header{"x", "x"}, []model.Record{{"1", "2"}})
-	out := filepath.Join(t.TempDir(), "dup.parquet")
+	// The second pair differs only in case, which is one name to the staging
+	// table, so a case-sensitive check would let it reach the error being replaced.
+	for _, header := range []model.Header{{"x", "x"}, {"x", "X"}} {
+		table := model.NewTable("dup", header, []model.Record{{"1", "2"}})
+		out := filepath.Join(t.TempDir(), "dup.parquet")
 
-	err := DumpTableToParquet(out, table)
-	if err == nil {
-		t.Fatal("DumpTableToParquet accepted two columns of one name, want a refusal")
-	}
-	if strings.Contains(err.Error(), "staging") || strings.Contains(err.Error(), "SQL logic error") {
-		t.Errorf("error exposes the staging database: %v", err)
-	}
-	if !strings.Contains(err.Error(), "duplicate column name") || !strings.Contains(err.Error(), `"x"`) {
-		t.Errorf("error = %v, want it to name the duplicated column", err)
+		err := DumpTableToParquet(out, table)
+		if err == nil {
+			t.Fatalf("DumpTableToParquet accepted %v, want a refusal", header)
+		}
+		if strings.Contains(err.Error(), "staging") || strings.Contains(err.Error(), "SQL logic error") {
+			t.Errorf("error for %v exposes the staging database: %v", header, err)
+		}
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			t.Errorf("error for %v = %v, want it to name the duplicated column", header, err)
+		}
 	}
 }
 
