@@ -51,7 +51,7 @@ scenarios:
             equals: |
               v
               alice
-
+              ""
               bob
 
   - name: a one-column TSV export keeps its empty rows
@@ -66,6 +66,72 @@ scenarios:
             equals: "v\nalice\n\"\"\nbob\n"
       - run:
           command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              3
+
+  - name: a redirected one-column CSV result keeps its empty rows through a reimport
+    # --output and a redirect have to produce the same file. Only the export path
+    # quoted the lone empty field, so `sqly ... > out.csv` silently lost the row
+    # that `--output out.csv` kept.
+    skip:
+      os: windows
+    steps:
+      - fixture: *src
+      - run:
+          shell: true
+          command: sqly --output-format csv --sql "SELECT v FROM src ORDER BY w" src.csv > out.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.csv
+            equals: "v\nalice\n\"\"\nbob\n"
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              3
+
+  - name: a redirected one-column TSV result keeps its empty rows through a reimport
+    skip:
+      os: windows
+    steps:
+      - fixture: *src
+      - run:
+          shell: true
+          command: sqly --output-format tsv --sql "SELECT v FROM src ORDER BY w" src.csv > out.tsv
+      - assert:
+          exit_code: 0
+          file:
+            path: out.tsv
+            equals: "v\nalice\n\"\"\nbob\n"
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              3
+
+  - name: .mode csv in a script keeps a lone empty field readable
+    skip:
+      os: windows
+    steps:
+      - fixture: *src
+      - run:
+          shell: true
+          command: printf '.mode csv\nSELECT v FROM src ORDER BY w;\n' | sqly src.csv > out.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
       - assert:
           exit_code: 0
           stdout:

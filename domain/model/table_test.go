@@ -1009,6 +1009,68 @@ func TestTablePrintEscaping(t *testing.T) {
 		}
 	})
 
+	t.Run("a one-column row whose only value is empty survives a re-read", func(t *testing.T) {
+		t.Parallel()
+
+		// A blank line is not a record, so three printed rows would read back as two.
+		for _, tt := range []struct {
+			name  string
+			mode  PrintMode
+			comma rune
+		}{
+			{name: "CSV", mode: PrintModeCSV, comma: ','},
+			{name: "TSV", mode: PrintModeTSV, comma: '\t'},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				tbl := NewTable("t", Header{"v"}, []Record{{"alice"}, {""}, {"bob"}})
+				var buf bytes.Buffer
+				if err := tbl.Print(&buf, tt.mode); err != nil {
+					t.Fatalf("Print: %v", err)
+				}
+				r := csv.NewReader(bytes.NewReader(buf.Bytes()))
+				r.Comma = tt.comma
+				rows, err := r.ReadAll()
+				if err != nil {
+					t.Fatalf("output is not valid: %v", err)
+				}
+				want := [][]string{{"v"}, {"alice"}, {""}, {"bob"}}
+				if diff := cmp.Diff(want, rows); diff != "" {
+					t.Errorf("re-read mismatch (-want +got):\n%s\nprinted %q", diff, buf.String())
+				}
+			})
+		}
+	})
+
+	t.Run("a lone empty column name survives a re-read", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{""}, []Record{{"x"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeCSV); err != nil {
+			t.Fatalf("Print CSV: %v", err)
+		}
+		rows, err := csv.NewReader(bytes.NewReader(buf.Bytes())).ReadAll()
+		if err != nil {
+			t.Fatalf("output is not valid CSV: %v", err)
+		}
+		want := [][]string{{""}, {"x"}}
+		if diff := cmp.Diff(want, rows); diff != "" {
+			t.Errorf("re-read mismatch (-want +got):\n%s\nprinted %q", diff, buf.String())
+		}
+	})
+
+	t.Run("a multi-column row of empty values keeps its delimiters", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"a", "b"}, []Record{{"", ""}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeCSV); err != nil {
+			t.Fatalf("Print CSV: %v", err)
+		}
+		if got, want := buf.String(), "a,b\n,\n"; got != want {
+			t.Errorf("Print CSV = %q, want %q", got, want)
+		}
+	})
+
 	t.Run("LTSV rejects a value containing a tab", func(t *testing.T) {
 		t.Parallel()
 		tbl := NewTable("t", Header{"c"}, []Record{{"a\tb"}})
