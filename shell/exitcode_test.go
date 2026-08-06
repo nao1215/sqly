@@ -352,7 +352,9 @@ func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
 		{name: ".mode with an unknown mode", argv: []string{"nope"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.modeCommand(context.Background(), s, a) }},
 		{name: ".row-mismatch with an unknown policy", argv: []string{"nope"},
-			run: func(c CommandList, s *Shell, a []string) error { return c.rowMismatchCommand(context.Background(), s, a) }},
+			run: func(c CommandList, s *Shell, a []string) error {
+				return c.rowMismatchCommand(context.Background(), s, a)
+			}},
 		{name: ".ls with two paths", argv: []string{"a", "b"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.lsCommand(context.Background(), s, a) }},
 		{name: ".cd with two paths", argv: []string{"a", "b"},
