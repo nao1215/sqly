@@ -1310,9 +1310,13 @@ func (s *Shell) runScript(ctx context.Context, elements []scriptElement) (bool, 
 	return ranAny, nil
 }
 
-// multiResultAdvice is the recovery half of every "one result set" error, shared
-// so --output and the machine-readable stdout formats say the same thing.
+// multiResultAdvice is the recovery half of the "one result set" error on the
+// machine-readable stdout formats, where changing the format is a way out.
 const multiResultAdvice = "keep one statement that returns rows, or use --output-format table, vertical, or markdown, which separate several results"
+
+// multiResultToFileAdvice is the same half for --output, where changing the
+// format is not a way out: one file holds one result whichever format it is in.
+const multiResultToFileAdvice = "keep one statement that returns rows, or drop --output and let the results print, in a format that separates them (table, vertical, markdown)"
 
 // runSQLFileToOutput runs a --sql-file script and exports its single result set
 // to --output. The script may run any number of setup statements (DDL/DML), but
@@ -1345,7 +1349,7 @@ func (s *Shell) runSQLFileToOutput(ctx context.Context, elements []scriptElement
 		return s.finishNonInteractive(ctx)
 	default:
 		return &resultCountError{Produced: len(s.capturedRowsets), Err: fmt.Errorf(
-			"--output writes one file, but the script produced %d result sets; %s", len(s.capturedRowsets), multiResultAdvice)}
+			"--output writes one file, but the script produced %d result sets; %s", len(s.capturedRowsets), multiResultToFileAdvice)}
 	}
 }
 
@@ -1450,18 +1454,25 @@ func printResultTable(table *model.Table, mode model.PrintMode) error {
 	return nil
 }
 
-// resolveOutputTarget resolves path against the run's format and reports a
-// conflict between the two as a usage error.
+// resolveOutputTarget resolves path against the run's format and gives each of
+// ResolveOutputTarget's refusals its class.
 //
-// The conflict is a contradiction between two things the user typed — an output
-// mode and a destination extension — so nothing about the data can settle it and
-// the fix is on the command line or in the script. The rest of what
-// ResolveOutputTarget rejects is about what the destination itself can hold, and
-// keeps the class it already had.
+// A format conflict is a contradiction between two things the user typed — an
+// output mode and a destination extension — so nothing about the data can settle
+// it and the fix is on the command line or in the script.
+//
+// Compression the destination cannot carry describes the file rather than the
+// command line, so it is a destination failure. It used to fall through
+// unclassified and exit 1, which is the code for a statement that ran and
+// failed: nothing had run, and a wrapper reading 1 was told its SQL was wrong
+// when what it needed to change was the path.
 func resolveOutputTarget(path string, explicit model.ExportFormat, explicitSet bool) (model.ExportFormat, model.Compression, error) {
 	format, compression, err := model.ResolveOutputTarget(path, explicit, explicitSet)
-	if errors.Is(err, model.ErrOutputFormatConflict) {
+	switch {
+	case errors.Is(err, model.ErrOutputFormatConflict):
 		return 0, model.CompressionNone, &invocationError{Err: err}
+	case errors.Is(err, model.ErrCompressionUnsupported):
+		return 0, model.CompressionNone, &outputPathError{Path: path, Err: err}
 	}
 	return format, compression, err
 }

@@ -364,9 +364,29 @@ func (s *Shell) recordTableSources(ctx context.Context, tableNames []string, sou
 		s.tableSources = make(map[string]string)
 	}
 	for _, name := range tableNames {
+		s.warnTableSourceReplaced(name, source)
 		s.tableSources[name] = source
 		s.snapshotBaseline(ctx, name)
 	}
+}
+
+// warnTableSourceReplaced says on stderr that a table now means a different file
+// than it did.
+//
+// Importing a file whose name is already taken is allowed on purpose: it is how a
+// table picked up from a directory is promoted to one the session names directly,
+// which is what makes it saveable. What it also does is rebind the name and drop
+// whatever the session had done to the old table, and it used to do that silently.
+//
+// A re-import of the same file is a reload, not a replacement, so it stays quiet.
+func (s *Shell) warnTableSourceReplaced(name, source string) {
+	previous, ok := s.tableSources[name]
+	if !ok || previous == source {
+		return
+	}
+	fmt.Fprintf(config.Stderr,
+		"warning: table %q now reads %s; it was %s, and any change made to it in this session is gone\n",
+		name, source, previous)
 }
 
 func (s *Shell) resolveImportTarget(ctx context.Context, input string) (cleanPath string, cleanup func(), info os.FileInfo, err error) {

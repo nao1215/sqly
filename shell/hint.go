@@ -73,6 +73,25 @@ func missingName(msg, marker string) (string, bool) {
 	return rest, true
 }
 
+// asMissingTableError rewrites the engine's report of an unknown table into the
+// wording every helper command uses, and leaves any other error alone.
+//
+// A helper command names a table directly, so the engine's own text says nothing
+// the user can act on that the command cannot say better: "SQL logic error: no
+// such table: nope (1)" offers an error number and an engine nobody addressed,
+// for what is almost always a typo. .describe and .schema check the table
+// themselves and answer plainly; the commands that reach the engine first now
+// report the same thing.
+func asMissingTableError(err error, tableName string) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := missingName(err.Error(), "no such table: "); !ok {
+		return err
+	}
+	return fmt.Errorf("no such table: %s", tableName)
+}
+
 // missingTableHint builds the hint for a table this session does not have, and
 // reports whether there is one to give. There is not when the table list cannot
 // be read: a session that holds tables and one whose list failed would otherwise

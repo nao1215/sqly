@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -76,7 +77,33 @@ func (c Cell) String() string {
 		return string(v)
 	case int64:
 		return strconv.FormatInt(v, 10)
+	case float64:
+		return formatFloat(v)
+	case float32:
+		return formatFloat(float64(v))
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// The three values that have no numeric spelling, written the same way wherever
+// they appear: the JSON formats quote these words, the text formats print them
+// bare. Defined once so the two cannot drift apart.
+const (
+	infinityToken    = "Infinity"
+	negInfinityToken = "-Infinity"
+	notANumberToken  = "NaN"
+)
+
+// formatFloat returns the shortest round-trip form, except for the three values above.
+func formatFloat(f float64) string {
+	switch {
+	case math.IsInf(f, 1):
+		return infinityToken
+	case math.IsInf(f, -1):
+		return negInfinityToken
+	case math.IsNaN(f):
+		return notANumberToken
+	}
+	return strconv.FormatFloat(f, 'g', -1, 64)
 }

@@ -25,7 +25,7 @@ func (c CommandList) headerCommand(ctx context.Context, s *Shell, argv []string)
 
 	table, err := s.usecases.metadata.Header(ctx, argv[0])
 	if err != nil {
-		return err
+		return asMissingTableError(err, argv[0])
 	}
 
 	// In a structured mode emit one machine-readable {column} object per column so

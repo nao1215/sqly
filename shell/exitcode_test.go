@@ -355,6 +355,8 @@ func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
 			run: func(c CommandList, s *Shell, a []string) error {
 				return c.rowMismatchCommand(context.Background(), s, a)
 			}},
+		{name: ".dialect with an unknown dialect", argv: []string{"nope"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.dialectCommand(context.Background(), s, a) }},
 		{name: ".ls with two paths", argv: []string{"a", "b"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.lsCommand(context.Background(), s, a) }},
 		{name: ".cd with two paths", argv: []string{"a", "b"},
@@ -380,6 +382,8 @@ func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
 			run: func(c CommandList, s *Shell, a []string) error {
 				return c.rowMismatchCommand(context.Background(), s, a)
 			}},
+		{name: ".dialect with an extra argument", argv: []string{"sqlite", "extra"},
+			run: func(c CommandList, s *Shell, a []string) error { return c.dialectCommand(context.Background(), s, a) }},
 		{name: ".save with two arguments", argv: []string{"a", "b"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.saveCommand(context.Background(), s, a) }},
 		{name: ".save with an unknown option", argv: []string{"--unknown"},

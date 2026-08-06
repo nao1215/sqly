@@ -309,6 +309,9 @@ scenarios:
           stderr:
             contains: 'unknown SQL dialect "oracle": want one of: sqlite, mysql, postgresql, googlesql'
 
+  # Same mistake as the scenario above, typed at the prompt instead of on the
+  # command line, so it exits the same way. .dialect was the one dot-command
+  # whose malformed forms still exited 1, the code for a statement that ran.
   - name: names every dialect in the .dialect error
     env: *hist
     steps:
@@ -317,7 +320,7 @@ scenarios:
           command: sqly t.csv
           stdin: ".dialect oracle\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: 'unknown SQL dialect "oracle" (available: sqlite, mysql, postgresql, googlesql)'
 

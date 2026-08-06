@@ -127,7 +127,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.csv.bz2
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: bzip2
 
@@ -137,7 +137,7 @@ scenarios:
       - run:
           command: sqly --sql "SELECT user_name FROM user LIMIT 1" user.csv --output result.parquet.gz
       - assert:
-          exit_code: 1
+          exit_code: 4
           stderr:
             contains: "cannot be compressed"
 

@@ -281,6 +281,62 @@ func TestExcelDumpRefusesInvalidUTF8(t *testing.T) {
 	}
 }
 
+// TestExcelDumpRefusesATrailingEmptyRow pins the refusal ensureLastRowSurvives
+// exists for: such a file reads back one row short.
+func TestExcelDumpRefusesATrailingEmptyRow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		table *model.Table
+		want  bool
+	}{
+		{
+			name:  "a lone empty row",
+			table: model.NewTable("t", model.Header{"a"}, []model.Record{{""}}),
+			want:  true,
+		},
+		{
+			name:  "an empty row at the end",
+			table: model.NewTable("t", model.Header{"a", "b"}, []model.Record{{"x", "1"}, {"", ""}}),
+			want:  true,
+		},
+		{
+			name:  "an empty row in the middle",
+			table: model.NewTable("t", model.Header{"a", "b"}, []model.Record{{"x", "1"}, {"", ""}, {"y", "2"}}),
+			want:  false,
+		},
+		{
+			name:  "a last row that holds something",
+			table: model.NewTable("t", model.Header{"a", "b"}, []model.Record{{"", ""}, {"", "2"}}),
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			out := filepath.Join(t.TempDir(), "out.xlsx")
+			err := NewExcelRepository().Dump(out, tt.table)
+			if tt.want {
+				if err == nil {
+					t.Fatal("Dump succeeded, want a refusal: the row would be lost on re-import")
+				}
+				if !strings.Contains(err.Error(), "last row") {
+					t.Errorf("error = %v, want it to name the last row", err)
+				}
+				if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+					t.Errorf("Dump left a file behind at %s; a refused export writes nothing", out)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Dump refused a table it can carry: %v", err)
+			}
+		})
+	}
+}
+
 // TestExcelDumpKeepsARealReplacementCharacter checks the refusal does not catch
 // a U+FFFD the data genuinely contains. The byte sequence is valid UTF-8, and
 // XML can carry the character, so it is written unchanged.

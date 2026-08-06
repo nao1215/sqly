@@ -243,6 +243,29 @@ func TestDumpTableToParquet_TextStagedColumnKeepsTheDisplayedNumber(t *testing.T
 	}
 }
 
+// TestDumpTableToParquet_RefusesDuplicateColumnNames pins that two columns of
+// one name are refused in sqly's own words.
+//
+// The refusal already happened, but in the staging database's words, for a query
+// the user can fix.
+func TestDumpTableToParquet_RefusesDuplicateColumnNames(t *testing.T) {
+	t.Parallel()
+
+	table := model.NewTable("dup", model.Header{"x", "x"}, []model.Record{{"1", "2"}})
+	out := filepath.Join(t.TempDir(), "dup.parquet")
+
+	err := DumpTableToParquet(out, table)
+	if err == nil {
+		t.Fatal("DumpTableToParquet accepted two columns of one name, want a refusal")
+	}
+	if strings.Contains(err.Error(), "staging") || strings.Contains(err.Error(), "SQL logic error") {
+		t.Errorf("error exposes the staging database: %v", err)
+	}
+	if !strings.Contains(err.Error(), "duplicate column name") || !strings.Contains(err.Error(), `"x"`) {
+		t.Errorf("error = %v, want it to name the duplicated column", err)
+	}
+}
+
 // TestDumpTableToParquet_EmptyResult covers the empty-result behavior: Parquet
 // needs at least one row to infer its schema, so exporting an empty result
 // returns a clear error rather than writing an unreadable file.

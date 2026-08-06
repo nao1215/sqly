@@ -422,26 +422,13 @@ func (t *Table) Print(out io.Writer, mode PrintMode) error {
 
 // printTable print all record with header; output format is table
 func (t *Table) printTable(out io.Writer) error {
-	// Create alignment configuration - detect numeric columns and align them right
+	// Numbers read best right aligned, and the values are what say whether a
+	// column holds them. The column name used to vote too, by substring, which
+	// only got it wrong: "message" and "package" contain "age". It never made a
+	// numeric column align that the values would not have.
 	alignment := make(tw.Alignment, t.ColumnCount())
-	for i, h := range t.Columns {
-		// Check if header suggests numeric data or if we should align right
-		headerName := strings.ToLower(h)
-		// Check for common numeric column patterns
-		isNumeric := strings.Contains(headerName, "gross") ||
-			strings.Contains(headerName, "number") ||
-			strings.Contains(headerName, "average") ||
-			strings.Contains(headerName, "total") ||
-			strings.Contains(headerName, "count") ||
-			strings.Contains(headerName, "price") ||
-			strings.Contains(headerName, "amount") ||
-			headerName == "id" ||
-			strings.Contains(headerName, "age") ||
-			strings.Contains(headerName, "年齢") ||
-			// Check if all data looks numeric (simple heuristic)
-			(t.RowCount() > 0 && isAllNumeric(t.columnData(i)))
-
-		if isNumeric {
+	for i := range t.Columns {
+		if t.RowCount() > 0 && isAllNumeric(t.columnData(i)) {
 			alignment[i] = tw.AlignRight
 		} else {
 			alignment[i] = tw.AlignLeft
@@ -875,11 +862,11 @@ func jsonNonFiniteToken(value any) ([]byte, bool) {
 	}
 	switch {
 	case math.IsNaN(f):
-		return []byte(`"NaN"`), true
+		return []byte(strconv.Quote(notANumberToken)), true
 	case math.IsInf(f, 1):
-		return []byte(`"Infinity"`), true
+		return []byte(strconv.Quote(infinityToken)), true
 	case math.IsInf(f, -1):
-		return []byte(`"-Infinity"`), true
+		return []byte(strconv.Quote(negInfinityToken)), true
 	default:
 		return nil, false
 	}

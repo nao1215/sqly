@@ -375,3 +375,169 @@ scenarios:
           stdout:
             line: 2
             equals: "1000.5"
+
+  # A second round of review against the rc5 binary, after the fixes above.
+
+  - name: says so when .import replaces a table with a different file
+    steps:
+      - fixture:
+          file: one/t.csv
+          content: |
+            id,name
+            1,alice
+      - fixture:
+          file: two/t.csv
+          content: |
+            id,city
+            1,tokyo
+      - run:
+          command: sqly one/t.csv
+          stdin: |
+            UPDATE t SET name = 'EDITED' WHERE id = 1;
+            .import two/t.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            matches: '(?s)warning: table "t" now reads .*two/t\.csv.*it was .*one/t\.csv'
+
+  - name: keeps quiet when .import reloads the same file
+    steps:
+      - fixture: &reload
+          file: r.csv
+          content: |
+            id,name
+            1,alice
+      - run:
+          command: sqly r.csv
+          stdin: ".import r.csv\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: "now reads"
+
+  - name: refuses an excel export whose last row is empty in every column
+    steps:
+      - fixture: &trailing
+          file: trail.csv
+          content: |
+            a,b
+            x,1
+            ,
+      - run:
+          command: sqly --output-format excel --output out.xlsx --sql "SELECT a, b FROM trail" trail.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "last row is empty in every column"
+      - assert:
+          file:
+            path: out.xlsx
+            exists: false
+
+  - name: still exports to excel when the last row holds something
+    steps:
+      - fixture: *trailing
+      - run:
+          command: sqly --output-format excel --output ok.xlsx --sql "SELECT a, b FROM trail WHERE a <> ''" trail.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: ok.xlsx
+            exists: true
+
+  - name: a dot-command given an argument it does not accept exits 2
+    matrix:
+      - line: ".dialect oracle"
+      - line: ".mode nope"
+      - line: ".row-mismatch nope"
+    steps:
+      - fixture: *reload
+      - run:
+          command: sqly r.csv
+          stdin: "${line}\n"
+      - assert:
+          exit_code: 2
+
+  - name: every helper command reports a missing table the same way
+    matrix:
+      - line: ".describe nope"
+      - line: ".schema nope"
+      - line: ".header nope"
+      - line: ".dump nope out.csv"
+    steps:
+      - fixture: *reload
+      - run:
+          command: sqly r.csv
+          stdin: "${line}\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such table: nope"
+      - assert:
+          stderr:
+            not_contains: "SQL logic error"
+
+  - name: an unwritable compression is a destination failure, not a statement failure
+    matrix:
+      - dest: "out.csv.bz2"
+      - dest: "out.parquet.gz"
+      - dest: "out.xlsx.gz"
+    steps:
+      - fixture: *reload
+      - run:
+          command: sqly --output ${dest} --sql "SELECT name FROM r" r.csv
+      - assert:
+          exit_code: 4
+
+  - name: --output with several results does not advise a format that also fails
+    steps:
+      - fixture: *reload
+      - fixture:
+          file: two.sql
+          content: |
+            SELECT 1 AS a;
+            SELECT 2 AS b;
+      - run:
+          command: sqly --sql-file two.sql --output-format table --output out.txt r.csv
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "drop --output"
+      - assert:
+          stderr:
+            not_contains: "use --output-format table"
+
+  - name: a parquet export names the duplicated column itself
+    steps:
+      - fixture: *reload
+      - run:
+          command: sqly --output-format parquet --output dup.parquet --sql "SELECT 1 AS x, 2 AS x" r.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: 'duplicate column name "x"'
+      - assert:
+          stderr:
+            not_contains: "staging"
+
+  - name: an infinite value is spelled the same way in every format
+    matrix:
+      - mode: csv
+      - mode: tsv
+      - mode: ltsv
+      - mode: json
+      - mode: jsonl
+      - mode: markdown
+      - mode: table
+      - mode: vertical
+    steps:
+      - fixture: *reload
+      - run:
+          command: sqly --output-format ${mode} --sql "SELECT 1e400 AS v" r.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Infinity"
+      - assert:
+          stdout:
+            not_contains: "+Inf"

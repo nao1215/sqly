@@ -66,7 +66,7 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 
 	table, err := s.usecases.metadata.List(ctx, tableName)
 	if err != nil {
-		return err
+		return asMissingTableError(err, tableName)
 	}
 	// The current .mode sets the format unless it is display-only (table,
 	// vertical); otherwise the format (and any compression) is inferred from the
