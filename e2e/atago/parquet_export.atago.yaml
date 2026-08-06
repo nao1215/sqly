@@ -86,6 +86,39 @@ scenarios:
           stdout:
             not_contains: '"id":""'
 
+  # A column that mixes numbers with text is staged as TEXT; binding the driver's
+  # number let SQLite render it, and a result printed as 100000 came back 100000.0.
+  - name: a column staged as text exports the number sqly displayed
+    steps:
+      - fixture:
+          file: mixed.csv
+          content: |
+            n,k
+            1e5,a
+            ,b
+      - run:
+          command: sqly --output-format csv --sql "SELECT n FROM mixed ORDER BY k" mixed.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              100000
+              ""
+      - run:
+          command: sqly --output-format parquet --output mixed.parquet --sql "SELECT n, k FROM mixed ORDER BY k" mixed.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT n FROM mixed ORDER BY k" mixed.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              n
+              100000
+              ""
+
   - name: reports a clear error when exporting an empty result
     steps:
       - fixture: *user

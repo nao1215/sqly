@@ -204,6 +204,45 @@ func TestDumpTableToParquet_PreservesNull(t *testing.T) {
 	}
 }
 
+// TestDumpTableToParquet_TextStagedColumnKeepsTheDisplayedNumber pins that a
+// column staged as TEXT — because it mixes numbers with something that is not a
+// number — reaches Parquet holding the text sqly showed, not SQLite's rendering
+// of the bound value.
+//
+// Staging as TEXT is what keeps "007" and "1.00" intact; binding the driver's
+// float64 into it let SQLite render the value, and a query that printed 100000
+// exported "100000.0".
+func TestDumpTableToParquet_TextStagedColumnKeepsTheDisplayedNumber(t *testing.T) {
+	t.Parallel()
+
+	// An empty string alongside the numbers is what forces TEXT staging: SQLite
+	// types values rather than columns, and a column holding text has to keep it.
+	table, err := model.NewTableFromCells("mixed", model.Header{"n"}, [][]model.Cell{
+		{model.NewCell(float64(100000))},
+		{model.NewCell(float64(2.5))},
+		{model.NewCell("")},
+	})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
+	out := filepath.Join(t.TempDir(), "mixed.parquet")
+
+	if err := DumpTableToParquet(out, table); err != nil {
+		t.Fatalf("DumpTableToParquet: %v", err)
+	}
+
+	got := reimportStringColumn(t, out, "mixed", "n")
+	want := []string{"100000", "2.5", ""}
+	if len(got) != len(want) {
+		t.Fatalf("reimported %d rows, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("row %d n = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 // TestDumpTableToParquet_EmptyResult covers the empty-result behavior: Parquet
 // needs at least one row to infer its schema, so exporting an empty result
 // returns a clear error rather than writing an unreadable file.
