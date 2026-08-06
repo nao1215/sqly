@@ -109,7 +109,7 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	// disagree about which spellings name a format.
 	target, ok := model.ParsePrintMode(modeName)
 	if !ok {
-		return fmt.Errorf("invalid output mode %q: want %s", modeName, model.PrintModeNames())
+		return &invocationError{Err: fmt.Errorf("invalid output mode %q: want %s", modeName, model.PrintModeNames())}
 	}
 
 	// Selecting the mode that is already in effect is what the caller asked for,

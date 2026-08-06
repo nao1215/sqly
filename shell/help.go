@@ -60,7 +60,7 @@ func helpGroups() []helpGroup {
 // suffix for each so common tasks and risky operations are discoverable in-shell.
 func (c CommandList) helpCommand(_ context.Context, _ *Shell, argv []string) error {
 	if len(argv) > 0 {
-		return fmt.Errorf(".help takes no arguments, got %d", len(argv))
+		return &invocationError{Err: fmt.Errorf(".help takes no arguments, got %d", len(argv))}
 	}
 	fmt.Fprintln(config.Stdout, "sqly helper commands (run inside the shell; SQL needs no leading dot):")
 	for _, g := range helpGroups() {

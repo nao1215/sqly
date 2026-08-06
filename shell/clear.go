@@ -21,7 +21,7 @@ import (
 // .clear becomes a no-op instead.
 func (c CommandList) clearCommand(_ context.Context, s *Shell, argv []string) error {
 	if len(argv) > 0 {
-		return fmt.Errorf(".clear takes no arguments, got %d", len(argv))
+		return &invocationError{Err: fmt.Errorf(".clear takes no arguments, got %d", len(argv))}
 	}
 	if s != nil && s.isTTY != nil && !s.isTTY() {
 		return nil

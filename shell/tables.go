@@ -22,7 +22,7 @@ const (
 // tablesCommand print all tables name in DB.
 func (c CommandList) tablesCommand(ctx context.Context, s *Shell, argv []string) error {
 	if len(argv) > 0 {
-		return fmt.Errorf(".tables takes no arguments, got %d", len(argv))
+		return &invocationError{Err: fmt.Errorf(".tables takes no arguments, got %d", len(argv))}
 	}
 	// List every queryable object (base tables, views, and TEMP tables/views),
 	// not only the file-imported base tables, so a session-created view or temp

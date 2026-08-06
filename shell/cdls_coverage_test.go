@@ -30,8 +30,10 @@ func TestCommandList_lsCommandCoverage(t *testing.T) {
 
 	t.Run("rejects more than one argument", func(t *testing.T) {
 		err := c.lsCommand(context.Background(), nil, []string{"a", "b"})
-		if err == nil || !strings.Contains(err.Error(), "too many arguments") {
-			t.Fatalf("want too many arguments error, got %v", err)
+		// A dot-command written wrong is a usage error, so it names the command
+		// and its usage rather than saying only "too many arguments".
+		if err == nil || !strings.Contains(err.Error(), "takes at most one path") {
+			t.Fatalf("want a usage error naming the command, got %v", err)
 		}
 	})
 
@@ -109,8 +111,10 @@ func TestCommandList_cdCommandCoverage(t *testing.T) {
 	t.Run("rejects more than one argument", func(t *testing.T) {
 		s := &Shell{state: &state{}}
 		err := c.cdCommand(context.Background(), s, []string{"a", "b"})
-		if err == nil || !strings.Contains(err.Error(), "too many arguments") {
-			t.Fatalf("want too many arguments error, got %v", err)
+		// A dot-command written wrong is a usage error, so it names the command
+		// and its usage rather than saying only "too many arguments".
+		if err == nil || !strings.Contains(err.Error(), "takes at most one path") {
+			t.Fatalf("want a usage error naming the command, got %v", err)
 		}
 	})
 

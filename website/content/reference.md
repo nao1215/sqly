@@ -738,7 +738,7 @@ wrong" from "that file would not load" without reading stderr.
 |:--|:--|:--|
 | `0` | success | — |
 | `1` | a statement ran and failed: a SQL error, a missing table, a constraint | the SQL |
-| `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a script whose several result sets the chosen format cannot separate | the invocation |
+| `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a dot-command missing an argument or given one it does not take, a script whose several result sets the chosen format cannot separate | the invocation |
 | `3` | an input could not be read: a missing path, an unsupported format, a download that failed or hit a limit, a malformed row under `--row-mismatch error` | the input |
 | `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback, a value or column set the chosen output format cannot represent — including when the destination is stdout | the destination |
 | `130` | SIGINT stopped the run — someone pressed Ctrl-C | — |
@@ -754,6 +754,12 @@ statement that hits it. A `4` means the query may already have produced results.
 The class is the same whether a failure happens at the top level or inside a
 script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly
 as it does on its own.
+
+A dot-command written wrong is a `2`, whichever command it is. `.header` with no
+table name, `.mode` naming a mode that does not exist, `.save` with two
+arguments, `.ls` with two paths — none of them ran, so none of them is a `1`.
+What the command does once it is accepted is classified on its own: `.cd` to a
+directory that is not there exits `1`, because that command ran and failed.
 
 `130` and `143` are `128` plus the signal number, which is what a shell reports
 for a process a signal killed. They are separate codes because the next move

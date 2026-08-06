@@ -28,10 +28,10 @@ func (c CommandList) schemaCommand(ctx context.Context, s *Shell, argv []string)
 		// A missing required argument is a command error, not a no-op: returning
 		// nil here would let a batch script continue and exit 0 after silently
 		// skipping the command. The usage text rides on the error path instead.
-		return errors.New(".schema requires a table name\n[Usage]\n  .schema TABLE_NAME")
+		return &invocationError{Err: errors.New(".schema requires a table name\n[Usage]\n  .schema TABLE_NAME")}
 	}
 	if len(argv) > 1 {
-		return fmt.Errorf(".schema accepts a single table name, got %d arguments", len(argv))
+		return &invocationError{Err: fmt.Errorf(".schema accepts a single table name, got %d arguments", len(argv))}
 	}
 	tableName := argv[0]
 

@@ -11,7 +11,7 @@ import (
 // like ".exit now" cannot silently terminate a batch run with status 0.
 func (c CommandList) exitCommand(_ context.Context, _ *Shell, argv []string) error {
 	if len(argv) > 0 {
-		return fmt.Errorf(".exit takes no arguments, got %d", len(argv))
+		return &invocationError{Err: fmt.Errorf(".exit takes no arguments, got %d", len(argv))}
 	}
 	return ErrExitSqly
 }

@@ -68,7 +68,7 @@ scenarios:
             UPDATE user SET user_name = 'changed';
             .save --force
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "--in-place"
           file:

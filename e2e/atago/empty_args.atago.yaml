@@ -21,7 +21,7 @@ scenarios:
           command: sqly u.csv
           stdin: "UPDATE u SET first_name = 'EMPTY' WHERE identifier = 1;\n.save \"\"\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stdout:
             equals: ""
           stderr:
@@ -43,7 +43,7 @@ scenarios:
           command: sqly user.csv
           stdin: ".dump user \"\"\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: ".dump requires"
 

@@ -16,10 +16,10 @@ func (c CommandList) describeCommand(ctx context.Context, s *Shell, argv []strin
 	if len(argv) == 0 {
 		// A missing required argument is a command error so a batch script fails
 		// fast instead of skipping the command and exiting 0.
-		return errors.New(".describe requires a table name\n[Usage]\n  .describe TABLE_NAME")
+		return &invocationError{Err: errors.New(".describe requires a table name\n[Usage]\n  .describe TABLE_NAME")}
 	}
 	if len(argv) > 1 {
-		return fmt.Errorf(".describe accepts a single table name, got %d arguments", len(argv))
+		return &invocationError{Err: fmt.Errorf(".describe accepts a single table name, got %d arguments", len(argv))}
 	}
 	tableName := argv[0]
 
