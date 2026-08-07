@@ -7,6 +7,47 @@ The [CHANGELOG](../CHANGELOG.md) records every change. This file records the one
 that require an edit to a command line, a script, or a program that reads sqly's
 output.
 
+## v1.0.0-rc6 → next
+
+### `.header` is removed; use `.describe`
+
+`.header TABLE` printed a table's column names, which is the `name` column of
+what `.describe TABLE` already printed. Two commands answering one question is a
+choice a reader had to make for nothing, so the subset is gone.
+
+```text
+Before:
+  sqly:~$ .header user
+  +------------+
+  |    user    |
+  +------------+
+  | user_name  |
+  | identifier |
+  +------------+
+
+From now:
+  sqly:~$ .header user
+  no such sqly command: .header user     # exit 1
+
+  sqly:~$ .describe user
+  +-----+------------+---------+---------+------------+----+
+  | cid |    name    |  type   | notnull | dflt_value | pk |
+  +-----+------------+---------+---------+------------+----+
+  |   0 | user_name  | TEXT    |       0 |            |  0 |
+  |   1 | identifier | INTEGER |       0 |            |  0 |
+  +-----+------------+---------+---------+------------+----+
+```
+
+**What to change:** replace `.header TABLE` with `.describe TABLE`. A script
+reading the column names out of a structured mode reads the `name` key instead of
+`column`:
+
+```shell
+printf '.mode jsonl\n.describe user\n' | sqly user.csv | jq -r '.name'
+```
+
+`sqly --inspect FILE` reports the same columns without a session.
+
 ## v1.0.0-rc5 → v1.0.0-rc6
 
 ### A one-column CSV or TSV result writes `""` for an empty value

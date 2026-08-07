@@ -73,17 +73,6 @@ scenarios:
           stdout:
             contains: id
 
-  - name: targets a literal dotted table name in .header
-    env: *hist
-    steps:
-      - run:
-          command: sqly
-          stdin: "CREATE TABLE \"a.b\"(id INTEGER);\n.header \"a.b\"\n"
-      - assert:
-          exit_code: 0
-          stdout:
-            contains: id
-
   - name: targets a literal dotted table name in .dump
     env: *hist
     steps:
@@ -107,16 +96,16 @@ scenarios:
           stdout:
             contains: '"two words"'
 
-  - name: keeps the full spaced table name in .header
+  - name: reaches a table whose name holds a space in .describe
     env: *hist
     steps:
       - run:
           command: sqly
-          stdin: "CREATE TABLE \"two words\"(id INTEGER);\n.header \"two words\"\n"
+          stdin: "CREATE TABLE \"two words\"(id INTEGER);\n.describe \"two words\"\n"
       - assert:
           exit_code: 0
           stdout:
-            contains: "two words"
+            contains: id
 
   - name: keeps the TEMP keyword for a temp-qualified table in .schema
     env: *hist
@@ -354,20 +343,20 @@ scenarios:
               - '"name"'
               - '"schema"'
 
-  - name: emits structured .header output under .mode jsonl
+  - name: emits structured .describe output under .mode jsonl
     env: *hist
     steps:
       - fixture: *user
       - run:
           command: sqly user.csv
-          stdin: ".mode jsonl\n.header user\n"
+          stdin: ".mode jsonl\n.describe user\n"
       - assert:
           exit_code: 0
           stderr:
             contains: "Change output mode"
           stdout:
             contains:
-              - '"column"'
+              - '"name"'
               - first_name
 
   - name: does not rewrite an unchanged source on .save --in-place

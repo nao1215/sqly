@@ -755,8 +755,8 @@ The class is the same whether a failure happens at the top level or inside a
 script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly
 as it does on its own.
 
-A dot-command written wrong is a `2`, whichever command it is. `.header` with no
-table name, `.mode` naming a mode that does not exist, `.save` with two
+A dot-command written wrong is a `2`, whichever command it is. `.describe` with
+no table name, `.mode` naming a mode that does not exist, `.save` with two
 arguments, `.ls` with two paths — none of them ran, so none of them is a `1`.
 What the command does once it is accepted is classified on its own: `.cd` to a
 directory that is not there exits `1`, because that command ran and failed.

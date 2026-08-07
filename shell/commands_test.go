@@ -679,32 +679,6 @@ func TestCommandList_tablesCommand_dependsOnMetadataUsecase(t *testing.T) {
 	}
 }
 
-// TestCommandList_headerCommand_dependsOnMetadataUsecase verifies that .header
-// is satisfied by a MetadataUsecase mock alone and prints the table's columns.
-func TestCommandList_headerCommand_dependsOnMetadataUsecase(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	metadata := mock.NewMockMetadataUsecase(ctrl)
-	metadata.EXPECT().Header(gomock.Any(), "users").Return(
-		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil)
-
-	st, err := newState(&config.Arg{Output: &config.Output{Mode: model.PrintModeTable}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &Shell{usecases: Usecases{metadata: metadata}, state: st}
-	out := captureStdout(t, func() {
-		if err := NewCommands().headerCommand(context.Background(), s, []string{"users"}); err != nil {
-			t.Fatalf("headerCommand returned error: %v", err)
-		}
-	})
-
-	for _, want := range []string{"id", "name"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output %q does not contain column %q", out, want)
-		}
-	}
-}
-
 // TestShell_execSQL_dependsOnQueryUsecase verifies that execSQL routes through
 // the QueryUsecase boundary: a statement that affects rows reports the count,
 // and an execution error is propagated unchanged.

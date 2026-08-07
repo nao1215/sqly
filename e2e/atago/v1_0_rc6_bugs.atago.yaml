@@ -463,7 +463,6 @@ scenarios:
     matrix:
       - line: ".describe nope"
       - line: ".schema nope"
-      - line: ".header nope"
       - line: ".dump nope out.csv"
     steps:
       - fixture: *reload

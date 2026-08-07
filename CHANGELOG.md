@@ -20,6 +20,9 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ## [Unreleased]
 
+### Breaking Changes
+* `.header` is removed; `.describe` is what it was a subset of. It printed a table's column names, which is the `name` column `.describe` already prints, so the shell answered one question two ways and carried a rendering path nothing else used. `.header` now reports "no such sqly command" and exits `1`. A script reading the names out of a structured mode reads the `name` key rather than `column`. See the [migration guide](doc/migration.md).
+
 ### Refactoring
 * FileSQLAdapter carries only the methods sqly calls. Its Query, Exec, GetTableHeader, and LoadFile were reached by tests alone: the session runs SQL through the memory repository and imports through LoadFiles. The adapter's Query held a second scan loop over the same rows, so the two readers could have diverged with only a user to notice.
 * Export formats are serializer functions rather than five interfaces. CSVRepository, TSVRepository, LTSVRepository, ExcelRepository, and FileRepository each had one implementation, one consumer, and one method, and nothing ever substituted them. A registry keyed by export format replaces the switch whose default branch wrote CSV, so a format added to the model and not wired up is now reported rather than written in the wrong format under the right extension.

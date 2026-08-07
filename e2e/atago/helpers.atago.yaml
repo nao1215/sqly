@@ -223,7 +223,7 @@ scenarios:
               - 'batch statement 1 failed at line 1: ".cd no_such_dir"'
               - "batch stopped: statement failed"
 
-  - name: .header fails on a missing table
+  - name: .describe fails on a missing table
     steps:
       - fixture:
           file: alpha.csv
@@ -232,7 +232,7 @@ scenarios:
             1
       - run:
           command: sqly alpha.csv
-          stdin: ".header nope\n"
+          stdin: ".describe nope\n"
       - assert:
           exit_code: 1
           stderr:
@@ -247,3 +247,40 @@ scenarios:
           exit_code: 0
           stdout:
             contains: ".import"
+
+  # .header was removed before v1.0.0: it printed the column names .describe
+  # prints in its name column, so the shell answered one question two ways.
+  - name: .header is not a command, and .describe is what replaced it
+    steps:
+      - fixture: &headergone
+          file: alpha.csv
+          content: |
+            id,name
+            1,alice
+      - run:
+          command: sqly alpha.csv
+          stdin: ".header alpha\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "no such sqly command"
+      - run:
+          command: sqly alpha.csv
+          stdin: ".describe alpha\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - id
+              - name
+
+  - name: .help no longer lists .header
+    steps:
+      - fixture: *headergone
+      - run:
+          command: sqly alpha.csv
+          stdin: ".help\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: ".header"

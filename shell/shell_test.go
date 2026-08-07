@@ -203,44 +203,6 @@ func TestShellExec(t *testing.T) {
 		assertShellFixture(t, "no_table_exist.golden", got)
 	})
 
-	t.Run("execute .header", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Error(err)
-		}
-		defer cleanup()
-
-		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
-			t.Fatal(err)
-		}
-		got, err := getExecStdOutput(t, shell.exec, ".header actor")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		assertShellFixture(t, "header.golden", got)
-	})
-
-	t.Run("execute .header: if not specify table name", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Error(err)
-		}
-		defer cleanup()
-
-		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "actor.csv")}); err != nil {
-			t.Fatal(err)
-		}
-		// A missing table name is a command error so batch mode fails fast.
-		err = shell.exec(context.Background(), ".header")
-		if err == nil {
-			t.Fatal(".header without a table name returned nil, want an error")
-		}
-		if !strings.Contains(err.Error(), ".header requires a table name") {
-			t.Errorf("error = %q, want it to mention the missing table name", err.Error())
-		}
-	})
-
 	t.Run("execute .mode: csv to table", func(t *testing.T) {
 		shell, cleanup, err := newShell(t, []string{"sqly", "--output-format", "csv"})
 		if err != nil {
@@ -991,23 +953,6 @@ func TestShellExec(t *testing.T) {
 		_, err = getExecStdOutput(t, shell.exec, ".tables")
 		if err != nil {
 			t.Fatalf(".tables failed: %v", err)
-		}
-	})
-
-	t.Run(".header after import", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Error(err)
-		}
-		defer cleanup()
-
-		if err := shell.commands.importCommand(context.Background(), shell, []string{filepath.Join("testdata", "sample.csv")}); err != nil {
-			t.Fatal(err)
-		}
-
-		_, err = getExecStdOutput(t, shell.exec, ".header sample")
-		if err != nil {
-			t.Fatalf(".header failed: %v", err)
 		}
 	})
 
@@ -2715,7 +2660,6 @@ func TestCommandList_missingRequiredArgsReturnError(t *testing.T) {
 		want string
 	}{
 		{"schema", func() error { return shell.commands.schemaCommand(context.Background(), shell, nil) }, ".schema requires"},
-		{"header", func() error { return shell.commands.headerCommand(context.Background(), shell, nil) }, ".header requires"},
 		{"describe", func() error { return shell.commands.describeCommand(context.Background(), shell, nil) }, ".describe requires"},
 		{"dump", func() error { return shell.commands.dumpCommand(context.Background(), shell, nil) }, ".dump requires"},
 		{"save", func() error { return shell.commands.saveCommand(context.Background(), shell, nil) }, ".save requires"},
@@ -3587,9 +3531,6 @@ func TestHelperCommandsRejectExtraArgs(t *testing.T) {
 		{".describe", func(s *Shell) error {
 			return s.commands.describeCommand(context.Background(), s, []string{"user", "extra"})
 		}},
-		{".header", func(s *Shell) error {
-			return s.commands.headerCommand(context.Background(), s, []string{"user", "extra"})
-		}},
 		{".mode", func(s *Shell) error { return s.commands.modeCommand(context.Background(), s, []string{"csv", "extra"}) }},
 		{".tables", func(s *Shell) error { return s.commands.tablesCommand(context.Background(), s, []string{"extra"}) }},
 		{".help", func(s *Shell) error { return s.commands.helpCommand(context.Background(), s, []string{"extra"}) }},
@@ -3888,18 +3829,6 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".header main.user accepts a schema-qualified name", func(t *testing.T) {
-		shell, cleanup := newImportedShell(t)
-		defer cleanup()
-		got, err := getExecStdOutput(t, shell.exec, ".header main.user")
-		if err != nil {
-			t.Fatalf(".header main.user error: %v", err)
-		}
-		if !strings.Contains(string(got), "user_name") {
-			t.Fatalf(".header main.user output missing columns: %q", got)
-		}
-	})
-
 	t.Run(".tables lists session-created VIEW", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
@@ -4041,21 +3970,6 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".header targets a literal dotted table name", func(t *testing.T) {
-		shell, cleanup := newImportedShell(t)
-		defer cleanup()
-		if err := shell.exec(context.Background(), `CREATE TABLE "a.b"(id INTEGER)`); err != nil {
-			t.Fatalf("create table error: %v", err)
-		}
-		got, err := getExecStdOutput(t, shell.exec, `.header "a.b"`)
-		if err != nil {
-			t.Fatalf(`.header "a.b" error: %v`, err)
-		}
-		if !strings.Contains(string(got), "id") {
-			t.Fatalf(`.header "a.b" missing the id header: %q`, got)
-		}
-	})
-
 	t.Run(".dump targets a literal dotted table name", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
@@ -4094,18 +4008,18 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".header keeps the full spaced table name", func(t *testing.T) {
+	t.Run(".describe keeps the full spaced table name", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		if err := shell.exec(context.Background(), `CREATE TABLE "two words"(id INTEGER)`); err != nil {
 			t.Fatalf("create table error: %v", err)
 		}
-		got, err := getExecStdOutput(t, shell.exec, `.header "two words"`)
+		got, err := getExecStdOutput(t, shell.exec, `.describe "two words"`)
 		if err != nil {
-			t.Fatalf(`.header "two words" error: %v`, err)
+			t.Fatalf(`.describe "two words" error: %v`, err)
 		}
-		if !strings.Contains(string(got), "two words") {
-			t.Fatalf(".header truncated the spaced table name: %q", got)
+		if !strings.Contains(string(got), "id") {
+			t.Fatalf(".describe lost the spaced table's column: %q", got)
 		}
 	})
 
@@ -4155,19 +4069,19 @@ func TestShellExec_SchemaQualifiedTempView(t *testing.T) {
 		}
 	})
 
-	t.Run(".header respects .mode jsonl", func(t *testing.T) {
+	t.Run(".describe respects .mode jsonl", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()
 		if err := shell.exec(context.Background(), ".mode jsonl"); err != nil {
 			t.Fatalf(".mode jsonl error: %v", err)
 		}
-		got, err := getExecStdOutput(t, shell.exec, ".header user")
+		got, err := getExecStdOutput(t, shell.exec, ".describe user")
 		if err != nil {
-			t.Fatalf(".header user error: %v", err)
+			t.Fatalf(".describe user error: %v", err)
 		}
 		out := string(got)
-		if !strings.Contains(out, `"column"`) || !strings.Contains(out, "first_name") {
-			t.Fatalf(".header ignored ndjson mode: %q", out)
+		if !strings.Contains(out, `"name"`) || !strings.Contains(out, "first_name") {
+			t.Fatalf(".describe ignored ndjson mode: %q", out)
 		}
 	})
 }
@@ -4232,21 +4146,6 @@ func TestShellExec_LiteralDottedObjectNames(t *testing.T) {
 			}
 			if !strings.Contains(string(got), "litcol") {
 				t.Fatalf(".describe %q missing the literal column: %q", tc.object, got)
-			}
-		})
-
-		t.Run(".header reaches "+tc.name, func(t *testing.T) {
-			shell, cleanup := newImportedShell(t)
-			defer cleanup()
-			if err := shell.exec(context.Background(), tc.create); err != nil {
-				t.Fatalf("create error: %v", err)
-			}
-			got, err := getExecStdOutput(t, shell.exec, `.header "`+tc.object+`"`)
-			if err != nil {
-				t.Fatalf(".header %q error: %v", tc.object, err)
-			}
-			if !strings.Contains(string(got), "litcol") {
-				t.Fatalf(".header %q missing the literal column: %q", tc.object, got)
 			}
 		})
 

@@ -42,7 +42,6 @@ const (
 	clearCommand    = ".clear"
 	dumpCommand     = ".dump"
 	exitCommand     = ".exit"
-	headerCommand   = ".header"
 	helpCommand     = ".help"
 	lsCommand       = ".ls"
 	modeCommand     = ".mode"
@@ -1872,7 +1871,7 @@ func valueCommandSpec(cmd string) (argumentValues, bool) {
 		return argRowMismatch, true
 	// .dump names a table first and a path second; the path half is
 	// pathCommandSpec's, and only the table half arrives here.
-	case headerCommand, schemaCommand, describeCommand, dumpCommand:
+	case schemaCommand, describeCommand, dumpCommand:
 		return argTable, true
 	case pwdCommand, tablesCommand, clearCommand, exitCommand, helpCommand:
 		return argNone, true

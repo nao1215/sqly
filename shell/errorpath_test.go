@@ -27,19 +27,7 @@ func covErrEmptyTable() *model.Table {
 	return model.NewTable("t", model.Header{}, []model.Record{})
 }
 
-func TestCommandList_headerCommand_propagatesUsecaseError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	metadata := mock.NewMockMetadataUsecase(ctrl)
-	metadata.EXPECT().Header(gomock.Any(), "user").Return(nil, errors.New("no such table: user"))
-
-	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
-	err := s.commands.headerCommand(context.Background(), s, []string{"user"})
-	if err == nil {
-		t.Fatal("want error when metadata.Header fails, got nil")
-	}
-}
-
-// TestHelperCommandsAgreeOnAMissingTable pins that all four helper commands
+// TestHelperCommandsAgreeOnAMissingTable pins that the helper commands
 // report a table the session does not have in the same words.
 func TestHelperCommandsAgreeOnAMissingTable(t *testing.T) {
 	tests := []struct {
@@ -51,8 +39,6 @@ func TestHelperCommandsAgreeOnAMissingTable(t *testing.T) {
 			run: func(c CommandList, s *Shell, a []string) error { return c.describeCommand(context.Background(), s, a) }},
 		{name: ".schema", argv: []string{"nope"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.schemaCommand(context.Background(), s, a) }},
-		{name: ".header", argv: []string{"nope"},
-			run: func(c CommandList, s *Shell, a []string) error { return c.headerCommand(context.Background(), s, a) }},
 		{name: ".dump", argv: []string{"nope", "out.csv"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.dumpCommand(context.Background(), s, a) }},
 	}

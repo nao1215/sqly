@@ -72,18 +72,6 @@ scenarios:
           stderr:
             contains: ".schema requires"
 
-  - name: fails batch mode when .header is missing its table name
-    env: *hist
-    steps:
-      - fixture: *user
-      - run:
-          command: sqly user.csv
-          stdin: ".header\n"
-      - assert:
-          exit_code: 2
-          stderr:
-            contains: ".header requires"
-
   - name: fails batch mode when .describe is missing its table name
     env: *hist
     steps:
