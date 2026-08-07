@@ -10,8 +10,54 @@ import (
 	"testing"
 
 	libfilesql "github.com/nao1215/filesql"
+	"github.com/nao1215/sqly/config"
+	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/domain/repository"
+	"github.com/nao1215/sqly/infrastructure/memory"
 	_ "modernc.org/sqlite"
 )
+
+// testAdapter is a FileSQLAdapter plus the read helpers the tests need.
+//
+// The adapter's job is loading files; reading them back is the memory
+// repository's, and that is the path a session actually takes. The adapter used
+// to carry its own Query/Exec/GetTableHeader with a second scan loop that only
+// tests reached, so a divergence between the two readers could not have been
+// noticed by anything but a user. Keeping the helpers here reads the rows
+// through the production repository and leaves the adapter with the one job.
+type testAdapter struct {
+	*FileSQLAdapter
+	repo repository.SQLite3Repository
+}
+
+// newTestAdapter returns an adapter over db together with the repository a
+// session reads that same database with.
+func newTestAdapter(db *sql.DB) *testAdapter {
+	return &testAdapter{
+		FileSQLAdapter: NewFileSQLAdapter(db),
+		repo:           memory.NewSQLite3Repository(config.MemoryDB(db)),
+	}
+}
+
+// LoadFile loads one file, the single-path case of LoadFiles.
+func (a *testAdapter) LoadFile(ctx context.Context, filePath string) error {
+	return a.LoadFiles(ctx, filePath)
+}
+
+// Query reads rows the way the session does.
+func (a *testAdapter) Query(ctx context.Context, query string) (*model.Table, error) {
+	return a.repo.Query(ctx, query)
+}
+
+// Exec runs a statement the way the session does.
+func (a *testAdapter) Exec(ctx context.Context, statement string) (int64, error) {
+	return a.repo.Exec(ctx, statement)
+}
+
+// GetTableHeader reads a table's column names the way the session does.
+func (a *testAdapter) GetTableHeader(ctx context.Context, tableName string) (*model.Table, error) {
+	return a.repo.Header(ctx, tableName)
+}
 
 func TestFileSQLAdapter_LoadFile(t *testing.T) {
 	t.Parallel()
@@ -36,7 +82,7 @@ Jane,30,Los Angeles`
 	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	// Test LoadFile
 	ctx := context.Background()
@@ -101,7 +147,7 @@ func TestFileSQLAdapter_LoadFileWithReservedKeywords(t *testing.T) {
 	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	// Test LoadFile with reserved keywords
 	ctx := context.Background()
@@ -160,7 +206,7 @@ Jane,30,Los Angeles`
 	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	// Test LoadFile with empty column name - this should handle gracefully
 	ctx := context.Background()
@@ -172,60 +218,6 @@ Jane,30,Los Angeles`
 		// If it fails, the error should be informative
 		if !strings.Contains(err.Error(), "column") {
 			t.Errorf("Error should mention column issue, got: %v", err)
-		}
-	}
-}
-
-func TestFileSQLAdapter_Query(t *testing.T) {
-	t.Parallel()
-
-	// Create shared database with test data
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create shared database: %v", err)
-	}
-	defer func() { _ = sharedDB.Close() }()
-
-	// Create test table
-	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE test_table (id INTEGER, name TEXT, age INTEGER)`)
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
-	}
-
-	// Insert test data
-	_, err = sharedDB.ExecContext(context.Background(), `INSERT INTO test_table VALUES (1, 'John', 25), (2, 'Jane', 30)`)
-	if err != nil {
-		t.Fatalf("Failed to insert test data: %v", err)
-	}
-
-	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
-
-	// Test Query
-	ctx := context.Background()
-	table, err := adapter.Query(ctx, "SELECT * FROM test_table ORDER BY id")
-	if err != nil {
-		t.Fatalf("Query failed: %v", err)
-	}
-
-	// Verify results
-	if len(table.Records()) != 2 {
-		t.Errorf("Expected 2 records, got %d", len(table.Records()))
-	}
-
-	expectedHeaders := []string{"id", "name", "age"}
-	actualHeaders := table.Header()
-	if len(actualHeaders) != len(expectedHeaders) {
-		t.Errorf("Expected %d headers, got %d", len(expectedHeaders), len(actualHeaders))
-	}
-
-	// Verify first record
-	if len(table.Records()) > 0 {
-		firstRecord := table.Records()[0]
-		if len(firstRecord) >= 3 {
-			if firstRecord[0] != "1" || firstRecord[1] != "John" || firstRecord[2] != "25" {
-				t.Errorf("First record data mismatch: got %v", firstRecord)
-			}
 		}
 	}
 }
@@ -252,7 +244,7 @@ func TestFileSQLAdapter_GetTableNames(t *testing.T) {
 	}
 
 	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	// Test GetTableNames
 	ctx := context.Background()
@@ -277,52 +269,6 @@ func TestFileSQLAdapter_GetTableNames(t *testing.T) {
 	}
 }
 
-func TestFileSQLAdapter_Exec(t *testing.T) {
-	t.Parallel()
-
-	// Create shared database
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create shared database: %v", err)
-	}
-	defer func() { _ = sharedDB.Close() }()
-
-	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
-
-	// Test Exec - CREATE TABLE
-	ctx := context.Background()
-	rowsAffected, err := adapter.Exec(ctx, "CREATE TABLE test_exec (id INTEGER, name TEXT)")
-	if err != nil {
-		t.Fatalf("Exec CREATE TABLE failed: %v", err)
-	}
-
-	// CREATE TABLE typically returns 0 rows affected
-	if rowsAffected != 0 {
-		t.Logf("CREATE TABLE returned %d rows affected (expected 0, but this may vary)", rowsAffected)
-	}
-
-	// Test Exec - INSERT
-	rowsAffected, err = adapter.Exec(ctx, "INSERT INTO test_exec VALUES (1, 'test')")
-	if err != nil {
-		t.Fatalf("Exec INSERT failed: %v", err)
-	}
-
-	if rowsAffected != 1 {
-		t.Errorf("Expected 1 row affected by INSERT, got %d", rowsAffected)
-	}
-
-	// Test Exec - UPDATE
-	rowsAffected, err = adapter.Exec(ctx, "UPDATE test_exec SET name = 'updated' WHERE id = 1")
-	if err != nil {
-		t.Fatalf("Exec UPDATE failed: %v", err)
-	}
-
-	if rowsAffected != 1 {
-		t.Errorf("Expected 1 row affected by UPDATE, got %d", rowsAffected)
-	}
-}
-
 func TestNewFileSQLAdapter(t *testing.T) {
 	t.Parallel()
 
@@ -334,7 +280,7 @@ func TestNewFileSQLAdapter(t *testing.T) {
 	defer func() { _ = sharedDB.Close() }()
 
 	// Test NewFileSQLAdapter
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	if adapter == nil {
 		t.Fatal("NewFileSQLAdapter returned nil")
@@ -507,7 +453,7 @@ Jane,value2,Los Angeles`
 	defer func() { _ = sharedDB.Close() }()
 
 	// Create adapter
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	// Test LoadFile with quotes in column names
 	ctx := context.Background()
@@ -548,7 +494,7 @@ func TestFileSQLAdapter_Close(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	// Test Close - should not return error
 	err = adapter.Close()
@@ -557,44 +503,10 @@ func TestFileSQLAdapter_Close(t *testing.T) {
 	}
 }
 
-func TestFileSQLAdapter_ExecNilDB(t *testing.T) {
-	t.Parallel()
-
-	adapter := NewFileSQLAdapter(nil)
-	ctx := context.Background()
-
-	// Test Exec with nil database
-	_, err := adapter.Exec(ctx, "SELECT 1")
-	if err == nil {
-		t.Fatal("Expected Exec to fail with nil database")
-	}
-
-	if !strings.Contains(err.Error(), "database not initialized") {
-		t.Errorf("Expected 'database not initialized' error, got: %v", err)
-	}
-}
-
-func TestFileSQLAdapter_QueryNilDB(t *testing.T) {
-	t.Parallel()
-
-	adapter := NewFileSQLAdapter(nil)
-	ctx := context.Background()
-
-	// Test Query with nil database
-	_, err := adapter.Query(ctx, "SELECT 1")
-	if err == nil {
-		t.Fatal("Expected Query to fail with nil database")
-	}
-
-	if !strings.Contains(err.Error(), "shared database not initialized") {
-		t.Errorf("Expected 'shared database not initialized' error, got: %v", err)
-	}
-}
-
 func TestFileSQLAdapter_GetTableNamesNilDB(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewFileSQLAdapter(nil)
+	adapter := newTestAdapter(nil)
 	ctx := context.Background()
 
 	// Test GetTableNames with nil database
@@ -617,7 +529,7 @@ func TestFileSQLAdapter_LoadFilesEmpty(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	// Test LoadFiles with empty file list
@@ -630,7 +542,7 @@ func TestFileSQLAdapter_LoadFilesEmpty(t *testing.T) {
 func TestFileSQLAdapter_LoadFilesNilDB(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewFileSQLAdapter(nil)
+	adapter := newTestAdapter(nil)
 	ctx := context.Background()
 
 	// Test LoadFiles with nil database
@@ -653,183 +565,13 @@ func TestFileSQLAdapter_LoadFileNonexistent(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	// Test LoadFile with nonexistent file
 	err = adapter.LoadFile(ctx, "/nonexistent/path/file.csv")
 	if err == nil {
 		t.Fatal("Expected LoadFile to fail with nonexistent file")
-	}
-}
-
-func TestFileSQLAdapter_GetTableHeaderNilDB(t *testing.T) {
-	t.Parallel()
-
-	adapter := NewFileSQLAdapter(nil)
-	ctx := context.Background()
-
-	// Test GetTableHeader with nil database
-	_, err := adapter.GetTableHeader(ctx, "test_table")
-	if err == nil {
-		t.Fatal("Expected GetTableHeader to fail with nil database")
-	}
-
-	if !strings.Contains(err.Error(), "database not initialized") {
-		t.Errorf("Expected 'database not initialized' error, got: %v", err)
-	}
-}
-
-func TestFileSQLAdapter_GetTableHeader(t *testing.T) {
-	t.Parallel()
-
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create shared database: %v", err)
-	}
-	defer func() { _ = sharedDB.Close() }()
-
-	// Create test table with various column types
-	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE test_header (id INTEGER, name TEXT, balance REAL, active BOOLEAN)`)
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
-	}
-
-	adapter := NewFileSQLAdapter(sharedDB)
-	ctx := context.Background()
-
-	// Test GetTableHeader
-	table, err := adapter.GetTableHeader(ctx, "test_header")
-	if err != nil {
-		t.Fatalf("GetTableHeader failed: %v", err)
-	}
-
-	if table.Name() != "test_header" {
-		t.Errorf("Expected table name 'test_header', got %s", table.Name())
-	}
-
-	expectedHeaders := []string{"id", "name", "balance", "active"}
-	actualHeaders := table.Header()
-	if len(actualHeaders) != len(expectedHeaders) {
-		t.Errorf("Expected %d headers, got %d", len(expectedHeaders), len(actualHeaders))
-	}
-
-	for i, expected := range expectedHeaders {
-		if i < len(actualHeaders) && actualHeaders[i] != expected {
-			t.Errorf("Expected header %d to be %s, got %s", i, expected, actualHeaders[i])
-		}
-	}
-
-	// Records should be nil for header-only queries
-	if table.Records() != nil {
-		t.Errorf("Expected no records in header-only table, got %d", len(table.Records()))
-	}
-}
-
-func TestFileSQLAdapter_GetTableHeaderNonexistent(t *testing.T) {
-	t.Parallel()
-
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create shared database: %v", err)
-	}
-	defer func() { _ = sharedDB.Close() }()
-
-	adapter := NewFileSQLAdapter(sharedDB)
-	ctx := context.Background()
-
-	// Test GetTableHeader with nonexistent table
-	table, err := adapter.GetTableHeader(ctx, "nonexistent_table")
-	if err != nil {
-		// Error is expected for nonexistent tables
-		t.Logf("Expected error for nonexistent table: %v", err)
-		return
-	}
-
-	// If no error, the table should have no columns
-	if table != nil && len(table.Header()) > 0 {
-		t.Errorf("Expected empty headers for nonexistent table, got: %v", table.Header())
-	}
-}
-
-func TestFileSQLAdapter_QueryWithDifferentDataTypes(t *testing.T) {
-	t.Parallel()
-
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create shared database: %v", err)
-	}
-	defer func() { _ = sharedDB.Close() }()
-
-	// Create test table with various data types
-	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE test_types (id INTEGER, name TEXT, balance REAL, data BLOB)`)
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
-	}
-
-	// Insert test data with different types
-	_, err = sharedDB.ExecContext(context.Background(), `INSERT INTO test_types VALUES (1, 'test', 123.45, X'48656C6C6F')`)
-	if err != nil {
-		t.Fatalf("Failed to insert test data: %v", err)
-	}
-
-	// Insert row with NULL values
-	_, err = sharedDB.ExecContext(context.Background(), `INSERT INTO test_types VALUES (2, NULL, NULL, NULL)`)
-	if err != nil {
-		t.Fatalf("Failed to insert NULL test data: %v", err)
-	}
-
-	adapter := NewFileSQLAdapter(sharedDB)
-	ctx := context.Background()
-
-	// Test Query with different data types
-	table, err := adapter.Query(ctx, "SELECT * FROM test_types ORDER BY id")
-	if err != nil {
-		t.Fatalf("Query failed: %v", err)
-	}
-
-	if len(table.Records()) != 2 {
-		t.Errorf("Expected 2 records, got %d", len(table.Records()))
-	}
-
-	// Check first record data types conversion
-	if len(table.Records()) > 0 {
-		firstRecord := table.Records()[0]
-		if len(firstRecord) >= 4 {
-			// INTEGER -> string
-			if firstRecord[0] != "1" {
-				t.Errorf("Expected id '1', got %s", firstRecord[0])
-			}
-			// TEXT -> string
-			if firstRecord[1] != "test" {
-				t.Errorf("Expected name 'test', got %s", firstRecord[1])
-			}
-			// REAL -> string
-			if firstRecord[2] != "123.45" {
-				t.Errorf("Expected balance '123.45', got %s", firstRecord[2])
-			}
-			// BLOB -> string
-			if firstRecord[3] != "Hello" {
-				t.Errorf("Expected data 'Hello', got %s", firstRecord[3])
-			}
-		}
-	}
-
-	// Check second record with NULL values
-	if len(table.Records()) > 1 {
-		secondRecord := table.Records()[1]
-		if len(secondRecord) >= 4 {
-			// NULL values should become empty strings
-			if secondRecord[1] != "" {
-				t.Errorf("Expected NULL name to be empty string, got %s", secondRecord[1])
-			}
-			if secondRecord[2] != "" {
-				t.Errorf("Expected NULL balance to be empty string, got %s", secondRecord[2])
-			}
-			if secondRecord[3] != "" {
-				t.Errorf("Expected NULL data to be empty string, got %s", secondRecord[3])
-			}
-		}
 	}
 }
 
@@ -1024,7 +766,7 @@ func TestFileSQLAdapter_NumericPrefixFilename(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, csvFile); err != nil {
@@ -1086,7 +828,7 @@ func TestGetTableNameFromFilePath_MatchesFilesqlNaming(t *testing.T) {
 			}
 			defer func() { _ = sharedDB.Close() }()
 
-			adapter := NewFileSQLAdapter(sharedDB)
+			adapter := newTestAdapter(sharedDB)
 			if err := adapter.LoadFile(context.Background(), csvFile); err != nil {
 				t.Fatalf("LoadFile failed: %v", err)
 			}
@@ -1128,7 +870,7 @@ func TestFileSQLAdapter_JSONFile(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, jsonFile); err != nil {
@@ -1173,7 +915,7 @@ func TestFileSQLAdapter_JSONLFile(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, jsonlFile); err != nil {
@@ -1212,7 +954,7 @@ func TestFileSQLAdapter_ExcelWithoutSheetName(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, xlsxFile); err != nil {
@@ -1258,7 +1000,7 @@ func TestFileSQLAdapter_ReservedWordTableName(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, csvFile); err != nil {
@@ -1300,7 +1042,7 @@ func TestFileSQLAdapter_ACHFile(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, achFile); err != nil {
@@ -1355,7 +1097,7 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	ctx := context.Background()
 
 	if err := adapter.LoadFile(ctx, fedFile); err != nil {
@@ -1414,7 +1156,7 @@ func TestLoadFile_ACHRegistryRetainedAfterImport(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	if err := adapter.LoadFile(context.Background(), achFile); err != nil {
 		t.Fatalf("LoadFile failed: %v", err)
 	}
@@ -1452,7 +1194,7 @@ func TestLoadFile_WireRegistryRetainedAfterImport(t *testing.T) {
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 	if err := adapter.LoadFile(context.Background(), fedFile); err != nil {
 		t.Fatalf("LoadFile failed: %v", err)
 	}
@@ -1571,7 +1313,7 @@ func BenchmarkAdapterLoadFiles(b *testing.B) {
 	// Match production: ":memory:" is private per connection, so pin the pool.
 	sharedDB.SetMaxOpenConns(1)
 	defer func() { _ = sharedDB.Close() }()
-	adapter := NewFileSQLAdapter(sharedDB)
+	adapter := newTestAdapter(sharedDB)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -1615,7 +1357,7 @@ func TestFileSQLAdapter_EmptyJSONLikeInputs(t *testing.T) {
 			}
 			defer func() { _ = sharedDB.Close() }()
 
-			adapter := NewFileSQLAdapter(sharedDB)
+			adapter := newTestAdapter(sharedDB)
 			ctx := context.Background()
 			if err := adapter.LoadFile(ctx, path); err != nil {
 				t.Fatalf("LoadFile of empty JSON input failed: %v", err)
@@ -1687,7 +1429,7 @@ func TestFileSQLAdapter_EmptyCompressedJSONLike(t *testing.T) {
 				t.Fatalf("open db: %v", err)
 			}
 			defer func() { _ = sharedDB.Close() }()
-			adapter := NewFileSQLAdapter(sharedDB)
+			adapter := newTestAdapter(sharedDB)
 
 			ctx := context.Background()
 			if err := adapter.LoadFile(ctx, path); err != nil {
@@ -1729,7 +1471,7 @@ func TestFileSQLAdapter_LTSVDuplicateLabelsRejected(t *testing.T) {
 		}
 		sharedDB, _ := sql.Open("sqlite", ":memory:")
 		defer func() { _ = sharedDB.Close() }()
-		adapter := NewFileSQLAdapter(sharedDB)
+		adapter := newTestAdapter(sharedDB)
 		if err := adapter.LoadFile(context.Background(), path); err == nil {
 			t.Error("LoadFile of duplicate-label LTSV returned nil error, want a duplicate-label rejection")
 		}
@@ -1742,7 +1484,7 @@ func TestFileSQLAdapter_LTSVDuplicateLabelsRejected(t *testing.T) {
 		gzipFile(t, path, []byte("a:1\tb:2\ta:3\n"))
 		sharedDB, _ := sql.Open("sqlite", ":memory:")
 		defer func() { _ = sharedDB.Close() }()
-		adapter := NewFileSQLAdapter(sharedDB)
+		adapter := newTestAdapter(sharedDB)
 		if err := adapter.LoadFile(context.Background(), path); err == nil {
 			t.Error("LoadFile of duplicate-label compressed LTSV returned nil error, want rejection")
 		}
@@ -1757,7 +1499,7 @@ func TestFileSQLAdapter_LTSVDuplicateLabelsRejected(t *testing.T) {
 		}
 		sharedDB, _ := sql.Open("sqlite", ":memory:")
 		defer func() { _ = sharedDB.Close() }()
-		adapter := NewFileSQLAdapter(sharedDB)
+		adapter := newTestAdapter(sharedDB)
 		if err := adapter.LoadFile(context.Background(), path); err != nil {
 			t.Errorf("LoadFile of unique-label LTSV error = %v, want nil", err)
 		}

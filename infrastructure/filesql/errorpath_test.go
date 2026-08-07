@@ -13,14 +13,14 @@ import (
 // covErrFsqlClosedAdapter returns an adapter whose shared database has already
 // been closed, so every statement it issues fails. It is the closed-DB variant of
 // covFsqlNewAdapter used to drive the error branches.
-func covErrFsqlClosedAdapter(t *testing.T) *FileSQLAdapter {
+func covErrFsqlClosedAdapter(t *testing.T) *testAdapter {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	a := NewFileSQLAdapter(db)
+	a := newTestAdapter(db)
 	if err := db.Close(); err != nil {
 		t.Fatalf("close db: %v", err)
 	}

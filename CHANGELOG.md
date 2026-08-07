@@ -18,6 +18,11 @@ point to pin a version against; none of rc1 through rc6 is it.
 
 Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
+## [Unreleased]
+
+### Refactoring
+* FileSQLAdapter carries only the methods sqly calls. Its Query, Exec, GetTableHeader, and LoadFile were reached by tests alone: the session runs SQL through the memory repository and imports through LoadFiles. The adapter's Query held a second scan loop over the same rows, so the two readers could have diverged with only a user to notice.
+
 ## [v1.0.0-rc6](https://github.com/nao1215/sqly/compare/v1.0.0-rc5...v1.0.0-rc6) (2026-08-06)
 
 A release candidate for v1.0.0, not the final one. Everything below is a change

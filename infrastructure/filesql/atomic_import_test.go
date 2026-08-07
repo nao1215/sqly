@@ -325,7 +325,7 @@ func TestLoadFilesRollsBackEveryEarlierInput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	if err := adapter.LoadFiles(t.Context(), good1, good2, broken); err == nil {
 		t.Fatal("LoadFiles with a broken last input = nil error, want an error")
 	}
@@ -386,7 +386,7 @@ func TestLoadFilesRollbackLeavesNoACHRegistryEntry(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	// The ACH file imports cleanly; the CSV after it does not, so the whole
 	// import rolls back.
 	if err := adapter.LoadFiles(t.Context(), achFile, broken); err == nil {

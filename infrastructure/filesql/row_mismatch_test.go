@@ -38,7 +38,7 @@ const mismatchedCSV = "id,name,zip\n1,alice,01234\n2,bob,00123\n3,caro\n4,dave,9
 // newMismatchTestAdapter writes the mismatched CSV to a file and returns an adapter
 // bound to a fresh shared in-memory database. The pool is pinned to a single
 // connection because a bare ":memory:" database is private per connection.
-func newMismatchTestAdapter(t *testing.T) (*FileSQLAdapter, string) {
+func newMismatchTestAdapter(t *testing.T) (*testAdapter, string) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "malformed.csv")
@@ -51,7 +51,7 @@ func newMismatchTestAdapter(t *testing.T) (*FileSQLAdapter, string) {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	return NewFileSQLAdapter(db), path
+	return newTestAdapter(db), path
 }
 
 func TestFileSQLAdapter_ImportMode_Stop(t *testing.T) {
@@ -130,7 +130,7 @@ func TestFileSQLAdapter_ImportMode_PadRejectsLongRow(t *testing.T) {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFile(context.Background(), path); err == nil {
@@ -153,7 +153,7 @@ func TestFileSQLAdapter_ImportMode_PadStreamsGzipCSV(t *testing.T) {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFile(context.Background(), path); err != nil {
@@ -197,7 +197,7 @@ func TestFileSQLAdapter_ImportMode_PadRejectsBeforeEmptyJSONTable(t *testing.T) 
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	adapter.SetRowMismatchPolicy(model.RowMismatchPad)
 
 	if err := adapter.LoadFiles(context.Background(), emptyJSON, longCSV); err == nil {
@@ -240,7 +240,7 @@ func TestFileSQLAdapter_LoadFilesIsAtomicAcrossInputFormats(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := NewFileSQLAdapter(db).LoadFiles(ctx, emptyJSON, bad); err == nil {
+			if err := newTestAdapter(db).LoadFiles(ctx, emptyJSON, bad); err == nil {
 				t.Fatal("mixed import returned nil, want an error")
 			}
 			var value string
@@ -288,7 +288,7 @@ func TestFileSQLAdapter_LoadFilesPreservesInputOrderForLastWins(t *testing.T) {
 		db.SetMaxOpenConns(1)
 		t.Cleanup(func() { _ = db.Close() })
 		ctx := context.Background()
-		if err := NewFileSQLAdapter(db).LoadFiles(ctx, paths...); err != nil {
+		if err := newTestAdapter(db).LoadFiles(ctx, paths...); err != nil {
 			t.Fatalf("LoadFiles: %v", err)
 		}
 		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM "same"`).Scan(&count); err != nil {
@@ -345,7 +345,7 @@ func TestFileSQLAdapter_LoadFilesRollsBackWhenLaterApplyFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	err = adapter.LoadFiles(ctx,
 		filepath.Join(dir, "first.csv"),
 		filepath.Join(dir, "same.csv"),
@@ -397,7 +397,7 @@ func TestFileSQLAdapter_LoadFilesEmptyJSONViewCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := NewFileSQLAdapter(db).LoadFiles(ctx, emptyJSON); err == nil {
+	if err := newTestAdapter(db).LoadFiles(ctx, emptyJSON); err == nil {
 		t.Fatal("LoadFiles returned nil, want empty-table/view collision error")
 	}
 	var id int

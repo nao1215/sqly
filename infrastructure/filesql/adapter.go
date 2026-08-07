@@ -3,9 +3,7 @@ package filesql
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -19,13 +17,9 @@ import (
 )
 
 const (
-	opQuery      = "query"
-	opRows       = "rows"
-	opExec       = "exec"
-	opGetTables  = "get_tables"
-	opGetHeader  = "get_header"
-	opScanTable  = "scan_table"
-	opScanHeader = "scan_header"
+	opRows      = "rows"
+	opGetTables = "get_tables"
+	opScanTable = "scan_table"
 
 	errDatabaseNotInit = "database not initialized"
 	defaultSheetName   = "sheet"
@@ -265,11 +259,6 @@ func unnamedCause(err error) error {
 	return err
 }
 
-// LoadFile loads a single file into the database
-func (f *FileSQLAdapter) LoadFile(ctx context.Context, filePath string) error {
-	return f.LoadFiles(ctx, filePath)
-}
-
 // DumpACHFile reconstructs a complete ACH file at outputPath from the table set
 // registered under baseName, reflecting any UPDATEs applied to those tables in
 // the session. It reads the current rows from the shared session database that
@@ -292,82 +281,6 @@ func (f *FileSQLAdapter) DumpFedWireFile(ctx context.Context, baseName, outputPa
 		return errors.New(errDatabaseNotInit)
 	}
 	return filesql.DumpFedWire(ctx, f.sharedDB, baseName, outputPath)
-}
-
-// Query executes SQL query and returns Table model
-func (f *FileSQLAdapter) Query(ctx context.Context, query string) (*model.Table, error) {
-	if f.sharedDB == nil {
-		return nil, &FileSQLError{Op: opQuery, Err: "shared database not initialized"}
-	}
-
-	rows, err := f.sharedDB.QueryContext(ctx, query)
-	if err != nil {
-		return nil, &FileSQLError{Op: opQuery, Err: err.Error()}
-	}
-	defer func() { _ = rows.Close() }()
-
-	// Get column names
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, &FileSQLError{Op: "columns", Err: err.Error()}
-	}
-
-	header := model.NewHeader(columns)
-	var cells [][]model.Cell
-
-	// Scan all rows, keeping the driver's native value per cell. model.Cell
-	// derives the display string from it, so this path preserves SQLite's
-	// INTEGER/REAL/TEXT types and its NULLs the same way the memory repository
-	// does instead of flattening every value to a string here.
-	for rows.Next() {
-		values := make([]any, len(columns))
-		valuePtrs := make([]any, len(columns))
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, &FileSQLError{Op: "scan", Err: err.Error()}
-		}
-
-		row := make([]model.Cell, len(columns))
-		for i, val := range values {
-			row[i] = model.NewCell(val)
-		}
-		cells = append(cells, row)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, &FileSQLError{Op: opRows, Err: err.Error()}
-	}
-
-	// Generate unique table name for query results to avoid conflicts
-	tableName := "query_result_" + generateRandomName()
-
-	table, err := model.NewTableFromCells(tableName, header, cells)
-	if err != nil {
-		return nil, &FileSQLError{Op: opQuery, Err: err.Error()}
-	}
-	return table, nil
-}
-
-// Exec executes SQL statement (INSERT, UPDATE, DELETE)
-func (f *FileSQLAdapter) Exec(ctx context.Context, statement string) (int64, error) {
-	if f.sharedDB == nil {
-		return 0, &FileSQLError{Op: opExec, Err: errDatabaseNotInit}
-	}
-
-	result, err := f.sharedDB.ExecContext(ctx, statement)
-	if err != nil {
-		return 0, &FileSQLError{Op: opExec, Err: err.Error()}
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return 0, &FileSQLError{Op: "rows_affected", Err: err.Error()}
-	}
-
-	return rowsAffected, nil
 }
 
 // GetTableNames returns all table names in the database
@@ -400,50 +313,6 @@ func (f *FileSQLAdapter) GetTableNames(ctx context.Context) ([]*model.Table, err
 	}
 
 	return tables, nil
-}
-
-// GetTableHeader returns header information for a specific table.
-// The tableName is safely quoted via QuoteIdentifier, so any non-empty
-// SQLite identifier (including names with spaces, hyphens, or starting
-// with digits) is accepted.
-func (f *FileSQLAdapter) GetTableHeader(ctx context.Context, tableName string) (*model.Table, error) {
-	if f.sharedDB == nil {
-		return nil, &FileSQLError{Op: opGetHeader, Err: errDatabaseNotInit}
-	}
-	if strings.TrimSpace(tableName) == "" {
-		return nil, &FileSQLError{Op: opGetHeader, Err: "table name is empty"}
-	}
-
-	// Get column info using PRAGMA
-	// nosemgrep: go.lang.security.audit.database.string-formatted-query.string-formatted-query, go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
-	query := "PRAGMA table_info(" + QuoteIdentifier(tableName) + ")" // #nosec G202
-	rows, err := f.sharedDB.QueryContext(ctx, query)
-	if err != nil {
-		return nil, &FileSQLError{Op: opGetHeader, Err: err.Error()}
-	}
-	defer func() { _ = rows.Close() }()
-
-	var columns []string
-	for rows.Next() {
-		var cid int
-		var name string
-		var dataType string
-		var notNull int
-		var defaultValue any
-		var pk int
-
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return nil, &FileSQLError{Op: opScanHeader, Err: err.Error()}
-		}
-		columns = append(columns, name)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, &FileSQLError{Op: "rows", Err: err.Error()}
-	}
-
-	header := model.NewHeader(columns)
-	return model.NewTable(tableName, header, nil), nil
 }
 
 // Close closes the database connection
@@ -608,12 +477,4 @@ func IsExcelFile(filePath string) bool {
 	}
 
 	return strings.HasSuffix(lower, ".xlsx")
-}
-
-// generateRandomName generates a random 4-byte hex string.
-func generateRandomName() string {
-	const randomBytesLen = 4
-	randomBytes := make([]byte, randomBytesLen)
-	_, _ = rand.Read(randomBytes)
-	return hex.EncodeToString(randomBytes)
 }
