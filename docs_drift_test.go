@@ -1820,6 +1820,32 @@ func TestGoReleaser_DescriptionsNameTheCurrentFormats(t *testing.T) {
 	}
 }
 
+// TestDocs_NoLinkToADeletedDesignDocument keeps a link to internal design prose
+// from creeping back into published documentation.
+//
+// The two documents this checks for were deleted because prose about internal
+// layering has to be maintained by hand beside the code it describes, and one of
+// them had drifted far enough to describe a program sqly no longer is, with
+// three missing images, while the public about page still sent readers to it.
+// The layering is checked by go-arch-lint instead, which cannot drift.
+func TestDocs_NoLinkToADeletedDesignDocument(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{
+		"README.md",
+		"CONTRIBUTING.md",
+		"website/content/about.md",
+		"doc/build_and_test.md",
+	} {
+		doc := readDoc(t, path)
+		for _, gone := range []string{"doc/architecture.md", "doc/design_overview.md"} {
+			if strings.Contains(doc, gone) {
+				t.Errorf("%s links %s, which was deleted; the layering is documented by .go-arch-lint.yml", path, gone)
+			}
+		}
+	}
+}
+
 // TestAbout_BenchmarkIsMarkedHistorical keeps an old measurement from reading as
 // a promise about the current release.
 func TestAbout_BenchmarkIsMarkedHistorical(t *testing.T) {

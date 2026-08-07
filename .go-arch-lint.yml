@@ -136,6 +136,9 @@ deps:
       # nothing ever substituted one, so the indirection bought a file to change
       # per format rather than a seam anyone used.
       - persistence-infra
+  # What is left in repository is what an interface earns: the session's SQL
+  # access, which the mocks in infrastructure/mock stand in for when a test needs
+  # a failure a real database will not produce on demand.
   repository:
     mayDependOn:
       - model
