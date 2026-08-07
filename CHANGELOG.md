@@ -22,6 +22,12 @@ point to pin a version against; none of rc1 through rc7 is it.
 
 * A file whose name begins with `query_result_` imports like any other. sqly once materialized results into tables of that name and filtered the prefix out of every listing; the materializing was removed and the filter was not, so it could only reach tables the user owned. Because import decides whether a file produced anything by comparing the table list before and after loading, such a file did not merely go missing from `.tables` and `--inspect` — the import failed outright with "the file has no rows to import" over a file full of rows, and `.save` had no table to write back. `CREATE TABLE query_result_x` had the same result from inside the session. SQLite's own `sqlite_` tables are still excluded, and that prefix is reserved by the engine, so no imported file can land under it.
 
+### Refactoring
+
+* The session has one table listing instead of two. Import counted tables through the filesql adapter's own `sqlite_master` query while `.tables`, `.save`, and `--inspect` went through the repository's, so two listings that had to agree were free not to — which is how one of them came to hide a name prefix the other showed. The adapter's copy is gone and every caller reads the repository.
+* Eight members no production code called are gone from the usecase and repository interfaces: `QueryStream` through all four layers, left behind when the commands that streamed rows were removed; `Exec` on `QueryUsecase`, since `ExecSQL` is the only entry point for a statement the user typed; `SanitizeForSQL`, `RowMismatchPolicy`, and `GetTableNames` on `ImportUsecase`; and `Table.Valid` with `IsEmptyName`, `IsEmptyHeader`, `IsEmptyRecords`, and `IsSameHeaderColumnName`, a validation path nothing invoked. The `domain` package held only the errors that validation returned, so it is gone too.
+* `ExcelSheetUsecase` is part of `ImportUsecase` rather than an interface embedded in it. Nothing consumed it on its own: what a workbook held and which sheets an import took is a question only importing raises.
+
 ## [v1.0.0-rc7](https://github.com/nao1215/sqly/compare/v1.0.0-rc6...v1.0.0-rc7) (2026-08-07)
 
 A release candidate for v1.0.0, not the final one. Everything below is a change

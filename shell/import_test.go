@@ -470,7 +470,7 @@ func TestImportCommand_TopLevelErrorCarriesDetail(t *testing.T) {
 			t.Errorf("error %q should name the failing path", importErr.Error())
 		}
 		// The good input must not have survived the failure.
-		tables, err := s.usecases.importer.GetTableNames(ctx)
+		tables, err := s.usecases.metadata.TablesName(ctx)
 		if err != nil {
 			t.Fatalf("list tables: %v", err)
 		}
@@ -555,7 +555,7 @@ func TestImportFile_CSVSuccess(t *testing.T) {
 		t.Fatalf("runImport: %v", err)
 	}
 
-	tables, err := s.usecases.importer.GetTableNames(ctx)
+	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -603,7 +603,7 @@ func TestImportDirectory_WithCSVFiles(t *testing.T) {
 		t.Fatalf("runImport: %v", err)
 	}
 
-	tables, err := s.usecases.importer.GetTableNames(ctx)
+	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +687,7 @@ func TestImportCommand_NoPartialSuccess(t *testing.T) {
 		t.Errorf("error = %v, want an importFailedError", err)
 	}
 
-	tables, err := s.usecases.importer.GetTableNames(ctx)
+	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}

@@ -36,7 +36,7 @@ type sessionState struct {
 // captureSessionState reads the session and the database.
 func captureSessionState(t *testing.T, s *Shell) sessionState {
 	t.Helper()
-	tables, err := s.usecases.importer.GetTableNames(context.Background())
+	tables, err := s.usecases.metadata.TablesName(context.Background())
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}

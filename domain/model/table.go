@@ -14,7 +14,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
-	"github.com/nao1215/sqly/domain"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 )
@@ -338,54 +337,6 @@ func (t *Table) Equal(t2 *Table) bool {
 		}
 	}
 	return true
-}
-
-// Valid check the contents of a Table.
-func (t *Table) Valid() error {
-	if t.IsEmptyName() {
-		return domain.ErrEmptyTableName
-	}
-
-	if t.IsEmptyHeader() {
-		return domain.ErrEmptyHeader
-	}
-
-	if t.IsEmptyRecords() {
-		return domain.ErrEmptyRecords
-	}
-
-	if t.IsSameHeaderColumnName() {
-		return domain.ErrSameHeaderColumns
-	}
-
-	return nil
-}
-
-// IsEmptyName return wherther table name is empty or not
-func (t *Table) IsEmptyName() bool {
-	return t.name == ""
-}
-
-// IsEmptyHeader return wherther table header is empty or not
-func (t *Table) IsEmptyHeader() bool {
-	return len(t.header) == 0
-}
-
-// IsEmptyRecords return wherther table records is empty or not
-func (t *Table) IsEmptyRecords() bool {
-	return len(t.records) == 0
-}
-
-// IsSameHeaderColumnName return whether the table has a header column with the same name
-func (t *Table) IsSameHeaderColumnName() bool {
-	encountered := make(map[string]bool, len(t.header))
-	for _, name := range t.Columns {
-		if encountered[name] {
-			return true
-		}
-		encountered[name] = true
-	}
-	return false
 }
 
 // Print print all record with header

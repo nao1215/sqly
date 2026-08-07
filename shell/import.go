@@ -69,7 +69,10 @@ func (s *Shell) runImport(ctx context.Context, argv, labels []string) error {
 		return s.reportImportFailure(err)
 	}
 
-	before, err := s.usecases.importer.GetTableNames(ctx)
+	// The listing that decides whether the import produced anything is the one
+	// .tables and .save read, so a name one of them admits cannot be a name the
+	// other drops.
+	before, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		return s.reportImportFailure(fmt.Errorf("failed to get table names before importing: %w", err))
 	}
@@ -81,7 +84,7 @@ func (s *Shell) runImport(ctx context.Context, argv, labels []string) error {
 		return s.reportImportFailure(s.describeLoadFailure(plan, err))
 	}
 
-	after, err := s.usecases.importer.GetTableNames(ctx)
+	after, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		return s.reportImportFailure(fmt.Errorf("failed to get table names after importing: %w", err))
 	}

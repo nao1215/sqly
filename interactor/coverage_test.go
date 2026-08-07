@@ -7,28 +7,6 @@ import (
 	"github.com/nao1215/sqly/domain/model"
 )
 
-// TestSQLite3InteractorMalformedRowPolicy verifies that a policy set with
-// SetRowMismatchPolicy is reported back by RowMismatchPolicy through the
-// filesql adapter.
-func TestSQLite3InteractorMalformedRowPolicy(t *testing.T) {
-	t.Parallel()
-
-	si, cleanup := newTestSQLite3InteractorWithAdapter(t)
-	defer cleanup()
-
-	policies := []model.RowMismatchPolicy{
-		model.RowMismatchError,
-		model.RowMismatchSkip,
-		model.RowMismatchPad,
-	}
-	for _, want := range policies {
-		si.SetRowMismatchPolicy(want)
-		if got := si.RowMismatchPolicy(); got != want {
-			t.Errorf("RowMismatchPolicy() = %v, want %v", got, want)
-		}
-	}
-}
-
 // TestWithCompressedWriterErrors covers the error branches of withCompressedWriter:
 // a failing file creation, a rejected compression codec, and a write function that
 // returns an error.
