@@ -1,0 +1,113 @@
+# sqly once materialized query results into tables named query_result_<id> and
+# hid them from every listing by filtering the name prefix out of sqlite_master.
+# The materializing is long gone, so the filter only reaches user tables now: a
+# file named query_result_*.csv imported into a table no listing would admit
+# existed. The import check compares the table set before and after loading, so
+# the file did not merely go missing from .tables — the import itself failed with
+# "the file has no rows to import" over a file full of rows. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly tables named with a formerly reserved prefix
+
+scenarios:
+  - name: imports a file whose name begins with query_result_
+    steps:
+      - fixture: &report
+          file: query_result_report.csv
+          content: |
+            id,amount
+            1,100
+            2,250
+      - run:
+          command: sqly --output-format csv --sql 'SELECT amount FROM query_result_report WHERE id = 2' query_result_report.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "250"
+
+  - name: lists a query_result_ table in .tables
+    steps:
+      - fixture: *report
+      - run:
+          command: sqly query_result_report.csv
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: query_result_report
+
+  - name: reports a query_result_ table in --inspect
+    steps:
+      - fixture: *report
+      - run:
+          command: sqly --inspect query_result_report.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].name"
+              equals: query_result_report
+
+  # The write-back path enumerates tables to match each one to its source, so a
+  # table missing from that enumeration is a table .save cannot write.
+  - name: writes a query_result_ table back to its source
+    steps:
+      - fixture: *report
+      - run:
+          command: sqly query_result_report.csv
+          stdin: |
+            UPDATE query_result_report SET amount = 999 WHERE id = 1;
+            .save --in-place
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Saved query_result_report to"
+      - run:
+          command: sqly --output-format csv --sql 'SELECT amount FROM query_result_report WHERE id = 1' query_result_report.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "999"
+
+  # A table created by hand in the session is the same case reached through SQL
+  # rather than through a file name.
+  - name: lists a query_result_ table created by CREATE TABLE
+    steps:
+      - fixture:
+          file: sample.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly sample.csv
+          stdin: |
+            CREATE TABLE query_result_scratch (a INTEGER);
+            .tables
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: query_result_scratch
+
+  # SQLite reserves the sqlite_ prefix for its own bookkeeping (sqlite_sequence,
+  # sqlite_stat1) and refuses to create such a table, so that filter still has
+  # something to hide and stays.
+  - name: keeps SQLite internal tables out of .tables
+    steps:
+      - fixture:
+          file: sample.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly sample.csv
+          stdin: |
+            CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT);
+            INSERT INTO seq (name) VALUES ('a');
+            .tables
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: sqlite_sequence

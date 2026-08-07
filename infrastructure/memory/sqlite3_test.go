@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -222,7 +223,11 @@ func TestExtractTableName(t *testing.T) {
 func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 	t.Parallel()
 
-	t.Run("excludes query_result_ tables", func(t *testing.T) {
+	// A table named query_result_* is the user's, not sqly's. sqly once
+	// materialized results into tables of that name and filtered them out of
+	// every listing; it no longer creates them, so the filter could only ever
+	// reach a table the user imported or created.
+	t.Run("lists a user table whose name begins with query_result_", func(t *testing.T) {
 		t.Parallel()
 
 		memoryDB, cleanup, err := config.NewInMemDB()
@@ -233,62 +238,59 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 
 		r := NewSQLite3Repository(memoryDB)
 
-		if _, err := r.Exec(context.Background(), "CREATE TABLE users (id TEXT, name TEXT)"); err != nil {
-			t.Fatal(err)
+		for _, stmt := range []string{
+			"CREATE TABLE users (id TEXT, name TEXT)",
+			"CREATE TABLE query_result_report (col1 TEXT, col2 TEXT)",
+			"CREATE TABLE products (id TEXT, price TEXT)",
+		} {
+			if _, err := r.Exec(context.Background(), stmt); err != nil {
+				t.Fatal(err)
+			}
 		}
 
-		// Create a query_result_ table (simulating internal table)
-		db := (*sql.DB)(memoryDB)
-		_, err = db.ExecContext(context.Background(),
-			"CREATE TABLE query_result_abc123 (col1 TEXT, col2 TEXT)")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if _, err := r.Exec(context.Background(), "CREATE TABLE products (id TEXT, price TEXT)"); err != nil {
-			t.Fatal(err)
-		}
-
-		// Get table names
 		tables, err := r.TablesName(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		// Verify query_result_ table is excluded
 		tableNames := make([]string, len(tables))
 		for i, table := range tables {
 			tableNames[i] = table.Name()
 		}
 
-		// Should have exactly 2 tables (users and products)
-		if len(tables) != 2 {
-			t.Errorf("Expected 2 tables, got %d: %v", len(tables), tableNames)
+		want := []string{"users", "query_result_report", "products"}
+		if diff := cmp.Diff(want, tableNames); diff != "" {
+			t.Errorf("TablesName() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("reports a query_result_ table in SchemaObjects", func(t *testing.T) {
+		t.Parallel()
+
+		memoryDB, cleanup, err := config.NewInMemDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+
+		r := NewSQLite3Repository(memoryDB)
+		if _, err := r.Exec(context.Background(), "CREATE TABLE query_result_report (a TEXT)"); err != nil {
+			t.Fatal(err)
 		}
 
-		// Verify query_result_ table is not in the list
-		for _, name := range tableNames {
-			if name == "query_result_abc123" {
-				t.Error("query_result_ table should be excluded from TablesName result")
-			}
+		tables, err := r.SchemaObjects(context.Background())
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		// Verify regular tables are included
-		hasUsers := false
-		hasProducts := false
-		for _, name := range tableNames {
-			if name == "users" {
-				hasUsers = true
-			}
-			if name == "products" {
-				hasProducts = true
+		found := false
+		for _, table := range tables {
+			if table.Name() == "query_result_report" {
+				found = true
 			}
 		}
-		if !hasUsers {
-			t.Error("Expected 'users' table to be in the list")
-		}
-		if !hasProducts {
-			t.Error("Expected 'products' table to be in the list")
+		if !found {
+			t.Errorf("SchemaObjects() omitted query_result_report; got %v", tables)
 		}
 	})
 
