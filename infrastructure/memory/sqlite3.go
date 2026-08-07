@@ -36,18 +36,6 @@ func (r *sqlite3Repository) inTx(ctx context.Context, fn func(tx *sql.Tx) error)
 	return err
 }
 
-// CreateTable create a DB table with columns given as model.Table
-func (r *sqlite3Repository) CreateTable(ctx context.Context, t *model.Table) error {
-	if err := t.Valid(); err != nil {
-		return err
-	}
-
-	return r.inTx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, infra.GenerateCreateTableStatement((t)))
-		return err
-	})
-}
-
 // TablesName return all table name in import order.
 // Internal tables (sqlite_* and query_result_*) are excluded from the result.
 // Rows are ordered by sqlite_master.rowid, which is assigned in CREATE order, so
@@ -117,22 +105,6 @@ func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, 
 		return nil, err
 	}
 	return tables, nil
-}
-
-// Insert set records in DB
-func (r *sqlite3Repository) Insert(ctx context.Context, t *model.Table) error {
-	if err := t.Valid(); err != nil {
-		return err
-	}
-
-	return r.inTx(ctx, func(tx *sql.Tx) error {
-		for _, v := range t.Rows {
-			if _, err := tx.ExecContext(ctx, infra.GenerateInsertStatement(t.Name(), v)); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 // List get records in the specified table

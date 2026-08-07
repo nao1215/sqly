@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -170,118 +169,6 @@ func TestQueryStreamCellSemantics(t *testing.T) {
 	}
 }
 
-func TestSqlite3RepositoryCreateTable(t *testing.T) {
-	t.Run("Create table", func(t *testing.T) {
-		memoryDB, cleanup, err := config.NewInMemDB()
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanup()
-
-		r := NewSQLite3Repository(memoryDB)
-		want := model.NewTable(
-			"sample",
-			model.Header{"aaa", "bbb", "ccc"},
-			[]model.Record{
-				{"111", "222", "333"},
-				{"444", "555", "666"},
-				{"777", "888", "999"},
-			},
-		)
-
-		if err := r.CreateTable(context.Background(), want); err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := r.TablesName(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if len(got) == 0 {
-			t.Fatal("falied to create table (no table in memory db)")
-		}
-
-		if diff := cmp.Diff(got[0].Name(), want.Name()); diff != "" {
-			t.Fatalf("mismatch (-got +want):\n%s", diff)
-		}
-
-		got2, err := r.List(context.Background(), "sample")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if diff := cmp.Diff(got2.Header(), want.Header()); diff != "" {
-			t.Fatalf("mismatch (-got +want):\n%s", diff)
-		}
-
-		got3, err := r.Header(context.Background(), "sample")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if diff := cmp.Diff(got3.Header(), want.Header()); diff != "" {
-			t.Fatalf("mismatch (-got +want):\n%s", diff)
-		}
-	})
-}
-
-func TestSqlite3RepositoryInsert(t *testing.T) {
-	t.Run("INSERT data", func(t *testing.T) {
-		memoryDB, cleanup, err := config.NewInMemDB()
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanup()
-
-		r := NewSQLite3Repository(memoryDB)
-		table := model.NewTable(
-			"sample",
-			model.Header{"aaa", "bbb", "ccc"},
-			[]model.Record{
-				{"111", "222", "333"},
-				{"444", "555", "666"},
-				{"777", "888", "999"},
-			},
-		)
-		if err := r.CreateTable(context.Background(), table); err != nil {
-			t.Fatal(err)
-		}
-
-		input := model.NewTable(
-			"sample",
-			model.Header{"aaa", "bbb", "ccc"},
-			[]model.Record{
-				{"111", "222", "333"},
-				{"444", "555", "666"},
-				{"777", "888", "999"},
-			},
-		)
-		if err := r.Insert(context.Background(), input); err != nil {
-			t.Fatal(err)
-		}
-
-		if _, err := r.Exec(context.Background(), "DELETE FROM sample WHERE aaa = '111'"); err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := r.Query(context.Background(), "SELECT * FROM sample ORDER BY aaa")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		want := model.NewTable(
-			"sample",
-			model.Header{"aaa", "bbb", "ccc"},
-			[]model.Record{
-				{"444", "555", "666"},
-				{"777", "888", "999"},
-			},
-		)
-		if diff := cmp.Diff(got, want); diff != "" {
-			t.Fatalf("mismatch (-got +want):\n%s", diff)
-		}
-	})
-}
-
 func TestExtractTableName(t *testing.T) {
 	t.Parallel()
 
@@ -346,13 +233,7 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 
 		r := NewSQLite3Repository(memoryDB)
 
-		// Create a regular table (must have at least one record for Valid() check)
-		regularTable := model.NewTable(
-			"users",
-			model.Header{"id", "name"},
-			[]model.Record{{"1", "test_user"}},
-		)
-		if err := r.CreateTable(context.Background(), regularTable); err != nil {
+		if _, err := r.Exec(context.Background(), "CREATE TABLE users (id TEXT, name TEXT)"); err != nil {
 			t.Fatal(err)
 		}
 
@@ -364,13 +245,7 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Create another regular table (must have at least one record for Valid() check)
-		anotherTable := model.NewTable(
-			"products",
-			model.Header{"id", "price"},
-			[]model.Record{{"1", "100"}},
-		)
-		if err := r.CreateTable(context.Background(), anotherTable); err != nil {
+		if _, err := r.Exec(context.Background(), "CREATE TABLE products (id TEXT, price TEXT)"); err != nil {
 			t.Fatal(err)
 		}
 
@@ -428,13 +303,7 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 
 		r := NewSQLite3Repository(memoryDB)
 
-		// Create a regular table (must have at least one record for Valid() check)
-		regularTable := model.NewTable(
-			"data",
-			model.Header{"id", "value"},
-			[]model.Record{{"1", "test_value"}},
-		)
-		if err := r.CreateTable(context.Background(), regularTable); err != nil {
+		if _, err := r.Exec(context.Background(), "CREATE TABLE data (id TEXT, value TEXT)"); err != nil {
 			t.Fatal(err)
 		}
 
@@ -474,8 +343,7 @@ func TestSqlite3RepositoryTablesNameExcludesInternalTables(t *testing.T) {
 		// Create "zebra" before "ant" so creation order and alphabetical order
 		// disagree; TablesName preserves creation (import) order.
 		for _, name := range []string{"zebra", "ant"} {
-			table := model.NewTable(name, model.Header{"id"}, []model.Record{{"1"}})
-			if err := r.CreateTable(context.Background(), table); err != nil {
+			if _, err := r.Exec(context.Background(), "CREATE TABLE "+name+" (id TEXT)"); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -503,14 +371,10 @@ func newSampleRepo(t *testing.T) repository.SQLite3Repository {
 	t.Cleanup(cleanup)
 
 	r := NewSQLite3Repository(memoryDB)
-	table := model.NewTable("sample", model.Header{"id", "name"}, []model.Record{
-		{"1", "alice"},
-		{"2", "bob"},
-	})
-	if err := r.CreateTable(context.Background(), table); err != nil {
+	if _, err := r.Exec(context.Background(), "CREATE TABLE sample (id TEXT, name TEXT)"); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Insert(context.Background(), table); err != nil {
+	if _, err := r.Exec(context.Background(), "INSERT INTO sample VALUES ('1', 'alice'), ('2', 'bob')"); err != nil {
 		t.Fatal(err)
 	}
 	return r
@@ -538,14 +402,6 @@ func TestSqlite3Repository_Exec_InvalidStatementReturnsError(t *testing.T) {
 	r := newSampleRepo(t)
 	if _, err := r.Exec(context.Background(), "UPDATE no_such_table SET x = 1"); err == nil {
 		t.Error("expected error for exec against missing table, got nil")
-	}
-}
-
-func TestSqlite3Repository_CreateTable_InvalidTableReturnsError(t *testing.T) {
-	r := newSampleRepo(t)
-	// An empty table (no name/header/records) fails Valid() before any SQL runs.
-	if err := r.CreateTable(context.Background(), model.NewTable("", model.Header{}, []model.Record{})); err == nil {
-		t.Error("expected error for invalid table, got nil")
 	}
 }
 

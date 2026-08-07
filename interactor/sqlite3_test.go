@@ -529,56 +529,6 @@ func TestSQLite3InteractorExecSQL(t *testing.T) {
 	})
 }
 
-func TestSqlite3InteractorCreateTable(t *testing.T) {
-	t.Parallel()
-
-	t.Run("create table succeeded", func(t *testing.T) {
-		t.Parallel()
-
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
-
-		table := model.NewTable(
-			"test",
-			model.Header{"id", "name"},
-			[]model.Record{
-				{"1", "Gina"},
-				{"2", "Yulia"},
-			},
-		)
-		repo.EXPECT().CreateTable(gomock.Any(), table).Return(nil)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		if err := interactor.CreateTable(context.Background(), table); err != nil {
-			t.Errorf("want: nil, got: %v", err)
-		}
-	})
-
-	t.Run("create table failed", func(t *testing.T) {
-		t.Parallel()
-
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
-
-		table := model.NewTable(
-			"test",
-			model.Header{"id", "name"},
-			[]model.Record{
-				{"1", "Gina"},
-				{"2", "Yulia"},
-			},
-		)
-
-		someErr := errors.New("failed to create table")
-		repo.EXPECT().CreateTable(gomock.Any(), table).Return(someErr)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		if err := interactor.CreateTable(context.Background(), table); !errors.Is(err, someErr) {
-			t.Errorf("want: %v, got: %v", someErr, err)
-		}
-	})
-}
-
 func TestSqlite3InteractorTablesName(t *testing.T) {
 	t.Parallel()
 
@@ -617,57 +567,6 @@ func TestSqlite3InteractorTablesName(t *testing.T) {
 		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
 		_, err := interactor.TablesName(context.Background())
 		if !errors.Is(err, someErr) {
-			t.Errorf("want: %v, got: %v", someErr, err)
-		}
-	})
-}
-
-func TestSqlite3InteractorInsert(t *testing.T) {
-	t.Parallel()
-
-	t.Run("insert records succeeded", func(t *testing.T) {
-		t.Parallel()
-
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
-
-		table := model.NewTable(
-			"test",
-			model.Header{"id", "name"},
-			[]model.Record{
-				{"1", "Gina"},
-				{"2", "Yulia"},
-			},
-		)
-
-		repo.EXPECT().Insert(gomock.Any(), table).Return(nil)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		if err := interactor.Insert(context.Background(), table); err != nil {
-			t.Errorf("want: nil, got: %v", err)
-		}
-	})
-
-	t.Run("insert records failed", func(t *testing.T) {
-		t.Parallel()
-
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
-
-		table := model.NewTable(
-			"test",
-			model.Header{"id", "name"},
-			[]model.Record{
-				{"1", "Gina"},
-				{"2", "Yulia"},
-			},
-		)
-
-		someErr := errors.New("failed to insert records")
-		repo.EXPECT().Insert(gomock.Any(), table).Return(someErr)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		if err := interactor.Insert(context.Background(), table); !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
 		}
 	})

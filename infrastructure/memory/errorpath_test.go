@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
 )
 
@@ -25,25 +24,10 @@ func covMemClosedRepo(t *testing.T) repository.SQLite3Repository {
 	return NewSQLite3Repository(memoryDB)
 }
 
-// covMemValidTable builds a minimal table that passes Valid() so a write method
-// reaches the DB call and fails there (from the closed DB) rather than during
-// validation.
-func covMemValidTable() *model.Table {
-	return model.NewTable("closed_sample", model.Header{"id"}, []model.Record{{"1"}})
-}
-
 func TestSqlite3Repository_ClosedDB_ReturnsErrors(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-
-	t.Run("CreateTable returns error when DB is closed", func(t *testing.T) {
-		t.Parallel()
-		r := covMemClosedRepo(t)
-		if err := r.CreateTable(ctx, covMemValidTable()); err == nil {
-			t.Error("expected error from CreateTable on a closed DB, got nil")
-		}
-	})
 
 	t.Run("TablesName returns error when DB is closed", func(t *testing.T) {
 		t.Parallel()
@@ -58,14 +42,6 @@ func TestSqlite3Repository_ClosedDB_ReturnsErrors(t *testing.T) {
 		r := covMemClosedRepo(t)
 		if _, err := r.SchemaObjects(ctx); err == nil {
 			t.Error("expected error from SchemaObjects on a closed DB, got nil")
-		}
-	})
-
-	t.Run("Insert returns error when DB is closed", func(t *testing.T) {
-		t.Parallel()
-		r := covMemClosedRepo(t)
-		if err := r.Insert(ctx, covMemValidTable()); err == nil {
-			t.Error("expected error from Insert on a closed DB, got nil")
 		}
 	})
 
