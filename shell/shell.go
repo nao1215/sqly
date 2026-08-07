@@ -38,6 +38,9 @@ const (
 	// the two a message offers depends on whether the process has already
 	// started; see rowMismatchAdvice.
 	rowMismatchFlag = "--row-mismatch"
+	// encodingFlag names the startup flag that decodes a text input, which is the
+	// only place the choice can be made: there is no shell command for it.
+	encodingFlag    = "--encoding"
 	cdCommand       = ".cd"
 	clearCommand    = ".clear"
 	dumpCommand     = ".dump"

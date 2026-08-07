@@ -105,13 +105,13 @@ scenarios:
           stdout:
             contains: 太郎
 
-  # The same file read as UTF-8 — the default — is not an error. Every byte the
-  # decoder cannot make sense of becomes U+FFFD and the run exits 0, so a wrapper
-  # that only checks the exit code gets mojibake and no warning. sqly cannot tell
-  # this from a file that genuinely holds U+FFFD, which is why it is documented
-  # rather than guessed at; the replacement character in the output is the signal
-  # to reach for --encoding.
-  - name: reads a Shift-JIS file as UTF-8 without complaining
+  # The same file read as UTF-8 — the default — used to load. SQLite stores TEXT
+  # as UTF-8, so the bytes went in as they were, came back as mojibake, and the
+  # run exited 0: a wrapper that checks the exit code got corrupt data and no
+  # warning. filesql v0.36.0 refuses the file instead. It is refused rather than
+  # guessed at, because nothing in the bytes says which encoding they are and a
+  # wrong guess is the same corruption in another shape.
+  - name: refuses a Shift-JIS file read as UTF-8 instead of importing mojibake
     steps:
       - fixture: &shiftjis
           file: people.csv
@@ -119,15 +119,99 @@ scenarios:
       - run:
           command: sqly --output-format json --sql "SELECT name FROM people ORDER BY id LIMIT 1" people.csv
       - assert:
-          exit_code: 0
+          exit_code: 3
           stderr:
-            empty: true
-          stdout:
-            # JSON escapes it, which is also how a consumer greps for it.
-            contains: '\ufffd'
+            contains: "invalid UTF-8"
       - assert:
           stdout:
-            not_contains: 太郎
+            equals: ""
+
+  # What replaced the silent load has to be actionable: the loader says a byte is
+  # invalid, which does not tell the reader that sqly can decode the file for
+  # them. The hint names the flag and the encodings it accepts.
+  - name: names the flag that reads a non-UTF-8 file
+    steps:
+      - fixture: *shiftjis
+      - run:
+          command: sqly --sql "SELECT name FROM people" people.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "--encoding"
+      - assert:
+          stderr:
+            contains: shift-jis
+
+  # The encoding is fixed when the process starts, so an .import typed into a
+  # running session cannot reach the flag and is told to restart with it rather
+  # than pointed at a command that does not exist.
+  - name: tells a running session the encoding is chosen at startup
+    steps:
+      - fixture: *shiftjis
+      - fixture:
+          file: seed.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly seed.csv
+          stdin: ".import people.csv\n"
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "restart with --encoding"
+
+  # A dataset piped in has its own error message, built where the path the user
+  # named and the path the loader read are not the same thing. The advice has to
+  # reach that message too, not only the plain one.
+  - name: advises on encoding for a dataset piped in with --stdin-format
+    steps:
+      - fixture: *shiftjis
+      - run:
+          command: sh -c "sqly --stdin-format csv --sql 'SELECT * FROM stdin' < people.csv"
+          shell: true
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "--encoding"
+      - assert:
+          stderr:
+            contains: shift-jis
+
+  # An import that failed for another reason must not collect encoding advice.
+  - name: leaves an unrelated import failure without encoding advice
+    steps:
+      - fixture:
+          file: dup.csv
+          content: |
+            a,a
+            1,2
+      - run:
+          command: sqly --sql "SELECT * FROM dup" dup.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: duplicate column name
+      - assert:
+          stderr:
+            not_contains: "--encoding"
+
+  # filesql v0.36.0 also names the column a duplicate name is, which a header
+  # whose duplicate is the empty name could not say before: the message ended at
+  # the colon.
+  - name: says which column a duplicate name is
+    steps:
+      - fixture:
+          file: unnamed.csv
+          content: |
+            a,,
+            1,2,3
+      - run:
+          command: sqly --sql "SELECT * FROM unnamed" unnamed.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "column 3"
 
   - name: names the encoding and gets the text back
     steps:

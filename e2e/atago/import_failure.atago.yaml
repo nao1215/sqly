@@ -101,7 +101,7 @@ scenarios:
           stdout:
             empty: true
           stderr:
-            contains: "filesql: duplicate column name: a"
+            contains: 'filesql: duplicate column name: "a" (column 2)'
 
   - name: refuses a file with nothing in it
     steps:

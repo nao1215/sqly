@@ -18,7 +18,13 @@ point to pin a version against; none of rc1 through rc7 is it.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+* A text input holding a byte sequence that is not valid UTF-8 is refused instead of loaded as mojibake. SQLite stores TEXT as UTF-8, so a Shift-JIS CSV — the ordinary export from Excel in Japan — went in as bytes that are not characters: `LENGTH` counted wrong, `LIKE` and `UPPER` worked on fragments, the replacement character appeared in output, and the run exited 0 with nothing on stderr. The file now fails the import with exit 3, and the error names the byte that is not UTF-8 and the flag that reads the file: `--encoding shift-jis`, or the same advice spelled as a restart when `.import` was typed into a running session, where the encoding can no longer be chosen. It is a check on the bytes rather than on which encoding a file is in, so a Shift-JIS file whose content is entirely ASCII still loads: sqly does not guess the encoding, because nothing in the bytes says which one it is and a wrong guess is the same corruption in a different shape. Binary containers are unaffected: Parquet and Excel state their own encoding, and ACH and Fedwire are fixed-width records. Fixed in filesql v0.36.0.
+
 ### Bug Fixes
+
+* A duplicate column name says which column it means. A header with two unnamed columns (`a,,`) was refused with `filesql: duplicate column name:` and nothing after the colon, so neither the name nor its position was recoverable from the message. It reads `duplicate column name: "" (column 3)` now, and a name that collides only after trimming shows the whitespace that did it. Fixed in filesql v0.36.0.
 
 * A file whose name begins with `query_result_` imports like any other. sqly once materialized results into tables of that name and filtered the prefix out of every listing; the materializing was removed and the filter was not, so it could only reach tables the user owned. Because import decides whether a file produced anything by comparing the table list before and after loading, such a file did not merely go missing from `.tables` and `--inspect` — the import failed outright with "the file has no rows to import" over a file full of rows, and `.save` had no table to write back. `CREATE TABLE query_result_x` had the same result from inside the session. SQLite's own `sqlite_` tables are still excluded, and that prefix is reserved by the engine, so no imported file can land under it.
 
