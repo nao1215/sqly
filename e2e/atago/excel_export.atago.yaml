@@ -67,12 +67,18 @@ scenarios:
               - "invalid output mode"
               - ".dump"
 
-  - name: .dump writes a workbook in table mode, from the extension alone
+  # The extension names the format in a display mode, and only there: a mode that
+  # names a different format is a conflict, which is the rule .mode excel used to
+  # sidestep by being neither.
+  - name: .dump writes a workbook from the extension in every display mode
+    matrix:
+      - screen: table
+      - screen: vertical
     steps:
       - fixture: *modegone
       - run:
           command: sqly user.csv
-          stdin: ".dump user out.xlsx\n"
+          stdin: ".mode ${screen}\n.dump user out.xlsx\n"
       - assert:
           exit_code: 0
           file:
@@ -85,6 +91,21 @@ scenarios:
           stdout:
             line: 2
             equals: "2"
+
+  - name: a mode naming another format still rejects an .xlsx destination
+    steps:
+      - fixture: *modegone
+      - run:
+          command: sqly user.csv
+          stdin: ".mode csv\n.dump user out.xlsx\n"
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "does not match destination extension"
+      - assert:
+          file:
+            path: out.xlsx
+            exists: false
 
   - name: --output-format excel still names a file format for --output
     steps:

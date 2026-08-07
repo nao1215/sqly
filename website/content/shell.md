@@ -121,9 +121,10 @@ still pipes into `jq`.
 
 `.mode` names what the screen shows, so `excel` and `parquet` are not among its
 values: neither can be rendered to a terminal. Write one with a destination
-instead — `.dump TABLE out.xlsx` takes the format from the extension, whatever
-the mode, and `--output-format excel --output FILE` does the same from the
-command line.
+instead. In a display mode (`table`, `vertical`) the extension names the format,
+so `.dump TABLE out.xlsx` writes a workbook; in a mode that names a format, an
+extension that disagrees is still a conflict and is rejected. From the command
+line it is `--output-format excel --output FILE`.
 
 ### Navigate
 
@@ -146,7 +147,7 @@ command line.
 | Command | Does |
 |:--|:--|
 | `.import PATH...` | load files, directories, or `http(s)` URLs into the session |
-| `.dump TABLE FILE` | export one table; the format follows `.mode`, or the file extension when the mode is `table` |
+| `.dump TABLE FILE` | export one table; the format follows `.mode`, or the file extension when the mode is a display mode (`table`, `vertical`) |
 | `.save DIR` | write every changed table into `DIR`, leaving the sources alone |
 | `.save --in-place` | overwrite each table's source file |
 | `.save --in-place --follow-symlinks` | also overwrite through a symlinked source, which is otherwise refused |

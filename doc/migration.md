@@ -30,9 +30,13 @@ From now:
 ```
 
 **What to change:** drop the `.mode` line from a script that pairs it with a
-`.dump`; the destination's extension already picks the format. A `.dump` to a
-path with no extension needs one now (`.dump user out.parquet`, not `.dump user
-out`), since the mode is no longer there to name the format.
+`.dump`. In a display mode (`table`, `vertical`) the destination's extension
+picks the format, which is what those scripts were doing the long way. A `.dump`
+to a path with no extension needs one now (`.dump user out.parquet`, not `.dump
+user out`), since the mode is no longer there to name the format.
+
+Extension inference applies in a display mode only: `.mode csv` followed by
+`.dump user out.xlsx` is a conflict and exits `2`, as it did before.
 
 `--output-format` is unchanged and still takes both, because there the name picks
 a file format for `--output`:
