@@ -781,4 +781,4 @@ Errors go to stderr; query results go to stdout, so a pipeline stays clean.
 
 | Variable | Does |
 |:--|:--|
-| `SQLY_HISTORY_DB_PATH` | where the shell keeps its command history |
+| `SQLY_HISTORY_PATH` | where the shell keeps its command history: a text file, one entry per line. Defaults to `history` under the config directory. Unwritable disables history with one warning rather than failing the run |

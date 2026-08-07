@@ -3,7 +3,6 @@ package di
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -149,97 +148,41 @@ func TestNewShell_StartsTheInspectAndBatchEntryPoints(t *testing.T) {
 	}
 }
 
-// TestNewShell_HistoryAndSessionAreSeparateDatabases pins the split. History is
-// a file that outlives the session; the tables live in memory and do not. One
-// database for both would put every imported table in the user's config
-// directory, and a re-run would see the previous run's tables.
-func TestNewShell_HistoryAndSessionAreSeparateDatabases(t *testing.T) {
+// TestNewShell_HistoryIsAFileBesideTheSession pins the split. History is a file
+// that outlives the session; the tables live in memory and do not. One store for
+// both would put every imported table in the user's config directory, and a
+// re-run would see the previous run's tables.
+func TestNewShell_HistoryIsAFileBesideTheSession(t *testing.T) {
 	historyPath := isolate(t)
 
-	// Record the database each constructor was handed, so the two can be
-	// compared by identity rather than by what they happen to contain.
-	origInMem, origHistory := newInMemDB, newHistoryDB
-	t.Cleanup(func() { newInMemDB, newHistoryDB = origInMem, origHistory })
-
-	var session, history *sql.DB
-	var configuredPath string
-	newInMemDB = func() (config.MemoryDB, func(), error) {
-		db, release, err := origInMem()
-		session = (*sql.DB)(db)
-		return db, release, err
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "user.csv")
+	if err := os.WriteFile(csvPath, []byte("id,name\n1,gopher\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	newHistoryDB = func(c *config.Config) (config.HistoryDB, func(), error) {
-		configuredPath = c.HistoryDBPath
-		db, release, err := origHistory(c)
-		history = (*sql.DB)(db)
-		return db, release, err
-	}
+	captureStdout(t)
 
-	sqlyShell, cleanup, err := NewShell([]string{"sqly", "--version"})
+	sqlyShell, cleanup, err := NewShell([]string{"sqly", "--sql", "SELECT name FROM user", csvPath})
 	if err != nil {
 		t.Fatalf("NewShell: %v", err)
 	}
 	defer cleanup()
-	if sqlyShell == nil {
-		t.Fatal("NewShell returned a nil shell")
+	if err := sqlyShell.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
 	}
 
-	if session == nil || history == nil {
-		t.Fatal("one of the two databases was never opened")
+	// History is a file at the configured path, created by the run.
+	if _, err := os.Stat(historyPath); err != nil {
+		t.Fatalf("history file %s was not created: %v", historyPath, err)
 	}
-	if session == history {
-		t.Error("history and the session are the same database; every imported table would be written to the user's config directory and outlive the run")
+	// The session is not in it: the imported table lives in memory, so a re-run
+	// does not see the previous run's tables.
+	data, err := os.ReadFile(historyPath) //#nosec G304 -- test path under t.TempDir
+	if err != nil {
+		t.Fatal(err)
 	}
-	if configuredPath != historyPath {
-		t.Errorf("history database path = %q, want the configured %q", configuredPath, historyPath)
-	}
-}
-
-// TestNewShell_ReleasesWhatItOpenedWhenTheHistoryDatabaseFails is the first
-// failure path. Only the session database is open at that point, and it has to
-// be closed before the error is returned.
-func TestNewShell_ReleasesWhatItOpenedWhenTheHistoryDatabaseFails(t *testing.T) {
-	isolate(t)
-
-	released := recordReleases(t)
-	wantErr := errors.New("history database refused to open")
-	newHistoryDB = func(*config.Config) (config.HistoryDB, func(), error) {
-		return nil, nil, wantErr
-	}
-
-	sqlyShell, cleanup, err := NewShell([]string{"sqly", "--version"})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error = %v, want %v", err, wantErr)
-	}
-	if sqlyShell != nil || cleanup != nil {
-		t.Fatalf("a failed NewShell returned shell!=nil=%v cleanup!=nil=%v; the caller has nothing to run", sqlyShell != nil, cleanup != nil)
-	}
-	if got := released.names(); len(got) != 1 || got[0] != "memory" {
-		t.Errorf("released %v, want exactly [memory]; the session database was open and is now unreachable", got)
-	}
-}
-
-// TestNewShell_ReleasesBothDatabasesWhenTheShellFails is the second failure
-// path, and the one where forgetting a single line leaks the history file
-// handle for the life of the process.
-func TestNewShell_ReleasesBothDatabasesWhenTheShellFails(t *testing.T) {
-	isolate(t)
-
-	released := recordReleases(t)
-	wantErr := errors.New("shell refused to start")
-	newSqlyShell = func(*config.Arg, *config.Config, shell.CommandList, shell.Usecases) (*shell.Shell, error) {
-		return nil, wantErr
-	}
-
-	sqlyShell, cleanup, err := NewShell([]string{"sqly", "--version"})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error = %v, want %v", err, wantErr)
-	}
-	if sqlyShell != nil || cleanup != nil {
-		t.Fatalf("a failed NewShell returned shell!=nil=%v cleanup!=nil=%v", sqlyShell != nil, cleanup != nil)
-	}
-	if got := released.names(); len(got) != 2 || got[0] != "history" || got[1] != "memory" {
-		t.Errorf("released %v, want [history memory]: both databases, closed in the reverse of the order they were opened", got)
+	if strings.Contains(string(data), "gopher") {
+		t.Errorf("history holds the session's data: %q", data)
 	}
 }
 
@@ -264,8 +207,9 @@ func TestNewShell_NothingIsOpenWhenTheSessionDatabaseFails(t *testing.T) {
 }
 
 // TestNewShell_SuccessCleanupReleasesEverythingOnce is the success contract.
-// Both databases close, in the reverse of the order they were opened, and a
-// second call to the same cleanup is not how they get closed twice.
+// The session database closes, and a second call to the same cleanup is not how
+// it gets closed twice. It is the only resource with a lifetime: history is a
+// file written one append at a time, with nothing held open between them.
 func TestNewShell_SuccessCleanupReleasesEverythingOnce(t *testing.T) {
 	isolate(t)
 
@@ -280,8 +224,32 @@ func TestNewShell_SuccessCleanupReleasesEverythingOnce(t *testing.T) {
 	}
 
 	cleanup()
-	if got := released.names(); len(got) != 2 || got[0] != "history" || got[1] != "memory" {
-		t.Fatalf("released %v, want [history memory]", got)
+	if got := released.names(); len(got) != 1 || got[0] != "memory" {
+		t.Fatalf("released %v, want [memory]", got)
+	}
+}
+
+// TestNewShell_ReleasesTheSessionWhenTheShellFails is the failure path where
+// forgetting a single line leaks the session database for the life of the
+// process: everything before the shell has already been opened.
+func TestNewShell_ReleasesTheSessionWhenTheShellFails(t *testing.T) {
+	isolate(t)
+
+	released := recordReleases(t)
+	wantErr := errors.New("shell refused to start")
+	newSqlyShell = func(*config.Arg, *config.Config, shell.CommandList, shell.Usecases) (*shell.Shell, error) {
+		return nil, wantErr
+	}
+
+	sqlyShell, cleanup, err := NewShell([]string{"sqly", "--version"})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if sqlyShell != nil || cleanup != nil {
+		t.Fatalf("a failed NewShell returned shell!=nil=%v cleanup!=nil=%v; the caller has nothing to run", sqlyShell != nil, cleanup != nil)
+	}
+	if got := released.names(); len(got) != 1 || got[0] != "memory" {
+		t.Errorf("released %v, want exactly [memory]; the session database was open and is now unreachable", got)
 	}
 }
 
@@ -305,9 +273,9 @@ func (l *releaseLog) record(name string, release func()) func() {
 func recordReleases(t *testing.T) *releaseLog {
 	t.Helper()
 
-	origInMem, origHistory, origShell := newInMemDB, newHistoryDB, newSqlyShell
+	origInMem, origShell := newInMemDB, newSqlyShell
 	t.Cleanup(func() {
-		newInMemDB, newHistoryDB, newSqlyShell = origInMem, origHistory, origShell
+		newInMemDB, newSqlyShell = origInMem, origShell
 	})
 
 	log := &releaseLog{}
@@ -318,25 +286,18 @@ func recordReleases(t *testing.T) *releaseLog {
 		}
 		return db, log.record("memory", release), nil
 	}
-	newHistoryDB = func(c *config.Config) (config.HistoryDB, func(), error) {
-		db, release, err := origHistory(c)
-		if err != nil {
-			return nil, nil, err
-		}
-		return db, log.record("history", release), nil
-	}
 	return log
 }
 
-// isolate points the history database and the config directory at a temp
-// directory, so a test never touches the developer's real sqly config, and
-// returns the history path it configured.
+// isolate points the history file and the config directory at a temp directory,
+// so a test never touches the developer's real sqly config, and returns the
+// history path it configured.
 func isolate(t *testing.T) string {
 	t.Helper()
 
 	dir := t.TempDir()
-	historyPath := filepath.Join(dir, "history.db")
-	t.Setenv("SQLY_HISTORY_DB_PATH", historyPath)
+	historyPath := filepath.Join(dir, "history")
+	t.Setenv("SQLY_HISTORY_PATH", historyPath)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
 	return historyPath
 }

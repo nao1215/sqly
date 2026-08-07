@@ -13,7 +13,7 @@ suite:
 scenarios:
   - name: sorts tables by name regardless of the order they were given
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &abc
           file: c.csv

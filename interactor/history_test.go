@@ -11,7 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestHistoryInteractorCreateTable(t *testing.T) {
+func TestHistoryInteractorInit(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success to create table", func(t *testing.T) {
@@ -19,10 +19,10 @@ func TestHistoryInteractorCreateTable(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
-		historyRepo.EXPECT().CreateTable(context.Background()).Return(nil)
+		historyRepo.EXPECT().Init(context.Background()).Return(nil)
 
 		historyInteractor := NewHistoryInteractor(historyRepo)
-		err := historyInteractor.CreateTable(context.Background())
+		err := historyInteractor.Init(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -34,45 +34,45 @@ func TestHistoryInteractorCreateTable(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
 		someErr := errors.New("failed to create table")
-		historyRepo.EXPECT().CreateTable(context.Background()).Return(someErr)
+		historyRepo.EXPECT().Init(context.Background()).Return(someErr)
 
 		historyInteractor := NewHistoryInteractor(historyRepo)
-		err := historyInteractor.CreateTable(context.Background())
+		err := historyInteractor.Init(context.Background())
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
 		}
 	})
 }
 
-func TestHistoryInteractorCreate(t *testing.T) {
+func TestHistoryInteractorAppend(t *testing.T) {
 	t.Parallel()
 
-	t.Run("success to create history record", func(t *testing.T) {
+	t.Run("success to append a history entry", func(t *testing.T) {
 		t.Parallel()
 
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
 		history := model.NewHistory(1, "create table")
-		historyRepo.EXPECT().Create(context.Background(), model.Histories{history}.ToTable()).Return(nil)
+		historyRepo.EXPECT().Append(context.Background(), history).Return(nil)
 
 		historyInteractor := NewHistoryInteractor(historyRepo)
-		err := historyInteractor.Create(context.Background(), history)
+		err := historyInteractor.Append(context.Background(), history)
 		if err != nil {
 			t.Fatal(err)
 		}
 	})
 
-	t.Run("failed to create history record", func(t *testing.T) {
+	t.Run("failed to append a history entry", func(t *testing.T) {
 		t.Parallel()
 
 		ctrl := gomock.NewController(t)
 		historyRepo := infrastructure.NewMockHistoryRepository(ctrl)
 		history := model.NewHistory(1, "create table")
 		someErr := errors.New("failed to create history record")
-		historyRepo.EXPECT().Create(context.Background(), model.Histories{history}.ToTable()).Return(someErr)
+		historyRepo.EXPECT().Append(context.Background(), history).Return(someErr)
 
 		historyInteractor := NewHistoryInteractor(historyRepo)
-		err := historyInteractor.Create(context.Background(), history)
+		err := historyInteractor.Append(context.Background(), history)
 		if !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
 		}

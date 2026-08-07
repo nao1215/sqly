@@ -10,10 +10,12 @@ import (
 
 // HistoryRepository is a repository that handles sqly shell history.
 type HistoryRepository interface {
-	// CreateTable create a DB table for sqly shell history
-	CreateTable(ctx context.Context) error
-	// Create set history record in DB
-	Create(ctx context.Context, t *model.Table) error
-	// List get sql shell all history.
+	// Init prepares the history store and reports whether it can be written.
+	// A session calls it once at startup so an unwritable location disables
+	// history with one warning rather than failing on every line typed.
+	Init(ctx context.Context) error
+	// Append adds one entry to the history.
+	Append(ctx context.Context, history model.History) error
+	// List returns the retained history, oldest first.
 	List(ctx context.Context) (model.Histories, error)
 }

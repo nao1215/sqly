@@ -24,7 +24,7 @@ scenarios:
   # the source kept its old rows — for good, in that session.
   - name: a .save DIR export leaves the source writable by a later in-place save
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &u
           file: u.csv

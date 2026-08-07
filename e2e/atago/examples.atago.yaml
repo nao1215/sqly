@@ -15,7 +15,7 @@ suite:
 scenarios:
   - name: examples/report.sql runs and aggregates by region
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &sales
           file: sales.csv

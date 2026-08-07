@@ -21,15 +21,14 @@ func NewHistoryInteractor(r repository.HistoryRepository) usecase.HistoryUsecase
 	return &historyInteractor{r: r}
 }
 
-// CreateTable create table for sqly history.
-func (hi *historyInteractor) CreateTable(ctx context.Context) error {
-	return hi.r.CreateTable(ctx)
+// Init prepares the history store and reports whether it can be written.
+func (hi *historyInteractor) Init(ctx context.Context) error {
+	return hi.r.Init(ctx)
 }
 
-// Create create history record.
-func (hi *historyInteractor) Create(ctx context.Context, history model.History) error {
-	h := model.Histories{history}
-	return hi.r.Create(ctx, h.ToTable())
+// Append adds one entry to the history.
+func (hi *historyInteractor) Append(ctx context.Context, history model.History) error {
+	return hi.r.Append(ctx, history)
 }
 
 // List get all sqly history.

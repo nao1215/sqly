@@ -12,7 +12,7 @@ suite:
 scenarios:
   - name: rejects an explicit empty --sql value
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &user
           file: user.csv

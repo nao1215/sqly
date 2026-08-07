@@ -45,7 +45,7 @@ func TestNewArgErrorNilPassthrough(t *testing.T) {
 // parallel.
 func TestNewConfigCreateDirFailure(t *testing.T) {
 	// Ensure history falls back to the default location so CreateDir runs.
-	t.Setenv("SQLY_HISTORY_DB_PATH", "")
+	t.Setenv("SQLY_HISTORY_PATH", "")
 
 	fileAsParent := filepath.Join(t.TempDir(), "not-a-dir")
 	if err := os.WriteFile(fileAsParent, []byte("x"), 0o600); err != nil {
@@ -64,7 +64,7 @@ func TestNewConfigCreateDirFailure(t *testing.T) {
 // TestNewConfigCreatesDefaultDir covers the success branch of NewConfig where
 // history uses the default location and the XDG config directory is created.
 func TestNewConfigCreatesDefaultDir(t *testing.T) {
-	t.Setenv("SQLY_HISTORY_DB_PATH", "")
+	t.Setenv("SQLY_HISTORY_PATH", "")
 
 	configHome := t.TempDir()
 	orgConfigHome := xdg.ConfigHome
@@ -75,9 +75,9 @@ func TestNewConfigCreatesDefaultDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfig() error = %v", err)
 	}
-	wantPath := filepath.Join(configHome, "sqly", "history.db")
-	if c.HistoryDBPath != wantPath {
-		t.Errorf("HistoryDBPath = %q, want %q", c.HistoryDBPath, wantPath)
+	wantPath := filepath.Join(configHome, "sqly", "history")
+	if c.HistoryPath != wantPath {
+		t.Errorf("HistoryPath = %q, want %q", c.HistoryPath, wantPath)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestNewConfigCreatesDefaultDir(t *testing.T) {
 func TestSqliteDriverOpenInvalidPath(t *testing.T) {
 	t.Parallel()
 
-	badPath := filepath.Join(t.TempDir(), "no-such-dir", "history.db")
+	badPath := filepath.Join(t.TempDir(), "no-such-dir", "history")
 	db, err := sql.Open("sqlite3", badPath)
 	if err != nil {
 		t.Fatalf("sql.Open returned error too early: %v", err)

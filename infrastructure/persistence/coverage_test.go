@@ -2,30 +2,13 @@ package persistence
 
 import (
 	"bytes"
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/testutil"
 	"github.com/xuri/excelize/v2"
 )
-
-// covPerNewHistoryRepo returns a history repository backed by its own in-memory
-// database so subtests can run in parallel.
-func covPerNewHistoryRepo(t *testing.T) (*historyRepository, func()) {
-	t.Helper()
-	historyDB, cleanup, err := testutil.NewInMemHistoryDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, ok := NewHistoryRepository(historyDB).(*historyRepository)
-	if !ok {
-		t.Fatal("NewHistoryRepository did not return *historyRepository")
-	}
-	return repo, cleanup
-}
 
 func TestExcelRepository_Dump_SaveToMissingDirectoryReturnsError(t *testing.T) {
 	t.Parallel()
@@ -60,62 +43,6 @@ func TestExcelRepository_Dump_SanitizesInvalidSheetName(t *testing.T) {
 	}
 	if strings.ContainsAny(sheets[0], `:\/?*[]`) {
 		t.Errorf("sheet name %q still contains a forbidden character", sheets[0])
-	}
-}
-
-func TestHistoryRepository_Create_InvalidTableReturnsError(t *testing.T) {
-	t.Parallel()
-
-	r, cleanup := covPerNewHistoryRepo(t)
-	defer cleanup()
-	if err := r.CreateTable(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	// An empty table fails Valid() before any SQL runs.
-	if err := r.Create(context.Background(), model.NewTable("", model.Header{}, []model.Record{})); err == nil {
-		t.Error("expected error creating from an invalid table, got nil")
-	}
-}
-
-func TestHistoryRepository_Create_WithoutTableReturnsError(t *testing.T) {
-	t.Parallel()
-
-	r, cleanup := covPerNewHistoryRepo(t)
-	defer cleanup()
-	// The history table was never created, so the INSERT fails.
-	input := model.Histories{model.NewHistory(0, "SELECT 1")}.ToTable()
-	if err := r.Create(context.Background(), input); err == nil {
-		t.Error("expected error inserting without a history table, got nil")
-	}
-}
-
-func TestHistoryRepository_List_ReturnsRowsInIdOrder(t *testing.T) {
-	t.Parallel()
-
-	r, cleanup := covPerNewHistoryRepo(t)
-	defer cleanup()
-	if err := r.CreateTable(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	for _, req := range []string{"one", "two", "three"} {
-		in := model.Histories{model.NewHistory(0, req)}.ToTable()
-		if err := r.Create(context.Background(), in); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got, err := r.List(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 3 {
-		t.Fatalf("history count = %d, want 3", len(got))
-	}
-	// List orders by id ASC, matching the insertion order.
-	wantReq := []string{"one", "two", "three"}
-	for i, h := range got {
-		if h.Request != wantReq[i] || h.ID != i+1 {
-			t.Errorf("history[%d] = {id:%d req:%q}, want {id:%d req:%q}", i, h.ID, h.Request, i+1, wantReq[i])
-		}
 	}
 }
 

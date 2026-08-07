@@ -1,12 +1,14 @@
 # Migrated from sqly's ShellSpec spec/history_tolerance_spec.sh.
-# Non-interactive runs must succeed even when the history DB cannot be created.
-# The history DB path is pointed (via scenario env + ${workdir}) at a directory
+# Non-interactive runs must succeed even when the history file cannot be created.
+# The history file path is pointed (via scenario env + ${workdir}) at a directory
 # that does not exist, so creating it fails the way a read-only/sandboxed config
 # location would. Run with: make test-e2e
 #
-# The "read-only after startup" group seeds a history DB (a first run creates
-# it) and then makes it 0444 with a mode-only fixture (fixture.mode applied to an
-# existing file), simulating a history DB that turned read-only mid-session.
+# The "already read-only" group seeds a history file (a first run creates it) and
+# then makes it 0444 with a mode-only fixture (fixture.mode applied to an
+# existing file). The permission change lands before the next process starts, so
+# what it covers is a history file that a session finds read-only — not one that
+# turns read-only while a session holds it, which nothing here arranges.
 version: "1"
 
 suite:
@@ -15,7 +17,7 @@ suite:
 scenarios:
   - name: runs --sql and warns instead of failing
     env: &histenv
-      SQLY_HISTORY_DB_PATH: "${workdir}/missing/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/missing/history"
     steps:
       - fixture: &actor
           file: actor.csv
@@ -32,7 +34,7 @@ scenarios:
           stderr:
             contains: "history disabled"
 
-  - name: runs batch mode without a writable history DB
+  - name: runs batch mode without a writable history file
     env: *histenv
     steps:
       - fixture: *actor
@@ -48,9 +50,9 @@ scenarios:
           stderr:
             contains: "history disabled"
 
-  - name: runs --sql when the history DB is read-only after startup
+  - name: runs --sql when the history file is already read-only
     env: &roenv
-      SQLY_HISTORY_DB_PATH: "${workdir}/h.db"
+      SQLY_HISTORY_PATH: "${workdir}/h"
     steps:
       - fixture: &user
           file: user.csv
@@ -58,12 +60,12 @@ scenarios:
             user_name,identifier
             booker12,1
             jenkins46,2
-      # First run seeds a valid, writable history DB at ${workdir}/h.db.
+      # First run seeds a valid, writable history file at ${workdir}/h.
       - run:
           command: sqly --sql "SELECT 1" user.csv
       # Make the seeded DB read-only (mode-only fixture modifies the existing file).
       - fixture:
-          file: h.db
+          file: h
           mode: "0444"
       - run:
           command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv
@@ -72,14 +74,14 @@ scenarios:
           stdout:
             contains: booker12
 
-  - name: runs --inspect when the history DB is read-only after startup
+  - name: runs --inspect when the history file is already read-only
     env: *roenv
     steps:
       - fixture: *user
       - run:
           command: sqly --sql "SELECT 1" user.csv
       - fixture:
-          file: h.db
+          file: h
           mode: "0444"
       - run:
           command: sqly --inspect user.csv
@@ -92,14 +94,14 @@ scenarios:
           stdout:
             contains: '"name": "user"'
 
-  - name: runs batch mode and warns when a history write fails after startup
+  - name: runs batch mode and warns when the history file is already read-only
     env: *roenv
     steps:
       - fixture: *user
       - run:
           command: sqly --sql "SELECT 1" user.csv
       - fixture:
-          file: h.db
+          file: h
           mode: "0444"
       - run:
           command: sqly user.csv
@@ -110,3 +112,68 @@ scenarios:
             contains: booker12
           stderr:
             contains: "history disabled"
+
+  # History is a text file now, one entry per line, so what a session typed can
+  # be read back with anything. It was a second SQLite database, which cost a
+  # busy timeout, a five-file layer stack, and a lock two sqly processes fought
+  # over for what an append already gives.
+  - name: history is a readable text file, one entry per line
+    env: &textenv
+      SQLY_HISTORY_PATH: "${workdir}/history"
+    steps:
+      - fixture: &small
+          file: t.csv
+          content: |
+            id
+            1
+      - run:
+          command: sqly t.csv
+          stdin: "SELECT 1;\nSELECT 2;\n"
+      - assert:
+          exit_code: 0
+      # The exact file, not a substring search: "contains" would pass just as
+      # well if both statements landed on one line, which is the thing the line
+      # format exists to prevent.
+      - run:
+          command: sh -c 'cat "$SQLY_HISTORY_PATH"'
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              SELECT 1
+              SELECT 2
+
+  - name: a later session recalls what an earlier one typed
+    env: *textenv
+    steps:
+      - fixture: *small
+      - run:
+          command: sqly t.csv
+          stdin: "SELECT 42;\n"
+      - assert:
+          exit_code: 0
+      - run:
+          command: sh -c 'cat "$SQLY_HISTORY_PATH"'
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "SELECT 42"
+
+  - name: a multi-line statement is kept on one line, with its newline escaped
+    env: *textenv
+    steps:
+      - fixture: *small
+      - run:
+          command: sqly t.csv
+          stdin: "SELECT 1,\n2;\n"
+      - assert:
+          exit_code: 0
+      # The whole file, so a count that happened to contain the right digit
+      # cannot pass for the right count.
+      - run:
+          command: sh -c 'cat "$SQLY_HISTORY_PATH"'
+      - assert:
+          exit_code: 0
+          stdout:
+            equals: |
+              SELECT 1,\n2

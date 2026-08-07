@@ -3,8 +3,6 @@ package config
 import (
 	"context"
 	"database/sql"
-	"os"
-	"path/filepath"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -47,75 +45,22 @@ func TestNewInMemDB(t *testing.T) {
 	}
 }
 
-func TestNewHistoryDB(t *testing.T) {
-	t.Parallel()
-
-	// Create temporary directory for test database
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "test_history.db")
-
-	config := &Config{
-		HistoryDBPath: dbPath,
-	}
-
-	db, cleanup, err := NewHistoryDB(config)
-	if err != nil {
-		t.Fatalf("NewHistoryDB failed: %v", err)
-	}
-	defer cleanup()
-
-	if db == nil {
-		t.Fatal("Expected database instance, got nil")
-	}
-
-	// Test that database file was created (it might not exist until first write)
-	// This is acceptable behavior for SQLite
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		t.Logf("Database file not created until first write (acceptable): %v", err)
-	}
-
-	// Test that database is usable
-	sqlDB := (*sql.DB)(db)
-	_, err = sqlDB.ExecContext(context.Background(), "CREATE TABLE history_test (id INTEGER, command TEXT)")
-	if err != nil {
-		t.Fatalf("Failed to create table in history database: %v", err)
-	}
-
-	// Test inserting and querying data
-	_, err = sqlDB.ExecContext(context.Background(), "INSERT INTO history_test VALUES (1, 'SELECT * FROM test')")
-	if err != nil {
-		t.Fatalf("Failed to insert into history database: %v", err)
-	}
-
-	var command string
-	err = sqlDB.QueryRowContext(context.Background(), "SELECT command FROM history_test WHERE id = 1").Scan(&command)
-	if err != nil {
-		t.Fatalf("Failed to query history database: %v", err)
-	}
-
-	if command != "SELECT * FROM test" {
-		t.Errorf("Expected 'SELECT * FROM test', got %s", command)
-	}
-}
-
-func TestSQLite3DriverEnablesForeignKeysAndBusyTimeout(t *testing.T) {
+// TestSQLite3DriverEnablesForeignKeys checks the one pragma the driver sets. The
+// busy timeout that used to sit beside it was for the history database, a file
+// two sqly processes could hold at once; the session database is private to the
+// process, so nothing waits on a lock here.
+func TestSQLite3DriverEnablesForeignKeys(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
-	var foreignKeys, busyTimeout int
+	var foreignKeys int
 	if err := db.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
 		t.Fatalf("read foreign_keys pragma: %v", err)
 	}
-	if err := db.QueryRowContext(context.Background(), "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
-		t.Fatalf("read busy_timeout pragma: %v", err)
-	}
 	if foreignKeys != 1 {
 		t.Errorf("foreign_keys = %d, want 1", foreignKeys)
-	}
-	if busyTimeout != 5000 {
-		t.Errorf("busy_timeout = %d, want 5000", busyTimeout)
 	}
 }

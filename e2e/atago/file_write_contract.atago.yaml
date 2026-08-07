@@ -23,7 +23,7 @@ suite:
 scenarios:
   - name: leaves an existing file whole when the format cannot hold a value
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &tabbed
           file: tabbed.csv

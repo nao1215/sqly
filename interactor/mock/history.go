@@ -41,78 +41,78 @@ func (m *MockHistoryUsecase) EXPECT() *MockHistoryUsecaseMockRecorder {
 	return m.recorder
 }
 
-// Create mocks base method.
-func (m *MockHistoryUsecase) Create(ctx context.Context, history model.History) error {
+// Append mocks base method.
+func (m *MockHistoryUsecase) Append(ctx context.Context, history model.History) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, history)
+	ret := m.ctrl.Call(m, "Append", ctx, history)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Create indicates an expected call of Create.
-func (mr *MockHistoryUsecaseMockRecorder) Create(ctx, history any) *MockHistoryUsecaseCreateCall {
+// Append indicates an expected call of Append.
+func (mr *MockHistoryUsecaseMockRecorder) Append(ctx, history any) *MockHistoryUsecaseAppendCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockHistoryUsecase)(nil).Create), ctx, history)
-	return &MockHistoryUsecaseCreateCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockHistoryUsecase)(nil).Append), ctx, history)
+	return &MockHistoryUsecaseAppendCall{Call: call}
 }
 
-// MockHistoryUsecaseCreateCall wrap *gomock.Call
-type MockHistoryUsecaseCreateCall struct {
+// MockHistoryUsecaseAppendCall wrap *gomock.Call
+type MockHistoryUsecaseAppendCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHistoryUsecaseCreateCall) Return(arg0 error) *MockHistoryUsecaseCreateCall {
+func (c *MockHistoryUsecaseAppendCall) Return(arg0 error) *MockHistoryUsecaseAppendCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHistoryUsecaseCreateCall) Do(f func(context.Context, model.History) error) *MockHistoryUsecaseCreateCall {
+func (c *MockHistoryUsecaseAppendCall) Do(f func(context.Context, model.History) error) *MockHistoryUsecaseAppendCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHistoryUsecaseCreateCall) DoAndReturn(f func(context.Context, model.History) error) *MockHistoryUsecaseCreateCall {
+func (c *MockHistoryUsecaseAppendCall) DoAndReturn(f func(context.Context, model.History) error) *MockHistoryUsecaseAppendCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
-// CreateTable mocks base method.
-func (m *MockHistoryUsecase) CreateTable(ctx context.Context) error {
+// Init mocks base method.
+func (m *MockHistoryUsecase) Init(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTable", ctx)
+	ret := m.ctrl.Call(m, "Init", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// CreateTable indicates an expected call of CreateTable.
-func (mr *MockHistoryUsecaseMockRecorder) CreateTable(ctx any) *MockHistoryUsecaseCreateTableCall {
+// Init indicates an expected call of Init.
+func (mr *MockHistoryUsecaseMockRecorder) Init(ctx any) *MockHistoryUsecaseInitCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockHistoryUsecase)(nil).CreateTable), ctx)
-	return &MockHistoryUsecaseCreateTableCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockHistoryUsecase)(nil).Init), ctx)
+	return &MockHistoryUsecaseInitCall{Call: call}
 }
 
-// MockHistoryUsecaseCreateTableCall wrap *gomock.Call
-type MockHistoryUsecaseCreateTableCall struct {
+// MockHistoryUsecaseInitCall wrap *gomock.Call
+type MockHistoryUsecaseInitCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHistoryUsecaseCreateTableCall) Return(arg0 error) *MockHistoryUsecaseCreateTableCall {
+func (c *MockHistoryUsecaseInitCall) Return(arg0 error) *MockHistoryUsecaseInitCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHistoryUsecaseCreateTableCall) Do(f func(context.Context) error) *MockHistoryUsecaseCreateTableCall {
+func (c *MockHistoryUsecaseInitCall) Do(f func(context.Context) error) *MockHistoryUsecaseInitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHistoryUsecaseCreateTableCall) DoAndReturn(f func(context.Context) error) *MockHistoryUsecaseCreateTableCall {
+func (c *MockHistoryUsecaseInitCall) DoAndReturn(f func(context.Context) error) *MockHistoryUsecaseInitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

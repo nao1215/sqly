@@ -9,6 +9,48 @@ output.
 
 ## v1.0.0-rc6 → next
 
+### Command history is a text file, named by `SQLY_HISTORY_PATH`
+
+It was a SQLite database at `SQLY_HISTORY_DB_PATH`. History is an append-only
+log, and a file gives the same guarantee for concurrent sessions without the lock
+a database made them wait on.
+
+```text
+Before:
+  SQLY_HISTORY_DB_PATH=/path/to/history.db sqly data.csv
+  # default: $XDG_CONFIG_HOME/sqly/history.db, a SQLite database
+
+From now:
+  SQLY_HISTORY_PATH=/path/to/history sqly data.csv
+  # default: $XDG_CONFIG_HOME/sqly/history, one entry per line
+
+  $ cat ~/.config/sqly/history
+  SELECT * FROM user
+  SELECT COUNT(*) FROM user WHERE id > 1
+```
+
+**What to change:** rename the variable if you set it. `SQLY_HISTORY_DB_PATH` is
+no longer read, so a run that still sets it gets the default location instead of
+the one it named.
+
+An existing `history.db` is not migrated: the new file starts empty, and the old
+one is left where it is. To keep the old entries, read them out once and append
+them to the new file. The escaping is the format, not decoration — an entry typed
+across several lines has to arrive as one line, or it comes back as several
+entries:
+
+```shell
+sqlite3 -json ~/.config/sqly/history.db 'SELECT request FROM history ORDER BY id' \
+  | jq -r '.[].request | gsub("\\\\"; "\\\\") | gsub("\n"; "\\n") | gsub("\r"; "\\r")' \
+  >> ~/.config/sqly/history
+```
+
+A path that cannot be written still disables history with one warning and lets
+the run continue; the warning now names `SQLY_HISTORY_PATH`. sqly does not create
+the directory of a path you name — only the default one under the config home —
+so a path in a directory that does not exist disables history rather than
+building a tree for a typo.
+
 ### `.mode excel` and `.mode parquet` are rejected
 
 `.mode` names what the screen shows, and neither format has an on-screen form.

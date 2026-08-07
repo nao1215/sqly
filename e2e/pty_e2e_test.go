@@ -75,7 +75,7 @@ func startPTYSessionInDir(t *testing.T, dir string, args ...string) *ptySession 
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"USERPROFILE="+home,
-		"SQLY_HISTORY_DB_PATH="+filepath.Join(home, "history.db"),
+		"SQLY_HISTORY_PATH="+filepath.Join(home, "history"),
 		"TERM=xterm-256color",
 	)
 

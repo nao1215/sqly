@@ -20,19 +20,16 @@ import (
 	"github.com/nao1215/sqly/shell"
 )
 
-// The three constructors that can fail once something is already open are
-// reached through variables so a test can make them fail and watch what gets
-// released. sqly's own failures here are unreachable from the outside —
-// sql.Open is lazy, so a bad history path fails at the first query rather than
-// at construction — and a cleanup that is never exercised is a cleanup that
-// silently stops working.
+// The two constructors that can fail once something is already open are reached
+// through variables so a test can make them fail and watch what gets released.
+// sqly's own failures here are unreachable from the outside, and a cleanup that
+// is never exercised is a cleanup that silently stops working.
 //
 // This is the seam main.go already uses for os.Exit, not a place to register
 // dependencies: nothing but a test ever assigns to them, and the graph below is
 // still written out in full.
 var (
 	newInMemDB   = config.NewInMemDB
-	newHistoryDB = config.NewHistoryDB
 	newSqlyShell = shell.NewShell
 )
 
@@ -42,7 +39,7 @@ var (
 // The returned cleanup is the caller's to run exactly once, and only when the
 // error is nil: a failure releases whatever it had already opened before
 // returning, so there is never a resource to clean up alongside an error. The
-// two databases are closed in the reverse of the order they were opened.
+// session database is the one thing with a lifetime.
 func NewShell(args []string) (*shell.Shell, func(), error) {
 	arg, err := config.NewArg(args)
 	if err != nil {
@@ -74,15 +71,11 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	metadataUsecase := interactor.NewMetadataUsecase(sqlite3Interactor)
 	persistenceUsecase := interactor.NewPersistenceUsecase(sqlite3Interactor)
 
-	// The history database is a real file under the user's config directory,
-	// separate from the session: history outlives the tables it was typed
-	// against. It is opened after the session, so it is closed before it.
-	historyDB, closeHistoryDB, err := newHistoryDB(cfg)
-	if err != nil {
-		closeMemoryDB()
-		return nil, nil, err
-	}
-	historyUsecase := interactor.NewHistoryInteractor(persistence.NewHistoryRepository(historyDB))
+	// History is a file under the user's config directory, separate from the
+	// session: it outlives the tables it was typed against. Nothing is held open
+	// for it — each entry is one appending write — so there is no second resource
+	// to release.
+	historyUsecase := interactor.NewHistoryInteractor(persistence.NewHistoryRepository(cfg.HistoryPath))
 
 	exportUsecase := interactor.NewExportInteractor()
 
@@ -97,15 +90,11 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 
 	sqlyShell, err := newSqlyShell(arg, cfg, commands, usecases)
 	if err != nil {
-		closeHistoryDB()
 		closeMemoryDB()
 		return nil, nil, err
 	}
 
-	return sqlyShell, func() {
-		closeHistoryDB()
-		closeMemoryDB()
-	}, nil
+	return sqlyShell, closeMemoryDB, nil
 }
 
 // newFileSQLAdapter points filesql at the session database. The conversion is

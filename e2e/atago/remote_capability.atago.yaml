@@ -21,7 +21,7 @@ suite:
 scenarios:
   - name: refuses a positional URL without --allow-remote
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - run:
           command: sqly --sql "SELECT * FROM users" https://sqly-e2e.invalid/users.csv

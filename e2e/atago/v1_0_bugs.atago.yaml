@@ -26,7 +26,7 @@ scenarios:
   # line that starts with "." is parsed by shell quoting rules.
   - name: runs a statement whose line comment holds an apostrophe
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &t
           file: t.csv

@@ -233,7 +233,7 @@ func TestInspectBinary_ReleaseLdflagsVersionIsReported(t *testing.T) {
 	cmd.Dir = repoRoot()
 	cmd.Env = append(os.Environ(),
 		"HOME="+home, "USERPROFILE="+home,
-		"SQLY_HISTORY_DB_PATH="+filepath.Join(home, "history.db"))
+		"SQLY_HISTORY_PATH="+filepath.Join(home, "history"))
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("run the release-style binary: %v", err)

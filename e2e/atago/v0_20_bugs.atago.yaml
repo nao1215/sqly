@@ -10,7 +10,7 @@ suite:
 scenarios:
   - name: "write-back rejects: ALTER TABLE RENAME COLUMN"
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &user
           file: user.csv
