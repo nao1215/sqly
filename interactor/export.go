@@ -7,39 +7,64 @@ import (
 
 	"github.com/nao1215/sqly/domain/cleanup"
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/infrastructure/filesql"
+	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/usecase"
 )
 
 // _ interface implementation check
 var _ usecase.ExportUsecase = (*exportInteractor)(nil)
 
-// exportInteractor consolidates all format-specific dump operations into
-// a single interactor. This replaces the individual Dump() methods that
-// were previously scattered across csv/tsv/ltsv/excel interactors.
-type exportInteractor struct {
-	csvRepo   repository.CSVRepository
-	tsvRepo   repository.TSVRepository
-	ltsvRepo  repository.LTSVRepository
-	excelRepo repository.ExcelRepository
-	fileRepo  repository.FileRepository
-}
+// exportInteractor writes a table out in any format sqly exports.
+//
+// It holds nothing. Each format used to arrive as an interface with one
+// implementation and one method, injected here through a five-argument
+// constructor; nothing ever substituted one, so what the indirection bought was
+// four files to change per format rather than one line.
+type exportInteractor struct{}
 
 // NewExportInteractor returns an ExportUsecase that can dump tables in any supported format.
-func NewExportInteractor(
-	csvRepo repository.CSVRepository,
-	tsvRepo repository.TSVRepository,
-	ltsvRepo repository.LTSVRepository,
-	excelRepo repository.ExcelRepository,
-	fileRepo repository.FileRepository,
-) usecase.ExportUsecase {
-	return &exportInteractor{
-		csvRepo:   csvRepo,
-		tsvRepo:   tsvRepo,
-		ltsvRepo:  ltsvRepo,
-		excelRepo: excelRepo,
-		fileRepo:  fileRepo,
+func NewExportInteractor() usecase.ExportUsecase {
+	return &exportInteractor{}
+}
+
+// streamSerializer writes a table to a stream, so its output can be wrapped in a
+// compression codec on the way to the file.
+type streamSerializer func(io.Writer, *model.Table) error
+
+// pathSerializer writes a table to a path it opens itself. Excel and Parquet
+// both build their container in memory and save it, so neither has a stream a
+// codec could wrap; callers reject compression for them upstream.
+type pathSerializer func(string, *model.Table) error
+
+// streamSerializers names the writer for every format that has one. Formats
+// whose file output is their display rendering (Markdown, JSON, JSONL) print
+// themselves rather than carrying a second implementation of the same bytes.
+//
+// A registry rather than a switch so a test can assert that every declared
+// ExportFormat resolves to a writer: a format added to the model and forgotten
+// here used to fall through to the default branch and be written as CSV, under
+// whatever extension was asked for.
+var streamSerializers = map[model.ExportFormat]streamSerializer{
+	model.ExportCSV:      persistence.DumpCSV,
+	model.ExportTSV:      persistence.DumpTSV,
+	model.ExportLTSV:     persistence.DumpLTSV,
+	model.ExportMarkdown: printSerializer(model.PrintModeMarkdownTable),
+	model.ExportJSON:     printSerializer(model.PrintModeJSON),
+	model.ExportJSONL:    printSerializer(model.PrintModeJSONL),
+}
+
+// pathSerializers names the writer for every format that opens its own file.
+var pathSerializers = map[model.ExportFormat]pathSerializer{
+	model.ExportExcel:   persistence.DumpExcel,
+	model.ExportParquet: filesql.DumpTableToParquet,
+}
+
+// printSerializer adapts a display mode into a serializer, for the formats whose
+// file output matches what the screen shows.
+func printSerializer(mode model.PrintMode) streamSerializer {
+	return func(w io.Writer, table *model.Table) error {
+		return table.Print(w, mode)
 	}
 }
 
@@ -47,42 +72,18 @@ func NewExportInteractor(
 // formats honor the compression codec; Excel and Parquet are binary container
 // formats and ignore it (callers reject compression for them upstream).
 func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression) error {
-	switch format {
-	case model.ExportCSV:
-		return e.dumpWithFile(filePath, table, compression, e.csvRepo.Dump)
-	case model.ExportTSV:
-		return e.dumpWithFile(filePath, table, compression, e.tsvRepo.Dump)
-	case model.ExportLTSV:
-		return e.dumpWithFile(filePath, table, compression, e.ltsvRepo.Dump)
-	case model.ExportExcel:
-		return e.excelRepo.Dump(filepath.Clean(filePath), table)
-	case model.ExportMarkdown:
-		return e.dumpViaPrint(filePath, table, compression, model.PrintModeMarkdownTable)
-	case model.ExportJSON:
-		return e.dumpViaPrint(filePath, table, compression, model.PrintModeJSON)
-	case model.ExportJSONL:
-		return e.dumpViaPrint(filePath, table, compression, model.PrintModeJSONL)
-	case model.ExportParquet:
-		return filesql.DumpTableToParquet(filepath.Clean(filePath), table)
-	default:
-		return e.dumpWithFile(filePath, table, compression, e.csvRepo.Dump)
+	if dump, ok := pathSerializers[format]; ok {
+		return dump(filepath.Clean(filePath), table)
 	}
-}
-
-// dumpWithFile creates a file and writes table data using the provided dump
-// function, wrapping the destination in a compression codec when requested.
-func (e *exportInteractor) dumpWithFile(filePath string, table *model.Table, compression model.Compression, dumpFunc func(io.Writer, *model.Table) error) (err error) {
+	dump, ok := streamSerializers[format]
+	if !ok {
+		// Unreachable from a parsed format: both parsers reject a name they do
+		// not know. Reported rather than silently written as CSV, which is what
+		// the switch this replaced did with a format nobody had wired up.
+		return fmt.Errorf("no serializer for export format %q", format)
+	}
 	return e.withCompressedWriter(filePath, compression, func(w io.Writer) error {
-		return dumpFunc(w, table)
-	})
-}
-
-// dumpViaPrint writes table data to file using Table.Print for formats whose
-// file output matches their display rendering (Markdown, JSON, NDJSON). This
-// reuses the rendering implementation instead of a separate repository.
-func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, compression model.Compression, mode model.PrintMode) (err error) {
-	return e.withCompressedWriter(filePath, compression, func(w io.Writer) error {
-		return table.Print(w, mode)
+		return dump(w, table)
 	})
 }
 
@@ -99,7 +100,7 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, com
 // twice and made the export depend on free space in the OS temp directory as
 // well as in the destination's own filesystem.
 func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
-	file, err := e.fileRepo.Create(filePath)
+	file, err := persistence.CreateExportFile(filePath)
 	if err != nil {
 		return fmt.Errorf("create output file %q: %w", filePath, err)
 	}

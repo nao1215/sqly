@@ -20,8 +20,6 @@ func TestLtsvRepositoryDump(t *testing.T) {
 	t.Run("dump ltsv data", func(t *testing.T) {
 		t.Parallel()
 
-		r := NewLTSVRepository()
-
 		table := readLTSVAsTable(t, filepath.Join("testdata", "sample.ltsv"))
 
 		var tmpFile *os.File
@@ -35,7 +33,7 @@ func TestLtsvRepositoryDump(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := r.Dump(tmpFile, table); err != nil {
+		if err := DumpLTSV(tmpFile, table); err != nil {
 			t.Fatal(err)
 		}
 

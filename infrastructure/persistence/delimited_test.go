@@ -20,8 +20,6 @@ func TestCSVRepositoryDump(t *testing.T) {
 	t.Run("dump csv data", func(t *testing.T) {
 		t.Parallel()
 
-		cr := NewCSVRepository()
-
 		table := readDelimitedAsTable(t, filepath.Join("testdata", "sample.csv"), ',')
 
 		var tmpFile *os.File
@@ -35,7 +33,7 @@ func TestCSVRepositoryDump(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := cr.Dump(tmpFile, table); err != nil {
+		if err := DumpCSV(tmpFile, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -53,8 +51,6 @@ func TestTSVRepositoryDump(t *testing.T) {
 	t.Run("dump tsv data", func(t *testing.T) {
 		t.Parallel()
 
-		r := NewTSVRepository()
-
 		table := readDelimitedAsTable(t, filepath.Join("testdata", "sample.tsv"), '\t')
 
 		var tmpFile *os.File
@@ -68,7 +64,7 @@ func TestTSVRepositoryDump(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := r.Dump(tmpFile, table); err != nil {
+		if err := DumpTSV(tmpFile, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -120,19 +116,13 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 	t.Parallel()
 
-	// Both repositories write through the same delimited writer, so one local
-	// interface names what the table needs from them.
-	type dumper interface {
-		Dump(io.Writer, *model.Table) error
-	}
-
 	tests := []struct {
 		name string
-		repo dumper
+		dump func(io.Writer, *model.Table) error
 		want string
 	}{
-		{name: "csv", repo: NewCSVRepository(), want: "v\nalice\n\"\"\nbob\n"},
-		{name: "tsv", repo: NewTSVRepository(), want: "v\nalice\n\"\"\nbob\n"},
+		{name: "csv", dump: DumpCSV, want: "v\nalice\n\"\"\nbob\n"},
+		{name: "tsv", dump: DumpTSV, want: "v\nalice\n\"\"\nbob\n"},
 	}
 
 	for _, tt := range tests {
@@ -144,7 +134,7 @@ func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 			})
 
 			var buf bytes.Buffer
-			if err := tt.repo.Dump(&buf, table); err != nil {
+			if err := tt.dump(&buf, table); err != nil {
 				t.Fatalf("Dump() error = %v, want nil", err)
 			}
 			if got := buf.String(); got != tt.want {
@@ -159,7 +149,7 @@ func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 		table := model.NewTable("t", model.Header{"a", "b"}, []model.Record{{"", ""}})
 
 		var buf bytes.Buffer
-		if err := NewCSVRepository().Dump(&buf, table); err != nil {
+		if err := DumpCSV(&buf, table); err != nil {
 			t.Fatalf("Dump() error = %v, want nil", err)
 		}
 		if got, want := buf.String(), "a,b\n,\n"; got != want {
@@ -173,7 +163,7 @@ func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 		table := model.NewTable("t", model.Header{""}, []model.Record{{"x"}})
 
 		var buf bytes.Buffer
-		if err := NewCSVRepository().Dump(&buf, table); err != nil {
+		if err := DumpCSV(&buf, table); err != nil {
 			t.Fatalf("Dump() error = %v, want nil", err)
 		}
 		if got, want := buf.String(), "\"\"\nx\n"; got != want {

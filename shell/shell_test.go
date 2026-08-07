@@ -1146,11 +1146,6 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	}
 	// Create filesql adapter and repositories for tests
 	filesqlAdapter := filesql.NewFileSQLAdapter((*sql.DB)(memoryDB))
-	csvRepo := persistence.NewCSVRepository()
-	tsvRepo := persistence.NewTSVRepository()
-	ltsvRepo := persistence.NewLTSVRepository()
-	excelRepo := persistence.NewExcelRepository()
-	fileRepo := persistence.NewFileRepository()
 
 	// Use memory-based sqlite3 repository matching production wiring (di/di.go)
 	sqlite3Repository := memory.NewSQLite3Repository(memoryDB)
@@ -1164,7 +1159,7 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	}
 	historyRepository := persistence.NewHistoryRepository(historyDB)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
-	exportInteractor := interactor.NewExportInteractor(csvRepo, tsvRepo, ltsvRepo, excelRepo, fileRepo)
+	exportInteractor := interactor.NewExportInteractor()
 	usecases := NewUsecases(sqLite3Interactor, sqLite3Interactor, sqLite3Interactor, historyInteractor, exportInteractor, sqLite3Interactor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {

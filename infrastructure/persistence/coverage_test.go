@@ -30,11 +30,10 @@ func covPerNewHistoryRepo(t *testing.T) (*historyRepository, func()) {
 func TestExcelRepository_Dump_SaveToMissingDirectoryReturnsError(t *testing.T) {
 	t.Parallel()
 
-	r := NewExcelRepository()
 	table := model.NewTable("sheet", model.Header{"id"}, []model.Record{{"1"}})
 	// SaveAs targets a directory that does not exist, so the write fails.
 	path := filepath.Join(t.TempDir(), "no_such_dir", "out.xlsx")
-	if err := r.Dump(path, table); err == nil {
+	if err := DumpExcel(path, table); err == nil {
 		t.Error("expected error dumping to a missing directory, got nil")
 	}
 }
@@ -42,12 +41,11 @@ func TestExcelRepository_Dump_SaveToMissingDirectoryReturnsError(t *testing.T) {
 func TestExcelRepository_Dump_SanitizesInvalidSheetName(t *testing.T) {
 	t.Parallel()
 
-	r := NewExcelRepository()
 	// Excel sheet names cannot contain ':'; the name is sanitized so the dump
 	// succeeds instead of failing on NewSheet.
 	table := model.NewTable("bad:name", model.Header{"id"}, []model.Record{{"1"}})
 	path := filepath.Join(t.TempDir(), "out.xlsx")
-	if err := r.Dump(path, table); err != nil {
+	if err := DumpExcel(path, table); err != nil {
 		t.Fatalf("Dump failed for a punctuated sheet name: %v", err)
 	}
 
@@ -124,13 +122,12 @@ func TestHistoryRepository_List_ReturnsRowsInIdOrder(t *testing.T) {
 func TestLTSVRepository_Dump_WritesLabelValueTokens(t *testing.T) {
 	t.Parallel()
 
-	r := NewLTSVRepository()
 	table := model.NewTable("t", model.Header{"a", "b"}, []model.Record{
 		{"1", "x"},
 		{"2", "y"},
 	})
 	var buf bytes.Buffer
-	if err := r.Dump(&buf, table); err != nil {
+	if err := DumpLTSV(&buf, table); err != nil {
 		t.Fatalf("Dump error = %v, want nil", err)
 	}
 	got := buf.String()
@@ -143,11 +140,10 @@ func TestLTSVRepository_Dump_WritesLabelValueTokens(t *testing.T) {
 func TestLTSVRepository_Dump_ValueWithTabReturnsError(t *testing.T) {
 	t.Parallel()
 
-	r := NewLTSVRepository()
 	// A tab inside a value cannot be represented in LTSV and must be rejected.
 	table := model.NewTable("t", model.Header{"a"}, []model.Record{{"has\ttab"}})
 	var buf bytes.Buffer
-	err := r.Dump(&buf, table)
+	err := DumpLTSV(&buf, table)
 	if err == nil {
 		t.Fatal("expected error for a value containing a tab, got nil")
 	}
@@ -159,11 +155,10 @@ func TestLTSVRepository_Dump_ValueWithTabReturnsError(t *testing.T) {
 func TestLTSVRepository_Dump_InvalidHeaderReturnsError(t *testing.T) {
 	t.Parallel()
 
-	r := NewLTSVRepository()
 	// A label containing ':' is not a writable LTSV label.
 	table := model.NewTable("t", model.Header{"bad:label"}, []model.Record{{"1"}})
 	var buf bytes.Buffer
-	if err := r.Dump(&buf, table); err == nil {
+	if err := DumpLTSV(&buf, table); err == nil {
 		t.Error("expected error for an invalid LTSV header, got nil")
 	}
 }
