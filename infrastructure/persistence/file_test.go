@@ -9,7 +9,7 @@ import (
 	"github.com/nao1215/sqly/config"
 )
 
-func TestFileRepositoryCreate(t *testing.T) {
+func TestCreateExportFile(t *testing.T) {
 	if runtime.GOOS == config.Windows {
 		t.Skip("skip on windows")
 	}
@@ -21,8 +21,7 @@ func TestFileRepositoryCreate(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		fr := NewFileRepository()
-		f, err := fr.Create(filepath.Join(tmpDir, "create.txt"))
+		f, err := CreateExportFile(filepath.Join(tmpDir, "create.txt"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,8 +56,7 @@ func TestFileRepositoryCreate(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fr := NewFileRepository()
-		_, err := fr.Create(filepath.Join(tmpDir, "create.txt"))
+		_, err := CreateExportFile(filepath.Join(tmpDir, "create.txt"))
 		if err == nil {
 			t.Fatal("error is nil")
 		}

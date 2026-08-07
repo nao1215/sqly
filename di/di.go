@@ -84,13 +84,7 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	}
 	historyUsecase := interactor.NewHistoryInteractor(persistence.NewHistoryRepository(historyDB))
 
-	exportUsecase := interactor.NewExportInteractor(
-		persistence.NewCSVRepository(),
-		persistence.NewTSVRepository(),
-		persistence.NewLTSVRepository(),
-		persistence.NewExcelRepository(),
-		persistence.NewFileRepository(),
-	)
+	exportUsecase := interactor.NewExportInteractor()
 
 	usecases := shell.NewUsecases(
 		queryUsecase,

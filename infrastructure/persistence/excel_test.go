@@ -17,8 +17,6 @@ func TestExcelRepositoryDump(t *testing.T) {
 	t.Run("dump excel data and verify round-trip", func(t *testing.T) {
 		t.Parallel()
 
-		r := NewExcelRepository()
-
 		table := model.NewTable(
 			"test_sheet",
 			model.Header{"id", "name"},
@@ -30,7 +28,7 @@ func TestExcelRepositoryDump(t *testing.T) {
 		)
 		tempFilePath := filepath.Join(os.TempDir(), "dump.xlsx")
 		defer func() { _ = os.Remove(tempFilePath) }()
-		if err := r.Dump(tempFilePath, table); err != nil {
+		if err := DumpExcel(tempFilePath, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -83,11 +81,10 @@ func TestExcelRepositoryDump(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				r := NewExcelRepository()
 				table := model.NewTable("t", model.Header{"v"}, []model.Record{{tt.value}})
 				out := filepath.Join(t.TempDir(), "control.xlsx")
 
-				err := r.Dump(out, table)
+				err := DumpExcel(out, table)
 				if err == nil {
 					t.Fatalf("Dump(%q) = nil error, want a refusal", tt.value)
 				}
@@ -107,11 +104,10 @@ func TestExcelRepositoryDump(t *testing.T) {
 		t.Parallel()
 
 		for _, label := range []string{"a\x01b", "a\ufffeb", "a\uffffb"} {
-			r := NewExcelRepository()
 			table := model.NewTable("t", model.Header{label}, []model.Record{{"v"}})
 			out := filepath.Join(t.TempDir(), "header.xlsx")
 
-			if err := r.Dump(out, table); err == nil {
+			if err := DumpExcel(out, table); err == nil {
 				t.Errorf("Dump with header %q = nil error, want a refusal", label)
 			}
 		}
@@ -122,12 +118,11 @@ func TestExcelRepositoryDump(t *testing.T) {
 	t.Run("the control characters XLSX can represent are written", func(t *testing.T) {
 		t.Parallel()
 
-		r := NewExcelRepository()
 		const value = "a\tb\nc\rd"
 		table := model.NewTable("t", model.Header{"v"}, []model.Record{{value}})
 		out := filepath.Join(t.TempDir(), "keepable.xlsx")
 
-		if err := r.Dump(out, table); err != nil {
+		if err := DumpExcel(out, table); err != nil {
 			t.Fatalf("Dump: %v", err)
 		}
 	})
@@ -135,14 +130,13 @@ func TestExcelRepositoryDump(t *testing.T) {
 	t.Run("dumped excel file is not executable", func(t *testing.T) {
 		t.Parallel()
 
-		r := NewExcelRepository()
 		table := model.NewTable(
 			"test_sheet",
 			model.Header{"id", "name"},
 			[]model.Record{{"1", "Gina"}},
 		)
 		tempFilePath := filepath.Join(t.TempDir(), "perms.xlsx")
-		if err := r.Dump(tempFilePath, table); err != nil {
+		if err := DumpExcel(tempFilePath, table); err != nil {
 			t.Fatal(err)
 		}
 
@@ -171,14 +165,13 @@ func TestExcelRepositoryDump(t *testing.T) {
 			t.Run(label, func(t *testing.T) {
 				t.Parallel()
 
-				r := NewExcelRepository()
 				table := model.NewTable(
 					name,
 					model.Header{"id", "name"},
 					[]model.Record{{"1", "Gina"}},
 				)
 				tempFilePath := filepath.Join(t.TempDir(), "out.xlsx")
-				if err := r.Dump(tempFilePath, table); err != nil {
+				if err := DumpExcel(tempFilePath, table); err != nil {
 					t.Fatalf("Dump failed for %q: %v", name, err)
 				}
 
@@ -219,11 +212,10 @@ func TestExcelDumpKeepsCharactersXLSXCanCarry(t *testing.T) {
 	t.Parallel()
 
 	const value = "A\x7fB�C"
-	r := NewExcelRepository()
 	table := model.NewTable("t", model.Header{"v"}, []model.Record{{value}})
 	out := filepath.Join(t.TempDir(), "high.xlsx")
 
-	if err := r.Dump(out, table); err != nil {
+	if err := DumpExcel(out, table); err != nil {
 		t.Fatalf("Dump: %v", err)
 	}
 
@@ -267,7 +259,7 @@ func TestExcelDumpRefusesInvalidUTF8(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			out := filepath.Join(t.TempDir(), "out.xlsx")
-			err := NewExcelRepository().Dump(out, tt.table)
+			err := DumpExcel(out, tt.table)
 			if err == nil {
 				t.Fatal("Dump succeeded, want a refusal: the invalid byte would be written as U+FFFD")
 			}
@@ -317,7 +309,7 @@ func TestExcelDumpRefusesATrailingEmptyRow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			out := filepath.Join(t.TempDir(), "out.xlsx")
-			err := NewExcelRepository().Dump(out, tt.table)
+			err := DumpExcel(out, tt.table)
 			if tt.want {
 				if err == nil {
 					t.Fatal("Dump succeeded, want a refusal: the row would be lost on re-import")
@@ -346,7 +338,7 @@ func TestExcelDumpKeepsARealReplacementCharacter(t *testing.T) {
 	const value = "a�b"
 	out := filepath.Join(t.TempDir(), "out.xlsx")
 	table := model.NewTable("t", model.Header{"v"}, []model.Record{{value}})
-	if err := NewExcelRepository().Dump(out, table); err != nil {
+	if err := DumpExcel(out, table); err != nil {
 		t.Fatalf("Dump: %v", err)
 	}
 

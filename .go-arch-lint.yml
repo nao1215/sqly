@@ -130,6 +130,12 @@ deps:
       - usecase
       - repository
       - memory-infra
+      # The export interactor calls the serializers directly, as the session
+      # interactor already calls the loader directly. Each format had an
+      # interface of its own with one implementation and one consumer, and
+      # nothing ever substituted one, so the indirection bought a file to change
+      # per format rather than a seam anyone used.
+      - persistence-infra
   repository:
     mayDependOn:
       - model

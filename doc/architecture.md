@@ -4,6 +4,8 @@ The sqly project adopts the [Clean Architecture](https://blog.cleancoder.com/unc
 
 The sqly shell calls the `usecase` interface, and the `interactor` implements the `usecase`. The `interactor` uses the `domain` (business logic) to perform data operations. Specifically, it uses the `infrastructure` that implements the `domain/repository` interface.
 
+Two places skip that interface. Loading calls filesql directly, and exporting calls the serializers in `infrastructure/persistence` directly. Both are single-implementation code with one consumer: an interface per output format bought a file to change per format rather than a seam anything substituted, and the mocks that justified it were used to test the wiring it created. Where an interface earns its place, it stays: the session's SQL access is still `domain/repository.SQLite3Repository`, which the mocks in `infrastructure/mock` stand in for when a test needs a failure the real database will not produce.
+
 The sqly reads data from each file, converts it into a table format, and stores the converted table data in an in-memory SQLite3 database. sqly does not have its own SQL parser and relies on SQLite3 for parsing.
 
 Here is a high-level overview of the Clean Architecture for the sqly project:

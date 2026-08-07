@@ -11,20 +11,61 @@ import (
 	"testing"
 
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/infrastructure/persistence"
 	"github.com/nao1215/sqly/usecase"
 )
 
-// newTestExportInteractor creates an ExportUsecase backed by real persistence
-// repositories. This avoids repeating the 5-line setup in every test function.
+// newTestExportInteractor creates the ExportUsecase the tests write through.
 func newTestExportInteractor() usecase.ExportUsecase {
-	return NewExportInteractor(
-		persistence.NewCSVRepository(),
-		persistence.NewTSVRepository(),
-		persistence.NewLTSVRepository(),
-		persistence.NewExcelRepository(),
-		persistence.NewFileRepository(),
-	)
+	return NewExportInteractor()
+}
+
+// TestEveryExportFormatHasASerializer walks the declared formats and asserts each
+// one resolves to a writer.
+//
+// A format used to be routed by a switch whose default branch wrote CSV, so one
+// added to the model and forgotten here produced a file in the wrong format
+// under the right extension, reporting success. The bound comes from
+// ExportFormat.String(), which names every format it knows: a new constant
+// without a name there fails this too.
+func TestEveryExportFormatHasASerializer(t *testing.T) {
+	t.Parallel()
+
+	for f := model.ExportCSV; ; f++ {
+		// String falls back to csv for an undeclared value, so the first format
+		// past the last declared one is where the walk ends.
+		if f != model.ExportCSV && f.String() == model.ExportCSV.String() {
+			break
+		}
+		_, stream := streamSerializers[f]
+		_, path := pathSerializers[f]
+		if !stream && !path {
+			t.Errorf("export format %q (%d) has no serializer", f, f)
+		}
+		if stream && path {
+			t.Errorf("export format %q (%d) is in both serializer tables", f, f)
+		}
+	}
+}
+
+// TestDumpTableRejectsAFormatWithNoSerializer pins that an unroutable format is
+// reported rather than written as CSV under whatever extension was asked for.
+func TestDumpTableRejectsAFormatWithNoSerializer(t *testing.T) {
+	t.Parallel()
+
+	table := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+		model.Record([]string{"1"}),
+	})
+	out := filepath.Join(t.TempDir(), "out.csv")
+
+	// A value past every declared format: nothing parses to it, so only a
+	// programming error reaches this.
+	const undeclared = model.ExportFormat(200)
+	if err := newTestExportInteractor().DumpTable(out, table, undeclared, model.CompressionNone); err == nil {
+		t.Fatal("DumpTable with an unroutable format = nil error, want error")
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Errorf("a refused export wrote %s, want no file", out)
+	}
 }
 
 func TestExportInteractor_DumpTable_CSV(t *testing.T) {
@@ -166,22 +207,6 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 
 	if !strings.Contains(string(content), "id") || !strings.Contains(string(content), "name") {
 		t.Errorf("Expected markdown table content, got: %s", string(content))
-	}
-}
-
-func TestExportInteractor_DumpTable_DefaultFormat(t *testing.T) {
-	t.Parallel()
-
-	exp := newTestExportInteractor()
-
-	table := model.NewTable("test", model.NewHeader([]string{"id"}), nil)
-
-	tempDir := t.TempDir()
-	outputFile := filepath.Join(tempDir, "output.txt")
-
-	// Use an invalid format value to trigger default (CSV) path
-	if err := exp.DumpTable(outputFile, table, model.ExportFormat(99), model.CompressionNone); err != nil {
-		t.Fatalf("DumpTable default format failed: %v", err)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/domain/repository"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -44,18 +43,10 @@ func excelSheetName(name string) string {
 	return name
 }
 
-// _ interface implementation check
-var _ repository.ExcelRepository = (*excelRepository)(nil)
-
-type excelRepository struct{}
-
-// NewExcelRepository return ExcelRepository
-func NewExcelRepository() repository.ExcelRepository {
-	return &excelRepository{}
-}
-
-// Dump write contents of DB table to XLSX file
-func (r *excelRepository) Dump(excelFilePath string, table *model.Table) (err error) {
+// DumpExcel writes contents of DB table to an XLSX file. It takes a path rather
+// than an io.Writer because excelize builds the whole workbook in memory and
+// saves it itself, so there is no stream for a compression codec to wrap.
+func DumpExcel(excelFilePath string, table *model.Table) (err error) {
 	f := excelize.NewFile()
 	defer func() {
 		if e := f.Close(); err != nil {
