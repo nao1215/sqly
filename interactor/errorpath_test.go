@@ -1,6 +1,8 @@
 package interactor
 
 import (
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -56,42 +58,129 @@ func TestDumpTable_ParquetEmpty(t *testing.T) {
 	}
 }
 
-func TestDumpTable_PreservesExistingFileOnFailure(t *testing.T) {
+// TestDumpTable_ReportsTheSerializerFailure checks that a value the format
+// cannot carry is reported rather than written. What happens to the user's
+// destination when it is not this scratch path is decided a layer up, by the
+// staging and rename in shell.writeFileAtomically and in the save flow, which is
+// where the preservation tests live.
+func TestDumpTable_ReportsTheSerializerFailure(t *testing.T) {
 	t.Parallel()
 
-	t.Run("preserves existing file and cleans up temp files when LTSV dump fails due to tab", func(t *testing.T) {
-		t.Parallel()
-
-		exp := newTestExportInteractor()
-		// Table with a tab character in a value, which is invalid in LTSV format
-		table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
-			model.Record([]string{"1", "alice\tbob"}),
-		})
-
-		tempDir := t.TempDir()
-		outPath := filepath.Join(tempDir, "original.ltsv")
-
-		// Create an existing file with content
-		originalContent := []byte("original data")
-		if err := os.WriteFile(outPath, originalContent, 0o600); err != nil {
-			t.Fatalf("failed to write original file: %v", err)
-		}
-
-		// Try to dump invalid table to the file path, which should fail
-		err := exp.DumpTable(outPath, table, model.ExportLTSV, model.CompressionNone)
-		if err == nil {
-			t.Fatal("expected DumpTable to fail due to tab in LTSV value, but it succeeded")
-		}
-
-		// Verify that the file still contains its original data and has not been truncated
-		currentContent, err := os.ReadFile(outPath) //nolint:gosec // test file with controlled path
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		if string(currentContent) != string(originalContent) {
-			t.Errorf("file was altered! got %q, want %q", string(currentContent), string(originalContent))
-		}
+	exp := newTestExportInteractor()
+	// A tab in a value has no representation in LTSV, so the dump must fail.
+	table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
+		model.Record([]string{"1", "alice\tbob"}),
 	})
+	staging := filepath.Join(t.TempDir(), "staging.ltsv")
+
+	if err := exp.DumpTable(staging, table, model.ExportLTSV, model.CompressionNone); err == nil {
+		t.Fatal("DumpTable with a tab in an LTSV value = nil error, want error")
+	}
+}
+
+// TestDumpTable_WritesOnlyToThePathItIsGiven pins that the export leaves nothing
+// behind anywhere else: it used to serialize into a file in the OS temp
+// directory and copy that across, so a failure could strand one there.
+func TestDumpTable_WritesOnlyToThePathItIsGiven(t *testing.T) {
+	exp := newTestExportInteractor()
+	table := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+		model.Record([]string{"1"}),
+	})
+
+	before, err := filepath.Glob(filepath.Join(os.TempDir(), "sqly-export-tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	if err := exp.DumpTable(filepath.Join(dir, "ok.csv"), table, model.ExportCSV, model.CompressionNone); err != nil {
+		t.Fatalf("DumpTable = %v, want nil", err)
+	}
+	// A serializer failure is the case that used to leave the strays.
+	bad := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+		model.Record([]string{"a\tb"}),
+	})
+	if err := exp.DumpTable(filepath.Join(dir, "bad.ltsv"), bad, model.ExportLTSV, model.CompressionNone); err == nil {
+		t.Fatal("DumpTable with a tab in an LTSV value = nil error, want error")
+	}
+
+	after, err := filepath.Glob(filepath.Join(os.TempDir(), "sqly-export-tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(before) {
+		t.Errorf("export left %d file(s) in the OS temp directory, want none", len(after)-len(before))
+	}
+}
+
+// TestDumpTable_RoundTripsThroughItsOwnOutput checks that what the export writes
+// is what the format reads back, for a compressed and an uncompressed
+// destination. Writing the bytes once instead of copying them between two files
+// must not change the file that results.
+func TestDumpTable_RoundTripsThroughItsOwnOutput(t *testing.T) {
+	t.Parallel()
+
+	table := model.NewTable("t", model.NewHeader([]string{"id", "name"}), []model.Record{
+		model.Record([]string{"1", "alice"}),
+		model.Record([]string{"2", "bob"}),
+	})
+	const want = "id,name\n1,alice\n2,bob\n"
+
+	for _, tt := range []struct {
+		name string
+		file string
+		comp model.Compression
+		read func(t *testing.T, path string) string
+	}{
+		{
+			name: "uncompressed csv is the bytes themselves",
+			file: "out.csv",
+			comp: model.CompressionNone,
+			read: func(t *testing.T, path string) string {
+				t.Helper()
+				b, err := os.ReadFile(path) //nolint:gosec // test path under t.TempDir
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(b)
+			},
+		},
+		{
+			name: "gzip csv decompresses to the same bytes",
+			file: "out.csv.gz",
+			comp: model.CompressionGzip,
+			read: func(t *testing.T, path string) string {
+				t.Helper()
+				f, err := os.Open(path) //nolint:gosec // test path under t.TempDir
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = f.Close() }()
+				zr, err := gzip.NewReader(f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = zr.Close() }()
+				b, err := io.ReadAll(zr)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(b)
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out := filepath.Join(t.TempDir(), tt.file)
+			if err := newTestExportInteractor().DumpTable(out, table, model.ExportCSV, tt.comp); err != nil {
+				t.Fatalf("DumpTable = %v, want nil", err)
+			}
+			if got := tt.read(t, out); got != want {
+				t.Errorf("round trip = %q, want %q", got, want)
+			}
+		})
+	}
 }
 
 func TestDumpTable_PreservesFilePermissions(t *testing.T) {

@@ -86,28 +86,28 @@ func (e *exportInteractor) dumpViaPrint(filePath string, table *model.Table, com
 	})
 }
 
-// withCompressedWriter opens filePath, optionally wraps it in a compression
+// withCompressedWriter creates filePath, optionally wraps it in a compression
 // codec, and passes the resulting writer to write. The codec is finalized before
 // the file is closed (deferred close runs in reverse order), so all buffered
 // compressed bytes reach disk.
+//
+// The bytes are written once, straight to filePath. Every caller already hands
+// this a scratch path rather than the user's destination — .dump and --output
+// through writeFileAtomically, .save through its own staging — and that is where
+// "the previous file survives a failed export" is decided. Serializing into a
+// second temporary file first, then copying it across, wrote every exported byte
+// twice and made the export depend on free space in the OS temp directory as
+// well as in the destination's own filesystem.
 func (e *exportInteractor) withCompressedWriter(filePath string, compression model.Compression, write func(io.Writer) error) (err error) {
-	// Create a temporary file in the OS temp directory (does not require write access to target parent directory during staging).
-	tmpFile, err := e.fileRepo.CreateTemp("", "sqly-export-tmp-*")
+	file, err := e.fileRepo.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("create temporary output file: %w", err)
+		return fmt.Errorf("create output file %q: %w", filePath, err)
 	}
-	tmpPath := tmpFile.Name()
-
-	// Ensure cleanup of the temporary file. Both failures are joined onto
-	// whatever the export returned rather than replacing it: a staging file left
-	// on disk is precisely the leftover a caller needs to hear about, and it is
-	// most likely to be left there when the export already failed.
 	defer func() {
-		err = cleanup.Join(err, tmpFile.Close(), "close temporary file")
-		err = cleanup.Join(err, e.fileRepo.Remove(tmpPath), fmt.Sprintf("remove temporary file %q", tmpPath))
+		err = cleanup.Join(err, file.Close(), fmt.Sprintf("close output file %q", filePath))
 	}()
 
-	w, closeComp, err := filesql.NewCompressingWriter(tmpFile, compression)
+	w, closeComp, err := filesql.NewCompressingWriter(file, compression)
 	if err != nil {
 		return fmt.Errorf("init compression for %q: %w", filePath, err)
 	}
@@ -129,28 +129,11 @@ func (e *exportInteractor) withCompressedWriter(filePath string, compression mod
 		return fmt.Errorf("dump to %q: %w", filePath, err)
 	}
 
-	// Flush and close the compression codec.
+	// Finalize the codec here rather than leaving it to the deferred call, so a
+	// codec that fails while flushing its tail is reported as the export failing
+	// instead of as a cleanup note on a success.
 	if err = finalizeComp(); err != nil {
 		return fmt.Errorf("finalize compression for %q: %w", filePath, err)
-	}
-
-	// Rewind the temporary file to the beginning for reading.
-	if _, err = tmpFile.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("seek temporary file: %w", err)
-	}
-
-	// Open the target file in-place (this preserves original permissions, ownership, and metadata).
-	targetFile, err := e.fileRepo.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("create output file %q: %w", filePath, err)
-	}
-	defer func() {
-		err = cleanup.Join(err, targetFile.Close(), fmt.Sprintf("close output file %q", filePath))
-	}()
-
-	// Copy the validated content from the temp file to the target file.
-	if _, err = io.Copy(targetFile, tmpFile); err != nil {
-		return fmt.Errorf("write output file %q: %w", filePath, err)
 	}
 
 	return nil

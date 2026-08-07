@@ -100,3 +100,58 @@ scenarios:
           exit_code: 0
           stdout:
             contains: bobqworst
+
+  # The export writes its bytes straight to the path it is handed. These pin the
+  # count, not just one value: a serializer that truncated or duplicated its tail
+  # would still let a single-row lookup pass.
+  - name: dump preserves every row through gzip
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly src.csv
+          stdin: |
+            .dump src out.csv.gz
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.csv.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: |
+              n
+              2
+
+  - name: dump preserves every row uncompressed
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly src.csv
+          stdin: |
+            .dump src out.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: |
+              n
+              2
+
+  - name: output preserves every row as tsv
+    steps:
+      - fixture: *src
+      - run:
+          command: sqly --sql "SELECT * FROM src ORDER BY id" src.csv --output result.tsv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM result" result.tsv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: |
+              n
+              2
