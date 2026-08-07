@@ -49,10 +49,16 @@ func (v fixtureVisibility) String() string {
 
 // fixtureSheet is one sheet of a fixture workbook: its name, its visibility, and
 // the value its single data row carries, which is what a spec queries for.
+//
+// headers is for the fixtures whose point is the header row itself. When it is
+// empty the sheet gets the default single column "v" holding value; when it is
+// set, it is the header row and values is the data row beneath it.
 type fixtureSheet struct {
 	name       string
 	visibility fixtureVisibility
 	value      string
+	headers    []string
+	values     []string
 }
 
 // fixtureWorkbook is one generated workbook. The sheets are written in the order
@@ -74,6 +80,36 @@ var excelFixtures = []fixtureWorkbook{
 			{name: "Internal", visibility: fixtureHidden, value: "hidden"},
 			{name: "Secret", visibility: fixtureVeryHidden, value: "very-hidden"},
 			{name: "Summary", visibility: fixtureVisible, value: "shown-too"},
+		},
+	},
+	{
+		// A header row whose two names differ only by surrounding whitespace.
+		// filesql compares column names trimmed, so this is one name twice and
+		// the workbook is refused — the same answer a CSV header of "name, name "
+		// gets. It used to load here as two columns, which is the divergence this
+		// fixture exists to keep closed.
+		path: filepath.Join("atago", "testdata", "sheet_whitespace_duplicate.xlsx"),
+		sheets: []fixtureSheet{
+			{
+				name:       "Sheet1",
+				visibility: fixtureVisible,
+				headers:    []string{"name", " name "},
+				values:     []string{"alice", "bob"},
+			},
+		},
+	},
+	{
+		// A header row that repeats a name exactly. This reached SQLite, which
+		// refused it in its own words inside a database-operation error; the
+		// refusal is sqly's now, and names the column.
+		path: filepath.Join("atago", "testdata", "sheet_exact_duplicate.xlsx"),
+		sheets: []fixtureSheet{
+			{
+				name:       "Sheet1",
+				visibility: fixtureVisible,
+				headers:    []string{"name", "name"},
+				values:     []string{"alice", "bob"},
+			},
 		},
 	},
 	{
@@ -118,6 +154,9 @@ func TestExcelFixtures_MatchTheirDeclaredVisibility(t *testing.T) {
 					t.Errorf("%s sheet %q reports visible=%t, but the fixture is declared %s",
 						workbook.path, want.name, got.Visible, want.visibility)
 				}
+				if len(want.headers) > 0 {
+					assertFixtureHeaderRow(t, workbook.path, want)
+				}
 			}
 		})
 	}
@@ -160,6 +199,15 @@ func writeFixtureWorkbook(workbook fixtureWorkbook) (err error) {
 				return err
 			}
 		}
+		if len(sheet.headers) > 0 {
+			if err := writeFixtureRow(f, sheet.name, 1, sheet.headers); err != nil {
+				return err
+			}
+			if err := writeFixtureRow(f, sheet.name, 2, sheet.values); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := f.SetCellValue(sheet.name, "A1", "v"); err != nil {
 			return err
 		}
@@ -200,4 +248,50 @@ func writeFixtureWorkbook(workbook fixtureWorkbook) (err error) {
 	}
 
 	return f.SaveAs(workbook.path)
+}
+
+// writeFixtureRow writes one row of cells starting at column A.
+func writeFixtureRow(f *excelize.File, sheet string, row int, cells []string) error {
+	for i, value := range cells {
+		axis, err := excelize.CoordinatesToCellName(i+1, row)
+		if err != nil {
+			return err
+		}
+		if err := f.SetCellValue(sheet, axis, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// assertFixtureHeaderRow reads back the header row of a fixture that declares
+// one. A workbook edited by hand can lose the whitespace the fixture is about
+// without changing anything a sheet listing would notice, and the scenario using
+// it would keep passing while proving nothing.
+func assertFixtureHeaderRow(t *testing.T, path string, sheet fixtureSheet) {
+	t.Helper()
+
+	f, err := excelize.OpenFile(path)
+	if err != nil {
+		t.Fatalf("open %s: %v (run `make e2e-fixtures` to regenerate)", path, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	rows, err := f.GetRows(sheet.name)
+	if err != nil {
+		t.Fatalf("read %s sheet %q: %v", path, sheet.name, err)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("%s sheet %q holds no rows", path, sheet.name)
+	}
+	if len(rows[0]) != len(sheet.headers) {
+		t.Fatalf("%s sheet %q header row holds %d columns, want %d",
+			path, sheet.name, len(rows[0]), len(sheet.headers))
+	}
+	for i, want := range sheet.headers {
+		if rows[0][i] != want {
+			t.Errorf("%s sheet %q header %d is %q, want %q; the whitespace this fixture carries changed",
+				path, sheet.name, i, rows[0][i], want)
+		}
+	}
 }

@@ -710,3 +710,68 @@ scenarios:
             # every sheet, so the notice would only be noise.
             not_contains: Skipped
 
+
+  # A workbook header follows the rule a CSV header does: names are compared
+  # with surrounding whitespace removed, so these two are one name twice. The
+  # workbook loaded before, as two columns, while "name, name " in a CSV was
+  # refused — the same header answered differently by the format it arrived in.
+  - name: refuses a workbook whose headers differ only by surrounding whitespace
+    env: *hist
+    steps:
+      - fixture:
+          file: dup.xlsx
+          from: testdata/sheet_whitespace_duplicate.xlsx
+      - run:
+          command: sqly --sql "SELECT 1" dup.xlsx
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "duplicate column name"
+      - assert:
+          stderr:
+            # Quoted, so the space that makes them the same name is visible.
+            contains: '" name "'
+
+  # The same header in a CSV, refused the same way. Two formats, one answer.
+  - name: refuses the same header in a CSV
+    env: *hist
+    steps:
+      - fixture:
+          file: dup.csv
+          content: |
+            name, name 
+            alice,bob
+      - run:
+          command: sqly --sql "SELECT 1" dup.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "duplicate column name"
+
+  # A workbook header that repeats a name exactly used to reach SQLite, which
+  # refused it in its own words ("SQL logic error: duplicate column name") inside
+  # a database-operation error. It is filesql's own refusal now, naming the
+  # column, which is what a CSV with the same header has always given.
+  - name: reports an exact duplicate workbook header as a duplicate column
+    env: *hist
+    steps:
+      - fixture:
+          file: exact.xlsx
+          from: testdata/sheet_exact_duplicate.xlsx
+      - run:
+          command: sqly --sql "SELECT 1" exact.xlsx
+      - assert:
+          exit_code: 3
+          stdout:
+            empty: true
+          stderr:
+            contains: "duplicate column name"
+      - assert:
+          stderr:
+            contains: "column 2"
+      - assert:
+          stderr:
+            # The engine's own wording is what the workbook path used to leak.
+            not_contains: "SQL logic error"

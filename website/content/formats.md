@@ -93,12 +93,17 @@ answer:
 
 | Input | Message |
 |:--|:--|
-| a CSV whose header repeats a name | `filesql: duplicate column name: a` |
+| a header that repeats a name | `filesql: duplicate column name: "a" (column 3)` |
 | a file of zero bytes | `filesql: empty data source: file is empty` |
 
 Rename one of the duplicate columns, or drop the file. A file holding only a
 header is neither of these: it imports as a table with no rows, which is what a
 query against it returns.
+
+Names are compared with surrounding whitespace removed, so `name` and ` name `
+are one name twice rather than two columns. The rule is the same whatever the
+header arrived in — a CSV, a TSV, an LTSV, or a sheet of a workbook — so a
+header refused in one format is refused in all of them.
 
 ## Write
 
