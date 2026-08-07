@@ -35,10 +35,14 @@ the one it named.
 
 An existing `history.db` is not migrated: the new file starts empty, and the old
 one is left where it is. To keep the old entries, read them out once and append
-them to the new file:
+them to the new file. The escaping is the format, not decoration — an entry typed
+across several lines has to arrive as one line, or it comes back as several
+entries:
 
 ```shell
-sqlite3 ~/.config/sqly/history.db 'SELECT request FROM history ORDER BY id' >> ~/.config/sqly/history
+sqlite3 -json ~/.config/sqly/history.db 'SELECT request FROM history ORDER BY id' \
+  | jq -r '.[].request | gsub("\\\\"; "\\\\") | gsub("\n"; "\\n") | gsub("\r"; "\\r")' \
+  >> ~/.config/sqly/history
 ```
 
 A path that cannot be written still disables history with one warning and lets

@@ -1088,10 +1088,17 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	configConfig, err := config.NewConfig()
+	// The config is built here rather than read from the environment.
+	// config.NewConfig creates the default XDG config directory when nothing
+	// names a history location, so calling it would have every test in this
+	// package touch, or fail on, the developer's real config home. t.Setenv is
+	// not the way around it either: it panics in a parallel test, and most tests
+	// here are parallel.
+	historyPath, cleanup2, err := testutil.NewTempHistoryPath()
 	if err != nil {
 		return nil, nil, err
 	}
+	configConfig := &config.Config{HistoryPath: historyPath}
 	commandList := NewCommands()
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {
@@ -1105,11 +1112,6 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
-	historyPath, cleanup2, err := testutil.NewTempHistoryPath()
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
 	historyRepository := persistence.NewHistoryRepository(historyPath)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
 	exportInteractor := interactor.NewExportInteractor()

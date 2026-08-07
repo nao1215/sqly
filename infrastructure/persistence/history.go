@@ -38,6 +38,11 @@ var _ repository.HistoryRepository = (*historyRepository)(nil)
 // keeps the newest, which is the end a person scrolls back into.
 const maxHistoryEntries = 5000
 
+// maxHistoryLineBytes caps how long one encoded entry may be when reading. A
+// statement can be long, so the default 64KiB scanner buffer is too small; past
+// this, the line is treated as damage rather than as history.
+const maxHistoryLineBytes = 8 * 1024 * 1024
+
 // historyFilePerm is the permission a new history file gets. It records what
 // someone typed, including a statement naming a path or a value they would not
 // publish, so it is readable by its owner alone.
@@ -163,7 +168,7 @@ func (h *historyRepository) readEntries() (_ []string, err error) {
 	scanner := bufio.NewScanner(f)
 	// A statement can be long, and the default 64KiB limit would end the scan
 	// mid-file, silently shortening the history rather than skipping one entry.
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxHistoryLineBytes)
 	for scanner.Scan() {
 		request, ok := decodeHistoryLine(scanner.Text())
 		if !ok {
@@ -172,6 +177,14 @@ func (h *historyRepository) readEntries() (_ []string, err error) {
 		requests = append(requests, request)
 	}
 	if err := scanner.Err(); err != nil {
+		// A line past the buffer is the same kind of damage as one that does not
+		// decode: it costs what is left of the file, not the entries already read.
+		// Returning the error instead would hand the shell a failed read, which
+		// disables history for the session — one 8MiB line, or a file that is not
+		// history at all, would cost every entry before it.
+		if errors.Is(err, bufio.ErrTooLong) {
+			return requests, nil
+		}
 		return nil, fmt.Errorf("read history file: %w", err)
 	}
 	return requests, nil

@@ -163,6 +163,36 @@ func TestHistorySkipsALineItCannotRead(t *testing.T) {
 	}
 }
 
+// TestHistoryKeepsWhatItReadBeforeAnOverLongLine pins that one line past the
+// scanner's buffer costs the rest of the file and not the whole read.
+//
+// Returning the scanner's error handed the shell a failed List, which disables
+// history for the session: a single 8MiB line, or a file that is not history at
+// all, cost every entry before it as well.
+func TestHistoryKeepsWhatItReadBeforeAnOverLongLine(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "history")
+	body := "SELECT 1\nSELECT 2\n" + strings.Repeat("x", maxHistoryLineBytes+1) + "\nSELECT 3\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := NewHistoryRepository(path).List(context.Background())
+	if err != nil {
+		t.Fatalf("List over an over-long line = %v, want nil", err)
+	}
+	want := []string{"SELECT 1", "SELECT 2"}
+	if len(got) != len(want) {
+		t.Fatalf("List returned %v, want %v", got.ToStringList(), want)
+	}
+	for i := range want {
+		if got[i].Request != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, got[i].Request, want[i])
+		}
+	}
+}
+
 // TestHistoryTrimsToTheCap checks that a file grown past the cap is cut down to
 // the newest entries, and that the trim is written back rather than only
 // applied in memory.

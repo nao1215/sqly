@@ -4,9 +4,11 @@
 # that does not exist, so creating it fails the way a read-only/sandboxed config
 # location would. Run with: make test-e2e
 #
-# The "read-only after startup" group seeds a history file (a first run creates
-# it) and then makes it 0444 with a mode-only fixture (fixture.mode applied to an
-# existing file), simulating a history file that turned read-only mid-session.
+# The "already read-only" group seeds a history file (a first run creates it) and
+# then makes it 0444 with a mode-only fixture (fixture.mode applied to an
+# existing file). The permission change lands before the next process starts, so
+# what it covers is a history file that a session finds read-only — not one that
+# turns read-only while a session holds it, which nothing here arranges.
 version: "1"
 
 suite:
@@ -48,7 +50,7 @@ scenarios:
           stderr:
             contains: "history disabled"
 
-  - name: runs --sql when the history file is read-only after startup
+  - name: runs --sql when the history file is already read-only
     env: &roenv
       SQLY_HISTORY_PATH: "${workdir}/h"
     steps:
@@ -72,7 +74,7 @@ scenarios:
           stdout:
             contains: booker12
 
-  - name: runs --inspect when the history file is read-only after startup
+  - name: runs --inspect when the history file is already read-only
     env: *roenv
     steps:
       - fixture: *user
@@ -92,7 +94,7 @@ scenarios:
           stdout:
             contains: '"name": "user"'
 
-  - name: runs batch mode and warns when a history write fails after startup
+  - name: runs batch mode and warns when the history file is already read-only
     env: *roenv
     steps:
       - fixture: *user
@@ -129,14 +131,17 @@ scenarios:
           stdin: "SELECT 1;\nSELECT 2;\n"
       - assert:
           exit_code: 0
+      # The exact file, not a substring search: "contains" would pass just as
+      # well if both statements landed on one line, which is the thing the line
+      # format exists to prevent.
       - run:
           command: sh -c 'cat "$SQLY_HISTORY_PATH"'
       - assert:
           exit_code: 0
           stdout:
-            contains:
-              - "SELECT 1"
-              - "SELECT 2"
+            equals: |
+              SELECT 1
+              SELECT 2
 
   - name: a later session recalls what an earlier one typed
     env: *textenv
@@ -154,7 +159,7 @@ scenarios:
           stdout:
             contains: "SELECT 42"
 
-  - name: a multi-line statement is kept on one line
+  - name: a multi-line statement is kept on one line, with its newline escaped
     env: *textenv
     steps:
       - fixture: *small
@@ -163,9 +168,12 @@ scenarios:
           stdin: "SELECT 1,\n2;\n"
       - assert:
           exit_code: 0
+      # The whole file, so a count that happened to contain the right digit
+      # cannot pass for the right count.
       - run:
-          command: sh -c 'wc -l < "$SQLY_HISTORY_PATH"'
+          command: sh -c 'cat "$SQLY_HISTORY_PATH"'
       - assert:
           exit_code: 0
           stdout:
-            contains: "1"
+            equals: |
+              SELECT 1,\n2
