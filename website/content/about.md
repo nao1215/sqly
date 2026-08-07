@@ -33,7 +33,7 @@ Two libraries carry most of the work, both from the same author:
 - [filesql](https://github.com/nao1215/filesql) — a `database/sql` driver that loads CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files into SQLite, and writes them back. It also holds the dialect translation behind `--dialect`.
 - [prompt](https://github.com/nao1215/prompt) — the line editor behind the interactive shell: completion, history, multi-line input, and raw-mode handling across Unix and Windows.
 
-The project follows Clean Architecture, checked in CI with [go-arch-lint](https://github.com/fe3dback/go-arch-lint). See [architecture](https://github.com/nao1215/sqly/blob/main/doc/architecture.md) and [design overview](https://github.com/nao1215/sqly/blob/main/doc/design_overview.md).
+The project's layering is checked in CI with [go-arch-lint](https://github.com/fe3dback/go-arch-lint), against the rules in [`.go-arch-lint.yml`](https://github.com/nao1215/sqly/blob/main/.go-arch-lint.yml).
 
 ## Contributing
 
