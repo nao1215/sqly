@@ -15,12 +15,7 @@ import (
 	"github.com/nao1215/sqly/shell"
 )
 
-// migrationGuideFile is where a user upgrading from one release candidate to the
-// next is sent. It is named once so the drift tests and the CHANGELOG check
-// cannot disagree about where it lives.
 const (
-	migrationGuideFile = "doc/migration.md"
-	migrationGuideLink = "doc/migration.md"
 	// referencePage is the page that quotes most of sqly's messages verbatim.
 	referencePage = "website/content/reference.md"
 )
@@ -1879,6 +1874,29 @@ func resolveDocLink(from, target string) string {
 	return filepath.ToSlash(filepath.Clean(filepath.Join(filepath.Dir(from), target)))
 }
 
+// TestDocs_NoLinkToTheDeletedMigrationGuide keeps a pointer to the migration
+// guide from coming back.
+//
+// The guide restated the CHANGELOG's Breaking Changes entries as before-and-after
+// commands, so every breaking change was written twice and kept in step by hand.
+// A breaking change is now described once, in its entry. A link left behind, or
+// added back, points at a file that is not there.
+//
+// The CHANGELOG is checked too, and it is the reason this resolves links rather
+// than matching text: a frozen entry may still name the guide as something a past
+// release added, so a mention is allowed where a link is not.
+func TestDocs_NoLinkToTheDeletedMigrationGuide(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range append(docSources(t), "CONTRIBUTING.md", "doc/build_and_test.md", "CHANGELOG.md") {
+		for _, target := range markdownLinkTargets(readDoc(t, path)) {
+			if resolveDocLink(path, target) == "doc/migration.md" {
+				t.Errorf("%s links %s, which was deleted; a breaking change is described in its CHANGELOG entry", path, target)
+			}
+		}
+	}
+}
+
 // TestAbout_BenchmarkIsMarkedHistorical keeps an old measurement from reading as
 // a promise about the current release.
 func TestAbout_BenchmarkIsMarkedHistorical(t *testing.T) {
@@ -1909,62 +1927,6 @@ func TestAbout_BenchmarkIsMarkedHistorical(t *testing.T) {
 	}
 }
 
-// TestMigrationGuide_ExplainsRc2ToRc3 checks the document a user upgrading from
-// the previous candidate actually needs: the before and the after, for both
-// breaking changes, as commands they can copy.
-func TestMigrationGuide_ExplainsRc2ToRc3(t *testing.T) {
-	t.Parallel()
-
-	guide := readDoc(t, migrationGuideFile)
-	flat := flatten(guide)
-
-	for _, claim := range []string{
-		"rc2",
-		"rc3",
-		`sqly --sql "..." https://example.com/data.csv`,
-		`sqly --allow-remote --sql "..." https://example.com/data.csv`,
-		"included five sample rows by default",
-		"schema-only by default",
-		"--inspect-sample N",
-	} {
-		if !strings.Contains(flat, claim) {
-			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
-		}
-	}
-
-	// The dialect warning is not a change a command has to absorb, but a caller
-	// that parses stderr has to know it arrived.
-	if !strings.Contains(flat, "stderr") {
-		t.Errorf("%s does not mention the new stderr output", migrationGuideFile)
-	}
-}
-
-// TestMigrationGuide_ExplainsRc5ToRc6 holds the guide to the changes an rc5
-// command line or wrapper has to absorb. A breaking change recorded only in the
-// CHANGELOG leaves the person upgrading to work out the edit themselves.
-func TestMigrationGuide_ExplainsRc5ToRc6(t *testing.T) {
-	t.Parallel()
-
-	guide := readDoc(t, migrationGuideFile)
-	if !strings.Contains(guide, "## v1.0.0-rc5 → v1.0.0-rc6") {
-		t.Fatalf("%s has no rc5 to rc6 section", migrationGuideFile)
-	}
-	flat := flatten(section(guide, "## v1.0.0-rc5 → v1.0.0-rc6"))
-
-	for _, claim := range []string{
-		"one column",
-		"last row is empty in every column",
-		"1 → 4",
-		"1 → 2",
-		"Infinity",
-		"declared type",
-	} {
-		if !strings.Contains(flat, claim) {
-			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
-		}
-	}
-}
-
 // TestCHANGELOG_ListsTheRc6BreakingChanges is the rc5 check for the release
 // after it: what the guide tells someone to change, the release notes have to
 // record.
@@ -1983,35 +1945,6 @@ func TestCHANGELOG_ListsTheRc6BreakingChanges(t *testing.T) {
 	for _, claim := range []string{"out.csv.bz2", "last row is empty", "Infinity", "`4`"} {
 		if !strings.Contains(breaking, claim) {
 			t.Errorf("the rc6 Breaking Changes section does not mention %s", claim)
-		}
-	}
-	if !strings.Contains(flatten(rc6), migrationGuideLink) {
-		t.Errorf("the rc6 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
-	}
-}
-
-// TestMigrationGuide_ExplainsRc4ToRc5 holds the guide to the changes an rc4
-// command line or wrapper has to absorb. A breaking change recorded only in the
-// CHANGELOG leaves the person upgrading to work out the edit themselves.
-func TestMigrationGuide_ExplainsRc4ToRc5(t *testing.T) {
-	t.Parallel()
-
-	guide := readDoc(t, migrationGuideFile)
-	if !strings.Contains(guide, "## v1.0.0-rc4 → v1.0.0-rc5") {
-		t.Fatalf("%s has no rc4 to rc5 section", migrationGuideFile)
-	}
-	flat := flatten(section(guide, "## v1.0.0-rc4 → v1.0.0-rc5"))
-
-	for _, claim := range []string{
-		"XLSX cannot represent",
-		"exit 4",
-		"csv, tsv, or json",
-		"tables[].source",
-		"user:xxxxx@",
-		"Ctrl-C",
-	} {
-		if !strings.Contains(flat, claim) {
-			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
 		}
 	}
 }
@@ -2036,35 +1969,6 @@ func TestCHANGELOG_ListsTheRc5BreakingChanges(t *testing.T) {
 			t.Errorf("the rc5 Breaking Changes section does not mention %s", claim)
 		}
 	}
-	if !strings.Contains(flatten(rc5), migrationGuideLink) {
-		t.Errorf("the rc5 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
-	}
-}
-
-// TestMigrationGuide_ExplainsRc3ToRc4 holds the guide to the changes an rc3
-// command line or wrapper has to absorb. A breaking change recorded only in the
-// CHANGELOG leaves the person upgrading to work out the edit themselves.
-func TestMigrationGuide_ExplainsRc3ToRc4(t *testing.T) {
-	t.Parallel()
-
-	guide := readDoc(t, migrationGuideFile)
-	if !strings.Contains(guide, "## v1.0.0-rc3 → v1.0.0-rc4") {
-		t.Fatalf("%s has no rc3 to rc4 section", migrationGuideFile)
-	}
-	flat := flatten(section(guide, "## v1.0.0-rc3 → v1.0.0-rc4"))
-
-	for _, claim := range []string{
-		"excel_sheets[].source",
-		"exit code `1`",
-		"`.dialect` writes to stderr",
-		"`.mode` and `.row-mismatch` with no argument report instead of failing",
-		"--inspect cannot be combined with --dialect mysql",
-		"batch statement",
-	} {
-		if !strings.Contains(flat, claim) {
-			t.Errorf("%s does not state: %s", migrationGuideFile, claim)
-		}
-	}
 }
 
 // TestCHANGELOG_ListsTheRc4BreakingChanges is the rc3 check for the release
@@ -2087,9 +1991,6 @@ func TestCHANGELOG_ListsTheRc4BreakingChanges(t *testing.T) {
 			t.Errorf("the rc4 Breaking Changes section does not mention %s", claim)
 		}
 	}
-	if !strings.Contains(flatten(rc4), migrationGuideLink) {
-		t.Errorf("the rc4 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
-	}
 }
 
 // TestCHANGELOG_ListsTheRc3BreakingChanges keeps the release notes in step with
@@ -2110,9 +2011,6 @@ func TestCHANGELOG_ListsTheRc3BreakingChanges(t *testing.T) {
 		if !strings.Contains(breaking, claim) {
 			t.Errorf("the rc3 Breaking Changes section does not mention %s", claim)
 		}
-	}
-	if !strings.Contains(flatten(rc3), migrationGuideLink) {
-		t.Errorf("the rc3 CHANGELOG entry does not link the migration guide (%s)", migrationGuideLink)
 	}
 }
 
