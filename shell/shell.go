@@ -60,6 +60,12 @@ const (
 	msgExcelSheet     = "Excel sheet"
 )
 
+// historySize is how many past entries the prompt keeps for recall. The history
+// file holds more than this, so it is also how many the preload hands over:
+// giving the prompt the whole file only to have it keep the tail is work nobody
+// sees.
+const historySize = 100
+
 // errNoStatements is returned by a non-interactive run that reads stdin in batch
 // mode but executes nothing (no TTY and empty or comment-only stdin, with no
 // --sql/--sql-file). Without it the run would exit 0 silently, so a headless
@@ -231,8 +237,6 @@ func NewShell(
 		state:    state,
 		files:    defaultFileOps(),
 		newPrompt: func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
-			const historySize = 100
-
 			return prompt.New(
 				prefix,
 				prompt.WithCompleter(completer),
@@ -608,7 +612,15 @@ func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 		if err != nil {
 			s.disableHistory(err)
 		} else {
-			for _, h := range histories.ToStringList() {
+			// Only the newest historySize entries are offered. The file keeps far
+			// more than the prompt does, and handing over all of them just to have
+			// the prompt drop all but the tail is work with no effect on what a
+			// user can recall.
+			entries := histories.ToStringList()
+			if len(entries) > historySize {
+				entries = entries[len(entries)-historySize:]
+			}
+			for _, h := range entries {
 				p.AddHistory(h)
 			}
 		}
@@ -1615,7 +1627,7 @@ func describeFileMode(mode os.FileMode) string {
 // full history scan, so each write costs a single insert rather than reading the
 // whole table first.
 func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
-	if err := s.usecases.history.Append(ctx, model.NewHistory(0, request)); err != nil {
+	if err := s.usecases.history.Append(ctx, model.NewHistory(request)); err != nil {
 		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil

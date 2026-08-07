@@ -75,7 +75,7 @@ func NewShell(args []string) (*shell.Shell, func(), error) {
 	// session: it outlives the tables it was typed against. Nothing is held open
 	// for it — each entry is one appending write — so there is no second resource
 	// to release.
-	historyUsecase := interactor.NewHistoryInteractor(persistence.NewHistoryRepository(cfg.HistoryPath))
+	historyUsecase := persistence.NewHistoryRepository(cfg.HistoryPath)
 
 	exportUsecase := interactor.NewExportInteractor()
 

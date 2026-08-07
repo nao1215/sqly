@@ -87,12 +87,12 @@ func TestHistoryAppendAndList(t *testing.T) {
 
 	want := []string{"SELECT 1", "SELECT *\nFROM user", "SELECT '日本語'"}
 	for _, request := range want {
-		if err := repo.Append(ctx, model.NewHistory(0, request)); err != nil {
+		if err := repo.Append(ctx, model.NewHistory(request)); err != nil {
 			t.Fatalf("Append(%q) = %v, want nil", request, err)
 		}
 	}
 	// A blank entry is not history; it must not take a line.
-	if err := repo.Append(ctx, model.NewHistory(0, "   ")); err != nil {
+	if err := repo.Append(ctx, model.NewHistory("   ")); err != nil {
 		t.Fatalf("Append(blank) = %v, want nil", err)
 	}
 
@@ -106,9 +106,6 @@ func TestHistoryAppendAndList(t *testing.T) {
 	for i, request := range want {
 		if got[i].Request != request {
 			t.Errorf("entry %d = %q, want %q", i, got[i].Request, request)
-		}
-		if got[i].ID != i+1 {
-			t.Errorf("entry %d has id %d, want %d (order is the identity)", i, got[i].ID, i+1)
 		}
 	}
 }
@@ -284,7 +281,7 @@ func TestHistoryConcurrentAppendsKeepEveryLineReadable(t *testing.T) {
 			for i := range perWriter {
 				// A multi-line statement, so a torn write would be visible as a
 				// line that does not decode to one of these.
-				_ = repo.Append(ctx, model.NewHistory(0, "SELECT "+strconv.Itoa(w)+"\nFROM t"+strconv.Itoa(i)))
+				_ = repo.Append(ctx, model.NewHistory("SELECT "+strconv.Itoa(w)+"\nFROM t"+strconv.Itoa(i)))
 			}
 		}(w)
 	}
@@ -329,7 +326,7 @@ func TestHistoryUnwritablePathFailsInit(t *testing.T) {
 		t.Skip("this filesystem allowed the write despite the directory mode")
 	}
 	// Append must refuse rather than half-write once Init has failed.
-	if err := repo.Append(context.Background(), model.NewHistory(0, "SELECT 1")); err == nil {
+	if err := repo.Append(context.Background(), model.NewHistory("SELECT 1")); err == nil {
 		t.Error("Append after a failed Init = nil error, want error")
 	}
 }

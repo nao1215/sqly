@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/domain/model"
-	"github.com/nao1215/sqly/domain/repository"
+	"github.com/nao1215/sqly/usecase"
 )
 
 // History is a text file: one entry per line, appended as it is typed.
@@ -30,8 +30,8 @@ import (
 // session's most recent entries, where the database dropped every entry of a
 // session that lost the lock for five seconds.
 
-// _ historyRepository implement HistoryRepository
-var _ repository.HistoryRepository = (*historyRepository)(nil)
+// _ historyRepository implement HistoryUsecase
+var _ usecase.HistoryUsecase = (*historyRepository)(nil)
 
 // maxHistoryEntries caps how many entries the file keeps. The shell preloads a
 // hundred, so anything past a few thousand is weight nothing reads; the trim
@@ -57,8 +57,13 @@ type historyRepository struct {
 	writable bool
 }
 
-// NewHistoryRepository returns a HistoryRepository backed by the file at path.
-func NewHistoryRepository(path string) repository.HistoryRepository {
+// NewHistoryRepository returns the shell's history, kept in the file at path.
+//
+// It satisfies usecase.HistoryUsecase directly. There was a second interface
+// between the two, identical method for identical method, with an interactor
+// forwarding each call unchanged; nothing ever substituted one, so what the
+// indirection bought was three places to edit when a method changed.
+func NewHistoryRepository(path string) usecase.HistoryUsecase {
 	return &historyRepository{path: path}
 }
 
@@ -133,10 +138,8 @@ func (h *historyRepository) List(_ context.Context) (model.Histories, error) {
 	}
 
 	histories := make(model.Histories, 0, len(requests))
-	for i, request := range requests {
-		// The id is the position in what was kept: the file records order, not
-		// identity, and the shell only ever reads these back in order.
-		histories = append(histories, model.NewHistory(i+1, request))
+	for _, request := range requests {
+		histories = append(histories, model.NewHistory(request))
 	}
 
 	if trimmed && h.writable {
