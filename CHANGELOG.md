@@ -2,21 +2,29 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc7` is the current release candidate, and it is not the final contract
-either. Breaking changes are still being made, and they are being made now
-rather than after v1.0.0.
+`v1.0.0-rc8` is the final release candidate. This is the point to pin a version
+against.
 
-* Breaking changes land before the final release candidate.
-* From the final RC onward, only bug fixes and documentation changes.
-* Nothing user-visible changes between the final RC and v1.0.0 — same flags,
-  same output, same exit codes.
-* Every change to what the previous candidate promised is listed under Breaking
-  Changes below.
+* Breaking changes landed before this candidate. Each is listed under Breaking
+  Changes in the section for the release that made it, rc1 through rc8.
+* From here on, only bug fixes and documentation changes: no new feature, no
+  breaking change.
+* Nothing user-visible changes between this candidate and v1.0.0 — same flags,
+  same output, same exit codes. A bug fix only moves a run toward what these
+  notes already describe; it does not change what they promise.
 
-The final RC is announced as the final one in its release notes. That is the
-point to pin a version against; none of rc1 through rc7 is it.
+## [v1.0.0-rc8](https://github.com/nao1215/sqly/compare/v1.0.0-rc7...v1.0.0-rc8) (2026-08-07)
 
-## [Unreleased]
+The final release candidate for v1.0.0. Everything below is a change from rc7.
+
+The theme of this one is the file as it is on disk rather than as it was meant
+to be. A CSV exported from Excel in Japan is Shift-JIS, and SQLite stores TEXT
+as UTF-8, so loading one as the other built a table that queried wrong and said
+nothing about it; those bytes are refused now, and the error names the flag that
+reads them. A duplicate header is judged by one rule whatever format carried it,
+and the refusal says which column it means. And a file named `query_result_...`
+imports like any other — a prefix sqly had reserved for itself, kept hidden long
+after it stopped writing anything under it.
 
 ### Breaking Changes
 
@@ -34,6 +42,11 @@ point to pin a version against; none of rc1 through rc7 is it.
 * The session has one table listing instead of two. Import counted tables through the filesql adapter's own `sqlite_master` query while `.tables`, `.save`, and `--inspect` went through the repository's, so two listings that had to agree were free not to — which is how one of them came to hide a name prefix the other showed. The adapter's copy is gone and every caller reads the repository.
 * Eight members no production code called are gone from the usecase and repository interfaces: `QueryStream` through all four layers, left behind when the commands that streamed rows were removed; `Exec` on `QueryUsecase`, since `ExecSQL` is the only entry point for a statement the user typed; `SanitizeForSQL`, `RowMismatchPolicy`, and `GetTableNames` on `ImportUsecase`; and `Table.Valid` with `IsEmptyName`, `IsEmptyHeader`, `IsEmptyRecords`, and `IsSameHeaderColumnName`, a validation path nothing invoked. The `domain` package held only the errors that validation returned, so it is gone too.
 * `ExcelSheetUsecase` is part of `ImportUsecase` rather than an interface embedded in it. Nothing consumed it on its own: what a workbook held and which sheets an import took is a question only importing raises.
+
+### Dependencies
+* filesql v0.37.1: upgraded from v0.35.2 across three releases, for the invalid-UTF-8 refusal and the duplicate column name that says which column it means (v0.36.0), the workbook header judged by the rule every other format uses (v0.37.0), and the removal of the second XLSX loader that let the rule differ by format in the first place (v0.37.1).
+* modernc.org/sqlite v1.56.0: upgraded from v1.55.0.
+* github.com/santhosh-tekuri/jsonschema/v6 v6.0.3: upgraded from v6.0.2.
 
 ## [v1.0.0-rc7](https://github.com/nao1215/sqly/compare/v1.0.0-rc6...v1.0.0-rc7) (2026-08-07)
 
