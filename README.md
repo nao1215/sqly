@@ -15,7 +15,7 @@ sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedw
 
 Documentation: **https://nao1215.github.io/sqly/**
 
-This documentation describes `v1.0.0-rc6`, a release candidate. It carries substantial breaking changes over v0.x — classified exit codes, visible-only Excel sheets, SIGTERM `143`, multiple inputs as one atomic import, a schema-only `--inspect`, default-deny remote input, stdout carrying nothing but data in every machine-readable format, and now an export that refuses a value it cannot write rather than changing it — and more can land before v1.0.0, so read the [CHANGELOG](./CHANGELOG.md) before upgrading.
+This documentation describes `v1.0.0-rc7`, a release candidate. It carries substantial breaking changes over v0.x — classified exit codes, visible-only Excel sheets, SIGTERM `143`, multiple inputs as one atomic import, a schema-only `--inspect`, default-deny remote input, stdout carrying nothing but data in every machine-readable format, an export that refuses a value it cannot write rather than changing it, and now a shell with `.header` removed, `.mode` limited to formats a screen can show, and its history in a text file — and more can land before v1.0.0, so read the [CHANGELOG](./CHANGELOG.md) before upgrading.
 
 ![demo](./doc/img/demo.gif)
 
@@ -91,7 +91,7 @@ sqly --inspect user.csv
 ```json
 {
   "schema_version": 1,
-  "sqly_version": "v1.0.0-rc6",
+  "sqly_version": "v1.0.0-rc7",
   "tables": [
     {
       "name": "user",
