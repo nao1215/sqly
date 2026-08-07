@@ -1,0 +1,153 @@
+# The session used to answer "which tables exist" twice: the import command
+# counted them through the filesql adapter's own sqlite_master query, while
+# .tables, .save, and --inspect went through the repository's. Two listings that
+# must agree and are free not to, which is how one of them came to hide a prefix
+# the other showed. There is one listing now, and these scenarios pin what every
+# surface reached through it reports. Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly table listing parity across commands
+
+scenarios:
+  - name: import, .tables, and --inspect agree on what was loaded
+    steps:
+      - fixture: &sales
+          file: sales.csv
+          content: |
+            id,amount
+            1,100
+            2,250
+      - fixture: &customers
+          file: customers.csv
+          content: |
+            id,name
+            1,alice
+      - run:
+          command: sqly sales.csv customers.csv
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: sales
+      - assert:
+          stdout:
+            contains: customers
+      # --inspect sorts its report by table name, so the pair appears
+      # alphabetically rather than in the order the files were named.
+      - run:
+          command: sqly --inspect sales.csv customers.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            json:
+              path: "$.tables[0].name"
+              equals: customers
+      - assert:
+          stdout:
+            json:
+              path: "$.tables[1].name"
+              equals: sales
+
+  # Import reports what a directory produced by diffing the listing around the
+  # load, so the count it prints comes from the same listing .tables reads.
+  - name: a directory import counts the tables it created
+    steps:
+      - fixture:
+          file: data/sales.csv
+          content: |
+            id,amount
+            1,100
+      - fixture:
+          file: data/customers.csv
+          content: |
+            id,name
+            1,alice
+      - run:
+          command: sqly data
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stderr:
+            contains: "Successfully imported 2 table(s)"
+      - assert:
+          stdout:
+            contains: customers
+      - assert:
+          stdout:
+            contains: sales
+
+  # A table created inside the session is not a file, and .tables enumerates
+  # what can be queried rather than only what was imported.
+  - name: .tables reports a view and a temp table alongside imported ones
+    steps:
+      - fixture: *sales
+      - run:
+          command: sqly sales.csv
+          stdin: |
+            CREATE VIEW big AS SELECT * FROM sales WHERE amount > 150;
+            CREATE TEMP TABLE scratch (a INTEGER);
+            .tables
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: big
+      - assert:
+          stdout:
+            contains: scratch
+
+  # .save resolves each table to its source through the same listing, so a
+  # write-back is the end-to-end check that import and listing still agree.
+  - name: .save writes back every imported table
+    steps:
+      - fixture: *sales
+      - fixture: *customers
+      - run:
+          command: sqly sales.csv customers.csv
+          stdin: |
+            UPDATE sales SET amount = 999 WHERE id = 1;
+            UPDATE customers SET name = 'bob' WHERE id = 1;
+            .save --in-place
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql 'SELECT s.amount, c.name FROM sales AS s JOIN customers AS c ON c.id = s.id WHERE s.id = 1' sales.csv customers.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "999,bob"
+
+  # Re-importing a file rebinds the name rather than adding a second table. The
+  # count came from the before/after diff of the listing, so it is the case that
+  # tells a rebind from a new table.
+  - name: re-importing a file does not add a table
+    steps:
+      - fixture: *sales
+      - run:
+          command: sqly sales.csv
+          stdin: |
+            .import sales.csv
+            .tables
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: sales
+      - assert:
+          stderr:
+            not_contains: "produced no table"
+
+  # DML still reports its affected-row count now that ExecSQL is the only entry
+  # point for a statement the user typed.
+  - name: an update reports the rows it changed
+    steps:
+      - fixture: *sales
+      - run:
+          command: sqly sales.csv
+          stdin: |
+            UPDATE sales SET amount = amount + 1;
+            DELETE FROM sales WHERE id = 2;
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2"

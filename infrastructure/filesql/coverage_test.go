@@ -242,29 +242,6 @@ func TestDumpACHFile_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestGetTableNames_ClosedDB checks the QueryContext error branch by closing the
-// database before the call.
-func TestGetTableNames_ClosedDB(t *testing.T) {
-	t.Parallel()
-
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	a := newTestAdapter(db)
-	_ = db.Close()
-
-	if _, err := a.GetTableNames(context.Background()); err == nil {
-		t.Fatal("GetTableNames on closed DB = nil error, want error")
-	}
-}
-
-// TestDumpFedWireFile_RoundTrip loads a Fedwire file and dumps it back out,
-// asserting a non-empty file is produced. It also checks the nil-DB guard.
-//
-// This test loads a Fedwire file, which registers a TableSet in filesql's
-// process-global registry, so it must not run in parallel with other FED tests.
 func TestDumpFedWireFile_RoundTrip(t *testing.T) {
 	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
 	if _, err := os.Stat(fedFile); os.IsNotExist(err) {

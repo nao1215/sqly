@@ -71,16 +71,6 @@ func TestSqlite3Repository_ClosedDB_ReturnsErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("QueryStream returns error when DB is closed", func(t *testing.T) {
-		t.Parallel()
-		r := covMemClosedRepo(t)
-		err := r.QueryStream(ctx, "SELECT 1",
-			func(_ []string, _ []bool) error { return nil })
-		if err == nil {
-			t.Error("expected error from QueryStream on a closed DB, got nil")
-		}
-	})
-
 	t.Run("Exec returns error when DB is closed", func(t *testing.T) {
 		t.Parallel()
 		r := covMemClosedRepo(t)

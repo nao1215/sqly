@@ -413,8 +413,8 @@ func TestFileSQLAdapter_ImportMode_DefaultIsStop(t *testing.T) {
 	t.Parallel()
 	adapter, path := newMismatchTestAdapter(t)
 	// No SetRowMismatchPolicy: the zero value must behave as stop.
-	if adapter.RowMismatchPolicy() != model.RowMismatchError {
-		t.Fatalf("default policy = %v, want stop", adapter.RowMismatchPolicy())
+	if adapter.rowMismatchPolicy != model.RowMismatchError {
+		t.Fatalf("default policy = %v, want stop", adapter.rowMismatchPolicy)
 	}
 	if err := adapter.LoadFile(context.Background(), path); err == nil {
 		t.Fatal("expected an error under the default (stop) policy")

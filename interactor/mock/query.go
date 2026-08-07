@@ -80,45 +80,6 @@ func (c *MockQueryUsecaseDialectCall) DoAndReturn(f func() dialect.Dialect) *Moc
 	return c
 }
 
-// Exec mocks base method.
-func (m *MockQueryUsecase) Exec(ctx context.Context, statement string) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exec", ctx, statement)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Exec indicates an expected call of Exec.
-func (mr *MockQueryUsecaseMockRecorder) Exec(ctx, statement any) *MockQueryUsecaseExecCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockQueryUsecase)(nil).Exec), ctx, statement)
-	return &MockQueryUsecaseExecCall{Call: call}
-}
-
-// MockQueryUsecaseExecCall wrap *gomock.Call
-type MockQueryUsecaseExecCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockQueryUsecaseExecCall) Return(arg0 int64, arg1 error) *MockQueryUsecaseExecCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockQueryUsecaseExecCall) Do(f func(context.Context, string) (int64, error)) *MockQueryUsecaseExecCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockQueryUsecaseExecCall) DoAndReturn(f func(context.Context, string) (int64, error)) *MockQueryUsecaseExecCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // ExecSQL mocks base method.
 func (m *MockQueryUsecase) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	m.ctrl.T.Helper()
@@ -194,44 +155,6 @@ func (c *MockQueryUsecaseQueryCall) Do(f func(context.Context, string) (*model.T
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockQueryUsecaseQueryCall) DoAndReturn(f func(context.Context, string) (*model.Table, error)) *MockQueryUsecaseQueryCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// QueryStream mocks base method.
-func (m *MockQueryUsecase) QueryStream(ctx context.Context, query string, fn func([]string, []bool) error) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryStream", ctx, query, fn)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// QueryStream indicates an expected call of QueryStream.
-func (mr *MockQueryUsecaseMockRecorder) QueryStream(ctx, query, fn any) *MockQueryUsecaseQueryStreamCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStream", reflect.TypeOf((*MockQueryUsecase)(nil).QueryStream), ctx, query, fn)
-	return &MockQueryUsecaseQueryStreamCall{Call: call}
-}
-
-// MockQueryUsecaseQueryStreamCall wrap *gomock.Call
-type MockQueryUsecaseQueryStreamCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockQueryUsecaseQueryStreamCall) Return(arg0 error) *MockQueryUsecaseQueryStreamCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockQueryUsecaseQueryStreamCall) Do(f func(context.Context, string, func([]string, []bool) error) error) *MockQueryUsecaseQueryStreamCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockQueryUsecaseQueryStreamCall) DoAndReturn(f func(context.Context, string, func([]string, []bool) error) error) *MockQueryUsecaseQueryStreamCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

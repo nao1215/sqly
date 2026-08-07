@@ -236,7 +236,7 @@ type claimedTables struct {
 // session is not a collision: re-importing a file the session already holds is
 // an ordinary thing to do.
 func (s *Shell) preflightTableNames(ctx context.Context, plan *importPlan) ([]claimedTables, error) {
-	existing, err := s.usecases.importer.GetTableNames(ctx)
+	existing, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get table names before importing: %w", err)
 	}

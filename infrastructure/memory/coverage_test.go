@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -20,18 +19,6 @@ func covMemNewRepo(t *testing.T) repository.SQLite3Repository {
 	}
 	t.Cleanup(cleanup)
 	return NewSQLite3Repository(memoryDB)
-}
-
-// covMemSeedTable creates and populates a small "sample" table used by the query
-// and streaming subtests.
-func covMemSeedTable(t *testing.T, r repository.SQLite3Repository) {
-	t.Helper()
-	if _, err := r.Exec(context.Background(), "CREATE TABLE sample (id TEXT, name TEXT)"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.Exec(context.Background(), "INSERT INTO sample VALUES ('1', 'alice'), ('2', 'bob')"); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestSqlite3Repository_List_MissingTableReturnsError(t *testing.T) {
@@ -97,78 +84,6 @@ func TestSqlite3Repository_Query_NullValuesFlagged(t *testing.T) {
 	}
 	if got.IsNull(0, 1) {
 		t.Error("IsNull(0,1) = true, want false for the empty-string cell")
-	}
-}
-
-func TestSqlite3Repository_QueryStream_VisitsEachRow(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	covMemSeedTable(t, r)
-
-	var count int
-	err := r.QueryStream(context.Background(), "SELECT * FROM sample ORDER BY id",
-		func(record []string, nulls []bool) error {
-			count++
-			if len(record) != 2 || len(nulls) != 2 {
-				t.Errorf("record/nulls length = %d/%d, want 2/2", len(record), len(nulls))
-			}
-			return nil
-		})
-	if err != nil {
-		t.Fatalf("QueryStream error = %v, want nil", err)
-	}
-	if count != 2 {
-		t.Errorf("visited %d rows, want 2", count)
-	}
-}
-
-func TestSqlite3Repository_QueryStream_NullValueFlagged(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	if _, err := r.Exec(context.Background(), "CREATE TABLE snt (a TEXT)"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.Exec(context.Background(), "INSERT INTO snt (a) VALUES (NULL)"); err != nil {
-		t.Fatal(err)
-	}
-	err := r.QueryStream(context.Background(), "SELECT a FROM snt",
-		func(_ []string, nulls []bool) error {
-			if len(nulls) != 1 || !nulls[0] {
-				t.Errorf("nulls = %v, want single NULL cell", nulls)
-			}
-			return nil
-		})
-	if err != nil {
-		t.Fatalf("QueryStream error = %v, want nil", err)
-	}
-}
-
-func TestSqlite3Repository_QueryStream_CallbackErrorPropagates(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	covMemSeedTable(t, r)
-
-	sentinel := errors.New("stop streaming")
-	err := r.QueryStream(context.Background(), "SELECT * FROM sample",
-		func(_ []string, _ []bool) error {
-			return sentinel
-		})
-	if !errors.Is(err, sentinel) {
-		t.Errorf("QueryStream error = %v, want %v", err, sentinel)
-	}
-}
-
-func TestSqlite3Repository_QueryStream_MissingTableReturnsError(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	err := r.QueryStream(context.Background(), "SELECT * FROM no_such_table",
-		func(_ []string, _ []bool) error { return nil })
-	if err == nil {
-		t.Error("expected error streaming a missing table, got nil")
 	}
 }
 

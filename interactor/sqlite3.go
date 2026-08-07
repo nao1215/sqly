@@ -110,17 +110,6 @@ func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Ta
 	return si.r.Query(ctx, query)
 }
 
-// QueryStream executes a "SELECT"/"EXPLAIN" query and streams each result row to
-// fn, so callers can aggregate without materializing the whole result set.
-func (si *SQLite3Interactor) QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error {
-	return si.r.QueryStream(ctx, query, fn)
-}
-
-// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
-func (si *SQLite3Interactor) Exec(ctx context.Context, statement string) (int64, error) {
-	return si.r.Exec(ctx, statement)
-}
-
 // ExecSQL executes "SELECT/EXPLAIN" query or "INSERT/UPDATE/DELETE" statement.
 // Returns:
 // - For SELECT/EXPLAIN: (*model.Table, 0, error)
@@ -189,11 +178,6 @@ func (si *SQLite3Interactor) SetRowMismatchPolicy(policy model.RowMismatchPolicy
 	si.adapter.SetRowMismatchPolicy(policy)
 }
 
-// RowMismatchPolicy returns the policy applied to mismatched CSV/TSV rows on import.
-func (si *SQLite3Interactor) RowMismatchPolicy() model.RowMismatchPolicy {
-	return si.adapter.RowMismatchPolicy()
-}
-
 // SetIncludeHiddenSheets decides whether subsequent Excel imports load the
 // sheets a workbook hides as well as the ones it shows.
 func (si *SQLite3Interactor) SetIncludeHiddenSheets(include bool) {
@@ -217,11 +201,6 @@ func (si *SQLite3Interactor) ExcelSheetTableNames(path string, sheetNames []stri
 	return si.adapter.ExcelSheetTableNames(path, sheetNames)
 }
 
-// GetTableNames returns the list of tables currently available in the database.
-func (si *SQLite3Interactor) GetTableNames(ctx context.Context) ([]*model.Table, error) {
-	return si.adapter.GetTableNames(ctx)
-}
-
 // IsSupportedFile checks if the file has a format supported by filesql.
 func (si *SQLite3Interactor) IsSupportedFile(filePath string) bool {
 	return filesql.IsSupportedFile(filePath)
@@ -230,11 +209,6 @@ func (si *SQLite3Interactor) IsSupportedFile(filePath string) bool {
 // IsExcelFile checks if the file is an Excel format (.xlsx).
 func (si *SQLite3Interactor) IsExcelFile(filePath string) bool {
 	return filesql.IsExcelFile(filePath)
-}
-
-// SanitizeForSQL sanitizes a string to be SQL-safe.
-func (si *SQLite3Interactor) SanitizeForSQL(name string) string {
-	return filesql.SanitizeForSQL(name)
 }
 
 // QuoteIdentifier safely quotes a SQL identifier.

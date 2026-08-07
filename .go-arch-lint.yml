@@ -34,7 +34,6 @@ vendors:
 components:
   cmd:   { in: . }
   shell: { in: shell }
-  domain: { in: domain }
   model: { in: domain/model }
   cleanup: { in: domain/cleanup }
   sqltext: { in: domain/sqltext }
@@ -100,8 +99,6 @@ deps:
     canUse:
       - runewidth
       - tablewriter
-    mayDependOn:
-      - domain
   cmd:
     mayDependOn:
       - shell

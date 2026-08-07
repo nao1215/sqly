@@ -17,10 +17,6 @@ import (
 )
 
 const (
-	opRows      = "rows"
-	opGetTables = "get_tables"
-	opScanTable = "scan_table"
-
 	errDatabaseNotInit = "database not initialized"
 	defaultSheetName   = "sheet"
 )
@@ -54,11 +50,6 @@ func NewFileSQLAdapter(sharedDB *sql.DB) *FileSQLAdapter {
 // differs from the header) is handled by subsequent imports.
 func (f *FileSQLAdapter) SetRowMismatchPolicy(policy model.RowMismatchPolicy) {
 	f.rowMismatchPolicy = policy
-}
-
-// RowMismatchPolicy returns the policy applied to mismatched CSV/TSV rows on import.
-func (f *FileSQLAdapter) RowMismatchPolicy() model.RowMismatchPolicy {
-	return f.rowMismatchPolicy
 }
 
 // SetIncludeHiddenSheets decides whether subsequent Excel imports load the
@@ -281,40 +272,6 @@ func (f *FileSQLAdapter) DumpFedWireFile(ctx context.Context, baseName, outputPa
 		return errors.New(errDatabaseNotInit)
 	}
 	return filesql.DumpFedWire(ctx, f.sharedDB, baseName, outputPath)
-}
-
-// GetTableNames returns all table names in the database
-func (f *FileSQLAdapter) GetTableNames(ctx context.Context) ([]*model.Table, error) {
-	if f.sharedDB == nil {
-		return nil, &FileSQLError{Op: opGetTables, Err: errDatabaseNotInit}
-	}
-
-	// Exclude only SQLite's own bookkeeping tables. Their sqlite_ prefix is
-	// reserved by the engine, which refuses to create a table under it, so no
-	// imported file can be hidden by this.
-	query := "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-	rows, err := f.sharedDB.QueryContext(ctx, query)
-	if err != nil {
-		return nil, &FileSQLError{Op: opGetTables, Err: err.Error()}
-	}
-	defer func() { _ = rows.Close() }()
-
-	var tables []*model.Table
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			return nil, &FileSQLError{Op: opScanTable, Err: err.Error()}
-		}
-
-		// Create table model with just the name
-		tables = append(tables, model.NewTable(tableName, nil, nil))
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, &FileSQLError{Op: opRows, Err: err.Error()}
-	}
-
-	return tables, nil
 }
 
 // Close closes the database connection

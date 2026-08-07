@@ -128,48 +128,6 @@ func TestSQLite3RepositoryListPreservesQueryMetadata(t *testing.T) {
 	}
 }
 
-// TestQueryStreamCellSemantics pins the contract QueryStream shares with Query:
-// both derive a row's strings and its NULL flags from model.Cell, so a streaming
-// consumer sees exactly the values a materialized *model.Table would show.
-func TestQueryStreamCellSemantics(t *testing.T) {
-	t.Parallel()
-
-	memoryDB, cleanup, err := config.NewInMemDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cleanup)
-	r := NewSQLite3Repository(memoryDB)
-	ctx := t.Context()
-
-	const query = `SELECT CAST(42 AS INTEGER) AS i, CAST(1.5 AS REAL) AS r, '00123' AS t, '' AS empty, NULL AS n`
-	var gotRecord []string
-	var gotNulls []bool
-	if err := r.QueryStream(ctx, query, func(record []string, nulls []bool) error {
-		gotRecord = append([]string(nil), record...)
-		gotNulls = append([]bool(nil), nulls...)
-		return nil
-	}); err != nil {
-		t.Fatalf("QueryStream: %v", err)
-	}
-
-	wantRecord := []string{"42", "1.5", "00123", "", ""}
-	for i, want := range wantRecord {
-		if gotRecord[i] != want {
-			t.Errorf("record[%d] = %q, want %q", i, gotRecord[i], want)
-		}
-	}
-	// The empty-string column and the NULL column render identically, so only the
-	// NULL flag separates them; asserting both together is what catches a
-	// regression that collapses one into the other.
-	wantNulls := []bool{false, false, false, false, true}
-	for i, want := range wantNulls {
-		if gotNulls[i] != want {
-			t.Errorf("nulls[%d] = %v, want %v", i, gotNulls[i], want)
-		}
-	}
-}
-
 func TestExtractTableName(t *testing.T) {
 	t.Parallel()
 

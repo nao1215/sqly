@@ -49,6 +49,13 @@ func (a *testAdapter) Query(ctx context.Context, query string) (*model.Table, er
 	return a.repo.Query(ctx, query)
 }
 
+// GetTableNames lists the tables the way the session does. The adapter used to
+// answer this with a second copy of the sqlite_master query, which is how the
+// two listings were free to disagree about what counted as a table.
+func (a *testAdapter) GetTableNames(ctx context.Context) ([]*model.Table, error) {
+	return a.repo.TablesName(ctx)
+}
+
 // Exec runs a statement the way the session does.
 func (a *testAdapter) Exec(ctx context.Context, statement string) (int64, error) {
 	return a.repo.Exec(ctx, statement)
@@ -222,75 +229,34 @@ Jane,30,Los Angeles`
 	}
 }
 
-func TestFileSQLAdapter_GetTableNames(t *testing.T) {
+// TestFileSQLAdapter_LoadFileTableNamedQueryResult pins the import of a file
+// whose table name begins with query_result_. sqly once materialized results
+// into tables of that name and filtered the prefix out of the listing import
+// diffs against, so such a file reported that it had produced no table.
+func TestFileSQLAdapter_LoadFileTableNamedQueryResult(t *testing.T) {
 	t.Parallel()
 
-	// Create shared database with multiple test tables
+	csvFile := filepath.Join(t.TempDir(), "query_result_report.csv")
+	if err := os.WriteFile(csvFile, []byte("id,amount\n1,100\n"), 0o600); err != nil {
+		t.Fatalf("Failed to create test CSV file: %v", err)
+	}
+
 	sharedDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to create shared database: %v", err)
 	}
 	defer func() { _ = sharedDB.Close() }()
 
-	// Create test tables
-	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE table1 (id INTEGER)`)
-	if err != nil {
-		t.Fatalf("Failed to create table1: %v", err)
-	}
-
-	_, err = sharedDB.ExecContext(context.Background(), `CREATE TABLE table2 (name TEXT)`)
-	if err != nil {
-		t.Fatalf("Failed to create table2: %v", err)
-	}
-
-	// Create adapter
 	adapter := newTestAdapter(sharedDB)
-
-	// Test GetTableNames
 	ctx := context.Background()
+	if err := adapter.LoadFile(ctx, csvFile); err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+
 	tables, err := adapter.GetTableNames(ctx)
 	if err != nil {
 		t.Fatalf("GetTableNames failed: %v", err)
 	}
-
-	// Verify results
-	if len(tables) != 2 {
-		t.Errorf("Expected 2 tables, got %d", len(tables))
-	}
-
-	// Verify table names (order may vary)
-	tableNames := make(map[string]bool)
-	for _, table := range tables {
-		tableNames[table.Name()] = true
-	}
-
-	if !tableNames["table1"] || !tableNames["table2"] {
-		t.Errorf("Expected tables table1 and table2, got: %v", tableNames)
-	}
-}
-
-// TestFileSQLAdapter_GetTableNamesIncludesQueryResultPrefix pins the visibility
-// of a table named query_result_*. Import compares this list before and after
-// loading to decide whether a file produced anything, so a name this list
-// refuses is a file that cannot be imported at all.
-func TestFileSQLAdapter_GetTableNamesIncludesQueryResultPrefix(t *testing.T) {
-	t.Parallel()
-
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create shared database: %v", err)
-	}
-	defer func() { _ = sharedDB.Close() }()
-
-	if _, err := sharedDB.ExecContext(context.Background(), `CREATE TABLE query_result_report (id INTEGER)`); err != nil {
-		t.Fatalf("Failed to create query_result_report: %v", err)
-	}
-
-	tables, err := newTestAdapter(sharedDB).GetTableNames(context.Background())
-	if err != nil {
-		t.Fatalf("GetTableNames failed: %v", err)
-	}
-
 	if len(tables) != 1 || tables[0].Name() != "query_result_report" {
 		t.Errorf("GetTableNames() = %v, want [query_result_report]", tables)
 	}
@@ -527,23 +493,6 @@ func TestFileSQLAdapter_Close(t *testing.T) {
 	err = adapter.Close()
 	if err != nil {
 		t.Errorf("Close() returned unexpected error: %v", err)
-	}
-}
-
-func TestFileSQLAdapter_GetTableNamesNilDB(t *testing.T) {
-	t.Parallel()
-
-	adapter := newTestAdapter(nil)
-	ctx := context.Background()
-
-	// Test GetTableNames with nil database
-	_, err := adapter.GetTableNames(ctx)
-	if err == nil {
-		t.Fatal("Expected GetTableNames to fail with nil database")
-	}
-
-	if !strings.Contains(err.Error(), "database not initialized") {
-		t.Errorf("Expected 'database not initialized' error, got: %v", err)
 	}
 }
 

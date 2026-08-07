@@ -8,12 +8,28 @@ import (
 
 //go:generate mockgen -typed -source=$GOFILE -destination=../interactor/mock/$GOFILE -package mock
 
-// ExcelSheetUsecase is the part of importing that only a workbook has: sheets,
-// some of which the workbook does not show. It is separated from the rest of
-// importing because it answers a different question — not "load this file" but
-// "what was in it, and which of it did we take" — and because that question has
-// no meaning for any other format.
-type ExcelSheetUsecase interface {
+// ImportUsecase loads files into the database and exposes the filesql helpers
+// the import command needs to name, validate, and quote tables. It is kept
+// separate from query and metadata so non-import commands do not depend on
+// file loading.
+//
+// The Excel methods are part of it rather than an interface of their own: they
+// answer what a workbook held and which of it an import took, which is a
+// question only importing raises, and no command reaches them without also
+// importing.
+type ImportUsecase interface {
+	// LoadFiles loads multiple files or directories into the database
+	LoadFiles(ctx context.Context, filePaths ...string) error
+	// SetRowMismatchPolicy sets how a CSV/TSV row (one whose field count
+	// differs from the header) is handled by subsequent imports.
+	SetRowMismatchPolicy(policy model.RowMismatchPolicy)
+	// IsSupportedFile checks if the file has a format supported by filesql
+	IsSupportedFile(filePath string) bool
+	// QuoteIdentifier safely quotes a SQL identifier
+	QuoteIdentifier(identifier string) string
+	// GetTableNameFromFilePath derives a table name from a file path
+	GetTableNameFromFilePath(filePath string) string
+
 	// IsExcelFile reports whether the path names an Excel workbook.
 	IsExcelFile(filePath string) bool
 	// SetIncludeHiddenSheets decides whether subsequent Excel imports load the
@@ -29,30 +45,4 @@ type ExcelSheetUsecase interface {
 	// table it is loaded as, parallel to sheetNames. It reports an error when
 	// two of the sheets would share a table.
 	ExcelSheetTableNames(path string, sheetNames []string) ([]string, error)
-}
-
-// ImportUsecase loads files into the database and exposes the filesql helpers
-// the import command needs to name, validate, and quote tables. It is kept
-// separate from query and metadata so non-import commands do not depend on
-// file loading.
-type ImportUsecase interface {
-	ExcelSheetUsecase
-
-	// LoadFiles loads multiple files or directories into the database
-	LoadFiles(ctx context.Context, filePaths ...string) error
-	// SetRowMismatchPolicy sets how a CSV/TSV row (one whose field count
-	// differs from the header) is handled by subsequent imports.
-	SetRowMismatchPolicy(policy model.RowMismatchPolicy)
-	// RowMismatchPolicy returns the policy applied to mismatched CSV/TSV rows.
-	RowMismatchPolicy() model.RowMismatchPolicy
-	// GetTableNames returns the list of tables in the database
-	GetTableNames(ctx context.Context) ([]*model.Table, error)
-	// IsSupportedFile checks if the file has a format supported by filesql
-	IsSupportedFile(filePath string) bool
-	// SanitizeForSQL sanitizes a string to be SQL-safe
-	SanitizeForSQL(name string) string
-	// QuoteIdentifier safely quotes a SQL identifier
-	QuoteIdentifier(identifier string) string
-	// GetTableNameFromFilePath derives a table name from a file path
-	GetTableNameFromFilePath(filePath string) string
 }

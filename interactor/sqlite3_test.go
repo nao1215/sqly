@@ -717,73 +717,46 @@ func TestSqlite3InteractorQuery(t *testing.T) {
 	})
 }
 
-func TestSqlite3InteractorExec(t *testing.T) {
+// TestSqlite3InteractorExecSQLReportsAffectedRows covers the exec half of
+// ExecSQL: a statement that produces no rowset reports the count the repository
+// returned, and a failing one reports the repository's error. ExecSQL is the
+// only entry point for a statement the user typed, so this is the path a DML
+// statement takes.
+func TestSqlite3InteractorExecSQLReportsAffectedRows(t *testing.T) {
 	t.Parallel()
 
-	t.Run("exec insert statement succeeded", func(t *testing.T) {
-		t.Parallel()
+	statements := []struct {
+		name      string
+		statement string
+	}{
+		{name: "insert", statement: "INSERT INTO test (id, name) VALUES (1, 'Gina')"},
+		{name: "update", statement: "UPDATE test SET name = 'Yulia' WHERE id = 1"},
+		{name: "delete", statement: "DELETE FROM test WHERE id = 1"},
+	}
+	for _, tt := range statements {
+		t.Run(tt.name+" reports the affected row count", func(t *testing.T) {
+			t.Parallel()
 
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
+			ctrl := gomock.NewController(t)
+			repo := infrastructure.NewMockSQLite3Repository(ctrl)
+			const expectedRows = int64(1)
+			repo.EXPECT().Exec(gomock.Any(), tt.statement).Return(expectedRows, nil)
 
-		statement := "INSERT INTO test (id, name) VALUES (1, 'Gina')"
-		expectedRows := int64(1)
+			interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
+			table, got, err := interactor.ExecSQL(context.Background(), tt.statement)
+			if err != nil {
+				t.Errorf("want: nil, got: %v", err)
+			}
+			if table != nil {
+				t.Errorf("want: no table for a statement without a rowset, got: %v", table)
+			}
+			if got != expectedRows {
+				t.Errorf("want: %v, got: %v", expectedRows, got)
+			}
+		})
+	}
 
-		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		got, err := interactor.Exec(context.Background(), statement)
-		if err != nil {
-			t.Errorf("want: nil, got: %v", err)
-		}
-		if got != expectedRows {
-			t.Errorf("want: %v, got: %v", expectedRows, got)
-		}
-	})
-
-	t.Run("exec update statement succeeded", func(t *testing.T) {
-		t.Parallel()
-
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
-
-		statement := "UPDATE test SET name = 'Yulia' WHERE id = 1"
-		expectedRows := int64(1)
-
-		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		got, err := interactor.Exec(context.Background(), statement)
-		if err != nil {
-			t.Errorf("want: nil, got: %v", err)
-		}
-		if got != expectedRows {
-			t.Errorf("want: %v, got: %v", expectedRows, got)
-		}
-	})
-
-	t.Run("exec delete statement succeeded", func(t *testing.T) {
-		t.Parallel()
-
-		ctrl := gomock.NewController(t)
-		repo := infrastructure.NewMockSQLite3Repository(ctrl)
-
-		statement := "DELETE FROM test WHERE id = 1"
-		expectedRows := int64(1)
-
-		repo.EXPECT().Exec(gomock.Any(), statement).Return(expectedRows, nil)
-
-		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		got, err := interactor.Exec(context.Background(), statement)
-		if err != nil {
-			t.Errorf("want: nil, got: %v", err)
-		}
-		if got != expectedRows {
-			t.Errorf("want: %v, got: %v", expectedRows, got)
-		}
-	})
-
-	t.Run("exec statement failed", func(t *testing.T) {
+	t.Run("a failing statement reports the repository error", func(t *testing.T) {
 		t.Parallel()
 
 		ctrl := gomock.NewController(t)
@@ -791,12 +764,10 @@ func TestSqlite3InteractorExec(t *testing.T) {
 
 		statement := "INSERT INTO test (id, name) VALUES (1, 'Gina')"
 		someErr := errors.New("failed to execute statement")
-
 		repo.EXPECT().Exec(gomock.Any(), statement).Return(int64(0), someErr)
 
 		interactor := NewSQLite3Interactor(repo, NewSQL(), nil)
-		_, err := interactor.Exec(context.Background(), statement)
-		if !errors.Is(err, someErr) {
+		if _, _, err := interactor.ExecSQL(context.Background(), statement); !errors.Is(err, someErr) {
 			t.Errorf("want: %v, got: %v", someErr, err)
 		}
 	})

@@ -15,14 +15,9 @@ import (
 type QueryUsecase interface {
 	// Query execute "SELECT" or "EXPLAIN" query
 	Query(ctx context.Context, query string) (*model.Table, error)
-	// QueryStream executes a "SELECT"/"EXPLAIN" query and streams each result row
-	// to fn, so callers can aggregate without materializing the whole result set.
-	// fn receives one row's cell strings and a per-cell SQL NULL flag; returning an
-	// error stops the scan.
-	QueryStream(ctx context.Context, query string, fn func(record []string, nulls []bool) error) error
-	// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
-	Exec(ctx context.Context, statement string) (int64, error)
-	// ExecSQL executes "SELECT/EXPLAIN" query or "INSERT/UPDATE/DELETE" statement
+	// ExecSQL executes "SELECT/EXPLAIN" query or "INSERT/UPDATE/DELETE" statement.
+	// It is the only entry point for a statement the user typed: it decides by
+	// shape whether the statement produces rows, so a caller never has to.
 	ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error)
 	// SetDialect sets the SQL dialect applied to subsequent user queries run via
 	// ExecSQL. Loading and internally generated statements always use SQLite.

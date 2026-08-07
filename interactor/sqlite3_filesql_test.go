@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/infrastructure/filesql"
+	"github.com/nao1215/sqly/infrastructure/memory"
 	_ "modernc.org/sqlite"
 )
 
@@ -19,11 +21,13 @@ func newTestSQLite3InteractorWithAdapter(t *testing.T) (*SQLite3Interactor, func
 		t.Fatalf("failed to create database: %v", err)
 	}
 
-	adapter := filesql.NewFileSQLAdapter(sharedDB)
+	// The repository and the adapter read and write the same database, which is
+	// what a session does: files are loaded through the adapter and listed back
+	// through the repository.
 	si := &SQLite3Interactor{
-		r:       nil,
+		r:       memory.NewSQLite3Repository(config.MemoryDB(sharedDB)),
 		sql:     NewSQL(),
-		adapter: adapter,
+		adapter: filesql.NewFileSQLAdapter(sharedDB),
 	}
 	return si, func() {
 		if err := sharedDB.Close(); err != nil {
@@ -49,9 +53,9 @@ func TestSQLite3Interactor_LoadFiles(t *testing.T) {
 		t.Fatalf("LoadFiles: %v", err)
 	}
 
-	tables, err := si.GetTableNames(ctx)
+	tables, err := si.TablesName(ctx)
 	if err != nil {
-		t.Fatalf("GetTableNames: %v", err)
+		t.Fatalf("TablesName: %v", err)
 	}
 	if len(tables) != 1 {
 		t.Errorf("expected 1 table, got %d", len(tables))
@@ -61,15 +65,17 @@ func TestSQLite3Interactor_LoadFiles(t *testing.T) {
 	}
 }
 
-func TestSQLite3Interactor_GetTableNames_Empty(t *testing.T) {
+// TestSQLite3Interactor_TablesName_Empty checks the listing of a session that
+// has loaded nothing: an empty result rather than an error.
+func TestSQLite3Interactor_TablesName_Empty(t *testing.T) {
 	t.Parallel()
 
 	si, cleanup := newTestSQLite3InteractorWithAdapter(t)
 	defer cleanup()
 
-	tables, err := si.GetTableNames(context.Background())
+	tables, err := si.TablesName(context.Background())
 	if err != nil {
-		t.Fatalf("GetTableNames: %v", err)
+		t.Fatalf("TablesName: %v", err)
 	}
 	if len(tables) != 0 {
 		t.Errorf("expected 0 tables, got %d", len(tables))
@@ -129,17 +135,6 @@ func TestSQLite3Interactor_IsExcelFile(t *testing.T) {
 				t.Errorf("IsExcelFile(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestSQLite3Interactor_SanitizeForSQL(t *testing.T) {
-	t.Parallel()
-
-	si, cleanup := newTestSQLite3InteractorWithAdapter(t)
-	defer cleanup()
-
-	if got := si.SanitizeForSQL("My Sheet-1"); got != "My_Sheet_1" {
-		t.Errorf("SanitizeForSQL = %q, want %q", got, "My_Sheet_1")
 	}
 }
 

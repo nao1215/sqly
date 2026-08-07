@@ -1820,9 +1820,9 @@ func TestImportCompletionAbsolutePathThenImportSucceeds(t *testing.T) {
 		t.Fatalf("importCommand(%q) failed: %v", completed, err)
 	}
 
-	tables, err := shell.usecases.importer.GetTableNames(ctx)
+	tables, err := shell.usecases.metadata.TablesName(ctx)
 	if err != nil {
-		t.Fatalf("GetTableNames: %v", err)
+		t.Fatalf("TablesName: %v", err)
 	}
 	names := make([]string, 0, len(tables))
 	for _, tbl := range tables {
