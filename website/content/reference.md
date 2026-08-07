@@ -572,7 +572,7 @@ Values use the same JSON encoding `--output-format json` uses:
 | NULL | `null`, which is what distinguishes it from `""` |
 | BLOB | a JSON string: the bytes when they are valid UTF-8, base64 otherwise (see below) |
 | Infinity, -Infinity, NaN | the JSON strings `"Infinity"`, `"-Infinity"`, `"NaN"`, because JSON has no way to write them |
-| Bytes that are not valid UTF-8 in a TEXT column | the invalid bytes become U+FFFD, as they already did on import |
+| Bytes that are not valid UTF-8 in a TEXT column | the invalid bytes become U+FFFD. A text input carrying them is refused on import, so such a value reaches a TEXT column through a binary container (Parquet, Excel) or a SQL expression |
 
 The distinction JSON keeps is number / string / null, and that is the whole of
 it. Three of the rows above land on "a JSON string", and a reader of the output

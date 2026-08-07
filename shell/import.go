@@ -150,16 +150,24 @@ func (s *Shell) describeLoadFailure(plan *importPlan, err error) error {
 	if best >= 0 {
 		target := plan.targets[best]
 		if msg, ok := s.stdinImportErrorMessage(target.displayPath, err, target.loadPath); ok {
-			return errors.New(msg + s.rowMismatchAdvice(err))
+			return errors.New(msg + s.importAdvice(err))
 		}
 		if target.loadPath == target.displayPath {
-			return fmt.Errorf("failed to import file %s: %w%s", target.displayPath, err, s.rowMismatchAdvice(err))
+			return fmt.Errorf("failed to import file %s: %w%s", target.displayPath, err, s.importAdvice(err))
 		}
 		// Replace the staged path so the message quotes what the user named.
 		return fmt.Errorf("failed to import file %s: %s%s", target.displayPath,
-			strings.ReplaceAll(err.Error(), target.loadPath, target.displayPath), s.rowMismatchAdvice(err))
+			strings.ReplaceAll(err.Error(), target.loadPath, target.displayPath), s.importAdvice(err))
 	}
 	return err
+}
+
+// importAdvice is what sqly can add to a failed import beyond what the loader
+// said: the knob that turns this particular refusal into a load. Each advice
+// answers for its own kind of failure and is empty for every other, so they
+// concatenate and a failure that has no way out stays as it came.
+func (s *Shell) importAdvice(err error) string {
+	return s.rowMismatchAdvice(err) + s.encodingAdvice(err)
 }
 
 // rowMismatchAdvice is the way out of an import that stopped on a short or long

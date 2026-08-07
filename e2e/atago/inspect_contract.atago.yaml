@@ -137,14 +137,29 @@ scenarios:
           stdout:
             contains: "9223372036854775807"
 
+  # The value arrives through Parquet, which states its own types and is not
+  # UTF-8-validated the way a text input is: filesql v0.36.0 refuses a CSV that
+  # is not UTF-8, so a text file can no longer carry such a value in, while a
+  # binary container still can. What --inspect owes the reader is unchanged — a
+  # document that parses, whatever the sample holds.
   - name: replaces bytes that are not valid UTF-8 rather than emitting invalid JSON
     env: *hist
     steps:
       - fixture:
-          file: bad.csv
-          base64: "eAr//v0K"
+          file: seed.csv
+          content: |
+            a
+            1
+      - fixture:
+          file: bad.sql
+          content: |
+            SELECT CAST(x'626164ff62797465' AS TEXT) AS v;
       - run:
-          command: sh -c "sqly --inspect --inspect-sample 1 bad.csv | python3 -c 'import json,sys; json.load(sys.stdin)'"
+          command: sqly --output bad.parquet --output-format parquet --sql-file bad.sql seed.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sh -c "sqly --inspect --inspect-sample 1 bad.parquet | python3 -c 'import json,sys; json.load(sys.stdin)'"
           shell: true
       - assert:
           exit_code: 0

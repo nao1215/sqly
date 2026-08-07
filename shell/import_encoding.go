@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -78,6 +79,35 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 	}
 
 	return stagedPath, cleanup, nil
+}
+
+// encodingAdvice is the way out of an import that stopped because the file is
+// not UTF-8, or "" for a failure that is about something else.
+//
+// The file used to load: SQLite stores TEXT as UTF-8, so bytes in a legacy
+// encoding went in as they were and came back as mojibake with exit 0. filesql
+// refuses them now, which is the right answer but not an actionable one on its
+// own — the reader is told a byte is invalid, not that sqly can decode the file
+// for them. Nothing here guesses which encoding it is: the bytes do not say, and
+// a wrong guess would put the corruption back in a different shape.
+//
+// The encoding is fixed for the session at startup, so an .import typed into a
+// running shell is told to restart with the flag rather than pointed at a
+// command that does not exist.
+func (s *Shell) encodingAdvice(err error) string {
+	// A session that already named an encoding knows the flag; its failure is
+	// about which encoding, and sqly has nothing to add about that.
+	if s.state.importEncoding != model.TextEncodingUTF8 || !errors.Is(err, filesql.ErrInvalidUTF8) {
+		return ""
+	}
+	if s.importingStartupInputs {
+		return fmt.Sprintf("\nhint: this file is not UTF-8. If it is Shift-JIS, EUC-JP, or another legacy encoding,"+
+			" load it with %s (one of: %s), e.g. %s shift-jis.",
+			encodingFlag, model.TextEncodingHelp(), encodingFlag)
+	}
+	return fmt.Sprintf("\nhint: this file is not UTF-8. The encoding is chosen when sqly starts,"+
+		" so restart with %s (one of: %s), e.g. sqly %s shift-jis FILE.",
+		encodingFlag, model.TextEncodingHelp(), encodingFlag)
 }
 
 func newImportDecoder(enc model.TextEncoding) transform.Transformer {

@@ -28,17 +28,24 @@ scenarios:
   # substituted U+FFFD, so the export succeeded and the byte was gone. The guard
   # ranged over the string, which decodes an invalid byte as U+FFFD before the
   # check can see it.
+  #
+  # The value is built in SQL rather than imported: filesql v0.36.0 refuses a
+  # text file that is not UTF-8, so a CSV can no longer carry one in. What the
+  # guard answers for is unchanged — a value reaching the writer, however it got
+  # there — and CAST from a blob reaches it without an import at all.
   - name: refuses an xlsx export of a value that is not valid UTF-8
     skip:
       os: windows
     env: &hist
       SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
+      - fixture: &seed
+          file: seed.csv
+          content: |
+            a
+            1
       - run:
-          command: sh -c 'printf "a,b\nbad\377byte,1\n" > bad.csv'
-          shell: true
-      - run:
-          command: sqly --output out.xlsx --sql "SELECT * FROM bad" bad.csv
+          command: sqly --output out.xlsx --sql "SELECT CAST(x'626164ff62797465' AS TEXT) AS v" seed.csv
       - assert:
           exit_code: 4
           stderr:
@@ -57,16 +64,21 @@ scenarios:
       os: windows
     env: *hist
     steps:
+      - fixture: *seed
+      # The statement is a file so the hex literal's quotes do not have to
+      # survive a shell inside a shell.
+      - fixture:
+          file: bad.sql
+          content: |
+            SELECT CAST(x'626164ff62797465' AS TEXT) AS v;
       - run:
-          command: sh -c 'printf "a,b\nbad\377byte,1\n" > bad.csv'
-          shell: true
-      - run:
-          command: sh -c 'sqly --output-format csv --sql "SELECT * FROM bad" bad.csv | wc -c'
+          command: sh -c 'sqly --output-format csv --sql-file bad.sql seed.csv | od -An -c | tr -s " "'
           shell: true
       - assert:
           exit_code: 0
           stdout:
-            contains: "15"
+            # The byte is written as it stands: b a d \377 b y t e.
+            contains: "b a d 377 b y t e"
 
   # 3. ltsv validated each value as it wrote it, so the rows before the bad one
   # were already on stdout. Writing to a file was atomic because it stages; only
