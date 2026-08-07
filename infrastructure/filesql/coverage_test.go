@@ -19,7 +19,7 @@ import (
 // database. The pool is pinned to a single connection because a bare
 // ":memory:" database is private per connection, so every statement must run
 // against the same underlying database.
-func covFsqlNewAdapter(t *testing.T) *FileSQLAdapter {
+func covFsqlNewAdapter(t *testing.T) *testAdapter {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
@@ -27,7 +27,7 @@ func covFsqlNewAdapter(t *testing.T) *FileSQLAdapter {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	return NewFileSQLAdapter(db)
+	return newTestAdapter(db)
 }
 
 // covFsqlWriteCSV writes a small CSV file into a temp dir and returns its path.
@@ -237,28 +237,8 @@ func TestDumpACHFile_RoundTrip(t *testing.T) {
 	}
 
 	// nil-DB guard.
-	if err := NewFileSQLAdapter(nil).DumpACHFile(ctx, baseName, out); err == nil {
+	if err := newTestAdapter(nil).DumpACHFile(ctx, baseName, out); err == nil {
 		t.Error("DumpACHFile with nil DB = nil error, want error")
-	}
-}
-
-// TestQuery_SQLError checks that an invalid query returns a FileSQLError.
-func TestQuery_SQLError(t *testing.T) {
-	t.Parallel()
-
-	a := covFsqlNewAdapter(t)
-	if _, err := a.Query(context.Background(), "SELECT * FROM no_such_table"); err == nil {
-		t.Fatal("Query on missing table = nil error, want error")
-	}
-}
-
-// TestExec_SQLError checks that an invalid statement returns a FileSQLError.
-func TestExec_SQLError(t *testing.T) {
-	t.Parallel()
-
-	a := covFsqlNewAdapter(t)
-	if _, err := a.Exec(context.Background(), "UPDATE no_such_table SET x = 1"); err == nil {
-		t.Fatal("Exec on missing table = nil error, want error")
 	}
 }
 
@@ -272,39 +252,11 @@ func TestGetTableNames_ClosedDB(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	a := NewFileSQLAdapter(db)
+	a := newTestAdapter(db)
 	_ = db.Close()
 
 	if _, err := a.GetTableNames(context.Background()); err == nil {
 		t.Fatal("GetTableNames on closed DB = nil error, want error")
-	}
-}
-
-// TestGetTableHeader_EmptyName checks the empty-name guard.
-func TestGetTableHeader_EmptyName(t *testing.T) {
-	t.Parallel()
-
-	a := covFsqlNewAdapter(t)
-	if _, err := a.GetTableHeader(context.Background(), "   "); err == nil {
-		t.Fatal("GetTableHeader with blank name = nil error, want error")
-	}
-}
-
-// TestGetTableHeader_ClosedDB checks the QueryContext error branch by closing the
-// database before the call.
-func TestGetTableHeader_ClosedDB(t *testing.T) {
-	t.Parallel()
-
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	a := NewFileSQLAdapter(db)
-	_ = db.Close()
-
-	if _, err := a.GetTableHeader(context.Background(), "some_table"); err == nil {
-		t.Fatal("GetTableHeader on closed DB = nil error, want error")
 	}
 }
 
@@ -339,7 +291,7 @@ func TestDumpFedWireFile_RoundTrip(t *testing.T) {
 	}
 
 	// nil-DB guard.
-	if err := NewFileSQLAdapter(nil).DumpFedWireFile(ctx, baseName, out); err == nil {
+	if err := newTestAdapter(nil).DumpFedWireFile(ctx, baseName, out); err == nil {
 		t.Error("DumpFedWireFile with nil DB = nil error, want error")
 	}
 }

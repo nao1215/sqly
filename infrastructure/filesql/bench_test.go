@@ -91,7 +91,7 @@ func benchImport(b *testing.B, rows int) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		adapter := NewFileSQLAdapter(db)
+		adapter := newTestAdapter(db)
 		b.StartTimer()
 
 		if err := adapter.LoadFiles(ctx, csv); err != nil {
@@ -130,7 +130,7 @@ func BenchmarkImportMultiFile(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		adapter := NewFileSQLAdapter(db)
+		adapter := newTestAdapter(db)
 		b.StartTimer()
 
 		if err := adapter.LoadFiles(ctx, paths...); err != nil {
@@ -145,7 +145,7 @@ func BenchmarkImportMultiFile(b *testing.B) {
 
 // benchQueryFixture imports a CSV once and returns an adapter over it, so the
 // query and output benchmarks measure only the work they name.
-func benchQueryFixture(b *testing.B, rows int) (*FileSQLAdapter, func()) {
+func benchQueryFixture(b *testing.B, rows int) (*testAdapter, func()) {
 	b.Helper()
 
 	dir := b.TempDir()
@@ -156,7 +156,7 @@ func benchQueryFixture(b *testing.B, rows int) (*FileSQLAdapter, func()) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	adapter := NewFileSQLAdapter(db)
+	adapter := newTestAdapter(db)
 	if err := adapter.LoadFiles(context.Background(), csv); err != nil {
 		b.Fatal(err)
 	}
