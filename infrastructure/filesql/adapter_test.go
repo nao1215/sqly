@@ -269,6 +269,33 @@ func TestFileSQLAdapter_GetTableNames(t *testing.T) {
 	}
 }
 
+// TestFileSQLAdapter_GetTableNamesIncludesQueryResultPrefix pins the visibility
+// of a table named query_result_*. Import compares this list before and after
+// loading to decide whether a file produced anything, so a name this list
+// refuses is a file that cannot be imported at all.
+func TestFileSQLAdapter_GetTableNamesIncludesQueryResultPrefix(t *testing.T) {
+	t.Parallel()
+
+	sharedDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create shared database: %v", err)
+	}
+	defer func() { _ = sharedDB.Close() }()
+
+	if _, err := sharedDB.ExecContext(context.Background(), `CREATE TABLE query_result_report (id INTEGER)`); err != nil {
+		t.Fatalf("Failed to create query_result_report: %v", err)
+	}
+
+	tables, err := newTestAdapter(sharedDB).GetTableNames(context.Background())
+	if err != nil {
+		t.Fatalf("GetTableNames failed: %v", err)
+	}
+
+	if len(tables) != 1 || tables[0].Name() != "query_result_report" {
+		t.Errorf("GetTableNames() = %v, want [query_result_report]", tables)
+	}
+}
+
 func TestNewFileSQLAdapter(t *testing.T) {
 	t.Parallel()
 

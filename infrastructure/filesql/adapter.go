@@ -289,8 +289,10 @@ func (f *FileSQLAdapter) GetTableNames(ctx context.Context) ([]*model.Table, err
 		return nil, &FileSQLError{Op: opGetTables, Err: errDatabaseNotInit}
 	}
 
-	// Query sqlite_master for table names, excluding system tables and temporary query result tables
-	query := "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'query_result_%'"
+	// Exclude only SQLite's own bookkeeping tables. Their sqlite_ prefix is
+	// reserved by the engine, which refuses to create a table under it, so no
+	// imported file can be hidden by this.
+	query := "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
 	rows, err := f.sharedDB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, &FileSQLError{Op: opGetTables, Err: err.Error()}

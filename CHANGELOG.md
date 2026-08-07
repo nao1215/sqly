@@ -16,6 +16,12 @@ rather than after v1.0.0.
 The final RC is announced as the final one in its release notes. That is the
 point to pin a version against; none of rc1 through rc7 is it.
 
+## [Unreleased]
+
+### Bug Fixes
+
+* A file whose name begins with `query_result_` imports like any other. sqly once materialized results into tables of that name and filtered the prefix out of every listing; the materializing was removed and the filter was not, so it could only reach tables the user owned. Because import decides whether a file produced anything by comparing the table list before and after loading, such a file did not merely go missing from `.tables` and `--inspect` — the import failed outright with "the file has no rows to import" over a file full of rows, and `.save` had no table to write back. `CREATE TABLE query_result_x` had the same result from inside the session. SQLite's own `sqlite_` tables are still excluded, and that prefix is reserved by the engine, so no imported file can land under it.
+
 ## [v1.0.0-rc7](https://github.com/nao1215/sqly/compare/v1.0.0-rc6...v1.0.0-rc7) (2026-08-07)
 
 A release candidate for v1.0.0, not the final one. Everything below is a change
