@@ -322,22 +322,30 @@ func TestShellExec(t *testing.T) {
 		}
 	})
 
-	t.Run("execute .mode: table to excel", func(t *testing.T) {
-		shell, cleanup, err := newShell(t, []string{"sqly"})
-		if err != nil {
-			t.Error(err)
-		}
-		defer cleanup()
+	// excel and parquet name a file, not a screen. Selecting one used to leave the
+	// session printing CSV under another name, with the banner admitting it.
+	t.Run("execute .mode: excel and parquet are refused", func(t *testing.T) {
+		for _, name := range []string{"excel", "parquet"} {
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		got, err := getExecStdErrOutput(t, shell.exec, ".mode excel")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		assertShellFixture(t, "mode_table_to_excel.golden", got)
-
-		if shell.state.mode.PrintMode != model.PrintModeExcel {
-			t.Errorf("mismatch got=%s, want=%s", shell.state.mode.String(), model.PrintModeExcel.String())
+			err = shell.exec(context.Background(), ".mode "+name)
+			if err == nil {
+				t.Fatalf(".mode %s returned nil, want an invalid-mode error", name)
+			}
+			if !strings.Contains(err.Error(), "invalid output mode") {
+				t.Errorf(".mode %s error = %v, want an invalid-mode error", name, err)
+			}
+			// The message has to say what is accepted, and what to use instead.
+			if !strings.Contains(err.Error(), "csv") || !strings.Contains(err.Error(), ".dump") {
+				t.Errorf(".mode %s error = %v, want the valid modes and the .dump alternative", name, err)
+			}
+			if shell.state.mode.PrintMode != model.PrintModeTable {
+				t.Errorf("a refused .mode %s changed the mode to %s", name, shell.state.mode.String())
+			}
+			cleanup()
 		}
 	})
 
