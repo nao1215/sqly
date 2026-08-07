@@ -26,50 +26,11 @@ func covMemNewRepo(t *testing.T) repository.SQLite3Repository {
 // and streaming subtests.
 func covMemSeedTable(t *testing.T, r repository.SQLite3Repository) {
 	t.Helper()
-	table := model.NewTable("sample", model.Header{"id", "name"}, []model.Record{
-		{"1", "alice"},
-		{"2", "bob"},
-	})
-	if err := r.CreateTable(context.Background(), table); err != nil {
+	if _, err := r.Exec(context.Background(), "CREATE TABLE sample (id TEXT, name TEXT)"); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Insert(context.Background(), table); err != nil {
+	if _, err := r.Exec(context.Background(), "INSERT INTO sample VALUES ('1', 'alice'), ('2', 'bob')"); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestSqlite3Repository_CreateTable_DuplicateReturnsError(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	table := model.NewTable("dup", model.Header{"id"}, []model.Record{{"1"}})
-	if err := r.CreateTable(context.Background(), table); err != nil {
-		t.Fatalf("first CreateTable error = %v, want nil", err)
-	}
-	// The second CREATE reaches ExecContext and fails because the table exists.
-	if err := r.CreateTable(context.Background(), table); err == nil {
-		t.Error("expected error creating a duplicate table, got nil")
-	}
-}
-
-func TestSqlite3Repository_Insert_InvalidTableReturnsError(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	// An empty table fails Valid() before any SQL runs.
-	if err := r.Insert(context.Background(), model.NewTable("", model.Header{}, []model.Record{})); err == nil {
-		t.Error("expected error inserting an invalid table, got nil")
-	}
-}
-
-func TestSqlite3Repository_Insert_MissingTableReturnsError(t *testing.T) {
-	t.Parallel()
-
-	r := covMemNewRepo(t)
-	// The table is valid but was never created, so ExecContext fails.
-	table := model.NewTable("ghost", model.Header{"id"}, []model.Record{{"1"}})
-	if err := r.Insert(context.Background(), table); err == nil {
-		t.Error("expected error inserting into a missing table, got nil")
 	}
 }
 

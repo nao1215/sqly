@@ -18,15 +18,11 @@ var ErrNoRows = errors.New("execute query, however return no records")
 
 // SQLite3Repository is a repository that handles SQLite3.
 type SQLite3Repository interface {
-	// CreateTable create a DB table with columns given as model.Table
-	CreateTable(ctx context.Context, t *model.Table) error
 	// TablesName return all table name.
 	TablesName(ctx context.Context) ([]*model.Table, error)
 	// SchemaObjects returns every queryable table and view in the session,
 	// including TEMP tables and views, for enumeration by .tables.
 	SchemaObjects(ctx context.Context) ([]*model.Table, error)
-	// Insert set records in DB
-	Insert(ctx context.Context, t *model.Table) error
 	// List get records in the specified table
 	List(ctx context.Context, tableName string) (*model.Table, error)
 	// Header get table header name.

@@ -84,11 +84,6 @@ func NewMetadataUsecase(i *SQLite3Interactor) usecase.MetadataUsecase { return i
 // (native financial write-back).
 func NewPersistenceUsecase(i *SQLite3Interactor) usecase.PersistenceUsecase { return i }
 
-// CreateTable create a DB table with columns given as model.Table
-func (si *SQLite3Interactor) CreateTable(ctx context.Context, t *model.Table) error {
-	return si.r.CreateTable(ctx, t)
-}
-
 // TablesName return all table name.
 func (si *SQLite3Interactor) TablesName(ctx context.Context) ([]*model.Table, error) {
 	return si.r.TablesName(ctx)
@@ -98,11 +93,6 @@ func (si *SQLite3Interactor) TablesName(ctx context.Context) ([]*model.Table, er
 // views, for enumeration by .tables.
 func (si *SQLite3Interactor) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
 	return si.r.SchemaObjects(ctx)
-}
-
-// Insert set records in DB
-func (si *SQLite3Interactor) Insert(ctx context.Context, t *model.Table) error {
-	return si.r.Insert(ctx, t)
 }
 
 // List get records in the specified table

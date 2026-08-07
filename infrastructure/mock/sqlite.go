@@ -41,44 +41,6 @@ func (m *MockSQLite3Repository) EXPECT() *MockSQLite3RepositoryMockRecorder {
 	return m.recorder
 }
 
-// CreateTable mocks base method.
-func (m *MockSQLite3Repository) CreateTable(ctx context.Context, t *model.Table) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTable", ctx, t)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateTable indicates an expected call of CreateTable.
-func (mr *MockSQLite3RepositoryMockRecorder) CreateTable(ctx, t any) *MockSQLite3RepositoryCreateTableCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockSQLite3Repository)(nil).CreateTable), ctx, t)
-	return &MockSQLite3RepositoryCreateTableCall{Call: call}
-}
-
-// MockSQLite3RepositoryCreateTableCall wrap *gomock.Call
-type MockSQLite3RepositoryCreateTableCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSQLite3RepositoryCreateTableCall) Return(arg0 error) *MockSQLite3RepositoryCreateTableCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSQLite3RepositoryCreateTableCall) Do(f func(context.Context, *model.Table) error) *MockSQLite3RepositoryCreateTableCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSQLite3RepositoryCreateTableCall) DoAndReturn(f func(context.Context, *model.Table) error) *MockSQLite3RepositoryCreateTableCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Exec mocks base method.
 func (m *MockSQLite3Repository) Exec(ctx context.Context, statement string) (int64, error) {
 	m.ctrl.T.Helper()
@@ -153,44 +115,6 @@ func (c *MockSQLite3RepositoryHeaderCall) Do(f func(context.Context, string) (*m
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockSQLite3RepositoryHeaderCall) DoAndReturn(f func(context.Context, string) (*model.Table, error)) *MockSQLite3RepositoryHeaderCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Insert mocks base method.
-func (m *MockSQLite3Repository) Insert(ctx context.Context, t *model.Table) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Insert", ctx, t)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Insert indicates an expected call of Insert.
-func (mr *MockSQLite3RepositoryMockRecorder) Insert(ctx, t any) *MockSQLite3RepositoryInsertCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockSQLite3Repository)(nil).Insert), ctx, t)
-	return &MockSQLite3RepositoryInsertCall{Call: call}
-}
-
-// MockSQLite3RepositoryInsertCall wrap *gomock.Call
-type MockSQLite3RepositoryInsertCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSQLite3RepositoryInsertCall) Return(arg0 error) *MockSQLite3RepositoryInsertCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSQLite3RepositoryInsertCall) Do(f func(context.Context, *model.Table) error) *MockSQLite3RepositoryInsertCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSQLite3RepositoryInsertCall) DoAndReturn(f func(context.Context, *model.Table) error) *MockSQLite3RepositoryInsertCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
