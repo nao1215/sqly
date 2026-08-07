@@ -33,7 +33,7 @@ scenarios:
       - fixture: *user
       - run:
           command: sqly user.csv
-          stdin: ".mode excel\n.dump user dump.xlsx\n"
+          stdin: ".dump user dump.xlsx\n"
       - assert:
           exit_code: 0
           stderr:
@@ -45,3 +45,54 @@ scenarios:
           file:
             path: dump.xlsx
             executable: false
+
+  # excel and parquet name a file, not a screen. .mode used to accept them and
+  # then print CSV under the name, with the banner admitting it was "same as csv
+  # mode"; a script scraping that output depended on excel meaning csv forever.
+  - name: .mode excel is refused and says what to use instead
+    steps:
+      - fixture: &modegone
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+            jenkins46,2
+      - run:
+          command: sqly user.csv
+          stdin: ".mode excel\n"
+      - assert:
+          exit_code: 2
+          stderr:
+            contains:
+              - "invalid output mode"
+              - ".dump"
+
+  - name: .dump writes a workbook in table mode, from the extension alone
+    steps:
+      - fixture: *modegone
+      - run:
+          command: sqly user.csv
+          stdin: ".dump user out.xlsx\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: out.xlsx
+            exists: true
+      - run:
+          command: sqly --output-format csv --sql "SELECT COUNT(*) AS c FROM out_user" out.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "2"
+
+  - name: --output-format excel still names a file format for --output
+    steps:
+      - fixture: *modegone
+      - run:
+          command: sqly --output-format excel --output q.xlsx --sql "SELECT user_name FROM user" user.csv
+      - assert:
+          exit_code: 0
+          file:
+            path: q.xlsx
+            exists: true

@@ -12,7 +12,7 @@ func (c CommandList) modeCommand(_ context.Context, s *Shell, argv []string) err
 	if len(argv) == 0 {
 		// Reporting the mode is the answer to the question ".mode" asks. See
 		// sessionsetting.go for why this is not an error and why it is on stderr.
-		printSessionSetting(settingOutputMode, s.state.mode.String(), model.PrintModeNames())
+		printSessionSetting(settingOutputMode, s.state.mode.String(), model.SelectableModeNames())
 		return nil
 	}
 	if len(argv) > 1 {

@@ -107,9 +107,9 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 	// leaves the current mode untouched. The name is resolved the same way
 	// --output-format resolves its value, so the two flags of one setting cannot
 	// disagree about which spellings name a format.
-	target, ok := model.ParsePrintMode(modeName)
+	target, ok := model.ParseSelectableMode(modeName)
 	if !ok {
-		return &invocationError{Err: fmt.Errorf("invalid output mode %q: want %s", modeName, model.PrintModeNames())}
+		return &invocationError{Err: fmt.Errorf("invalid output mode %q: want %s (excel and parquet name a file, not a screen: write one with .dump TABLE FILE.xlsx or --output)", modeName, model.SelectableModeNames())}
 	}
 
 	// Selecting the mode that is already in effect is what the caller asked for,
@@ -131,16 +131,11 @@ func (m *mode) changeOutputModeIfNeeded(modeName string) error {
 }
 
 // modeBannerSuffix is what the .mode banner adds after the new mode's name, for
-// the modes whose name does not describe what the screen will show: markdown
-// renders a table, and the two dump-only formats render as CSV until a .dump or
-// --output gives them a file to be written to.
+// a mode whose name does not describe what the screen will show. Markdown is the
+// one left: it renders a table.
 func modeBannerSuffix(mode model.PrintMode) string {
-	switch mode {
-	case model.PrintModeMarkdownTable:
+	if mode == model.PrintModeMarkdownTable {
 		return " table"
-	case model.PrintModeExcel, model.PrintModeParquet:
-		return " (active only when executing .dump, otherwise same as csv mode)"
-	default:
-		return ""
 	}
+	return ""
 }

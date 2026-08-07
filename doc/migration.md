@@ -9,6 +9,38 @@ output.
 
 ## v1.0.0-rc6 → next
 
+### `.mode excel` and `.mode parquet` are rejected
+
+`.mode` names what the screen shows, and neither format has an on-screen form.
+Selecting one printed CSV under another name, which the banner admitted.
+
+```text
+Before:
+  sqly:~$ .mode parquet
+  Change output mode from table to parquet (active only when executing .dump, otherwise same as csv mode)
+  sqly:~$ .dump user out.parquet
+
+From now:
+  sqly:~$ .mode parquet
+  invalid output mode "parquet": want table, vertical, csv, tsv, ltsv, json, jsonl,
+  markdown (excel and parquet name a file, not a screen: write one with
+  .dump TABLE FILE.xlsx or --output)          # exit 2
+
+  sqly:~$ .dump user out.parquet              # the extension names the format
+```
+
+**What to change:** drop the `.mode` line from a script that pairs it with a
+`.dump`; the destination's extension already picks the format. A `.dump` to a
+path with no extension needs one now (`.dump user out.parquet`, not `.dump user
+out`), since the mode is no longer there to name the format.
+
+`--output-format` is unchanged and still takes both, because there the name picks
+a file format for `--output`:
+
+```shell
+sqly --output-format parquet --output q.parquet --sql "SELECT * FROM user" user.csv
+```
+
 ### `.header` is removed; use `.describe`
 
 `.header TABLE` printed a table's column names, which is the `name` column of

@@ -101,6 +101,59 @@ func TestPrintModeNamesListsEveryMode(t *testing.T) {
 	}
 }
 
+// TestSelectableModesAreTheOnesAScreenCanShow pins the two vocabularies apart.
+//
+// --output-format names a file format for --output, and .mode names what the
+// screen shows. Excel and Parquet belong to the first only: neither can be
+// rendered to a terminal, so .mode used to accept a name and then print CSV
+// under it. The sets are asserted rather than derived from each other, so
+// widening one does not silently widen the other.
+func TestSelectableModesAreTheOnesAScreenCanShow(t *testing.T) {
+	t.Parallel()
+
+	wantSelectable := []string{"table", "vertical", "csv", "tsv", "ltsv", "json", "jsonl", "markdown"}
+	wantOutputOnly := []string{"excel", "parquet"}
+
+	got := strings.Split(SelectableModeNames(), ", ")
+	if len(got) != len(wantSelectable) {
+		t.Fatalf("SelectableModeNames() = %v, want %v", got, wantSelectable)
+	}
+	for i, want := range wantSelectable {
+		if got[i] != want {
+			t.Errorf("SelectableModeNames()[%d] = %q, want %q", i, got[i], want)
+		}
+	}
+
+	// Every selectable name parses as one, and the file-only names do not.
+	for _, name := range wantSelectable {
+		if _, ok := ParseSelectableMode(name); !ok {
+			t.Errorf("ParseSelectableMode(%q) = false, want true", name)
+		}
+	}
+	for _, name := range wantOutputOnly {
+		if _, ok := ParseSelectableMode(name); ok {
+			t.Errorf("ParseSelectableMode(%q) = true, want false: it names a file, not a screen", name)
+		}
+		// --output-format still takes them, which is the point of keeping two lists.
+		if _, ok := ParsePrintMode(name); !ok {
+			t.Errorf("ParsePrintMode(%q) = false, want true: --output-format still names it", name)
+		}
+		if !strings.Contains(PrintModeNames(), name) {
+			t.Errorf("PrintModeNames() lost %q, which --output-format accepts", name)
+		}
+	}
+
+	// SelectableModes and SelectableModeNames must not disagree.
+	if len(SelectableModes()) != len(got) {
+		t.Errorf("SelectableModes() has %d entries, SelectableModeNames() lists %d", len(SelectableModes()), len(got))
+	}
+	for i, m := range SelectableModes() {
+		if m.String() != got[i] {
+			t.Errorf("SelectableModes()[%d] = %q, SelectableModeNames()[%d] = %q", i, m.String(), i, got[i])
+		}
+	}
+}
+
 // TestStdinFormatsHaveExtensions checks what the two tables this replaced could
 // not: every name the flag accepts stages a file with an extension, so a value
 // that validates cannot then fail to import for want of one.

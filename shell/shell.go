@@ -1921,11 +1921,12 @@ func dialectSuggestions() []Suggest {
 	return out
 }
 
-// outputModeSuggestions offers every output format, read from the same registry
-// --output-format and .mode resolve against, so a format cannot exist for one of
-// them and not the others.
+// outputModeSuggestions offers the formats .mode can select, read from the same
+// registry .mode resolves against, so completion cannot offer a name .mode would
+// then reject. Excel and Parquet are absent for that reason: they name a file
+// for --output or .dump, not something a screen can show.
 func outputModeSuggestions() []Suggest {
-	modes := model.PrintModes()
+	modes := model.SelectableModes()
 	out := make([]Suggest, 0, len(modes))
 	for _, m := range modes {
 		out = append(out, Suggest{Text: m.String(), Description: outputFormatDescription(m)})

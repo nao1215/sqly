@@ -353,7 +353,7 @@ scenarios:
       - assert:
           stderr:
             line: 1
-            equals: "current output mode: csv (available: table, vertical, csv, tsv, ltsv, json, jsonl, markdown, excel, parquet)"
+            equals: "current output mode: csv (available: table, vertical, csv, tsv, ltsv, json, jsonl, markdown)"
 
   - name: reports the current row-mismatch policy instead of failing
     env: *hist

@@ -77,20 +77,29 @@ const (
 //
 // The order is part of the registry rather than each caller's business, so the
 // three lists a user might compare cannot disagree about it either.
+//
+// selectable says whether .mode can choose the format. Excel and Parquet cannot:
+// neither can be rendered to a terminal, so selecting one used to leave the
+// session printing CSV while calling itself something else — a banner had to
+// admit it was "same as csv mode", and a script scraping that output depended on
+// excel meaning csv forever. They stay in the registry because --output-format
+// still names them: there the name picks a file format for --output, which is a
+// different question from what the screen shows.
 var printModes = []struct {
-	mode PrintMode
-	name string
+	mode       PrintMode
+	name       string
+	selectable bool
 }{
-	{PrintModeTable, formatTable},
-	{PrintModeVertical, formatVertical},
-	{PrintModeCSV, formatCSV},
-	{PrintModeTSV, formatTSV},
-	{PrintModeLTSV, formatLTSV},
-	{PrintModeJSON, formatJSON},
-	{PrintModeJSONL, formatJSONL},
-	{PrintModeMarkdownTable, formatMarkdown},
-	{PrintModeExcel, formatExcel},
-	{PrintModeParquet, formatParquet},
+	{PrintModeTable, formatTable, true},
+	{PrintModeVertical, formatVertical, true},
+	{PrintModeCSV, formatCSV, true},
+	{PrintModeTSV, formatTSV, true},
+	{PrintModeLTSV, formatLTSV, true},
+	{PrintModeJSON, formatJSON, true},
+	{PrintModeJSONL, formatJSONL, true},
+	{PrintModeMarkdownTable, formatMarkdown, true},
+	{PrintModeExcel, formatExcel, false},
+	{PrintModeParquet, formatParquet, false},
 }
 
 // PrintModes returns every output mode, in the order they are listed to a user.
@@ -142,6 +151,48 @@ func PrintModeNames() string {
 	names := make([]string, 0, len(printModes))
 	for _, m := range printModes {
 		names = append(names, m.name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// SelectableModes returns the formats .mode can choose, in the order they are
+// listed to a user. Completion iterates this so it cannot offer a name .mode
+// would then reject.
+func SelectableModes() []PrintMode {
+	modes := make([]PrintMode, 0, len(printModes))
+	for _, m := range printModes {
+		if m.selectable {
+			modes = append(modes, m.mode)
+		}
+	}
+	return modes
+}
+
+// ParseSelectableMode returns the mode a user named to .mode, and whether the
+// name is one .mode can select. A format that only names a file (excel,
+// parquet) is not: it reports false, like an unknown name, so the caller says
+// what .mode takes rather than accepting a mode the screen cannot show.
+func ParseSelectableMode(name string) (PrintMode, bool) {
+	mode, ok := ParsePrintMode(name)
+	if !ok {
+		return PrintModeTable, false
+	}
+	for _, m := range printModes {
+		if m.mode == mode {
+			return mode, m.selectable
+		}
+	}
+	return PrintModeTable, false
+}
+
+// SelectableModeNames lists the formats .mode can choose, comma-separated in the
+// order a user is shown them.
+func SelectableModeNames() string {
+	names := make([]string, 0, len(printModes))
+	for _, m := range printModes {
+		if m.selectable {
+			names = append(names, m.name)
+		}
 	}
 	return strings.Join(names, ", ")
 }

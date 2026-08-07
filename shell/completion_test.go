@@ -1868,7 +1868,7 @@ func TestArgumentCompletionIsCommandAware(t *testing.T) {
 	}{
 		{".dialect offers every dialect and nothing else", ".dialect ", []string{"sqlite", "mysql", "postgresql", "googlesql"}},
 		{".dialect m narrows to the dialect, not the output format", ".dialect m", []string{"mysql"}},
-		{".mode offers every output format and nothing else", ".mode ", []string{"table", "vertical", "csv", "tsv", "ltsv", "json", "jsonl", "markdown", "excel", "parquet"}},
+		{".mode offers the formats a screen can show, and nothing else", ".mode ", []string{"table", "vertical", "csv", "tsv", "ltsv", "json", "jsonl", "markdown"}},
 		{".mode m narrows to the format, not the dialect", ".mode m", []string{"markdown"}},
 		{".row-mismatch offers its three policies", ".row-mismatch ", []string{"error", "skip", "pad"}},
 		{".row-mismatch s reaches skip", ".row-mismatch s", []string{"skip"}},

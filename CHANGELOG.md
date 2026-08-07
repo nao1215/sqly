@@ -21,6 +21,7 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 ## [Unreleased]
 
 ### Breaking Changes
+* `.mode` no longer takes `excel` or `parquet`. Neither can be rendered to a terminal, so selecting one left the session printing CSV under another name — the banner had to say "active only when executing .dump, otherwise same as csv mode", and a pipeline reading that output depended on excel meaning csv. `.mode excel` now exits `2` and names the modes a screen can show. Writing either format is unchanged: `.dump TABLE out.xlsx` takes the format from the extension whatever the mode, and `--output-format excel --output FILE` still names a file format for the flag that writes a file. See the [migration guide](doc/migration.md).
 * `.header` is removed; `.describe` is what it was a subset of. It printed a table's column names, which is the `name` column `.describe` already prints, so the shell answered one question two ways and carried a rendering path nothing else used. `.header` now reports "no such sqly command" and exits `1`. A script reading the names out of a structured mode reads the `name` key rather than `column`. See the [migration guide](doc/migration.md).
 
 ### Refactoring

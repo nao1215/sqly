@@ -98,7 +98,7 @@ afterward still exits 0.
 | Command | Does |
 |:--|:--|
 | `.help` | show the command list |
-| `.mode [MODE]` | show or set the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown`, `excel`, `parquet` |
+| `.mode [MODE]` | show or set the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
 | `.row-mismatch [POLICY]` | show or set how a CSV/TSV row whose field count differs from the header is imported: `error` fails the import, `skip` drops the row, `pad` fills a short row with empty values and fails on a long one |
 | `.clear` | clear the screen |
@@ -109,7 +109,7 @@ no argument each reports and succeeds:
 
 ```text
 sqly:~/data(table)$ .mode
-current output mode: table (available: table, vertical, csv, tsv, ltsv, json, jsonl, markdown, excel, parquet)
+current output mode: table (available: table, vertical, csv, tsv, ltsv, json, jsonl, markdown)
 ```
 
 Two of them used to fail instead, so a script that meant `.mode csv` would not
@@ -118,6 +118,12 @@ rejected, so that typo is still caught.
 
 Every one of those lines goes to stderr, so a script that names its dialect
 still pipes into `jq`.
+
+`.mode` names what the screen shows, so `excel` and `parquet` are not among its
+values: neither can be rendered to a terminal. Write one with a destination
+instead — `.dump TABLE out.xlsx` takes the format from the extension, whatever
+the mode, and `--output-format excel --output FILE` does the same from the
+command line.
 
 ### Navigate
 
