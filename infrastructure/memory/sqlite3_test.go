@@ -455,7 +455,7 @@ func TestSqlite3RepositorySchemaObjects(t *testing.T) {
 }
 
 // TestSqlite3RepositoryListSchemaQualified verifies that List accepts a
-// schema-qualified table name, so .dump and .header can target main.<table>.
+// schema-qualified table name, so .dump and .describe can target main.<table>.
 func TestSqlite3RepositoryListSchemaQualified(t *testing.T) {
 	memoryDB, cleanup, err := config.NewInMemDB()
 	if err != nil {

@@ -104,7 +104,7 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 		}
 		records = append(records, model.Record(row))
 	}
-	return model.NewTable(filepath.Base(path), model.NewHeader(header), records)
+	return model.NewTable(filepath.Base(path), header, records)
 }
 
 // TestDelimitedRepositoryDumpLoneEmptyField pins that a one-column row whose

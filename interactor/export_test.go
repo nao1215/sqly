@@ -52,7 +52,7 @@ func TestEveryExportFormatHasASerializer(t *testing.T) {
 func TestDumpTableRejectsAFormatWithNoSerializer(t *testing.T) {
 	t.Parallel()
 
-	table := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+	table := model.NewTable("t", model.Header{"id"}, []model.Record{
 		model.Record([]string{"1"}),
 	})
 	out := filepath.Join(t.TempDir(), "out.csv")
@@ -73,7 +73,7 @@ func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 
 	exp := newTestExportInteractor()
 
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age", "city"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age", "city"}, []model.Record{
 		model.Record([]string{"John", "25", "New York"}),
 		model.Record([]string{"Jane", "30", "Los Angeles"}),
 	})
@@ -104,7 +104,7 @@ func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 
 	exp := newTestExportInteractor()
 
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age", "city"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age", "city"}, []model.Record{
 		model.Record([]string{"John", "25", "New York"}),
 	})
 
@@ -130,7 +130,7 @@ func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 
 	exp := newTestExportInteractor()
 
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age"}, []model.Record{
 		model.Record([]string{"John", "25"}),
 	})
 
@@ -156,7 +156,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 
 	exp := newTestExportInteractor()
 
-	table := model.NewTable("test_sheet", model.NewHeader([]string{"id", "name"}), []model.Record{
+	table := model.NewTable("test_sheet", model.Header{"id", "name"}, []model.Record{
 		model.Record([]string{"1", "Gina"}),
 	})
 
@@ -189,7 +189,7 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 
 	exp := newTestExportInteractor()
 
-	table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
+	table := model.NewTable("test", model.Header{"id", "name"}, []model.Record{
 		model.Record([]string{"1", "Alice"}),
 	})
 
@@ -215,7 +215,7 @@ func TestExportInteractor_DumpTable_InvalidPath(t *testing.T) {
 
 	exp := newTestExportInteractor()
 
-	table := model.NewTable("test", model.NewHeader([]string{"id"}), nil)
+	table := model.NewTable("test", model.Header{"id"}, nil)
 
 	err := exp.DumpTable("/nonexistent/directory/file.csv", table, model.ExportCSV, model.CompressionNone)
 	if err == nil {
@@ -227,7 +227,7 @@ func TestExportInteractor_DumpTable_JSON(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age"}, []model.Record{
 		model.Record([]string{"John", "25"}),
 		model.Record([]string{"Jane", "30"}),
 	})
@@ -280,7 +280,7 @@ func TestExportInteractor_DumpTable_CSV_Gzip(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age"}, []model.Record{
 		model.Record([]string{"John", "25"}),
 	})
 
@@ -300,7 +300,7 @@ func TestExportInteractor_DumpTable_NDJSON_Gzip(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age"}, []model.Record{
 		model.Record([]string{"John", "25"}),
 		model.Record([]string{"Jane", "30"}),
 	})
@@ -328,7 +328,7 @@ func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("test", model.NewHeader([]string{"name", "age"}), []model.Record{
+	table := model.NewTable("test", model.Header{"name", "age"}, []model.Record{
 		model.Record([]string{"John", "25"}),
 		model.Record([]string{"Jane", "30"}),
 	})

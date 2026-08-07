@@ -16,7 +16,7 @@ import (
 // covErrTable is a minimal non-empty table used where a usecase must return a
 // value so a later call is the one that fails.
 func covErrTable() *model.Table {
-	return model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
+	return model.NewTable("t", model.Header{"n"}, []model.Record{
 		model.Record([]string{"1"}),
 	})
 }
@@ -275,5 +275,5 @@ func TestShellInspectSampleBoundaries(t *testing.T) {
 }
 
 func covErrTableWithValue(value string) *model.Table {
-	return model.NewTable("t", model.NewHeader([]string{"count"}), []model.Record{model.Record([]string{value})})
+	return model.NewTable("t", model.Header{"count"}, []model.Record{model.Record([]string{value})})
 }

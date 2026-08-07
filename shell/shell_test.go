@@ -2073,7 +2073,7 @@ func TestShell_outputToFile(t *testing.T) {
 	defer cleanup()
 
 	// Test CSV output
-	header := model.NewHeader([]string{"id", "name"})
+	header := model.Header{"id", "name"}
 	records := []model.Record{
 		model.Record([]string{"1", "John"}),
 		model.Record([]string{"2", "Jane"}),

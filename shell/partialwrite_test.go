@@ -424,7 +424,7 @@ func TestDumpWrite_FallbackCopyFailurePreservesTheDestination(t *testing.T) {
 	metadata := mock.NewMockMetadataUsecase(ctrl)
 	exporter := mock.NewMockExportUsecase(ctrl)
 
-	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
+	table := model.NewTable("users", model.Header{"id", "name"}, nil)
 	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
 	// The exporter succeeds, as the real one does whenever the format can hold
 	// every value. Only the commit fails.
@@ -471,7 +471,7 @@ func TestDumpWrite_SucceedsToANewPath(t *testing.T) {
 	metadata := mock.NewMockMetadataUsecase(ctrl)
 	exporter := mock.NewMockExportUsecase(ctrl)
 
-	table := model.NewTable("users", model.NewHeader([]string{"id"}), nil)
+	table := model.NewTable("users", model.Header{"id"}, nil)
 	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
 
 	const written = "id\n1\n"

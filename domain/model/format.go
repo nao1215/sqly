@@ -102,18 +102,6 @@ var printModes = []struct {
 	{PrintModeParquet, formatParquet, false},
 }
 
-// PrintModes returns every output mode, in the order they are listed to a user.
-// A caller building a list of the formats — help text, completion — iterates
-// this rather than writing the names out, so a format cannot be offered by one
-// and missing from another.
-func PrintModes() []PrintMode {
-	modes := make([]PrintMode, 0, len(printModes))
-	for _, m := range printModes {
-		modes = append(modes, m.mode)
-	}
-	return modes
-}
-
 // unknownPrintModeName is what String reports for a value that is not one of the
 // declared modes. Nothing sqly does can produce one — the modes come from the
 // two parsers, and both reject a name they do not know — so it marks a

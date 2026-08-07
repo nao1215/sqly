@@ -15,14 +15,6 @@ func unquoteBacktick(q string) (string, bool) {
 	return strings.ReplaceAll(q[1:len(q)-1], "``", "`"), true
 }
 
-// unquoteSingle reverses SingleQuote.
-func unquoteSingle(q string) (string, bool) {
-	if len(q) < 2 || q[0] != '\'' || q[len(q)-1] != '\'' {
-		return "", false
-	}
-	return strings.ReplaceAll(q[1:len(q)-1], "''", "'"), true
-}
-
 // FuzzQuoteRoundTrip asserts Quote always produces a well-formed backtick-quoted
 // identifier that reverses to the original input, for any string. This is the
 // metamorphic relation unquote(Quote(s)) == s, and it guards the identifier
@@ -46,27 +38,6 @@ func FuzzQuoteRoundTrip(f *testing.F) {
 		got, ok := unquoteBacktick(q)
 		if !ok || got != s {
 			t.Fatalf("round-trip failed: Quote(%q) = %q, unquote = %q (ok=%v)", s, q, got, ok)
-		}
-	})
-}
-
-// FuzzSingleQuoteRoundTrip asserts SingleQuote round-trips like Quote, for the
-// SQL string literals sqly builds for INSERT statements.
-func FuzzSingleQuoteRoundTrip(f *testing.F) {
-	for _, s := range []string{"", "a", "a'b", "'", "''", "a\nb", "日本語", "`", "\""} {
-		f.Add(s)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		q := SingleQuote(s)
-		if len(q) < 2 || q[0] != '\'' || q[len(q)-1] != '\'' {
-			t.Fatalf("SingleQuote(%q) = %q is not single-quote-delimited", s, q)
-		}
-		if !utf8.ValidString(s) {
-			return // rune-based, lossy on invalid UTF-8 (see FuzzQuoteRoundTrip)
-		}
-		got, ok := unquoteSingle(q)
-		if !ok || got != s {
-			t.Fatalf("round-trip failed: SingleQuote(%q) = %q, unquote = %q (ok=%v)", s, q, got, ok)
 		}
 	})
 }

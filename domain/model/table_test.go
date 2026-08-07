@@ -1347,7 +1347,7 @@ func TestEnsureJSONWritableAgreesWithTheWriter(t *testing.T) {
 	}
 
 	for _, v := range values {
-		table, err := NewTableFromCells("t", NewHeader([]string{"v"}), [][]Cell{{NewCell(v)}})
+		table, err := NewTableFromCells("t", Header{"v"}, [][]Cell{{NewCell(v)}})
 		if err != nil {
 			t.Fatalf("NewTableFromCells(%T): %v", v, err)
 		}

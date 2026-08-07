@@ -63,6 +63,20 @@ CheckAutoGenerateFiles workflow fails when they are out of date.
 Application wiring is not generated. `di/di.go` is a hand-written composition
 root; see CONTRIBUTING.md for what to do when you add a constructor.
 
+### Finding code nothing reaches
+
+Removing a feature tends to leave a function whose last caller went with it, and
+tests keep such a function compiling and covered, so nothing else notices:
+
+```shell
+$ go run golang.org/x/tools/cmd/deadcode@latest ./...
+```
+
+Findings under `testutil/` are expected, because deadcode does not see test
+binaries. A finding anywhere else is a function to delete or a caller to
+restore. It is not part of `make lint`, since it is a whole-program analysis run
+occasionally rather than a gate on every change.
+
 ### Demo GIFs
 
 The README and GitHub Pages embed demo GIFs under `doc/img/`, each rendered from a

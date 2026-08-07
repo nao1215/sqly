@@ -118,7 +118,7 @@ func TestMissingTableHint(t *testing.T) {
 			metadata := mock.NewMockMetadataUsecase(ctrl)
 			tables := make([]*model.Table, 0, tt.tables)
 			for i := 1; i <= tt.tables; i++ {
-				tables = append(tables, model.NewTable(fmt.Sprintf("t%02d", i), model.NewHeader([]string{"n"}), nil))
+				tables = append(tables, model.NewTable(fmt.Sprintf("t%02d", i), model.Header{"n"}, nil))
 			}
 			metadata.EXPECT().TablesName(gomock.Any()).Return(tables, nil)
 
