@@ -1945,15 +1945,21 @@ func TestCHANGELOG_ListsTheRc7BreakingChanges(t *testing.T) {
 	if breaking == "" {
 		t.Fatal("the v1.0.0-rc7 CHANGELOG entry has no Breaking Changes section")
 	}
+	// Each removal is checked twice: by what stopped working, which is the string
+	// a reader greps the notes for, and by what to use instead. An entry that
+	// says a thing is gone without naming its replacement leaves the reader where
+	// the error message already left them, and one that names only the
+	// replacement never meets the reader who is searching for the old spelling.
 	for _, claim := range []string{
 		"`.header` is removed",
-		"`.mode` no longer takes `excel` or `parquet`",
-		"SQLY_HISTORY_PATH",
-		// The replacement matters as much as the removal: an entry that says a
-		// command is gone without saying what to type instead leaves the reader
-		// where the error message already left them.
 		"`.describe`",
+
+		"`.mode` no longer takes `excel` or `parquet`",
 		".dump TABLE out.xlsx",
+
+		"SQLY_HISTORY_DB_PATH",
+		"SQLY_HISTORY_PATH",
+		"text file",
 	} {
 		if !strings.Contains(breaking, claim) {
 			t.Errorf("the rc7 Breaking Changes section does not mention %s", claim)
