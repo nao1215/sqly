@@ -42,25 +42,25 @@ func TestConfigCreateDir(t *testing.T) {
 
 func TestNewConfigSkipsDefaultDirWhenHistoryPathSet(t *testing.T) {
 	// Regression: NewConfig must not create the default XDG config directory
-	// when SQLY_HISTORY_DB_PATH routes history elsewhere.
+	// when SQLY_HISTORY_PATH routes history elsewhere.
 	configHome := t.TempDir()
 	orgConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = configHome
 	t.Cleanup(func() { xdg.ConfigHome = orgConfigHome })
 
-	customPath := filepath.Join(t.TempDir(), "history.db")
-	t.Setenv("SQLY_HISTORY_DB_PATH", customPath)
+	customPath := filepath.Join(t.TempDir(), "history")
+	t.Setenv("SQLY_HISTORY_PATH", customPath)
 
 	c, err := NewConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if c.HistoryDBPath != customPath {
-		t.Errorf("HistoryDBPath = %q, want %q", c.HistoryDBPath, customPath)
+	if c.HistoryPath != customPath {
+		t.Errorf("HistoryPath = %q, want %q", c.HistoryPath, customPath)
 	}
 	if defaultDir := filepath.Join(configHome, "sqly"); isDir(t, defaultDir) {
-		t.Errorf("default config directory %s was created despite SQLY_HISTORY_DB_PATH being set", defaultDir)
+		t.Errorf("default config directory %s was created despite SQLY_HISTORY_PATH being set", defaultDir)
 	}
 }
 

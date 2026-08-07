@@ -10,10 +10,11 @@ import (
 
 // HistoryUsecase handle sqly history.
 type HistoryUsecase interface {
-	// CreateTable create table for sqly history.
-	CreateTable(ctx context.Context) error
-	// Create create history record.
-	Create(ctx context.Context, history model.History) error
-	// List get all sqly history.
+	// Init prepares the history store and reports whether it can be written, so
+	// an unwritable location is found once at startup rather than per statement.
+	Init(ctx context.Context) error
+	// Append adds one entry to the history.
+	Append(ctx context.Context, history model.History) error
+	// List returns the retained history, oldest first.
 	List(ctx context.Context) (model.Histories, error)
 }

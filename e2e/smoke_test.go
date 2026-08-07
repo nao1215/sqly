@@ -83,7 +83,7 @@ func runWithEnv(t *testing.T, dir, home string, extraEnv []string, stdin string,
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"USERPROFILE="+home,
-		"SQLY_HISTORY_DB_PATH="+filepath.Join(home, "history.db"),
+		"SQLY_HISTORY_PATH="+filepath.Join(home, "history"),
 	)
 	cmd.Env = append(cmd.Env, extraEnv...)
 	err := cmd.Run()

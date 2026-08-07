@@ -1105,12 +1105,12 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
-	historyDB, cleanup2, err := testutil.NewInMemHistoryDB()
+	historyPath, cleanup2, err := testutil.NewTempHistoryPath()
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	historyRepository := persistence.NewHistoryRepository(historyDB)
+	historyRepository := persistence.NewHistoryRepository(historyPath)
 	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
 	exportInteractor := interactor.NewExportInteractor()
 	usecases := NewUsecases(sqLite3Interactor, sqLite3Interactor, sqLite3Interactor, historyInteractor, exportInteractor, sqLite3Interactor)
@@ -1120,9 +1120,8 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	// Create history table in the in-memory DB. File-based history DB may
-	// already have the table from a previous session, but in-memory starts empty.
-	if err := historyInteractor.CreateTable(context.Background()); err != nil {
+	// Prepare the history file, as a session does at startup.
+	if err := historyInteractor.Init(context.Background()); err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
@@ -1323,18 +1322,18 @@ func hasPromptSuggestion(suggestions []prompt.Suggestion, text string) bool {
 }
 
 type historyUsecaseStub struct {
-	histories      model.Histories
-	listErr        error
-	createTableErr error
-	createErr      error
+	histories model.Histories
+	listErr   error
+	initErr   error
+	appendErr error
 }
 
-func (h historyUsecaseStub) CreateTable(context.Context) error {
-	return h.createTableErr
+func (h historyUsecaseStub) Init(context.Context) error {
+	return h.initErr
 }
 
-func (h historyUsecaseStub) Create(context.Context, model.History) error {
-	return h.createErr
+func (h historyUsecaseStub) Append(context.Context, model.History) error {
+	return h.appendErr
 }
 
 func (h historyUsecaseStub) List(context.Context) (model.Histories, error) {
@@ -3652,7 +3651,7 @@ func TestShellRun_HistoryUnavailable(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanup()
-		shell.usecases.history = historyUsecaseStub{createTableErr: readonlyErr}
+		shell.usecases.history = historyUsecaseStub{initErr: readonlyErr}
 
 		got := string(getStdoutForRunFunc(t, shell.Run))
 		if !strings.Contains(got, "actor") {
@@ -3666,7 +3665,7 @@ func TestShellRun_HistoryUnavailable(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanup()
-		shell.usecases.history = historyUsecaseStub{createTableErr: readonlyErr, createErr: readonlyErr}
+		shell.usecases.history = historyUsecaseStub{initErr: readonlyErr, appendErr: readonlyErr}
 		shell.isTTY = func() bool { return false }
 		shell.stdin = strings.NewReader("SELECT actor FROM actor ORDER BY actor LIMIT 1\n")
 

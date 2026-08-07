@@ -19,7 +19,7 @@ suite:
 scenarios:
   - name: says nothing for the default SQLite dialect
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &users
           file: users.csv

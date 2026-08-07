@@ -14,9 +14,6 @@ import (
 // MemoryDB is *sql.DB for excuting sql.
 type MemoryDB *sql.DB
 
-// HistoryDB is *sql.DB for sqly shell history.
-type HistoryDB *sql.DB
-
 // NewInMemDB create *sql.DB for SQLite3. SQLite3 store data in memory.
 // The return function is the function to close the DB.
 //
@@ -31,16 +28,6 @@ func NewInMemDB() (MemoryDB, func(), error) {
 	}
 	db.SetMaxOpenConns(1)
 	return MemoryDB(db), func() { _ = db.Close() }, nil // #nosec G104
-}
-
-// NewHistoryDB create *sql.DB for history.
-// The return function is the function to close the DB.
-func NewHistoryDB(c *Config) (HistoryDB, func(), error) {
-	db, err := sql.Open("sqlite3", c.HistoryDBPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	return HistoryDB(db), func() { _ = db.Close() }, nil // #nosec G104
 }
 
 // sqlite3RegisterOnce is package-level rather than function-local so repeated
@@ -110,18 +97,6 @@ func (d sqliteDriver) Open(name string) (driver.Conn, error) {
 			return nil, fmt.Errorf("failed to close connection: %w", err)
 		}
 		return nil, fmt.Errorf("failed to enable enable foreign keys: %w", err)
-	}
-
-	// Wait up to 5s for a held lock instead of failing immediately with
-	// SQLITE_BUSY. The history DB is a shared file, so two sqly processes can write
-	// it concurrently; without a busy timeout one process would disable history on
-	// transient lock contention and print a misleading "set a writable path"
-	// warning even though the path is writable.
-	if _, err := c.Exec("PRAGMA busy_timeout = 5000;", nil); err != nil {
-		if err := conn.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close connection: %w", err)
-		}
-		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
 	}
 
 	return conn, nil

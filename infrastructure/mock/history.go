@@ -41,78 +41,78 @@ func (m *MockHistoryRepository) EXPECT() *MockHistoryRepositoryMockRecorder {
 	return m.recorder
 }
 
-// Create mocks base method.
-func (m *MockHistoryRepository) Create(ctx context.Context, t *model.Table) error {
+// Append mocks base method.
+func (m *MockHistoryRepository) Append(ctx context.Context, history model.History) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, t)
+	ret := m.ctrl.Call(m, "Append", ctx, history)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Create indicates an expected call of Create.
-func (mr *MockHistoryRepositoryMockRecorder) Create(ctx, t any) *MockHistoryRepositoryCreateCall {
+// Append indicates an expected call of Append.
+func (mr *MockHistoryRepositoryMockRecorder) Append(ctx, history any) *MockHistoryRepositoryAppendCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockHistoryRepository)(nil).Create), ctx, t)
-	return &MockHistoryRepositoryCreateCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockHistoryRepository)(nil).Append), ctx, history)
+	return &MockHistoryRepositoryAppendCall{Call: call}
 }
 
-// MockHistoryRepositoryCreateCall wrap *gomock.Call
-type MockHistoryRepositoryCreateCall struct {
+// MockHistoryRepositoryAppendCall wrap *gomock.Call
+type MockHistoryRepositoryAppendCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHistoryRepositoryCreateCall) Return(arg0 error) *MockHistoryRepositoryCreateCall {
+func (c *MockHistoryRepositoryAppendCall) Return(arg0 error) *MockHistoryRepositoryAppendCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHistoryRepositoryCreateCall) Do(f func(context.Context, *model.Table) error) *MockHistoryRepositoryCreateCall {
+func (c *MockHistoryRepositoryAppendCall) Do(f func(context.Context, model.History) error) *MockHistoryRepositoryAppendCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHistoryRepositoryCreateCall) DoAndReturn(f func(context.Context, *model.Table) error) *MockHistoryRepositoryCreateCall {
+func (c *MockHistoryRepositoryAppendCall) DoAndReturn(f func(context.Context, model.History) error) *MockHistoryRepositoryAppendCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
-// CreateTable mocks base method.
-func (m *MockHistoryRepository) CreateTable(ctx context.Context) error {
+// Init mocks base method.
+func (m *MockHistoryRepository) Init(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTable", ctx)
+	ret := m.ctrl.Call(m, "Init", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// CreateTable indicates an expected call of CreateTable.
-func (mr *MockHistoryRepositoryMockRecorder) CreateTable(ctx any) *MockHistoryRepositoryCreateTableCall {
+// Init indicates an expected call of Init.
+func (mr *MockHistoryRepositoryMockRecorder) Init(ctx any) *MockHistoryRepositoryInitCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockHistoryRepository)(nil).CreateTable), ctx)
-	return &MockHistoryRepositoryCreateTableCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockHistoryRepository)(nil).Init), ctx)
+	return &MockHistoryRepositoryInitCall{Call: call}
 }
 
-// MockHistoryRepositoryCreateTableCall wrap *gomock.Call
-type MockHistoryRepositoryCreateTableCall struct {
+// MockHistoryRepositoryInitCall wrap *gomock.Call
+type MockHistoryRepositoryInitCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHistoryRepositoryCreateTableCall) Return(arg0 error) *MockHistoryRepositoryCreateTableCall {
+func (c *MockHistoryRepositoryInitCall) Return(arg0 error) *MockHistoryRepositoryInitCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHistoryRepositoryCreateTableCall) Do(f func(context.Context) error) *MockHistoryRepositoryCreateTableCall {
+func (c *MockHistoryRepositoryInitCall) Do(f func(context.Context) error) *MockHistoryRepositoryInitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHistoryRepositoryCreateTableCall) DoAndReturn(f func(context.Context) error) *MockHistoryRepositoryCreateTableCall {
+func (c *MockHistoryRepositoryInitCall) DoAndReturn(f func(context.Context) error) *MockHistoryRepositoryInitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

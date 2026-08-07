@@ -21,7 +21,7 @@ scenarios:
   # --- --sql-file holds SQL, and says so -----------------------------------
   - name: rejects a .save in a --sql-file by name and line
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &user
           file: user.csv

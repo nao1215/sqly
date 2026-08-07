@@ -26,7 +26,7 @@ scenarios:
     steps:
       - run:
           shell: true
-          command: 'case "$SQLY_HISTORY_DB_PATH" in "$SQLY_E2E_SANDBOX"*) exit 0 ;; *) exit 1 ;; esac'
+          command: 'case "$SQLY_HISTORY_PATH" in "$SQLY_E2E_SANDBOX"*) exit 0 ;; *) exit 1 ;; esac'
       - assert:
           exit_code: 0
 

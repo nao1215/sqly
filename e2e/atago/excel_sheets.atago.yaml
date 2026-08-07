@@ -20,7 +20,7 @@ suite:
 scenarios:
   - name: imports every sheet of a workbook as its own table
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture:
           file: many.xlsx

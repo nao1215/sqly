@@ -39,7 +39,7 @@ export USERPROFILE="$SANDBOX/home"
 export XDG_CONFIG_HOME="$SANDBOX/config"
 export XDG_DATA_HOME="$SANDBOX/data"
 export XDG_CACHE_HOME="$SANDBOX/cache"
-export SQLY_HISTORY_DB_PATH="$SANDBOX/history.db"
+export SQLY_HISTORY_PATH="$SANDBOX/history"
 
 PATH="$SANDBOX/bin:$PATH"
 export PATH

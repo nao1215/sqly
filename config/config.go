@@ -21,7 +21,10 @@ const (
 
 // Config is the configuration for sqly.
 type Config struct {
-	HistoryDBPath string `env:"SQLY_HISTORY_DB_PATH"`
+	// HistoryPath is where the shell's command history is kept. It is a text
+	// file, one entry per line, so SQLY_HISTORY_PATH is what names it; the
+	// SQLY_HISTORY_DB_PATH that preceded it named a SQLite database.
+	HistoryPath string `env:"SQLY_HISTORY_PATH"`
 }
 
 // NewConfig return *Config.
@@ -32,14 +35,13 @@ func NewConfig() (*Config, error) {
 	}
 
 	// Only create the default config directory when history falls back to the
-	// default location. When SQLY_HISTORY_DB_PATH is set the caller routed
-	// history elsewhere, so creating the XDG directory would be a useless side
-	// effect.
-	if cfg.HistoryDBPath == "" {
+	// default location. When SQLY_HISTORY_PATH is set the caller routed history
+	// elsewhere, so creating the XDG directory would be a useless side effect.
+	if cfg.HistoryPath == "" {
 		if err := cfg.CreateDir(); err != nil {
 			return nil, err
 		}
-		cfg.HistoryDBPath = filepath.Join(cfg.Dir(), "history.db")
+		cfg.HistoryPath = filepath.Join(cfg.Dir(), "history")
 	}
 	return &cfg, nil
 }

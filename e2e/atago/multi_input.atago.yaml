@@ -15,7 +15,7 @@ suite:
 scenarios:
   - name: three files of one format all become tables
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &users
           file: users.csv

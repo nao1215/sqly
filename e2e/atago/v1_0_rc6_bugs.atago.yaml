@@ -32,7 +32,7 @@ scenarios:
     skip:
       os: windows
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - run:
           command: sh -c 'printf "a,b\nbad\377byte,1\n" > bad.csv'

@@ -58,8 +58,8 @@ export XDG_DATA_HOME="$SANDBOX/data"
 export XDG_CACHE_HOME="$SANDBOX/cache"
 
 # Route sqly's command history to the sandbox explicitly, so specs that do not
-# set their own SQLY_HISTORY_DB_PATH still never touch the real history DB.
-export SQLY_HISTORY_DB_PATH="$SANDBOX/history.db"
+# set their own SQLY_HISTORY_PATH still never touch the real history DB.
+export SQLY_HISTORY_PATH="$SANDBOX/history"
 
 # Expose the sandbox root so the hermeticity scenarios can assert that HOME and
 # the history DB live inside it.

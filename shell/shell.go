@@ -618,15 +618,15 @@ func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
 }
 
 // disableHistory turns off history persistence for the rest of the session and
-// warns once. It is called when the history DB cannot be created at startup or a
-// later read/write fails (e.g. the DB became read-only), so history stays
+// warns once. It is called when the history file cannot be created at startup or
+// a later read/write fails (e.g. the file became read-only), so history stays
 // best-effort and never aborts the requested --sql, --inspect, or batch command.
 func (s *Shell) disableHistory(err error) {
 	if !s.historyEnabled {
 		return
 	}
 	s.historyEnabled = false
-	fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_DB_PATH to a writable path to enable it.\n", err)
+	fmt.Fprintf(config.Stderr, "warning: command history disabled (%v). Set SQLY_HISTORY_PATH to a writable path to enable it.\n", err)
 }
 
 // validateBinaryOutputFormat rejects an --output-format that writes a binary
@@ -720,7 +720,7 @@ func (s *Shell) init(ctx context.Context) error {
 	// History is best-effort: a read-only or unwritable history DB (CI,
 	// sandboxes, containers) must not block the requested query or command.
 	// Disable history for the session and warn instead of failing.
-	if err := s.usecases.history.CreateTable(ctx); err != nil {
+	if err := s.usecases.history.Init(ctx); err != nil {
 		s.disableHistory(err)
 	}
 
@@ -1615,7 +1615,7 @@ func describeFileMode(mode os.FileMode) string {
 // full history scan, so each write costs a single insert rather than reading the
 // whole table first.
 func (s *Shell) recordUserRequest(ctx context.Context, request string) error {
-	if err := s.usecases.history.Create(ctx, model.NewHistory(0, request)); err != nil {
+	if err := s.usecases.history.Append(ctx, model.NewHistory(0, request)); err != nil {
 		return fmt.Errorf("failed to store user input history: %w", err)
 	}
 	return nil

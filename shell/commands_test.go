@@ -49,7 +49,7 @@ func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
 	// First command: the history write fails as if the DB became read-only after
 	// startup. The write is a single insert (no preceding List scan), and the
 	// query must still run.
-	history.EXPECT().Create(gomock.Any(), gomock.Any()).
+	history.EXPECT().Append(gomock.Any(), gomock.Any()).
 		Return(errors.New("attempt to write a readonly database"))
 	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(table, int64(0), nil)
 
@@ -88,7 +88,7 @@ func TestExec_HistoryWriteDoesNotScanHistory(t *testing.T) {
 
 	// A history write is a single insert: it must not call List to compute an id.
 	// No List expectation is set, so gomock fails the test if List is called.
-	history.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+	history.EXPECT().Append(gomock.Any(), gomock.Any()).Return(nil)
 	query.EXPECT().ExecSQL(gomock.Any(), "SELECT 1").Return(table, int64(0), nil)
 
 	s := newBoundaryTestShell(t, Usecases{history: history, query: query})
@@ -170,7 +170,7 @@ func TestExec_RecordsHistoryForAnInputItCannotParse(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	history := mock.NewMockHistoryUsecase(ctrl)
 	const input = ".import 'oops"
-	history.EXPECT().Create(gomock.Any(), gomock.Any()).
+	history.EXPECT().Append(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, h model.History) error {
 			if h.Request != input {
 				t.Errorf("history recorded %q, want %q", h.Request, input)

@@ -9,7 +9,7 @@ suite:
 scenarios:
   - name: prefers a TEMP table over a same-named main table in .schema
     env: &hist
-      SQLY_HISTORY_DB_PATH: "${workdir}/history.db"
+      SQLY_HISTORY_PATH: "${workdir}/history"
     steps:
       - fixture: &user
           file: user.csv

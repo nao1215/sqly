@@ -87,7 +87,7 @@ jobs:
           export PATH="$PWD:$PATH"
           export HOME="$RUNNER_TEMP/sqlyhome"
           export USERPROFILE="$HOME"
-          export SQLY_HISTORY_DB_PATH="$RUNNER_TEMP/history.db"
+          export SQLY_HISTORY_PATH="$RUNNER_TEMP/history"
           mkdir -p "$HOME"
           # Every spec except the pty one, which needs its own serialized pass.
           specs=()
@@ -103,6 +103,6 @@ jobs:
           export PATH="$PWD:$PATH"
           export HOME="$RUNNER_TEMP/sqlyhome"
           export USERPROFILE="$HOME"
-          export SQLY_HISTORY_DB_PATH="$RUNNER_TEMP/history.db"
+          export SQLY_HISTORY_PATH="$RUNNER_TEMP/history"
           mkdir -p "$HOME"
           atago run --ci --parallel 1 --retry-failed 0 ./e2e/atago/pty.atago.yaml
