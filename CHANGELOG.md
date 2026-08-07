@@ -16,14 +16,15 @@ rather than after v1.0.0.
 The final RC is announced as the final one in its release notes. That is the
 point to pin a version against; none of rc1 through rc6 is it.
 
-Upgrading between candidates: [doc/migration.md](doc/migration.md).
-
 ## [Unreleased]
 
 ### Breaking Changes
-* Command history is a text file, and the variable that points at it is `SQLY_HISTORY_PATH`. It was a second SQLite database named by `SQLY_HISTORY_DB_PATH`, which bought nothing a file does not: history is an append-only log, and an append to a file opened `O_APPEND` is atomic per write, so two sqly processes interleave whole lines instead of one of them waiting on a lock and then disabling history. The default moves from `history.db` to `history` under the config directory, one entry per line with newlines escaped, so a session's history is readable with anything. An existing `history.db` is not read; the shell starts with an empty history. Unwritable still means one warning and a run that continues. See the [migration guide](doc/migration.md).
-* `.mode` no longer takes `excel` or `parquet`. Neither can be rendered to a terminal, so selecting one left the session printing CSV under another name — the banner had to say "active only when executing .dump, otherwise same as csv mode", and a pipeline reading that output depended on excel meaning csv. `.mode excel` now exits `2` and names the modes a screen can show. Writing either format is unchanged: in a display mode `.dump TABLE out.xlsx` takes the format from the extension, a mode that names a different format still rejects the destination, and `--output-format excel --output FILE` still names a file format for the flag that writes a file. See the [migration guide](doc/migration.md).
-* `.header` is removed; `.describe` is what it was a subset of. It printed a table's column names, which is the `name` column `.describe` already prints, so the shell answered one question two ways and carried a rendering path nothing else used. `.header` now reports "no such sqly command" and exits `1`. A script reading the names out of a structured mode reads the `name` key rather than `column`. See the [migration guide](doc/migration.md).
+* Command history is a text file, and the variable that points at it is `SQLY_HISTORY_PATH`. It was a second SQLite database named by `SQLY_HISTORY_DB_PATH`, which bought nothing a file does not: history is an append-only log, and an append to a file opened `O_APPEND` is atomic per write, so two sqly processes interleave whole lines instead of one of them waiting on a lock and then disabling history. The default moves from `history.db` to `history` under the config directory, one entry per line with newlines escaped, so a session's history is readable with anything. An existing `history.db` is not read; the shell starts with an empty history. Unwritable still means one warning and a run that continues.
+* `.mode` no longer takes `excel` or `parquet`. Neither can be rendered to a terminal, so selecting one left the session printing CSV under another name — the banner had to say "active only when executing .dump, otherwise same as csv mode", and a pipeline reading that output depended on excel meaning csv. `.mode excel` now exits `2` and names the modes a screen can show. Writing either format is unchanged: in a display mode `.dump TABLE out.xlsx` takes the format from the extension, a mode that names a different format still rejects the destination, and `--output-format excel --output FILE` still names a file format for the flag that writes a file.
+* `.header` is removed; `.describe` is what it was a subset of. It printed a table's column names, which is the `name` column `.describe` already prints, so the shell answered one question two ways and carried a rendering path nothing else used. `.header` now reports "no such sqly command" and exits `1`. A script reading the names out of a structured mode reads the `name` key rather than `column`.
+
+### Documentation
+* The migration guide is gone; a breaking change is described once, in its Breaking Changes entry here. `doc/migration.md` restated those entries as before-and-after commands, which meant every breaking change was written twice and kept in step by hand — and by drift tests that existed because it drifted. Each entry above already says what changed and what a caller does about it. The dead pointers to the guide are removed from the README, the site's front page, and the frozen rc3 through rc6 sections.
 
 ### Documentation
 * The internal design documents are gone: `doc/architecture.md` and `doc/design_overview.md`. Prose about internal layering has to be maintained by hand beside the code it describes, and the design overview showed the cost of not doing it — it described format-specific models that filesql replaced, and embedded three images the repository does not hold, while the public about page still sent readers to it. The layering is checked by go-arch-lint against `.go-arch-lint.yml`, where the rationale for each edge now lives; the about page links that file. `doc/build_and_test.md` and `doc/cookbook.md` stay: one is how to build, the other is the cookbook page's source.
@@ -38,8 +39,6 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 A release candidate for v1.0.0, not the final one. Everything below is a change
 from rc5.
-
-Upgrading from rc5: [doc/migration.md](doc/migration.md).
 
 The theme of this one is what sqly writes and what it says about it, found by
 running the rc5 binary rather than by reading it. Two paths lost rows and said
@@ -93,8 +92,6 @@ to fix, and four messages described sqly's insides rather than the query.
 A release candidate for v1.0.0, not the final one. Everything below is a change
 from rc4.
 
-Upgrading from rc4: [doc/migration.md](doc/migration.md).
-
 The theme of this one is the interactive shell, and what an export does with a
 value it cannot write. Ctrl-C could not reach a running statement and ended the
 session instead of the line; a ";" was a terminator wherever it appeared, so a
@@ -125,8 +122,6 @@ both streams.
 
 A release candidate for v1.0.0, not the final one. Everything below is a change
 from rc3.
-
-Upgrading from rc3: [doc/migration.md](doc/migration.md).
 
 The theme of this one is what reaches stdout and what a message claims. A
 session setting was printing control lines into the data a program parses, a
@@ -189,8 +184,6 @@ something other than what the caller asked for.
 
 A release candidate for v1.0.0, not the final one. Everything below is a change
 from rc2.
-
-Upgrading from rc2: [doc/migration.md](doc/migration.md).
 
 The theme is the same in all four changes. sqly is run by wrappers, CI jobs, and
 LLM agents at least as often as by people, and three of its defaults did
