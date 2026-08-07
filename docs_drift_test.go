@@ -1927,6 +1927,46 @@ func TestAbout_BenchmarkIsMarkedHistorical(t *testing.T) {
 	}
 }
 
+// TestCHANGELOG_ListsTheRc7BreakingChanges holds the release notes to the three
+// surfaces rc7 took away.
+//
+// Each is something a user could type into rc6 and cannot type into rc7, so the
+// notes are the only place they learn it before the shell tells them. A removal
+// that reaches a release without an entry here is the failure this catches.
+func TestCHANGELOG_ListsTheRc7BreakingChanges(t *testing.T) {
+	t.Parallel()
+
+	body := readDoc(t, "CHANGELOG.md")
+	rc7 := section(body, "## [v1.0.0-rc7]")
+	if rc7 == "" {
+		t.Fatal("CHANGELOG.md has no v1.0.0-rc7 section")
+	}
+	breaking := flatten(section(rc7, "### Breaking Changes"))
+	if breaking == "" {
+		t.Fatal("the v1.0.0-rc7 CHANGELOG entry has no Breaking Changes section")
+	}
+	// Each removal is checked twice: by what stopped working, which is the string
+	// a reader greps the notes for, and by what to use instead. An entry that
+	// says a thing is gone without naming its replacement leaves the reader where
+	// the error message already left them, and one that names only the
+	// replacement never meets the reader who is searching for the old spelling.
+	for _, claim := range []string{
+		"`.header` is removed",
+		"`.describe`",
+
+		"`.mode` no longer takes `excel` or `parquet`",
+		".dump TABLE out.xlsx",
+
+		"SQLY_HISTORY_DB_PATH",
+		"SQLY_HISTORY_PATH",
+		"text file",
+	} {
+		if !strings.Contains(breaking, claim) {
+			t.Errorf("the rc7 Breaking Changes section does not mention %s", claim)
+		}
+	}
+}
+
 // TestCHANGELOG_ListsTheRc6BreakingChanges is the rc5 check for the release
 // after it: what the guide tells someone to change, the release notes have to
 // record.

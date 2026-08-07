@@ -2,7 +2,7 @@
 
 ## Release candidates and what v1.0.0 freezes
 
-`v1.0.0-rc6` is the current release candidate, and it is not the final contract
+`v1.0.0-rc7` is the current release candidate, and it is not the final contract
 either. Breaking changes are still being made, and they are being made now
 rather than after v1.0.0.
 
@@ -14,9 +14,23 @@ rather than after v1.0.0.
   Changes below.
 
 The final RC is announced as the final one in its release notes. That is the
-point to pin a version against; none of rc1 through rc6 is it.
+point to pin a version against; none of rc1 through rc7 is it.
 
-## [Unreleased]
+## [v1.0.0-rc7](https://github.com/nao1215/sqly/compare/v1.0.0-rc6...v1.0.0-rc7) (2026-08-07)
+
+A release candidate for v1.0.0, not the final one. Everything below is a change
+from rc6.
+
+The theme of this one is taking things away. Three surfaces a user could reach
+are gone, each because something else already answered the same question:
+`.header`, which printed the column names `.describe` prints; `.mode excel` and
+`.mode parquet`, which set a mode that then rendered CSV; and the SQLite
+database behind the shell's history, which is now a text file one entry per
+line. Inside, six pieces of scaffolding went the same way — interfaces with one
+implementation and nobody substituting them, an export that wrote every byte
+twice, and functions whose last caller had already been deleted. Two documents
+went too: the internal design prose, and the migration guide that restated these
+notes.
 
 ### Breaking Changes
 * Command history is a text file, and the variable that points at it is `SQLY_HISTORY_PATH`. It was a second SQLite database named by `SQLY_HISTORY_DB_PATH`, which bought nothing a file does not: history is an append-only log, and an append to a file opened `O_APPEND` is atomic per write, so two sqly processes interleave whole lines instead of one of them waiting on a lock and then disabling history. The default moves from `history.db` to `history` under the config directory, one entry per line with newlines escaped, so a session's history is readable with anything. An existing `history.db` is not read; the shell starts with an empty history. Unwritable still means one warning and a run that continues.
@@ -25,8 +39,6 @@ point to pin a version against; none of rc1 through rc6 is it.
 
 ### Documentation
 * The migration guide is gone; a breaking change is described once, in its Breaking Changes entry here. `doc/migration.md` restated those entries as before-and-after commands, which meant every breaking change was written twice and kept in step by hand — and by drift tests that existed because it drifted. Each entry above already says what changed and what a caller does about it. The dead pointers to the guide are removed from the README, the site's front page, and the frozen rc3 through rc6 sections.
-
-### Documentation
 * The internal design documents are gone: `doc/architecture.md` and `doc/design_overview.md`. Prose about internal layering has to be maintained by hand beside the code it describes, and the design overview showed the cost of not doing it — it described format-specific models that filesql replaced, and embedded three images the repository does not hold, while the public about page still sent readers to it. The layering is checked by go-arch-lint against `.go-arch-lint.yml`, where the rationale for each edge now lives; the about page links that file. `doc/build_and_test.md` and `doc/cookbook.md` stay: one is how to build, the other is the cookbook page's source.
 
 ### Refactoring
