@@ -113,30 +113,12 @@ func (h *historyRepository) Append(_ context.Context, history model.History) err
 // write from a killed process, or a file someone edited, should cost that one
 // entry and not the session's whole history.
 func (h *historyRepository) List(_ context.Context) (model.Histories, error) {
-	f, err := os.Open(filepath.Clean(h.path))
+	// The read is its own call so the file is closed before a trim renames over
+	// it. Windows refuses to replace a file that is still open, so holding the
+	// descriptor until List returned left the trim silently doing nothing there.
+	requests, err := h.readEntries()
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Nothing typed yet is not a failure.
-			return model.Histories{}, nil
-		}
-		return nil, fmt.Errorf("open history file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	requests := make([]string, 0, maxHistoryEntries)
-	scanner := bufio.NewScanner(f)
-	// A statement can be long, and the default 64KiB limit would end the scan
-	// mid-file, silently shortening the history rather than skipping one entry.
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	for scanner.Scan() {
-		request, ok := decodeHistoryLine(scanner.Text())
-		if !ok {
-			continue
-		}
-		requests = append(requests, request)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read history file: %w", err)
+		return nil, err
 	}
 
 	trimmed := false
@@ -158,6 +140,41 @@ func (h *historyRepository) List(_ context.Context) (model.Histories, error) {
 		_ = h.rewrite(requests)
 	}
 	return histories, nil
+}
+
+// readEntries decodes every entry the file holds, oldest first, and closes it
+// before returning.
+func (h *historyRepository) readEntries() (_ []string, err error) {
+	f, err := os.Open(filepath.Clean(h.path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Nothing typed yet is not a failure.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open history file: %w", err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close history file: %w", cerr)
+		}
+	}()
+
+	requests := make([]string, 0, maxHistoryEntries)
+	scanner := bufio.NewScanner(f)
+	// A statement can be long, and the default 64KiB limit would end the scan
+	// mid-file, silently shortening the history rather than skipping one entry.
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for scanner.Scan() {
+		request, ok := decodeHistoryLine(scanner.Text())
+		if !ok {
+			continue
+		}
+		requests = append(requests, request)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read history file: %w", err)
+	}
+	return requests, nil
 }
 
 // rewrite replaces the history file with the given entries, staging beside it so

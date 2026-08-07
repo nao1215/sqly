@@ -206,12 +206,25 @@ func TestHistoryTrimsToTheCap(t *testing.T) {
 	}
 
 	// The file itself was trimmed, so the next session does not re-read the cut.
+	//
+	// This is the assertion Windows failed while the read still held the file
+	// open: renaming over an open file is refused there, so the trim did nothing
+	// and every session paid to re-read the whole log.
 	data, err := os.ReadFile(path) //#nosec G304 -- test path under t.TempDir
 	if err != nil {
 		t.Fatal(err)
 	}
 	if lines := strings.Count(string(data), "\n"); lines != maxHistoryEntries {
 		t.Errorf("file holds %d lines after the trim, want %d", lines, maxHistoryEntries)
+	}
+
+	// A second read sees the trimmed file, not the original.
+	again, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List after the trim = %v, want nil", err)
+	}
+	if len(again) != maxHistoryEntries {
+		t.Errorf("List after the trim returned %d entries, want %d", len(again), maxHistoryEntries)
 	}
 }
 
@@ -280,7 +293,10 @@ func TestHistoryUnwritablePathFailsInit(t *testing.T) {
 
 	repo := NewHistoryRepository(filepath.Join(dir, "history"))
 	if err := repo.Init(context.Background()); err == nil {
-		t.Skip("the filesystem allowed the write (running as root?)")
+		// Windows does not enforce a directory mode this way, and root ignores it.
+		// Either way there is nothing to assert, so the case is skipped rather
+		// than asserted as a pass it did not earn.
+		t.Skip("this filesystem allowed the write despite the directory mode")
 	}
 	// Append must refuse rather than half-write once Init has failed.
 	if err := repo.Append(context.Background(), model.NewHistory(0, "SELECT 1")); err == nil {
