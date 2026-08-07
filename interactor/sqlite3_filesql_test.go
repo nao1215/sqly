@@ -65,6 +65,8 @@ func TestSQLite3Interactor_LoadFiles(t *testing.T) {
 	}
 }
 
+// TestSQLite3Interactor_TablesName_Empty checks the listing of a session that
+// has loaded nothing: an empty result rather than an error.
 func TestSQLite3Interactor_TablesName_Empty(t *testing.T) {
 	t.Parallel()
 
