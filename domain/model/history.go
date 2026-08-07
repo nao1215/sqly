@@ -1,37 +1,21 @@
 package model
 
-import (
-	"strconv"
-)
-
 // Histories is sqly history all record.
 type Histories []History
 
-// History is sqly history record.
+// History is one entry of the sqly shell's command history.
+//
+// It carries no id. The history is a file whose order is its order, and nothing
+// addresses an entry by anything else; an id was what the SQLite table it used
+// to live in needed for its own sake.
 type History struct {
-	// ID is history id. 1 is oldest
-	ID int
 	// Request is sqly history record that is user input from sqly prompt
 	Request string
 }
 
 // NewHistory create new History.
-func NewHistory(id int, request string) History {
-	return History{
-		ID:      id,
-		Request: request,
-	}
-}
-
-// ToTable convert History to Table.
-func (h Histories) ToTable() *Table {
-	records := make([]Record, 0, len(h))
-	for _, v := range h {
-		records = append(records, Record{
-			strconv.Itoa(v.ID), v.Request,
-		})
-	}
-	return NewTable("history", []string{"id", "request"}, records)
+func NewHistory(request string) History {
+	return History{Request: request}
 }
 
 // ToStringList convert history to string list.

@@ -163,3 +163,8 @@ deps:
       - model
       - repository
       - infrastructure
+      # History satisfies its usecase here, as the session's loader does in
+      # memory-infra. The interface it used to implement was declared twice,
+      # identical method for identical method, with an interactor forwarding
+      # each call unchanged and nothing ever substituting either one.
+      - usecase

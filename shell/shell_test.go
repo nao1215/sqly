@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1112,10 +1113,9 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 	sqlHelper := interactor.NewSQL()
 	sqLite3Interactor := interactor.NewSQLite3Interactor(sqlite3Repository, sqlHelper, filesqlAdapter)
 
-	historyRepository := persistence.NewHistoryRepository(historyPath)
-	historyInteractor := interactor.NewHistoryInteractor(historyRepository)
+	historyUsecase := persistence.NewHistoryRepository(historyPath)
 	exportInteractor := interactor.NewExportInteractor()
-	usecases := NewUsecases(sqLite3Interactor, sqLite3Interactor, sqLite3Interactor, historyInteractor, exportInteractor, sqLite3Interactor)
+	usecases := NewUsecases(sqLite3Interactor, sqLite3Interactor, sqLite3Interactor, historyUsecase, exportInteractor, sqLite3Interactor)
 	shellShell, err := NewShell(arg, configConfig, commandList, usecases)
 	if err != nil {
 		cleanup2()
@@ -1123,7 +1123,7 @@ func newShell(tb testing.TB, args []string) (*Shell, func(), error) {
 		return nil, nil, err
 	}
 	// Prepare the history file, as a session does at startup.
-	if err := historyInteractor.Init(context.Background()); err != nil {
+	if err := historyUsecase.Init(context.Background()); err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
@@ -1885,6 +1885,77 @@ func TestShellNewPromptSession_DisablesHistoryOnPreloadFailure(t *testing.T) {
 	}
 	if fakePrompt.closeCalls != 0 {
 		t.Fatalf("prompt close calls = %d, want 0 (prompt must stay open)", fakePrompt.closeCalls)
+	}
+}
+
+// TestNewPromptSession_PreloadsOnlyTheNewestEntries pins what the shell hands
+// the prompt when the history file holds more than the prompt keeps.
+//
+// The file retains thousands of entries and the prompt keeps historySize, so
+// offering everything meant the prompt dropped all but the tail — the same
+// recall for a call per discarded entry. What matters to a user is that the tail
+// is the newest end, in order, which is what this asserts.
+func TestNewPromptSession_PreloadsOnlyTheNewestEntries(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	stored := make(model.Histories, 0, historySize*2)
+	for i := range historySize * 2 {
+		stored = append(stored, model.NewHistory("SELECT "+strconv.Itoa(i)))
+	}
+
+	fakePrompt := &fakePromptSession{}
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return fakePrompt, nil
+	}
+	shell.usecases.history = historyUsecaseStub{histories: stored}
+
+	if _, err := shell.newPromptSession(context.Background()); err != nil {
+		t.Fatalf("newPromptSession: %v", err)
+	}
+
+	if len(fakePrompt.addedHistories) != historySize {
+		t.Fatalf("preloaded %d entries, want %d", len(fakePrompt.addedHistories), historySize)
+	}
+	// The newest end survives, in the order it was typed.
+	for i, got := range fakePrompt.addedHistories {
+		want := "SELECT " + strconv.Itoa(historySize+i)
+		if got != want {
+			t.Errorf("preloaded entry %d = %q, want %q", i, got, want)
+		}
+	}
+}
+
+// TestNewPromptSession_PreloadsEveryEntryItHasWhenFewerThanTheCap is the other
+// side: a session that has typed less than the cap gets all of it.
+func TestNewPromptSession_PreloadsEveryEntryItHasWhenFewerThanTheCap(t *testing.T) {
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	stored := model.Histories{model.NewHistory("SELECT 1"), model.NewHistory("SELECT 2")}
+	fakePrompt := &fakePromptSession{}
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return fakePrompt, nil
+	}
+	shell.usecases.history = historyUsecaseStub{histories: stored}
+
+	if _, err := shell.newPromptSession(context.Background()); err != nil {
+		t.Fatalf("newPromptSession: %v", err)
+	}
+	want := []string{"SELECT 1", "SELECT 2"}
+	if len(fakePrompt.addedHistories) != len(want) {
+		t.Fatalf("preloaded %v, want %v", fakePrompt.addedHistories, want)
+	}
+	for i := range want {
+		if fakePrompt.addedHistories[i] != want[i] {
+			t.Errorf("preloaded entry %d = %q, want %q", i, fakePrompt.addedHistories[i], want[i])
+		}
 	}
 }
 

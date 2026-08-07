@@ -696,3 +696,39 @@ scenarios:
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0
+
+  # History outlives the session it was typed in: it is a file, and a later shell
+  # preloads its newest entries into the prompt. What the up-arrow reaches in a
+  # fresh process is the whole point of persisting it at all.
+  - name: recalls with the up-arrow what an earlier session typed
+    env:
+      SQLY_HISTORY_PATH: "${workdir}/history"
+    steps:
+      - fixture: &history_people
+          file: people.csv
+          content: |
+            id,name
+            1,Alice
+            2,Bob
+      # A first session types a statement and leaves.
+      - run:
+          command: sqly people.csv
+          stdin: "SELECT name FROM people WHERE id = 2;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+      # A second process, with nothing typed into it yet, reaches that statement.
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: { key: up }
+            - expect: "SELECT name FROM people WHERE id = 2"
+            - send: { key: ctrl-u }
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
