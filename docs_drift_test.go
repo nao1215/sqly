@@ -1831,19 +1831,52 @@ func TestGoReleaser_DescriptionsNameTheCurrentFormats(t *testing.T) {
 func TestDocs_NoLinkToADeletedDesignDocument(t *testing.T) {
 	t.Parallel()
 
-	for _, path := range []string{
-		"README.md",
-		"CONTRIBUTING.md",
-		"website/content/about.md",
-		"doc/build_and_test.md",
-	} {
-		doc := readDoc(t, path)
-		for _, gone := range []string{"doc/architecture.md", "doc/design_overview.md"} {
-			if strings.Contains(doc, gone) {
-				t.Errorf("%s links %s, which was deleted; the layering is documented by .go-arch-lint.yml", path, gone)
+	deleted := map[string]bool{
+		"doc/architecture.md":    true,
+		"doc/design_overview.md": true,
+	}
+
+	for _, path := range append(docSources(t), "CONTRIBUTING.md", "doc/build_and_test.md") {
+		for _, target := range markdownLinkTargets(readDoc(t, path)) {
+			if deleted[resolveDocLink(path, target)] {
+				t.Errorf("%s links %s, which was deleted; the layering is documented by .go-arch-lint.yml", path, target)
 			}
 		}
 	}
+}
+
+// markdownLinkPattern matches the target of a Markdown inline link.
+var markdownLinkPattern = regexp.MustCompile(`\]\(([^)\s]+)`)
+
+// markdownLinkTargets returns every inline link target in a document, with any
+// fragment stripped.
+func markdownLinkTargets(doc string) []string {
+	matches := markdownLinkPattern.FindAllStringSubmatch(doc, -1)
+	targets := make([]string, 0, len(matches))
+	for _, m := range matches {
+		target, _, _ := strings.Cut(m[1], "#")
+		if target != "" {
+			targets = append(targets, target)
+		}
+	}
+	return targets
+}
+
+// resolveDocLink turns a link target into the repository path it points at, so a
+// document under doc/ writing "architecture.md" and the README writing
+// "./doc/architecture.md" resolve to the same file. A link to this repository on
+// GitHub is resolved by the path after the branch, since that is the same file
+// seen through a URL. Anything else (an external site, a mailto) resolves to
+// itself and matches nothing.
+func resolveDocLink(from, target string) string {
+	const blob = "github.com/nao1215/sqly/blob/main/"
+	if i := strings.Index(target, blob); i >= 0 {
+		return target[i+len(blob):]
+	}
+	if strings.Contains(target, "://") {
+		return target
+	}
+	return filepath.ToSlash(filepath.Clean(filepath.Join(filepath.Dir(from), target)))
 }
 
 // TestAbout_BenchmarkIsMarkedHistorical keeps an old measurement from reading as
