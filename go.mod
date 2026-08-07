@@ -14,7 +14,7 @@ require (
 	github.com/nao1215/filesql v0.37.1
 	github.com/nao1215/prompt v0.0.17
 	github.com/olekukonko/tablewriter v1.1.4
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/pflag v1.0.10
 	github.com/xuri/excelize/v2 v2.11.0
 	go.uber.org/mock v0.6.0
