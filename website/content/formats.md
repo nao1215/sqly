@@ -362,13 +362,18 @@ whose source is a URL; export it to a local file instead.
 
 A text input without a Unicode BOM is decoded as UTF-8 unless `--encoding` says otherwise: `utf-8`, `shift-jis` (accepting `cp932`, `ms932`, `windows-31j`, `sjis`), `euc-jp`, `iso-2022-jp`, `utf-16le`, `utf-16be`. A BOM always wins over the flag.
 
-### Getting the encoding wrong fails the import
+### Bytes that are not UTF-8 fail the import
 
-A file in another encoding read as UTF-8 is refused. SQLite stores TEXT as
-UTF-8, so bytes in another encoding would go in as they are and come back as
+A text input holding a byte sequence that is not valid UTF-8 is refused. SQLite
+stores TEXT as UTF-8, so those bytes would go in as they are and come back as
 mojibake: `LENGTH` counting the wrong number of characters, `LIKE` and `UPPER`
 working on fragments of characters, and a run that exits `0` with nothing on
 stderr. It used to do exactly that.
+
+This is a check on the bytes, not a check on which encoding a file is in. A
+Shift-JIS or EUC-JP file whose content is entirely ASCII is already valid UTF-8
+and loads unchanged, because ASCII is the same in all three. What is caught is
+the case that would have corrupted data: a byte no UTF-8 sequence can contain.
 
 ```shell
 sqly --output-format csv --sql "SELECT * FROM sj" sj.csv
@@ -388,7 +393,7 @@ sqly --encoding shift-jis --output-format csv --sql "SELECT * FROM sj" sj.csv
 
 sqly does not guess which encoding it is. Nothing in the bytes says so, and a
 wrong guess is the same corruption in a different shape — which is what the
-replacement character used to be.
+replacement character used to be. `--encoding` is how the answer is given.
 
 Binary containers are not affected: Parquet and Excel state their own encoding,
 and ACH and Fedwire are fixed-width records, so none of them is validated as

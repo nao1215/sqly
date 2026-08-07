@@ -157,8 +157,26 @@ scenarios:
           command: sqly seed.csv
           stdin: ".import people.csv\n"
       - assert:
+          exit_code: 3
           stderr:
             contains: "restart with --encoding"
+
+  # A dataset piped in has its own error message, built where the path the user
+  # named and the path the loader read are not the same thing. The advice has to
+  # reach that message too, not only the plain one.
+  - name: advises on encoding for a dataset piped in with --stdin-format
+    steps:
+      - fixture: *shiftjis
+      - run:
+          command: sh -c "sqly --stdin-format csv --sql 'SELECT * FROM stdin' < people.csv"
+          shell: true
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: "--encoding"
+      - assert:
+          stderr:
+            contains: shift-jis
 
   # An import that failed for another reason must not collect encoding advice.
   - name: leaves an unrelated import failure without encoding advice
