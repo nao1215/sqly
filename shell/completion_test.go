@@ -1872,7 +1872,6 @@ func TestArgumentCompletionIsCommandAware(t *testing.T) {
 		{".mode m narrows to the format, not the dialect", ".mode m", []string{"markdown"}},
 		{".row-mismatch offers its three policies", ".row-mismatch ", []string{"error", "skip", "pad"}},
 		{".row-mismatch s reaches skip", ".row-mismatch s", []string{"skip"}},
-		{".header offers table names only", ".header ", []string{"sample"}},
 		{".schema offers table names only", ".schema ", []string{"sample"}},
 		{".describe offers table names only", ".describe ", []string{"sample"}},
 		{".dump names a table first", ".dump ", []string{"sample"}},

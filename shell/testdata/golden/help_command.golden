@@ -16,7 +16,6 @@ Inspect
   .tables            list imported tables
   .schema TABLE      print a table's CREATE statement
   .describe TABLE    print a table's columns
-  .header TABLE      print a table's header row
 
 Import / Export
   .import PATH...    load files or directories into the session

@@ -341,8 +341,6 @@ func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
 	}{
 		{name: ".import with no path", argv: nil,
 			run: func(c CommandList, s *Shell, a []string) error { return c.importCommand(context.Background(), s, a) }},
-		{name: ".header with no table", argv: nil,
-			run: func(c CommandList, s *Shell, a []string) error { return c.headerCommand(context.Background(), s, a) }},
 		{name: ".describe with no table", argv: nil,
 			run: func(c CommandList, s *Shell, a []string) error { return c.describeCommand(context.Background(), s, a) }},
 		{name: ".schema with no table", argv: nil,
@@ -368,8 +366,6 @@ func TestDotCommandUsageErrorsAreUsageErrors(t *testing.T) {
 		// missing-argument branches, and the table had one case per command, so it
 		// agreed. Every command that counts its arguments can be wrong in both
 		// directions, and both are the same class.
-		{name: ".header with an extra argument", argv: []string{"t", "extra"},
-			run: func(c CommandList, s *Shell, a []string) error { return c.headerCommand(context.Background(), s, a) }},
 		{name: ".describe with an extra argument", argv: []string{"t", "extra"},
 			run: func(c CommandList, s *Shell, a []string) error { return c.describeCommand(context.Background(), s, a) }},
 		{name: ".schema with an extra argument", argv: []string{"t", "extra"},

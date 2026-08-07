@@ -11,7 +11,6 @@ import (
 
 	"github.com/nao1215/prompt"
 	"github.com/nao1215/sqly/config"
-	"github.com/nao1215/sqly/domain/model"
 )
 
 // TestSplitPathPrefix_QuotedBranches exercises the shapes splitPathPrefix can
@@ -234,40 +233,6 @@ func TestPwdCommand_RejectsArguments(t *testing.T) {
 	}
 }
 
-// TestHeaderCommand_Branches covers the too-many-arguments guard and the
-// structured (json) output branch of .header.
-func TestHeaderCommand_Branches(t *testing.T) {
-	// Serial: replaces config.Stdout while capturing output.
-	shell, cleanup, err := newShell(t, []string{"sqly"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	if err := shell.commands.importCommand(context.Background(), shell, []string{"testdata/user.csv"}); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("two table names -> argument-count error", func(t *testing.T) {
-		err := shell.commands.headerCommand(context.Background(), shell, []string{"user", "extra"})
-		if err == nil || !strings.Contains(err.Error(), "single table name") {
-			t.Fatalf(".header with two names error = %v, want argument-count error", err)
-		}
-	})
-
-	t.Run("json mode -> structured column output", func(t *testing.T) {
-		shell.state.mode.PrintMode = model.PrintModeJSON
-		defer func() { shell.state.mode.PrintMode = model.PrintModeTable }()
-
-		out := getStdoutForRunFunc(t, func(ctx context.Context) error {
-			return shell.commands.headerCommand(ctx, shell, []string{"user"})
-		})
-		if !strings.Contains(string(out), "column") {
-			t.Fatalf(".header json output = %q, want a machine-readable column key", string(out))
-		}
-	})
-}
-
 // TestTableColumns_SchemaQualifiedName covers the schema-qualified branch of
 // tableColumns, where a "main.<table>" argument is inspected against that schema.
 func TestTableColumns_SchemaQualifiedName(t *testing.T) {
@@ -309,6 +274,25 @@ func TestExec_UnknownDotCommand(t *testing.T) {
 	err = shell.exec(context.Background(), ".definitely-not-a-command")
 	if err == nil || !strings.Contains(err.Error(), "no such sqly command") {
 		t.Fatalf(".exec unknown dot command error = %v, want no-such-command error", err)
+	}
+}
+
+// TestExec_HeaderIsNoLongerACommand pins that .header is gone rather than
+// quietly doing something else. It printed the column names .describe prints in
+// its name column, and answering one question two ways is a choice a reader has
+// to make for nothing.
+func TestExec_HeaderIsNoLongerACommand(t *testing.T) {
+	t.Parallel()
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	err = shell.exec(context.Background(), ".header user")
+	if err == nil || !strings.Contains(err.Error(), "no such sqly command") {
+		t.Fatalf(".header error = %v, want no-such-command error", err)
 	}
 }
 

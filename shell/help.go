@@ -44,7 +44,6 @@ func helpGroups() []helpGroup {
 			{tablesCommand, "list imported tables"},
 			{schemaCommand + " TABLE", "print a table's CREATE statement"},
 			{describeCommand + " TABLE", "print a table's columns"},
-			{headerCommand + " TABLE", "print a table's header row"},
 		}},
 		{"Import / Export", []helpLine{
 			{importCommand + " PATH...", "load files or directories into the session"},

@@ -134,7 +134,6 @@ still pipes into `jq`.
 | `.tables` | list the imported tables |
 | `.schema TABLE` | print the table's `CREATE TABLE` statement |
 | `.describe TABLE` | print the table's columns and types |
-| `.header TABLE` | print the table's header row |
 
 ### Import and export
 

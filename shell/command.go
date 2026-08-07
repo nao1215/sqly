@@ -27,7 +27,6 @@ func NewCommands() CommandList {
 	c[clearCommand] = command{execute: c.clearCommand, name: clearCommand, description: "clear terminal screen"}
 	c[dumpCommand] = command{execute: c.dumpCommand, name: dumpCommand, description: "dump db table to file in a format according to output mode (default: csv)"}
 	c[exitCommand] = command{execute: c.exitCommand, name: exitCommand, description: "exit sqly"}
-	c[headerCommand] = command{execute: c.headerCommand, name: headerCommand, description: "print table header"}
 	c[helpCommand] = command{execute: c.helpCommand, name: helpCommand, description: "print help message"}
 	c[importCommand] = command{execute: c.importCommand, name: importCommand, description: "import file(s) and/or directory(ies)"}
 	c[rowMismatchCommand] = command{execute: c.rowMismatchCommand, name: rowMismatchCommand, description: "handle a CSV/TSV row whose field count differs from the header (error|skip|pad)"}

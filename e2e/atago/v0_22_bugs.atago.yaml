@@ -33,12 +33,12 @@ scenarios:
           stdout:
             contains: litcol
 
-  - name: inspects a literal "main.v" view with .header
+  - name: inspects a literal "main.v" view with .describe
     env: *hist
     steps:
       - run:
           command: sqly
-          stdin: "CREATE VIEW \"main.v\" AS SELECT 1 AS litcol;\n.header \"main.v\"\n"
+          stdin: "CREATE VIEW \"main.v\" AS SELECT 1 AS litcol;\n.describe \"main.v\"\n"
       - assert:
           exit_code: 0
           stdout:
