@@ -7,9 +7,11 @@ against.
 
 * Breaking changes landed before this candidate. Each is listed under Breaking
   Changes in the section for the release that made it, rc1 through rc8.
-* From here on, only bug fixes and documentation changes.
+* From here on, only bug fixes and documentation changes: no new feature, no
+  breaking change.
 * Nothing user-visible changes between this candidate and v1.0.0 — same flags,
-  same output, same exit codes.
+  same output, same exit codes. A bug fix only moves a run toward what these
+  notes already describe; it does not change what they promise.
 
 ## [v1.0.0-rc8](https://github.com/nao1215/sqly/compare/v1.0.0-rc7...v1.0.0-rc8) (2026-08-07)
 
