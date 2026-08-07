@@ -22,6 +22,7 @@ Upgrading between candidates: [doc/migration.md](doc/migration.md).
 
 ### Refactoring
 * FileSQLAdapter carries only the methods sqly calls. Its Query, Exec, GetTableHeader, and LoadFile were reached by tests alone: the session runs SQL through the memory repository and imports through LoadFiles. The adapter's Query held a second scan loop over the same rows, so the two readers could have diverged with only a user to notice.
+* An export writes its bytes once. Every caller of DumpTable already hands it a scratch path that its own staging and rename commit from, so serializing into a second temporary file in the OS temp directory and copying it across wrote every exported byte twice and made the export depend on free space in two filesystems.
 * SQLite3Repository no longer declares CreateTable and Insert. Imports have gone through filesql since the loader was replaced, so the row-by-row write path they backed, including the statement builders behind it, was reachable only from tests while still obliging every implementation and mock to carry it.
 
 ## [v1.0.0-rc6](https://github.com/nao1215/sqly/compare/v1.0.0-rc5...v1.0.0-rc6) (2026-08-06)
