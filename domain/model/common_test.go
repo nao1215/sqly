@@ -4,20 +4,6 @@ import (
 	"testing"
 )
 
-func TestNewHeader(t *testing.T) {
-	t.Parallel()
-
-	h := NewHeader([]string{"a", "b", "c"})
-	if len(h) != 3 || h[0] != "a" || h[1] != "b" || h[2] != "c" {
-		t.Errorf("NewHeader() = %v, want [a b c]", h)
-	}
-
-	empty := NewHeader(nil)
-	if len(empty) != 0 {
-		t.Errorf("NewHeader(nil) = %v, want empty", empty)
-	}
-}
-
 func TestNewRecord(t *testing.T) {
 	t.Parallel()
 

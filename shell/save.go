@@ -879,27 +879,19 @@ func resolveFilePath(p string) string {
 	return filepath.Clean(abs)
 }
 
-// writableExportTarget reports whether a source path can be written back, and
-// the export format and compression to use. Only the formats that round-trip
-// cleanly through sqly's table model are allowed: CSV, TSV, LTSV (with the
-// source's compression), and Parquet. JSON/JSONL (stored in a single data
-// column), Excel, ACH, and Fedwire are not.
-func writableExportTarget(source string) (model.ExportFormat, model.Compression, bool) {
-	format, comp, err := exportTargetFor(source)
-	if err != nil {
-		return 0, model.CompressionNone, false
-	}
-	return format, comp, true
-}
-
-// exportTargetFor is writableExportTarget with the reason it said no.
+// exportTargetFor reports the export format and compression a source path can be
+// written back as, or why it cannot be.
+//
+// Only the formats that round-trip cleanly through sqly's table model are
+// allowed: CSV, TSV, LTSV (with the source's compression), and Parquet.
+// JSON/JSONL (stored in a single data column), Excel, ACH, and Fedwire are not.
 //
 // Three different things make a source unwritable, and they need three different
 // answers. Reporting them all as "write-back to data.csv.bz2 is not supported
 // (use csv, tsv, ltsv, or parquet)" told a user holding a CSV to use CSV, and a
 // user holding a Parquet to use Parquet: the format was never the problem in
-// either case, the compression was. The reason is named here so the caller can
-// say which one it hit.
+// either case, the compression was. The reason is named so the caller can say
+// which one it hit.
 func exportTargetFor(source string) (model.ExportFormat, model.Compression, error) {
 	comp := model.CompressionNone
 	base := source

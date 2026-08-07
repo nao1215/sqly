@@ -13,15 +13,16 @@ import (
 func TestPrintModeRoundTrips(t *testing.T) {
 	t.Parallel()
 
-	for _, mode := range PrintModes() {
+	for _, entry := range printModes {
+		mode := entry.mode
 		name := mode.String()
 		if name == unknownPrintModeName {
-			t.Errorf("mode %d is in PrintModes but has no name", mode)
+			t.Errorf("mode %d is in the registry but has no name", mode)
 			continue
 		}
 		got, ok := ParsePrintMode(name)
 		if !ok {
-			t.Errorf("ParsePrintMode(%q) failed for a mode PrintModes lists", name)
+			t.Errorf("ParsePrintMode(%q) failed for a mode the registry lists", name)
 			continue
 		}
 		if got != mode {
@@ -44,8 +45,8 @@ func TestPrintModesCoversEveryDeclaredMode(t *testing.T) {
 			t.Errorf("PrintMode %d is declared but has no registry entry, so no flag can name it", mode)
 		}
 	}
-	if got, want := len(PrintModes()), int(PrintModeVertical)+1; got != want {
-		t.Errorf("PrintModes() has %d entries, want %d (one per declared mode)", got, want)
+	if got, want := len(printModes), int(PrintModeVertical)+1; got != want {
+		t.Errorf("the mode registry has %d entries, want %d (one per declared mode)", got, want)
 	}
 }
 
@@ -91,12 +92,12 @@ func TestPrintModeNamesListsEveryMode(t *testing.T) {
 	t.Parallel()
 
 	listed := strings.Split(PrintModeNames(), ", ")
-	if len(listed) != len(PrintModes()) {
-		t.Fatalf("PrintModeNames() lists %d formats, want %d", len(listed), len(PrintModes()))
+	if len(listed) != len(printModes) {
+		t.Fatalf("PrintModeNames() lists %d formats, want %d", len(listed), len(printModes))
 	}
-	for i, mode := range PrintModes() {
-		if listed[i] != mode.String() {
-			t.Errorf("PrintModeNames()[%d] = %q, want %q (the order must match PrintModes)", i, listed[i], mode.String())
+	for i, entry := range printModes {
+		if listed[i] != entry.mode.String() {
+			t.Errorf("PrintModeNames()[%d] = %q, want %q (the order must match the registry)", i, listed[i], entry.mode.String())
 		}
 	}
 }

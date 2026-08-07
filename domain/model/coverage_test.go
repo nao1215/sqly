@@ -29,7 +29,7 @@ func (w *covMdlFailAfterWriter) Write(p []byte) (int, error) {
 
 func TestPrintMarkdownWriteErrors(t *testing.T) {
 	t.Parallel()
-	table := NewTable("t", NewHeader([]string{"name", "note"}), []Record{
+	table := NewTable("t", Header{"name", "note"}, []Record{
 		Record([]string{"Alice", "line 1\nline 2"}),
 	})
 	// Each markdown write is deliberately allowed to fail at a different point,
@@ -44,7 +44,7 @@ func TestPrintMarkdownWriteErrors(t *testing.T) {
 
 func TestPrintDisplayModesWriteErrors(t *testing.T) {
 	t.Parallel()
-	table := NewTable("t", NewHeader([]string{"a"}), []Record{Record([]string{"1"})})
+	table := NewTable("t", Header{"a"}, []Record{Record([]string{"1"})})
 	if err := table.Print(covMdlFailingWriter{}, PrintModeVertical); err == nil {
 		t.Error("Print(vertical) to failing writer returned nil error")
 	}
@@ -52,7 +52,7 @@ func TestPrintDisplayModesWriteErrors(t *testing.T) {
 
 func TestPrintParquetModeUsesCSVDisplay(t *testing.T) {
 	t.Parallel()
-	table := NewTable("t", NewHeader([]string{"id"}), []Record{Record([]string{"1"})})
+	table := NewTable("t", Header{"id"}, []Record{Record([]string{"1"})})
 	var buf bytes.Buffer
 	if err := table.Print(&buf, PrintModeParquet); err != nil {
 		t.Fatalf("Print(parquet) = %v", err)
@@ -64,7 +64,7 @@ func TestPrintParquetModeUsesCSVDisplay(t *testing.T) {
 
 func TestPrintUnknownModeFallsBackToTable(t *testing.T) {
 	t.Parallel()
-	table := NewTable("t", NewHeader([]string{"id"}), []Record{Record([]string{"1"})})
+	table := NewTable("t", Header{"id"}, []Record{Record([]string{"1"})})
 	var buf bytes.Buffer
 	if err := table.Print(&buf, PrintMode(99)); err != nil {
 		t.Fatalf("Print(unknown) = %v", err)
@@ -76,7 +76,7 @@ func TestPrintUnknownModeFallsBackToTable(t *testing.T) {
 
 func TestPrintJSONRejectsUnsupportedNativeValue(t *testing.T) {
 	t.Parallel()
-	table, err := NewTableFromCells("t", NewHeader([]string{"value"}), [][]Cell{{NewCell(make(chan int))}})
+	table, err := NewTableFromCells("t", Header{"value"}, [][]Cell{{NewCell(make(chan int))}})
 	if err != nil {
 		t.Fatalf("NewTableFromCells: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestWriteDelimitedThroughPrint(t *testing.T) {
 
 	t.Run("csv quotes values with commas, quotes and newlines", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"name", "note"}), []Record{
+		table := NewTable("t", Header{"name", "note"}, []Record{
 			Record([]string{"a,b", "line1\nline2"}),
 			Record([]string{`he said "hi"`, ""}),
 		})
@@ -118,7 +118,7 @@ func TestWriteDelimitedThroughPrint(t *testing.T) {
 
 	t.Run("tsv writes header only for empty records", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a", "b"}), nil)
+		table := NewTable("t", Header{"a", "b"}, nil)
 		var buf bytes.Buffer
 		if err := table.Print(&buf, PrintModeTSV); err != nil {
 			t.Fatalf("Print(TSV) error = %v", err)
@@ -134,7 +134,7 @@ func TestWriteDelimitedThroughPrint(t *testing.T) {
 		// during Write, so the underlying writer error surfaces immediately as the
 		// header write error rather than being deferred to Flush.
 		bigHeader := strings.Repeat("x", 8192)
-		table := NewTable("t", NewHeader([]string{bigHeader}), []Record{
+		table := NewTable("t", Header{bigHeader}, []Record{
 			Record([]string{"v"}),
 		})
 		if err := table.Print(covMdlFailingWriter{}, PrintModeCSV); err == nil {
@@ -150,7 +150,7 @@ func TestPrintJSONEdgeCases(t *testing.T) {
 
 	t.Run("empty records print an empty array", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a"}), nil)
+		table := NewTable("t", Header{"a"}, nil)
 		var buf bytes.Buffer
 		if err := table.Print(&buf, PrintModeJSON); err != nil {
 			t.Fatalf("Print(JSON) error = %v", err)
@@ -162,7 +162,7 @@ func TestPrintJSONEdgeCases(t *testing.T) {
 
 	t.Run("duplicate columns are rejected", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a", "a"}), []Record{
+		table := NewTable("t", Header{"a", "a"}, []Record{
 			Record([]string{"1", "2"}),
 		})
 		var buf bytes.Buffer
@@ -173,7 +173,7 @@ func TestPrintJSONEdgeCases(t *testing.T) {
 
 	t.Run("multi row render with special characters", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"name", "val"}), []Record{
+		table := NewTable("t", Header{"name", "val"}, []Record{
 			Record([]string{"quote\"", "007"}),
 			Record([]string{"tab\there", ""}),
 		})
@@ -192,7 +192,7 @@ func TestPrintJSONEdgeCases(t *testing.T) {
 
 	t.Run("write failure surfaces as error", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a"}), []Record{
+		table := NewTable("t", Header{"a"}, []Record{
 			Record([]string{"1"}),
 		})
 		if err := table.Print(covMdlFailingWriter{}, PrintModeJSON); err == nil {
@@ -208,7 +208,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 
 	t.Run("empty records print nothing", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a"}), nil)
+		table := NewTable("t", Header{"a"}, nil)
 		var buf bytes.Buffer
 		if err := table.Print(&buf, PrintModeJSONL); err != nil {
 			t.Fatalf("Print(NDJSON) error = %v", err)
@@ -220,7 +220,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 
 	t.Run("duplicate columns are rejected", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a", "a"}), []Record{
+		table := NewTable("t", Header{"a", "a"}, []Record{
 			Record([]string{"1", "2"}),
 		})
 		var buf bytes.Buffer
@@ -231,7 +231,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 
 	t.Run("one object per line", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a", "b"}), []Record{
+		table := NewTable("t", Header{"a", "b"}, []Record{
 			Record([]string{"1", "x"}),
 			Record([]string{"2", "y"}),
 		})
@@ -252,7 +252,7 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 
 	t.Run("write failure surfaces as error", func(t *testing.T) {
 		t.Parallel()
-		table := NewTable("t", NewHeader([]string{"a"}), []Record{
+		table := NewTable("t", Header{"a"}, []Record{
 			Record([]string{"1"}),
 		})
 		if err := table.Print(covMdlFailingWriter{}, PrintModeJSONL); err == nil {

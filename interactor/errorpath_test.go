@@ -17,7 +17,7 @@ func TestDumpTable_InitCompressionError(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+	table := model.NewTable("t", model.Header{"id"}, []model.Record{
 		model.Record([]string{"1"}),
 	})
 	out := filepath.Join(t.TempDir(), "out.csv.bz2")
@@ -34,7 +34,7 @@ func TestDumpTable_Parquet(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("people", model.NewHeader([]string{"id", "name"}), []model.Record{
+	table := model.NewTable("people", model.Header{"id", "name"}, []model.Record{
 		model.Record([]string{"1", "alice"}),
 	})
 	out := filepath.Join(t.TempDir(), "people.parquet")
@@ -50,7 +50,7 @@ func TestDumpTable_ParquetEmpty(t *testing.T) {
 	t.Parallel()
 
 	exp := newTestExportInteractor()
-	table := model.NewTable("empty", model.NewHeader([]string{"id"}), []model.Record{})
+	table := model.NewTable("empty", model.Header{"id"}, []model.Record{})
 	out := filepath.Join(t.TempDir(), "empty.parquet")
 
 	if err := exp.DumpTable(out, table, model.ExportParquet, model.CompressionNone); err == nil {
@@ -68,7 +68,7 @@ func TestDumpTable_ReportsTheSerializerFailure(t *testing.T) {
 
 	exp := newTestExportInteractor()
 	// A tab in a value has no representation in LTSV, so the dump must fail.
-	table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
+	table := model.NewTable("test", model.Header{"id", "name"}, []model.Record{
 		model.Record([]string{"1", "alice\tbob"}),
 	})
 	staging := filepath.Join(t.TempDir(), "staging.ltsv")
@@ -83,7 +83,7 @@ func TestDumpTable_ReportsTheSerializerFailure(t *testing.T) {
 // directory and copy that across, so a failure could strand one there.
 func TestDumpTable_WritesOnlyToThePathItIsGiven(t *testing.T) {
 	exp := newTestExportInteractor()
-	table := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+	table := model.NewTable("t", model.Header{"id"}, []model.Record{
 		model.Record([]string{"1"}),
 	})
 
@@ -97,7 +97,7 @@ func TestDumpTable_WritesOnlyToThePathItIsGiven(t *testing.T) {
 		t.Fatalf("DumpTable = %v, want nil", err)
 	}
 	// A serializer failure is the case that used to leave the strays.
-	bad := model.NewTable("t", model.NewHeader([]string{"id"}), []model.Record{
+	bad := model.NewTable("t", model.Header{"id"}, []model.Record{
 		model.Record([]string{"a\tb"}),
 	})
 	if err := exp.DumpTable(filepath.Join(dir, "bad.ltsv"), bad, model.ExportLTSV, model.CompressionNone); err == nil {
@@ -120,7 +120,7 @@ func TestDumpTable_WritesOnlyToThePathItIsGiven(t *testing.T) {
 func TestDumpTable_RoundTripsThroughItsOwnOutput(t *testing.T) {
 	t.Parallel()
 
-	table := model.NewTable("t", model.NewHeader([]string{"id", "name"}), []model.Record{
+	table := model.NewTable("t", model.Header{"id", "name"}, []model.Record{
 		model.Record([]string{"1", "alice"}),
 		model.Record([]string{"2", "bob"}),
 	})
@@ -190,7 +190,7 @@ func TestDumpTable_PreservesFilePermissions(t *testing.T) {
 		t.Parallel()
 
 		exp := newTestExportInteractor()
-		table := model.NewTable("test", model.NewHeader([]string{"id", "name"}), []model.Record{
+		table := model.NewTable("test", model.Header{"id", "name"}, []model.Record{
 			model.Record([]string{"1", "alice"}),
 		})
 

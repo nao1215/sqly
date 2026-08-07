@@ -4,11 +4,6 @@ package model
 // Header is CSV/TSV/Table header.
 type Header []string
 
-// NewHeader create new Header.
-func NewHeader(h []string) Header {
-	return Header(h)
-}
-
 // Equal compare Header.
 func (h Header) Equal(h2 Header) bool {
 	if len(h) != len(h2) {

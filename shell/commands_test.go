@@ -42,7 +42,7 @@ func TestExec_RuntimeHistoryFailureDisablesHistoryAndContinues(t *testing.T) {
 	query := mock.NewMockQueryUsecase(ctrl)
 	query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
 
-	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
+	table := model.NewTable("t", model.Header{"n"}, []model.Record{
 		model.Record([]string{"1"}),
 	})
 
@@ -82,7 +82,7 @@ func TestExec_HistoryWriteDoesNotScanHistory(t *testing.T) {
 	query := mock.NewMockQueryUsecase(ctrl)
 	query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
 
-	table := model.NewTable("t", model.NewHeader([]string{"n"}), []model.Record{
+	table := model.NewTable("t", model.Header{"n"}, []model.Record{
 		model.Record([]string{"1"}),
 	})
 
@@ -123,7 +123,7 @@ func TestExec_SQLReachesTheEngineWithQuotesInItsComments(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			query := mock.NewMockQueryUsecase(ctrl)
 			query.EXPECT().Dialect().Return(dialect.SQLite).AnyTimes()
-			table := model.NewTable("t", model.NewHeader([]string{"x"}), []model.Record{
+			table := model.NewTable("t", model.Header{"x"}, []model.Record{
 				model.Record([]string{"1"}),
 			})
 			query.EXPECT().ExecSQL(gomock.Any(), tt.input).Return(table, int64(0), nil)
@@ -741,7 +741,7 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 
 	outputPath := filepath.Join(t.TempDir(), "report.out")
 	normalizedPath := model.BuildOutputPath(outputPath, model.ExportCSV, model.CompressionNone)
-	table := model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil)
+	table := model.NewTable("users", model.Header{"id", "name"}, nil)
 
 	metadata.EXPECT().List(gomock.Any(), "users").Return(table, nil)
 	// The exporter writes a scratch file beside the destination, which is then

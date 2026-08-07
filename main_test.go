@@ -157,8 +157,8 @@ func Test_startupErrorMessage(t *testing.T) {
 
 	t.Run("a genuine shell-start failure keeps the shell initialization prefix", func(t *testing.T) {
 		t.Parallel()
-		got := startupErrorMessage(errors.New("history db open failed"))
-		want := "failed to initialize sqly shell: history db open failed"
+		got := startupErrorMessage(errors.New("history file open failed"))
+		want := "failed to initialize sqly shell: history file open failed"
 		if got != want {
 			t.Errorf("mismatch got=%q, want=%q", got, want)
 		}

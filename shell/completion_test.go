@@ -1375,7 +1375,7 @@ func TestShell_getRegularCompletions_dependsOnMetadataUsecase(t *testing.T) {
 		model.NewTable("users", nil, nil),
 	}, nil)
 	metadata.EXPECT().Header(gomock.Any(), "users").Return(
-		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil)
+		model.NewTable("users", model.Header{"id", "name"}, nil), nil)
 
 	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
 
@@ -1400,9 +1400,9 @@ func TestShell_getRegularCompletions_cachesTableHeaders(t *testing.T) {
 	// be fetched only once across repeated completions thanks to the cache.
 	metadata.EXPECT().TablesName(gomock.Any()).Return(tables, nil).AnyTimes()
 	metadata.EXPECT().Header(gomock.Any(), "users").Return(
-		model.NewTable("users", model.NewHeader([]string{"id", "name"}), nil), nil).Times(1)
+		model.NewTable("users", model.Header{"id", "name"}, nil), nil).Times(1)
 	metadata.EXPECT().Header(gomock.Any(), "orders").Return(
-		model.NewTable("orders", model.NewHeader([]string{"id", "total"}), nil), nil).Times(1)
+		model.NewTable("orders", model.Header{"id", "total"}, nil), nil).Times(1)
 
 	s := newBoundaryTestShell(t, Usecases{metadata: metadata})
 
@@ -1436,7 +1436,7 @@ func BenchmarkRegularCompletionManyTables(b *testing.B) {
 		name := "table" + strconv.Itoa(i)
 		tables = append(tables, model.NewTable(name, nil, nil))
 		metadata.EXPECT().Header(gomock.Any(), name).Return(
-			model.NewTable(name, model.NewHeader([]string{"col_a", "col_b", "col_c", "col_d"}), nil), nil).AnyTimes()
+			model.NewTable(name, model.Header{"col_a", "col_b", "col_c", "col_d"}, nil), nil).AnyTimes()
 	}
 	metadata.EXPECT().TablesName(gomock.Any()).Return(tables, nil).AnyTimes()
 

@@ -40,12 +40,12 @@ func TestWritableExportTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			format, comp, ok := writableExportTarget(tt.source)
-			if ok != tt.wantOK {
-				t.Fatalf("writableExportTarget(%q) ok = %v, want %v", tt.source, ok, tt.wantOK)
+			format, comp, err := exportTargetFor(tt.source)
+			if ok := err == nil; ok != tt.wantOK {
+				t.Fatalf("exportTargetFor(%q) err = %v, want writable = %v", tt.source, err, tt.wantOK)
 			}
-			if ok && (format != tt.wantFormat || comp != tt.wantComp) {
-				t.Errorf("writableExportTarget(%q) = (%v, %v), want (%v, %v)", tt.source, format, comp, tt.wantFormat, tt.wantComp)
+			if err == nil && (format != tt.wantFormat || comp != tt.wantComp) {
+				t.Errorf("exportTargetFor(%q) = (%v, %v), want (%v, %v)", tt.source, format, comp, tt.wantFormat, tt.wantComp)
 			}
 		})
 	}

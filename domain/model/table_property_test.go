@@ -219,8 +219,8 @@ func TestTable_EqualReflexiveSymmetricProperty(t *testing.T) {
 // Record.Equal hold for identical copies of arbitrary string slices.
 func TestHeaderRecordEqual_ReflexiveProperty(t *testing.T) {
 	headerProp := func(s []string) bool {
-		h := NewHeader(s)
-		cp := NewHeader(append([]string(nil), s...))
+		h := Header(s)
+		cp := Header(append([]string(nil), s...))
 		return h.Equal(cp) && cp.Equal(h)
 	}
 	if err := quick.Check(headerProp, quickConfig()); err != nil {
