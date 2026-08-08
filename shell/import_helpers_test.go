@@ -253,6 +253,86 @@ func TestPrepareImportLoadPathDecodesTextInput(t *testing.T) {
 	}
 }
 
+// TestPrepareImportLoadPathRefusesBytesTheEncodingCannotDecode covers the half of
+// the encoding contract the flag used to skip. A text input that is not UTF-8 is
+// refused, but naming a legacy encoding turned the same corruption back on: the
+// x/text decoders substitute U+FFFD for a byte the encoding has no meaning for,
+// so the import succeeded and the table held replacement characters.
+func TestPrepareImportLoadPathRefusesBytesTheEncodingCannotDecode(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		encoding string
+		content  []byte
+	}{
+		// 0xFF is not a legal Shift-JIS lead byte, and EUC-JP has no meaning for
+		// it either.
+		{name: "shift-jis lead byte", encoding: "shift-jis", content: []byte("a\n\xff\xfe\x01\n")},
+		{name: "euc-jp lead byte", encoding: "euc-jp", content: []byte("a\n\xff\xff\n")},
+		// ISO-2022-JP is 7-bit, so a byte with the high bit set is outside it
+		// whatever shift state the stream is in.
+		{name: "iso-2022-jp high bit", encoding: "iso-2022-jp", content: []byte("a\n\xff\xfe\n")},
+		// A UTF-16 code unit is two bytes, so an odd length means the last one was
+		// cut in half.
+		{name: "utf-16le odd length", encoding: "utf-16le", content: []byte("a\x00\n\x00\x41")},
+		// A high surrogate with nothing after it is not a character.
+		{name: "utf-16le unpaired surrogate", encoding: "utf-16le", content: []byte("a\x00\n\x00\x00\xd8\x41\x00")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s, cleanup, err := newShell(t, []string{"sqly", "--encoding", test.encoding})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			path := filepath.Join(t.TempDir(), "bad.csv")
+			if err := os.WriteFile(path, test.content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			staged, cleanupStaged, err := s.prepareImportLoadPath(path)
+			if cleanupStaged != nil {
+				cleanupStaged()
+			}
+			if err == nil {
+				t.Fatalf("prepareImportLoadPath() = %q, nil error; want a refusal for bytes %s cannot decode", staged, test.encoding)
+			}
+			if !strings.Contains(err.Error(), test.encoding) {
+				t.Errorf("error = %v, want it to name the declared encoding %q", err, test.encoding)
+			}
+		})
+	}
+}
+
+// TestPrepareImportLoadPathKeepsAGenuineReplacementCharacter is the other side of
+// the check: U+FFFD is a real character in UTF-16, so a file that holds one is
+// data rather than a decode that went wrong.
+func TestPrepareImportLoadPathKeepsAGenuineReplacementCharacter(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly", "--encoding", "utf-16le"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	path := filepath.Join(t.TempDir(), "fffd.csv")
+	// "a\n" then U+FFFD, each as a little-endian code unit.
+	if err := os.WriteFile(path, []byte("a\x00\n\x00\xfd\xff"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	staged, cleanupStaged, err := s.prepareImportLoadPath(path)
+	if err != nil {
+		t.Fatalf("prepareImportLoadPath() error = %v, want a file holding U+FFFD to load", err)
+	}
+	defer cleanupStaged()
+	decoded, err := os.ReadFile(staged) //nolint:gosec // staged is a path sqly created
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(decoded), "�") {
+		t.Errorf("staged content = %q, want the replacement character the file holds", decoded)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
