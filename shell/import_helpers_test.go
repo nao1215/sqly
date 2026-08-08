@@ -268,6 +268,9 @@ func TestPrepareImportLoadPathRefusesBytesTheEncodingCannotDecode(t *testing.T) 
 		// it either.
 		{name: "shift-jis lead byte", encoding: "shift-jis", content: []byte("a\n\xff\xfe\x01\n")},
 		{name: "euc-jp lead byte", encoding: "euc-jp", content: []byte("a\n\xff\xff\n")},
+		// ISO-2022-JP is 7-bit, so a byte with the high bit set is outside it
+		// whatever shift state the stream is in.
+		{name: "iso-2022-jp high bit", encoding: "iso-2022-jp", content: []byte("a\n\xff\xfe\n")},
 		// A UTF-16 code unit is two bytes, so an odd length means the last one was
 		// cut in half.
 		{name: "utf-16le odd length", encoding: "utf-16le", content: []byte("a\x00\n\x00\x41")},

@@ -430,6 +430,9 @@ func TestSmoke_EncodingRefusesBytesItCannotDecode(t *testing.T) {
 	}{
 		{name: "a byte that begins nothing in shift-jis", encoding: "shift-jis", content: []byte("a\n\xff\xfe\x01\n")},
 		{name: "a byte that begins nothing in euc-jp", encoding: "euc-jp", content: []byte("a\n\xff\xff\n")},
+		// ISO-2022-JP is a 7-bit encoding, so a byte with the high bit set is
+		// outside it whatever shift state the stream is in.
+		{name: "a high bit set in iso-2022-jp", encoding: "iso-2022-jp", content: []byte("a\n\xff\xfe\n")},
 		{name: "a utf-16le code unit cut in half", encoding: "utf-16le", content: []byte("a\x00\n\x00\x41")},
 		{name: "a utf-16le surrogate with no partner", encoding: "utf-16le", content: []byte("a\x00\n\x00\x00\xd8\x41\x00")},
 	} {
