@@ -281,6 +281,58 @@ func TestSmoke_SaveDoesNotPersistUncommittedData(t *testing.T) {
 	}
 }
 
+// TestSmoke_SavePreflightIsAUsageError pins the class of the .save preflight
+// refusal. The check runs before the first statement, so nothing has run when it
+// fires, and the exit-code table reserves 1 for "a statement ran and failed".
+// It reported 1 anyway, because a bare error falls through to that code.
+func TestSmoke_SavePreflightIsAUsageError(t *testing.T) {
+	dir := t.TempDir()
+	source := writeFixture(t, dir, "src.csv", "id\n1\n")
+	out := filepath.Join(dir, "out")
+
+	script := "CREATE TABLE brand_new (a TEXT);\n" +
+		"INSERT INTO brand_new VALUES ('v');\n" +
+		".save " + out + "\n"
+	stdout, stderr, code := run(t, script, source)
+
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2 (the script was not accepted)\nstderr: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "cannot persist") {
+		t.Errorf("stderr = %q, want the preflight refusal", stderr)
+	}
+	// Nothing ran, so neither statement's feedback line may appear.
+	for _, feedback := range []string{"statement executed successfully", "affected is"} {
+		if strings.Contains(stdout, feedback) {
+			t.Errorf("stdout = %q, want no statement feedback: the script was refused before it ran", stdout)
+		}
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Errorf("a refused script created %s", out)
+	}
+}
+
+// TestSmoke_SaveAfterTheLastSaveIsAllowed is the other side of the preflight
+// window. A statement write-back cannot persist is only a problem when a .save
+// could reach it, so one after the final .save leaves the run alone.
+func TestSmoke_SaveAfterTheLastSaveIsAllowed(t *testing.T) {
+	dir := t.TempDir()
+	source := writeFixture(t, dir, "src.csv", "id\n1\n")
+	out := filepath.Join(dir, "out")
+	if err := os.Mkdir(out, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	script := "UPDATE src SET id = 2;\n" +
+		".save " + out + "\n" +
+		"CREATE TABLE scratch (a TEXT);\n"
+	_, stderr, code := run(t, script, source)
+
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0: the scratch table is after the last .save\nstderr: %s", code, stderr)
+	}
+}
+
 // TestSmoke_NoStrayFilesLeftBehind runs sqly with its working directory inside a
 // directory the test owns and requires that directory to be unchanged
 // afterwards. A temporary staging file or a stray SQLite database left in the

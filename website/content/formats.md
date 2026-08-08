@@ -109,7 +109,7 @@ header refused in one format is refused in all of them.
 
 `--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format jsonl`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
 
-`--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
+`--output PATH` writes to a file. An extension sqly knows must agree with the chosen format, and `--output-format csv --output out.json` is refused as a usage error, exit `2`. An extension it does not know is written as given, so `--output report.txt` holds CSV; a path with no extension gets the format's own, so `--output report` writes `report.csv`. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
 ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `.save` does, not `--output`.
 

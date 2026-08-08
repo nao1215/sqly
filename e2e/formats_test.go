@@ -529,6 +529,52 @@ func TestSmoke_EncodingStillReadsWhatItShould(t *testing.T) {
 	})
 }
 
+// TestSmoke_OutputExtensionRules pins what --output does with each kind of
+// destination extension: a known one must agree with the chosen format, an
+// unknown one is written as given, and a missing one gets the format's own.
+//
+// Only the first was documented. The formats page said the extension "must agree
+// with the chosen format" without qualification, so the two escape hatches were
+// behavior nothing described and nothing held in place.
+func TestSmoke_OutputExtensionRules(t *testing.T) {
+	dir := t.TempDir()
+	source := writeFixture(t, dir, "src.csv", "id\n1\n")
+
+	t.Run("a known extension must agree with the format", func(t *testing.T) {
+		out := filepath.Join(dir, "disagree.json")
+		_, stderr, code := run(t, "", "--output-format", "csv", "--output", out, "--sql", "SELECT 1", source)
+		if code != 2 {
+			t.Errorf("exit code = %d, want 2\nstderr: %s", code, stderr)
+		}
+		if _, err := os.Stat(out); !os.IsNotExist(err) {
+			t.Errorf("a refused export created %s", out)
+		}
+	})
+
+	t.Run("an unknown extension is written as given", func(t *testing.T) {
+		out := filepath.Join(dir, "report.txt")
+		if _, stderr, code := run(t, "", "--output-format", "csv", "--output", out, "--sql", "SELECT 1 AS n", source); code != 0 {
+			t.Fatalf("exit code = %d, want 0\nstderr: %s", code, stderr)
+		}
+		if _, err := os.Stat(out); err != nil {
+			t.Errorf("want %s written at the path given: %v", out, err)
+		}
+	})
+
+	t.Run("no extension gets the format's own", func(t *testing.T) {
+		out := filepath.Join(dir, "report")
+		if _, stderr, code := run(t, "", "--output-format", "tsv", "--output", out, "--sql", "SELECT 1 AS n", source); code != 0 {
+			t.Fatalf("exit code = %d, want 0\nstderr: %s", code, stderr)
+		}
+		if _, err := os.Stat(out + ".tsv"); err != nil {
+			t.Errorf("want %s.tsv written: %v", out, err)
+		}
+		if _, err := os.Stat(out); !os.IsNotExist(err) {
+			t.Errorf("the extensionless path %s should not also be written", out)
+		}
+	})
+}
+
 // TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry covers the one format that
 // used to answer an unrepresentable value by changing it. XLSX is XML, and XML
 // 1.0 has no way to write most control characters, so the writer substituted
