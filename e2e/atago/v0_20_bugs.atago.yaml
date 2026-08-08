@@ -23,7 +23,7 @@ scenarios:
             ALTER TABLE user RENAME COLUMN first_name TO fname;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           stdout:
@@ -39,7 +39,7 @@ scenarios:
             DROP TABLE user;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
@@ -53,7 +53,7 @@ scenarios:
             CREATE VIEW v AS SELECT user_name FROM user;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
@@ -67,7 +67,7 @@ scenarios:
             CREATE INDEX idx ON user(identifier);
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
@@ -81,7 +81,7 @@ scenarios:
             CREATE TABLE backup (id INTEGER);
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
@@ -95,7 +95,7 @@ scenarios:
             REINDEX;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
@@ -109,7 +109,7 @@ scenarios:
             ANALYZE;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
@@ -123,7 +123,7 @@ scenarios:
             CREATE TABLE backup AS SELECT * FROM user;
             .save out
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           file:
@@ -138,7 +138,7 @@ scenarios:
           command: sqly user.csv
           stdin: "CREATE TABLE backup AS SELECT * FROM user;\nUPDATE user SET first_name='Z' WHERE identifier=1;\n.save --in-place\n"
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
 
