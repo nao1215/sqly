@@ -172,6 +172,12 @@ func (si *SQLite3Interactor) LoadFiles(ctx context.Context, filePaths ...string)
 	return si.adapter.LoadFiles(ctx, filePaths...)
 }
 
+// SkippedRows reports what the row-mismatch policy dropped for the named
+// tables, and forgets it.
+func (si *SQLite3Interactor) SkippedRows(tables []string) []model.SkippedRows {
+	return si.adapter.SkippedRows(tables)
+}
+
 // SetRowMismatchPolicy sets how a mismatched CSV/TSV row is handled by subsequent
 // imports.
 func (si *SQLite3Interactor) SetRowMismatchPolicy(policy model.RowMismatchPolicy) {

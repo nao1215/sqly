@@ -37,6 +37,12 @@ type FileSQLAdapter struct {
 	// not build them — and is set by the --include-hidden-sheets flag for the
 	// whole session, so a later .import applies it too.
 	includeHiddenSheets bool
+	// skipped holds what --row-mismatch skip discarded during the imports of
+	// this session, keyed by table. A dropped row is what the user asked for,
+	// but an import that says nothing leaves one dropped row and most of the
+	// file dropped looking the same — and .save --in-place then makes either
+	// permanent.
+	skipped map[string]model.SkippedRows
 }
 
 // NewFileSQLAdapter creates a new adapter for filesql integration
@@ -218,6 +224,7 @@ func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string)
 		return nil, importError(path, err)
 	}
 	registry, err := validated.LoadIntoTxWithPending(ctx, tx)
+	f.recordSkippedRows(validated.SkippedRows())
 	if err != nil {
 		if f.rowMismatchPolicy == model.RowMismatchPad && errors.Is(err, filesql.ErrColumnMismatch) {
 			return nil, importError(path, fmt.Errorf("--row-mismatch pad refuses to truncate a long row: %w", unnamedCause(err)))
@@ -225,6 +232,37 @@ func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string)
 		return nil, importError(path, err)
 	}
 	return registry, nil
+}
+
+// recordSkippedRows keeps what one import discarded, so the shell can report it
+// once the import has committed. A later import of the same table replaces the
+// count, because it replaced the table.
+func (f *FileSQLAdapter) recordSkippedRows(skipped []filesql.SkippedRows) {
+	if len(skipped) == 0 {
+		return
+	}
+	if f.skipped == nil {
+		f.skipped = make(map[string]model.SkippedRows, len(skipped))
+	}
+	for _, s := range skipped {
+		f.skipped[s.Table] = model.SkippedRows{Table: s.Table, Count: s.Count, Total: s.Total}
+	}
+}
+
+// SkippedRows returns what the row-mismatch policy dropped for the given tables,
+// and forgets it: a count is reported once, at the import that produced it.
+func (f *FileSQLAdapter) SkippedRows(tables []string) []model.SkippedRows {
+	if len(f.skipped) == 0 {
+		return nil
+	}
+	out := make([]model.SkippedRows, 0, len(tables))
+	for _, name := range tables {
+		if s, ok := f.skipped[name]; ok {
+			out = append(out, s)
+			delete(f.skipped, name)
+		}
+	}
+	return out
 }
 
 // importError names the input a load failed on, carrying the path as a value so

@@ -472,6 +472,16 @@ failed to import file rm.csv: filesql: column count mismatch: row 1 has 2 fields
 An `.import` inside a running session is offered `.row-mismatch` instead: the
 flag can only be given when the process starts.
 
+`skip` says how much it dropped, because dropping one ragged row and dropping
+most of the file are not the same thing to know before a `.save --in-place`
+writes the smaller table back:
+
+```text
+warning: table "ragged": skipped 2 of 4 data rows whose field count differs from the header
+```
+
+An import that dropped nothing says nothing.
+
 ## Output formats
 
 `--output-format` picks how a result is printed. The same query, three ways:

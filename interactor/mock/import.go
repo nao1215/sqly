@@ -423,3 +423,41 @@ func (c *MockImportUsecaseSetRowMismatchPolicyCall) DoAndReturn(f func(model.Row
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// SkippedRows mocks base method.
+func (m *MockImportUsecase) SkippedRows(tables []string) []model.SkippedRows {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SkippedRows", tables)
+	ret0, _ := ret[0].([]model.SkippedRows)
+	return ret0
+}
+
+// SkippedRows indicates an expected call of SkippedRows.
+func (mr *MockImportUsecaseMockRecorder) SkippedRows(tables any) *MockImportUsecaseSkippedRowsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SkippedRows", reflect.TypeOf((*MockImportUsecase)(nil).SkippedRows), tables)
+	return &MockImportUsecaseSkippedRowsCall{Call: call}
+}
+
+// MockImportUsecaseSkippedRowsCall wrap *gomock.Call
+type MockImportUsecaseSkippedRowsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockImportUsecaseSkippedRowsCall) Return(arg0 []model.SkippedRows) *MockImportUsecaseSkippedRowsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockImportUsecaseSkippedRowsCall) Do(f func([]string) []model.SkippedRows) *MockImportUsecaseSkippedRowsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockImportUsecaseSkippedRowsCall) DoAndReturn(f func([]string) []model.SkippedRows) *MockImportUsecaseSkippedRowsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
