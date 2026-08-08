@@ -59,7 +59,12 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 		return "", nil, fmt.Errorf("create staging file for %s: %w", path, err)
 	}
 
-	_, copyErr := io.Copy(file, transform.NewReader(reader, newImportDecoder(s.state.importEncoding)))
+	// The source is checked before the decoder for UTF-16 and the decoder's output
+	// after it for the legacy encodings; see import_decode_validate.go for why the
+	// two cannot be one check.
+	validated := newSourceValidatingReader(s.state.importEncoding, reader)
+	decoded := transform.NewReader(validated, newImportDecoder(s.state.importEncoding))
+	_, copyErr := io.Copy(file, newDecodeValidatingReader(s.state.importEncoding, decoded))
 	closeErr := file.Close()
 	if !readerClosed {
 		if err := cleanupReader(); err != nil {

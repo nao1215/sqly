@@ -412,6 +412,18 @@ sqly does not guess which encoding it is. Nothing in the bytes says so, and a
 wrong guess is the same corruption in a different shape — which is what the
 replacement character used to be. `--encoding` is how the answer is given.
 
+Naming an encoding changes which bytes are valid, not whether they are checked.
+A byte that begins nothing in the encoding named, a UTF-16 code unit cut in half,
+or a surrogate with no partner is refused with exit `3`, naming the encoding:
+
+```text
+import failed, and no table was created or changed: decode sj.csv as shift-jis: byte at offset 8 is not valid shift-jis, so it would be read as the replacement character; check --encoding, one of: utf-8|shift-jis|euc-jp|iso-2022-jp|utf-16le|utf-16be
+```
+
+A `U+FFFD` the file really holds is data and loads: UTF-16 can write one, so it
+says nothing about how the decode went. The other encodings cannot, which is
+what makes one in their output proof of a substitution.
+
 Binary containers are not affected: Parquet and Excel state their own encoding,
 and ACH and Fedwire are fixed-width records, so none of them is validated as
 UTF-8 text.

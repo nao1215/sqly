@@ -8,6 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 )
 
 // TestSmoke_MixedFormatInputs loads three formats in one invocation and treats
@@ -410,6 +414,116 @@ func TestSmoke_ExportedHeadersReimport(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSmoke_EncodingRefusesBytesItCannotDecode is the encoding half of the rule
+// that a text input sqly cannot read is refused rather than loaded as mojibake.
+// Without --encoding that has been true since rc8; with it, the x/text decoders
+// substituted U+FFFD for bytes the declared encoding has no meaning for, so the
+// same corruption loaded at exit 0. Naming an encoding must not turn the check
+// off — it changes which bytes are valid, not whether they are checked.
+func TestSmoke_EncodingRefusesBytesItCannotDecode(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		encoding string
+		content  []byte
+	}{
+		{name: "a byte that begins nothing in shift-jis", encoding: "shift-jis", content: []byte("a\n\xff\xfe\x01\n")},
+		{name: "a byte that begins nothing in euc-jp", encoding: "euc-jp", content: []byte("a\n\xff\xff\n")},
+		{name: "a utf-16le code unit cut in half", encoding: "utf-16le", content: []byte("a\x00\n\x00\x41")},
+		{name: "a utf-16le surrogate with no partner", encoding: "utf-16le", content: []byte("a\x00\n\x00\x00\xd8\x41\x00")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "bad.csv")
+			if err := os.WriteFile(path, tt.content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			stdout, stderr, code := run(t, "", "--encoding", tt.encoding, "--sql", "SELECT 1", path)
+			if code != 3 {
+				t.Errorf("exit code = %d, want 3 (an input that could not be read)\nstderr: %s", code, stderr)
+			}
+			if !strings.Contains(stderr, tt.encoding) {
+				t.Errorf("stderr = %q, want it to name the declared encoding", stderr)
+			}
+			// Import is all-or-nothing, so the refusal lands before any table.
+			if !strings.Contains(stderr, "no table was created or changed") {
+				t.Errorf("stderr = %q, want the all-or-nothing framing", stderr)
+			}
+			if strings.TrimSpace(stdout) != "" {
+				t.Errorf("stdout = %q, want it empty", stdout)
+			}
+		})
+	}
+
+	t.Run("the stdin dataset is checked the same way", func(t *testing.T) {
+		_, stderr, code := run(t, "a\n\xff\xfe\x01\n",
+			"--stdin-format", "csv", "--encoding", "shift-jis", "--sql", "SELECT 1")
+		if code != 3 {
+			t.Errorf("exit code = %d, want 3\nstderr: %s", code, stderr)
+		}
+		if !strings.Contains(stderr, "shift-jis") {
+			t.Errorf("stderr = %q, want it to name the declared encoding", stderr)
+		}
+	})
+}
+
+// TestSmoke_EncodingStillReadsWhatItShould is the other side: the check rejects
+// malformed input rather than the encodings themselves, so every valid decode
+// still loads.
+func TestSmoke_EncodingStillReadsWhatItShould(t *testing.T) {
+	const utf8Source = "name,city\n山田,東京\n"
+
+	for _, tt := range []struct {
+		name     string
+		encoding string
+		encoder  transform.Transformer
+	}{
+		{name: "shift-jis", encoding: "shift-jis", encoder: japanese.ShiftJIS.NewEncoder()},
+		{name: "euc-jp", encoding: "euc-jp", encoder: japanese.EUCJP.NewEncoder()},
+		{name: "iso-2022-jp", encoding: "iso-2022-jp", encoder: japanese.ISO2022JP.NewEncoder()},
+		{name: "utf-16le", encoding: "utf-16le", encoder: unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder()},
+		{name: "utf-16be", encoding: "utf-16be", encoder: unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM).NewEncoder()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "people.csv")
+			encoded, _, err := transform.Bytes(tt.encoder, []byte(utf8Source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, encoded, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			stdout, stderr, code := run(t, "",
+				"--encoding", tt.encoding, "--output-format", "jsonl", "--sql", "SELECT city FROM people", path)
+			if code != 0 {
+				t.Fatalf("exit code = %d, want 0\nstderr: %s", code, stderr)
+			}
+			if !strings.Contains(stdout, "東京") {
+				t.Errorf("output = %q, want the decoded value", stdout)
+			}
+		})
+	}
+
+	t.Run("a genuine replacement character is data, not a failed decode", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "fffd.csv")
+		// "a\n" then U+FFFD, as little-endian UTF-16 code units.
+		if err := os.WriteFile(path, []byte("a\x00\n\x00\xfd\xff"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		stdout, stderr, code := run(t, "",
+			"--encoding", "utf-16le", "--output-format", "jsonl", "--sql", "SELECT a FROM fffd", path)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0: U+FFFD is representable in UTF-16\nstderr: %s", code, stderr)
+		}
+		if !strings.Contains(stdout, "�") {
+			t.Errorf("output = %q, want the replacement character the file holds", stdout)
+		}
+	})
 }
 
 // TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry covers the one format that
