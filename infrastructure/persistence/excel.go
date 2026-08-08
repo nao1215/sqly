@@ -78,6 +78,9 @@ func DumpExcel(excelFilePath string, table *model.Table) (err error) {
 			return err
 		}
 	}
+	if err := model.EnsureHeaderReimportable("excel", header); err != nil {
+		return err
+	}
 	if err := f.SetSheetRow(sheetName, "A1", &header); err != nil {
 		return err
 	}

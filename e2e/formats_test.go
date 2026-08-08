@@ -333,6 +333,85 @@ func hexOf(s string) string {
 	return b.String()
 }
 
+// exportExtension is the destination extension each writable format requires,
+// so the round-trip test below can name a file --output will accept.
+var exportExtension = map[string]string{
+	"csv":     ".csv",
+	"tsv":     ".tsv",
+	"ltsv":    ".ltsv",
+	"json":    ".json",
+	"jsonl":   ".jsonl",
+	"excel":   ".xlsx",
+	"parquet": ".parquet",
+}
+
+// TestSmoke_ExportedHeadersReimport is the round-trip property for a header: an
+// export that reports success has written a file sqly can read back.
+//
+// csv, tsv, and excel used to break it. An import reads two column names that
+// differ only in case, or only in surrounding whitespace, as one column and
+// refuses the file; those three writers compared nothing, so `SELECT id AS x,
+// label AS x` exported at exit 0 and the file it produced failed to load at exit
+// 3. json, jsonl, ltsv, and parquet already refused a repeat, which is what made
+// the gap a difference between formats rather than one rule.
+//
+// The property is stated over every writable format rather than over the three
+// that were wrong, and it does not say which side of the line a header falls on:
+// each format is asked, and whichever answer it gives has to hold up — a success
+// must re-import, and a refusal must leave no file behind. A format free to
+// disagree about a header is not free to write one it cannot read.
+func TestSmoke_ExportedHeadersReimport(t *testing.T) {
+	headers := []struct {
+		name    string
+		columns []string
+	}{
+		{name: "a name repeated", columns: []string{"x", "x"}},
+		{name: "names differing only by case", columns: []string{"a", "A"}},
+		{name: "names differing only by surrounding whitespace", columns: []string{"x", " x"}},
+		{name: "names differing by both, which an import tells apart", columns: []string{"a", " A"}},
+		{name: "names differing by non-ASCII case, which SQLite tells apart", columns: []string{"ä", "Ä"}},
+		{name: "distinct names", columns: []string{"a", "b"}},
+	}
+
+	for _, format := range []string{"csv", "tsv", "ltsv", "json", "jsonl", "excel", "parquet"} {
+		t.Run(format, func(t *testing.T) {
+			for _, header := range headers {
+				t.Run(header.name, func(t *testing.T) {
+					dir := t.TempDir()
+					out := filepath.Join(dir, "out"+exportExtension[format])
+					source := writeFixture(t, dir, "src.csv", "id\n1\n")
+
+					selectList := make([]string, 0, len(header.columns))
+					for i, column := range header.columns {
+						selectList = append(selectList,
+							strconv.Itoa(i+1)+` AS "`+column+`"`)
+					}
+					query := "SELECT " + strings.Join(selectList, ", ") + " FROM src"
+
+					_, stderr, code := run(t, "", "--output-format", format, "--output", out, "--sql", query, source)
+					if code != 0 {
+						if code != 4 {
+							t.Fatalf("export exit code = %d, want 0 or 4 (a header the format refuses)\nstderr: %s", code, stderr)
+						}
+						// A refused export leaves the destination alone, as every
+						// other refusal in this file does.
+						if _, err := os.Stat(out); !os.IsNotExist(err) {
+							t.Errorf("refused export left %s behind, want no file", out)
+						}
+						return
+					}
+
+					// The query names no table, so it proves the file loaded rather
+					// than anything about what the load produced.
+					if _, stderr, code := run(t, "", "--sql", "SELECT 1", out); code != 0 {
+						t.Errorf("export succeeded but the file it wrote does not load: exit %d\nstderr: %s", code, stderr)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry covers the one format that
 // used to answer an unrepresentable value by changing it. XLSX is XML, and XML
 // 1.0 has no way to write most control characters, so the writer substituted
