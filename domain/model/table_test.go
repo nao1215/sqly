@@ -984,6 +984,65 @@ func TestTablePrintEscaping(t *testing.T) {
 		}
 	})
 
+	t.Run("CSV rejects duplicate column names", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeCSV); err == nil {
+			t.Errorf("want error for duplicate CSV header, got output %q", buf.String())
+		}
+	})
+
+	t.Run("TSV rejects duplicate column names", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeTSV); err == nil {
+			t.Errorf("want error for duplicate TSV header, got output %q", buf.String())
+		}
+	})
+
+	t.Run("CSV rejects column names the importer reads as one name", func(t *testing.T) {
+		t.Parallel()
+		// The importer compares names with surrounding whitespace removed and
+		// ASCII case folded, so a header unique byte-for-byte can still be one
+		// no sqly run could load back.
+		for _, tt := range []struct {
+			name   string
+			header Header
+		}{
+			{name: "differ only by case", header: Header{"a", "A"}},
+			{name: "differ only by surrounding whitespace", header: Header{"x", " x"}},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				tbl := NewTable("t", tt.header, []Record{{"1", "2"}})
+				var buf bytes.Buffer
+				if err := tbl.Print(&buf, PrintModeCSV); err == nil {
+					t.Errorf("want error for header %v, got output %q", tt.header, buf.String())
+				}
+			})
+		}
+	})
+
+	t.Run("CSV keeps non-ASCII case pairs, which SQLite tells apart", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"ä", "Ä"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeCSV); err != nil {
+			t.Errorf("Print CSV: %v, want success for names SQLite tells apart", err)
+		}
+	})
+
+	t.Run("LTSV rejects labels that differ only by case", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"a", "A"}, []Record{{"1", "2"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeLTSV); err == nil {
+			t.Errorf("want error for case-folded duplicate LTSV labels, got output %q", buf.String())
+		}
+	})
+
 	t.Run("JSON rejects duplicate column names", func(t *testing.T) {
 		t.Parallel()
 		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})

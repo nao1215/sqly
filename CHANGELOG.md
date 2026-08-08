@@ -13,6 +13,12 @@ against.
   same output, same exit codes. A bug fix only moves a run toward what these
   notes already describe; it does not change what they promise.
 
+## [Unreleased]
+
+### Bug Fixes
+
+* An export refuses a header it could not read back. rc8 made one rule of the duplicate header on the way in, and csv, tsv, and excel still wrote one on the way out: `SELECT * FROM a JOIN b ON a.id = b.id` names `id` twice, so the export reported success and the file it produced failed to load with `duplicate column name`. json, jsonl, ltsv, and parquet already refused it, which is what made this a difference between formats rather than one answer. All of them refuse it now, at exit `4`, leaving the destination as it was. The rule is the import's own: names are compared with surrounding whitespace removed, and again with ASCII case ignored, so `x` beside ` x` and `a` beside `A` are each refused, while `ä` beside `Ä` still exports because SQLite tells those apart. LTSV gains the case half it was missing.
+
 ## [v1.0.0-rc8](https://github.com/nao1215/sqly/compare/v1.0.0-rc7...v1.0.0-rc8) (2026-08-07)
 
 The final release candidate for v1.0.0. Everything below is a change from rc7.

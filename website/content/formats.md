@@ -119,6 +119,18 @@ XLSX — being XML — has no way to hold a control character other than tab,
 newline, and carriage return, nor the two noncharacters `U+FFFE` and `U+FFFF`. Either one names the column and exits `4`, leaving
 the destination as it was; csv, tsv, and json carry all of them.
 
+An export also refuses a header sqly could not read back, by the same rule the
+read side applies: names compared with surrounding whitespace removed, and again
+with ASCII case ignored. `SELECT * FROM a JOIN b ON a.id = b.id` names `id`
+twice, so it is refused in every format at exit `4` — alias one of them:
+
+```shell
+sqly --output-format csv --output out.csv \
+  --sql "SELECT a.id AS a_id, b.id AS b_id FROM a JOIN b ON a.id = b.id" a.csv b.csv
+```
+
+`ä` beside `Ä` is two columns, not one, because that is what SQLite compares.
+
 ## Compression
 
 CSV, TSV, LTSV, JSON, JSONL, Parquet, and Excel are read through `.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, and `.lz4` — so `data.csv.gz` is table `data`, with nothing to declare.

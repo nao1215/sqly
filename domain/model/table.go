@@ -482,6 +482,9 @@ func (t *Table) printMarkdownTable(out io.Writer) error {
 // escaped, matching the --output file path and staying valid when redirected to
 // a file or piped to a CSV-aware tool.
 func (t *Table) printCSV(out io.Writer) error {
+	if err := EnsureHeaderReimportable(formatCSV, t.Header()); err != nil {
+		return err
+	}
 	return t.writeDelimited(out, ',')
 }
 
@@ -489,6 +492,9 @@ func (t *Table) printCSV(out io.Writer) error {
 // uses a writer that quotes values containing the delimiter, quotes, or newlines,
 // so the stream stays a valid tabular record when redirected or piped.
 func (t *Table) printTSV(out io.Writer) error {
+	if err := EnsureHeaderReimportable(formatTSV, t.Header()); err != nil {
+		return err
+	}
 	return t.writeDelimited(out, '\t')
 }
 
@@ -709,6 +715,12 @@ func jsonRenderableValue(value any) error {
 // export rather than truncating it.
 func (t *Table) EnsureLTSVWritable() error {
 	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
+		return err
+	}
+	// The check above compares labels as they are, which leaves the pair an
+	// import reads as one column: "a" beside "A" is two LTSV labels and one
+	// SQLite column, so the file wrote cleanly and would not load.
+	if err := EnsureHeaderReimportable(formatLTSV, t.Header()); err != nil {
 		return err
 	}
 	for _, v := range t.Rows {
