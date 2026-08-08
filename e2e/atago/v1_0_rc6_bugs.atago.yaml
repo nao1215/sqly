@@ -260,7 +260,7 @@ scenarios:
       - run:
           command: sqly --script-file before.sqly staff.csv
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "changes schema"
 

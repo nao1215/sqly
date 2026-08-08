@@ -128,10 +128,14 @@ func (s *Shell) preflightSave(elements []scriptElement) error {
 	// changes, ANALYZE, maintenance). Only read-only queries and row-modifying DML
 	// on imported tables are persisted, so a schema-only run must fail loudly here
 	// instead of exiting 0 while leaving the source unchanged.,
+	// An invocationError, not a bare one: this refusal is decided before the first
+	// statement runs, so it is a script that was not accepted (exit 2) rather than
+	// a statement that ran and failed (exit 1), which is what a bare error would
+	// have been classified as.
 	if stmt := firstSaveIncompatibleStatement(elements); stmt != "" {
-		return fmt.Errorf(
+		return &invocationError{Err: fmt.Errorf(
 			".save cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
-			trimGaps(stmt))
+			trimGaps(stmt))}
 	}
 	return nil
 }

@@ -109,7 +109,7 @@ header refused in one format is refused in all of them.
 
 `--output-format csv`, `--output-format tsv`, `--output-format ltsv`, `--output-format json`, `--output-format jsonl`, `--output-format markdown`, `--output-format excel`, `--output-format parquet`, and the default `table`.
 
-`--output PATH` writes to a file; its extension must agree with the chosen format. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
+`--output PATH` writes to a file. An extension sqly knows must agree with the chosen format, and `--output-format csv --output out.json` is refused as a usage error, exit `2`. An extension it does not know is written as given, so `--output report.txt` holds CSV; a path with no extension gets the format's own, so `--output report` writes `report.csv`. With the default `table` mode the format is inferred from the extension instead, falling back to CSV.
 
 ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `.save` does, not `--output`.
 
@@ -411,6 +411,18 @@ sqly --encoding shift-jis --output-format csv --sql "SELECT * FROM sj" sj.csv
 sqly does not guess which encoding it is. Nothing in the bytes says so, and a
 wrong guess is the same corruption in a different shape — which is what the
 replacement character used to be. `--encoding` is how the answer is given.
+
+Naming an encoding changes which bytes are valid, not whether they are checked.
+A byte that begins nothing in the encoding named, a UTF-16 code unit cut in half,
+or a surrogate with no partner is refused with exit `3`, naming the encoding:
+
+```text
+import failed, and no table was created or changed: decode sj.csv as shift-jis: byte at offset 8 is not valid shift-jis, so it would be read as the replacement character; check --encoding, one of: utf-8|shift-jis|euc-jp|iso-2022-jp|utf-16le|utf-16be
+```
+
+A `U+FFFD` the file really holds is data and loads: UTF-16 can write one, so it
+says nothing about how the decode went. The other encodings cannot, which is
+what makes one in their output proof of a substitution.
 
 ### A write-back keeps the source's encoding
 
