@@ -174,7 +174,7 @@ scenarios:
             PRAGMA user_version=1;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           stdout:
@@ -190,7 +190,7 @@ scenarios:
             PRAGMA incremental_vacuum;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           stdout:
@@ -206,7 +206,7 @@ scenarios:
             PRAGMA journal_mode=OFF;
             .save --in-place
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           stdout:
@@ -222,7 +222,7 @@ scenarios:
             PRAGMA user_version=1;
             .save out
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           file:
@@ -239,7 +239,7 @@ scenarios:
             PRAGMA incremental_vacuum;
             .save out
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             empty: false
           file:
