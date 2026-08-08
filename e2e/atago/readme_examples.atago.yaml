@@ -369,7 +369,7 @@ scenarios:
             CREATE TABLE backup AS SELECT * FROM user;
             .save out
       - assert:
-          exit_code: 1
+          exit_code: 2
           stderr:
             contains: "cannot persist"
           file:
