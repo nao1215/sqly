@@ -17,7 +17,13 @@ against.
 
 ### Bug Fixes
 
+* A script the `.save` preflight refuses exits `2` rather than `1`. The check runs before the first statement, so nothing has run when it fires — no statement feedback is printed and no destination is created — and `2` is the code for a script that was not accepted, where `1` means a statement ran and failed. It reported `1` because the refusal was a bare error, which is the code anything unclassified falls through to.
+
 * An export refuses a header it could not read back. rc8 made one rule of the duplicate header on the way in, and csv, tsv, and excel still wrote one on the way out: `SELECT * FROM a JOIN b ON a.id = b.id` names `id` twice, so the export reported success and the file it produced failed to load with `duplicate column name`. json, jsonl, ltsv, and parquet already refused it, which is what made this a difference between formats rather than one answer. All of them refuse it now, at exit `4`, leaving the destination as it was. The rule is the import's own: names are compared with surrounding whitespace removed, and again with ASCII case ignored, so `x` beside ` x` and `a` beside `A` are each refused, while `ä` beside `Ä` still exports because SQLite tells those apart. LTSV gains the case half it was missing.
+
+### Documentation
+
+* What `--output` does with a destination extension is written down in full. The formats page said the extension "must agree with the chosen format", which holds only for an extension sqly knows: an unknown one is written as given, so `--output report.txt` holds CSV, and a path with no extension gets the format's own, so `--output report` writes `report.csv`. All three are pinned by tests now.
 
 ## [v1.0.0-rc8](https://github.com/nao1215/sqly/compare/v1.0.0-rc7...v1.0.0-rc8) (2026-08-07)
 
