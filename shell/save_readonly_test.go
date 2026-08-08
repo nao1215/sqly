@@ -45,6 +45,9 @@ func TestSaveInPlace_RefusesAReadOnlySource(t *testing.T) {
 	if err == nil {
 		t.Fatal("an in-place save over a read-only source was accepted")
 	}
+	if got := ExitCode(err); got != ExitOutput {
+		t.Errorf("exit code = %d, want %d: a destination that could not be written", got, ExitOutput)
+	}
 	if !strings.Contains(stderr, "read-only") {
 		t.Errorf("the refusal should say the file is read-only, got: %s", stderr)
 	}
@@ -69,6 +72,9 @@ func TestSaveInPlace_ReadOnlySourceLeavesTheOtherFilesAlone(t *testing.T) {
 	_, stderr, err := runScriptStreams(t, script, writable, locked)
 	if err == nil {
 		t.Fatal("a save covering a read-only source was accepted")
+	}
+	if got := ExitCode(err); got != ExitOutput {
+		t.Errorf("exit code = %d, want %d: a destination that could not be written", got, ExitOutput)
 	}
 	if !strings.Contains(stderr, "read-only") {
 		t.Errorf("the refusal should say which file is read-only, got: %s", stderr)
@@ -102,6 +108,9 @@ func TestSaveInPlace_RefusesAReadOnlyFinancialSource(t *testing.T) {
 	_, stderr, err := runScriptStreams(t, script, source)
 	if err == nil {
 		t.Fatal("an in-place save over a read-only ACH source was accepted")
+	}
+	if got := ExitCode(err); got != ExitOutput {
+		t.Errorf("exit code = %d, want %d: a destination that could not be written", got, ExitOutput)
 	}
 	if !strings.Contains(stderr, "read-only") {
 		t.Errorf("the refusal should say the file is read-only, got: %s", stderr)
