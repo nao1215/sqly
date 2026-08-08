@@ -751,8 +751,8 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 	// line below plus TestDumpWrite_SucceedsToANewPath.
 	var staged string
 	exporter.EXPECT().
-		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone).
-		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression) error {
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone, gomock.Any()).
+		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression, _ model.TextEncoding) error {
 			staged = path
 			return os.WriteFile(path, []byte("id,name\n"), 0o600)
 		})

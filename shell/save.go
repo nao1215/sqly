@@ -821,7 +821,11 @@ func (s *Shell) stageWriteTarget(ctx context.Context, tgt writeTarget) (stagedWr
 		_ = s.fs().Remove(staging)
 		return stagedWrite{}, fmt.Errorf("failed to read table %s: %w", tgt.table, err)
 	}
-	if err := s.usecases.export.DumpTable(staging, table, tgt.format, tgt.comp); err != nil {
+	// A write-back rewrites a file the session read, so it writes it in the
+	// encoding it was read with. Writing UTF-8 instead changed the file's
+	// encoding without saying so, and the same command run again read the result
+	// as the encoding it was told, which is mojibake.
+	if err := s.usecases.export.DumpTable(staging, table, tgt.format, tgt.comp, s.state.importEncoding); err != nil {
 		_ = s.fs().Remove(staging)
 		return stagedWrite{}, fmt.Errorf("failed to save table %s to %s: %w", tgt.table, tgt.dest, err)
 	}

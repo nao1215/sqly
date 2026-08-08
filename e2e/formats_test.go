@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 // TestSmoke_MixedFormatInputs loads three formats in one invocation and treats
@@ -410,6 +413,103 @@ func TestSmoke_ExportedHeadersReimport(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSmoke_SavePreservesTheSourceEncoding is the write-back half of --encoding.
+// A save used to write UTF-8 whatever the source was, so `.save --in-place` on a
+// Shift-JIS file quietly converted it, and the user's own next run of the same
+// command decoded UTF-8 as Shift-JIS and returned mojibake at exit 0. Compression
+// has always been preserved by a write-back; the encoding is the same promise.
+func TestSmoke_SavePreservesTheSourceEncoding(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		encoding string
+		encoder  transform.Transformer
+		decoder  transform.Transformer
+	}{
+		{
+			name: "shift-jis", encoding: "shift-jis",
+			encoder: japanese.ShiftJIS.NewEncoder(), decoder: japanese.ShiftJIS.NewDecoder(),
+		},
+		{
+			name: "euc-jp", encoding: "euc-jp",
+			encoder: japanese.EUCJP.NewEncoder(), decoder: japanese.EUCJP.NewDecoder(),
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "people.csv")
+			encoded, _, err := transform.Bytes(tt.encoder, []byte("name,city\n山田,東京\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, encoded, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			script := "UPDATE people SET city = '京都' WHERE name = '山田';\n.save --in-place\n"
+			if _, stderr, code := run(t, script, "--encoding", tt.encoding, path); code != 0 {
+				t.Fatalf("save exit code = %d, want 0\nstderr: %s", code, stderr)
+			}
+
+			// The bytes on disk still decode in the source's own encoding.
+			written, err := os.ReadFile(path) //nolint:gosec // path built by the test
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, _, err := transform.Bytes(tt.decoder, written)
+			if err != nil {
+				t.Fatalf("the saved file does not decode as %s: %v", tt.encoding, err)
+			}
+			if !strings.Contains(string(decoded), "京都") {
+				t.Errorf("decoded file = %q, want the updated value", decoded)
+			}
+
+			// The user's own pipeline, run again unchanged, is what the bug broke.
+			stdout, stderr, code := run(t, "",
+				"--encoding", tt.encoding, "--output-format", "jsonl", "--sql", "SELECT city FROM people", path)
+			if code != 0 {
+				t.Fatalf("re-read exit code = %d, want 0\nstderr: %s", code, stderr)
+			}
+			if !strings.Contains(stdout, "京都") {
+				t.Errorf("re-read = %q, want 京都 rather than mojibake", stdout)
+			}
+		})
+	}
+
+	t.Run("a value the encoding cannot write refuses the save", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "people.csv")
+		encoded, _, err := transform.Bytes(japanese.ShiftJIS.NewEncoder(), []byte("name\n山田\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, encoded, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		before, err := os.ReadFile(path) //nolint:gosec // path built by the test
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// An emoji has no Shift-JIS spelling, so writing it would substitute.
+		script := "UPDATE people SET name = '🎌';\n.save --in-place\n"
+		_, stderr, code := run(t, script, "--encoding", "shift-jis", path)
+		if code != 4 {
+			t.Errorf("exit code = %d, want 4 (a value the destination cannot represent)\nstderr: %s", code, stderr)
+		}
+		if !strings.Contains(stderr, "shift-jis") {
+			t.Errorf("stderr = %q, want it to name the encoding", stderr)
+		}
+
+		after, err := os.ReadFile(path) //nolint:gosec // path built by the test
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(after) != string(before) {
+			t.Errorf("a refused save changed the file: %q, want it left as it was", after)
+		}
+	})
 }
 
 // TestSmoke_ExcelExportRefusesValuesXLSXCannotCarry covers the one format that

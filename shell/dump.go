@@ -97,7 +97,9 @@ func (c CommandList) dumpCommand(ctx context.Context, s *Shell, argv []string) e
 	// makes the last step a rename inside the destination's own directory, with a
 	// copy only where the platform refuses one and a backup taken before it runs.
 	if err := s.writeFileAtomically(filePath, func(staging string) error {
-		return s.usecases.export.DumpTable(staging, table, exportFmt, compression)
+		// A new file, not a rewrite of one the session read, so it is UTF-8: there
+		// is no source encoding to preserve here.
+		return s.usecases.export.DumpTable(staging, table, exportFmt, compression, model.TextEncodingUTF8)
 	}); err != nil {
 		return &outputPathError{Path: filePath, Err: err}
 	}

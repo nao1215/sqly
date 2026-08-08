@@ -412,6 +412,25 @@ sqly does not guess which encoding it is. Nothing in the bytes says so, and a
 wrong guess is the same corruption in a different shape — which is what the
 replacement character used to be. `--encoding` is how the answer is given.
 
+### A write-back keeps the source's encoding
+
+`.save` rewrites a file in the encoding it was read with, the way it already
+preserves compression. A Shift-JIS file edited and saved is still Shift-JIS, so
+the same command run again reads what it wrote:
+
+```shell
+sqly --encoding shift-jis --script-file edit.sql sales.csv
+sqly --encoding shift-jis --sql "SELECT * FROM sales" sales.csv
+```
+
+A value the encoding has no way to write — an emoji into Shift-JIS — refuses the
+save at exit `4`, naming the encoding, and leaves the file as it was. Writing a
+substitute character instead would be the loss the import side refuses, on a file
+the user already had.
+
+`--output` and `.dump` are unaffected: they create new files rather than
+rewriting one the session read, and a new file is UTF-8.
+
 Binary containers are not affected: Parquet and Excel state their own encoding,
 and ACH and Fedwire are fixed-width records, so none of them is validated as
 UTF-8 text.

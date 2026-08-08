@@ -1523,7 +1523,9 @@ func (s *Shell) outputToFile(table *model.Table) error {
 	// not land. The wrapper carries no text of its own, so the message stays the
 	// one the failing step produced.
 	if err := s.writeFileAtomically(filePath, func(staging string) error {
-		return s.usecases.export.DumpTable(staging, table, exportFmt, compression)
+		// A new file, not a rewrite of one the session read, so it is UTF-8: there
+		// is no source encoding to preserve here.
+		return s.usecases.export.DumpTable(staging, table, exportFmt, compression, model.TextEncodingUTF8)
 	}); err != nil {
 		return &outputPathError{Path: filePath, Err: err}
 	}

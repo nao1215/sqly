@@ -17,6 +17,8 @@ against.
 
 ### Bug Fixes
 
+* A write-back keeps the source's text encoding. `.save` wrote UTF-8 whatever the file was read as, so `sqly --encoding shift-jis` plus `.save --in-place` converted the user's Shift-JIS file without a word, and their own next run of the same command decoded the new bytes as Shift-JIS and returned mojibake at exit `0`. The encoding is preserved the way compression already was. A value the encoding cannot write refuses the save at exit `4`, naming the encoding and leaving the file as it was, rather than writing a substitute character. `--output` and `.dump` are unchanged: they create new files rather than rewriting one the session read, and a new file is UTF-8.
+
 * An export refuses a header it could not read back. rc8 made one rule of the duplicate header on the way in, and csv, tsv, and excel still wrote one on the way out: `SELECT * FROM a JOIN b ON a.id = b.id` names `id` twice, so the export reported success and the file it produced failed to load with `duplicate column name`. json, jsonl, ltsv, and parquet already refused it, which is what made this a difference between formats rather than one answer. All of them refuse it now, at exit `4`, leaving the destination as it was. The rule is the import's own: names are compared with surrounding whitespace removed, and again with ASCII case ignored, so `x` beside ` x` and `a` beside `A` are each refused, while `ä` beside `Ä` still exports because SQLite tells those apart. LTSV gains the case half it was missing.
 
 ## [v1.0.0-rc8](https://github.com/nao1215/sqly/compare/v1.0.0-rc7...v1.0.0-rc8) (2026-08-07)
