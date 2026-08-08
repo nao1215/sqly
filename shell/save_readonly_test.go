@@ -78,6 +78,43 @@ func TestSaveInPlace_ReadOnlySourceLeavesTheOtherFilesAlone(t *testing.T) {
 	}
 }
 
+// An ACH or Fedwire source is written back as one file rebuilt from several
+// tables, which gives it a planning path of its own. That path did not ask
+// whether the file may be written, so the guard covered every format except the
+// two whose contents are financial records.
+func TestSaveInPlace_RefusesAReadOnlyFinancialSource(t *testing.T) {
+	requireModeEnforcement(t)
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "ppd.ach")
+	fixture, err := os.ReadFile(filepath.Join("..", "testdata", "ppd-debit.ach"))
+	if err != nil {
+		t.Fatalf("read the ACH fixture: %v", err)
+	}
+	if err := os.WriteFile(source, fixture, 0o600); err != nil {
+		t.Fatalf("write the ACH source: %v", err)
+	}
+	if err := os.Chmod(source, 0o444); err != nil { //nolint:gosec // a read-only file is the subject of the test
+		t.Fatalf("make the source read-only: %v", err)
+	}
+
+	script := "UPDATE ppd_entries SET individual_name = 'RENAMED' WHERE entry_index = 0;\n.save --in-place\n"
+	_, stderr, err := runScriptStreams(t, script, source)
+	if err == nil {
+		t.Fatal("an in-place save over a read-only ACH source was accepted")
+	}
+	if !strings.Contains(stderr, "read-only") {
+		t.Errorf("the refusal should say the file is read-only, got: %s", stderr)
+	}
+	after, readErr := os.ReadFile(source)
+	if readErr != nil {
+		t.Fatalf("read the source back: %v", readErr)
+	}
+	if string(after) != string(fixture) {
+		t.Error("the read-only ACH source was rewritten despite the refusal")
+	}
+}
+
 func TestSaveDir_RefusesAReadOnlyDestinationDirectory(t *testing.T) {
 	requireModeEnforcement(t)
 

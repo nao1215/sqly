@@ -575,6 +575,14 @@ func (s *Shell) planFinancialSet(ctx context.Context, source, format string, cur
 	}
 
 	dest := source
+	if destDir == "" {
+		// An in-place save replaces this file, so the file's own permissions
+		// decide whether it may be. See refuseUnwritableSource; an ACH or
+		// Fedwire set is one file like any other here.
+		if err := refuseUnwritableSource(source); err != nil {
+			return writeTarget{}, fmt.Sprintf("%s: %v", label, err), false
+		}
+	}
 	if destDir != "" {
 		dest = filepath.Join(destDir, label)
 		if sameFilePath(dest, source) {

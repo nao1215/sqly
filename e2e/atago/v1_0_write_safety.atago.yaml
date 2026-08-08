@@ -22,7 +22,7 @@ scenarios:
   # write-back afterwards makes either one permanent.
   - name: --row-mismatch skip reports how much of the file it dropped
     steps:
-      - fixture: &ragged
+      - fixture:
           file: ragged.csv
           content: |
             a,b
@@ -61,7 +61,7 @@ scenarios:
   # user had protected.
   - name: .save --in-place refuses a read-only source and leaves it whole
     steps:
-      - fixture: &locked
+      - fixture:
           file: locked.csv
           content: |
             name,age
@@ -111,6 +111,10 @@ scenarios:
       - assert:
           file:
             path: dest.csv
+            contains: "1"
+      - assert:
+          file:
+            path: dest.csv
             not_contains: "2"
 
   - name: .dump refuses a read-only destination
@@ -129,12 +133,23 @@ scenarios:
       - assert:
           file:
             path: dest.csv
-            not_contains: "2"
+            contains: "1"
+      # The source holds 9, so a .dump that landed would leave it here.
+      - assert:
+          file:
+            path: dest.csv
+            not_contains: "9"
 
   # 3. A workbook has no null, but it does have "no cell", which is what a
   # reader shows as blank. Writing the empty string for both told every reader
   # of the file that the column held a value in every row.
-  - name: an xlsx export writes NULL as a blank cell, not as an empty string
+  #
+  # Which of the two the file holds is a question about a worksheet cell, and
+  # the unit test owns it (TestExcelDumpWritesNullAsAnEmptyCell asserts the cell
+  # type). What this scenario owns is the risk that comes with writing no cell
+  # at all: a reader stops at the last cell that has a value, so a row could
+  # come back short or vanish. Every row and every id must survive.
+  - name: an xlsx export with NULL cells loses no row and no column
     steps:
       - fixture:
           file: nulls.csv
