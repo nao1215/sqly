@@ -91,7 +91,7 @@ func TestSaveInPlace_RefusesAReadOnlyFinancialSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the ACH fixture: %v", err)
 	}
-	if err := os.WriteFile(source, fixture, 0o600); err != nil {
+	if err := os.WriteFile(source, fixture, 0o600); err != nil { //nolint:gosec // source is a path this test built under t.TempDir
 		t.Fatalf("write the ACH source: %v", err)
 	}
 	if err := os.Chmod(source, 0o444); err != nil { //nolint:gosec // a read-only file is the subject of the test
@@ -106,7 +106,7 @@ func TestSaveInPlace_RefusesAReadOnlyFinancialSource(t *testing.T) {
 	if !strings.Contains(stderr, "read-only") {
 		t.Errorf("the refusal should say the file is read-only, got: %s", stderr)
 	}
-	after, readErr := os.ReadFile(source)
+	after, readErr := os.ReadFile(source) //nolint:gosec // source is a path this test built under t.TempDir
 	if readErr != nil {
 		t.Fatalf("read the source back: %v", readErr)
 	}

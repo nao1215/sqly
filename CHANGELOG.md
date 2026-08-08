@@ -33,7 +33,7 @@ against.
 
 ### Dependencies
 
-* filesql v0.39.0. It stops a sampled type decision from damaging a value it never saw — a zero-padded code or an integer past int64 arriving after the first 1000 rows was rewritten by SQLite's affinity, so `007` loaded as `7` — and it refuses an ACH or Fedwire write-back value too wide for its fixed-width record instead of cutting it to fit. It also reports what a skipping import dropped, which is what the `--row-mismatch skip` warning above is built on.
+* filesql v0.39.1. It stops a sampled type decision from damaging a value it never saw — a zero-padded code or an integer past int64 arriving after the first 1000 rows was rewritten by SQLite's affinity, so `007` loaded as `7` — and it refuses an ACH or Fedwire write-back value too wide for its fixed-width record instead of cutting it to fit. It also reports what a skipping import dropped, which is what the `--row-mismatch skip` warning above is built on.
 
 * prompt v0.0.18. Three of its fixes are visible in sqly's shell: input that filled a terminal row exactly no longer erases the line above the prompt (the bottom of the result you are reading), a prompt prefix wider than the terminal no longer leaves a torn copy of itself behind on every line, and Ctrl+R redraws its search in place instead of stacking a block per keystroke.
 

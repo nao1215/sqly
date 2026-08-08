@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/compress v1.19.1
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
-	github.com/nao1215/filesql v0.39.0
+	github.com/nao1215/filesql v0.39.1
 	github.com/nao1215/prompt v0.0.18
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -78,5 +78,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-replace github.com/nao1215/filesql => /home/nao/ghq/github.com/nao1215/filesql
