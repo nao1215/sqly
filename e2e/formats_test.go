@@ -413,10 +413,12 @@ func TestSmoke_ExportedHeadersReimport(t *testing.T) {
 }
 
 // TestSmoke_OutputExtensionRules pins what --output does with each kind of
-// destination extension. The formats page claimed the extension "must agree with
-// the chosen format", which is true only of an extension sqly recognizes: an
-// unknown one is written as given and a missing one gets the format's own, and
-// neither was written down.
+// destination extension: a known one must agree with the chosen format, an
+// unknown one is written as given, and a missing one gets the format's own.
+//
+// Only the first was documented. The formats page said the extension "must agree
+// with the chosen format" without qualification, so the two escape hatches were
+// behavior nothing described and nothing held in place.
 func TestSmoke_OutputExtensionRules(t *testing.T) {
 	dir := t.TempDir()
 	source := writeFixture(t, dir, "src.csv", "id\n1\n")
