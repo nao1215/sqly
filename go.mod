@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/compress v1.19.1
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
-	github.com/nao1215/filesql v0.37.1
+	github.com/nao1215/filesql v0.38.0
 	github.com/nao1215/prompt v0.0.17
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3

@@ -60,7 +60,7 @@ func TestDumpTableRejectsAFormatWithNoSerializer(t *testing.T) {
 	// A value past every declared format: nothing parses to it, so only a
 	// programming error reaches this.
 	const undeclared = model.ExportFormat(200)
-	if err := newTestExportInteractor().DumpTable(out, table, undeclared, model.CompressionNone); err == nil {
+	if err := newTestExportInteractor().DumpTable(out, table, undeclared, model.CompressionNone, model.TextEncodingUTF8); err == nil {
 		t.Fatal("DumpTable with an unroutable format = nil error, want error")
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
@@ -81,7 +81,7 @@ func TestExportInteractor_DumpTable_CSV(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.csv")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportCSV, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable CSV failed: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestExportInteractor_DumpTable_TSV(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.tsv")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportTSV, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportTSV, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable TSV failed: %v", err)
 	}
 
@@ -137,7 +137,7 @@ func TestExportInteractor_DumpTable_LTSV(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.ltsv")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportLTSV, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportLTSV, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable LTSV failed: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func TestExportInteractor_DumpTable_Excel(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.xlsx")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportExcel, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportExcel, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable Excel failed: %v", err)
 	}
 
@@ -196,7 +196,7 @@ func TestExportInteractor_DumpTable_Markdown(t *testing.T) {
 	tempDir := t.TempDir()
 	outputFile := filepath.Join(tempDir, "output.md")
 
-	if err := exp.DumpTable(outputFile, table, model.ExportMarkdown, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportMarkdown, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable Markdown failed: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func TestExportInteractor_DumpTable_InvalidPath(t *testing.T) {
 
 	table := model.NewTable("test", model.Header{"id"}, nil)
 
-	err := exp.DumpTable("/nonexistent/directory/file.csv", table, model.ExportCSV, model.CompressionNone)
+	err := exp.DumpTable("/nonexistent/directory/file.csv", table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8)
 	if err == nil {
 		t.Fatal("Expected error when dumping to invalid path")
 	}
@@ -233,7 +233,7 @@ func TestExportInteractor_DumpTable_JSON(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.json")
-	if err := exp.DumpTable(outputFile, table, model.ExportJSON, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportJSON, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable JSON failed: %v", err)
 	}
 
@@ -285,7 +285,7 @@ func TestExportInteractor_DumpTable_CSV_Gzip(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.csv.gz")
-	if err := exp.DumpTable(outputFile, table, model.ExportCSV, model.CompressionGzip); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportCSV, model.CompressionGzip, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable CSV gzip failed: %v", err)
 	}
 
@@ -306,7 +306,7 @@ func TestExportInteractor_DumpTable_NDJSON_Gzip(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson.gz")
-	if err := exp.DumpTable(outputFile, table, model.ExportJSONL, model.CompressionGzip); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportJSONL, model.CompressionGzip, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable NDJSON gzip failed: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func TestExportInteractor_DumpTable_NDJSON(t *testing.T) {
 	})
 
 	outputFile := filepath.Join(t.TempDir(), "output.ndjson")
-	if err := exp.DumpTable(outputFile, table, model.ExportJSONL, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(outputFile, table, model.ExportJSONL, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable NDJSON failed: %v", err)
 	}
 

@@ -13,5 +13,11 @@ type ExportUsecase interface {
 	// DumpTable exports a table to a file in the specified format, optionally
 	// wrapping text and JSON output in a compression codec. Pass
 	// model.CompressionNone to write uncompressed.
-	DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression) error
+	//
+	// encoding names the text encoding of the output. Pass
+	// model.TextEncodingUTF8 for the ordinary case; a write-back passes the
+	// encoding its source was read with, so the file it rewrites stays readable
+	// the way the caller has been reading it. Excel and Parquet carry their own
+	// encoding and ignore it.
+	DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression, encoding model.TextEncoding) error
 }

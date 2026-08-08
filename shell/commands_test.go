@@ -750,9 +750,11 @@ func TestCommandList_dumpCommand_dependsOnMetadataAndExportUsecases(t *testing.T
 	// the assertion that the destination is the path the user named is the stderr
 	// line below plus TestDumpWrite_SucceedsToANewPath.
 	var staged string
+	// UTF-8 rather than gomock.Any(): .dump creates a new file, so it must not
+	// forward the session's import encoding the way a write-back does.
 	exporter.EXPECT().
-		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone).
-		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression) error {
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8).
+		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression, _ model.TextEncoding) error {
 			staged = path
 			return os.WriteFile(path, []byte("id,name\n"), 0o600)
 		})

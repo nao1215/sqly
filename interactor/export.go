@@ -69,9 +69,10 @@ func printSerializer(mode model.PrintMode) streamSerializer {
 }
 
 // DumpTable exports a table to a file in the specified format. Text and JSON
-// formats honor the compression codec; Excel and Parquet are binary container
-// formats and ignore it (callers reject compression for them upstream).
-func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression) error {
+// formats honor the compression codec and the text encoding; Excel and Parquet
+// are binary container formats that state their own encoding and ignore both
+// (callers reject compression for them upstream).
+func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format model.ExportFormat, compression model.Compression, encoding model.TextEncoding) error {
 	if dump, ok := pathSerializers[format]; ok {
 		return dump(filepath.Clean(filePath), table)
 	}
@@ -83,7 +84,14 @@ func (e *exportInteractor) DumpTable(filePath string, table *model.Table, format
 		return fmt.Errorf("no serializer for export format %q", format)
 	}
 	return e.withCompressedWriter(filePath, compression, func(w io.Writer) error {
-		return dump(w, table)
+		// The encoder sits inside the compressor, because what a codec stores is
+		// the encoded text: a reader decompresses and then decodes, which is the
+		// order the import side already applies.
+		encoded, finish := persistence.NewEncodingWriter(w, encoding)
+		if err := dump(encoded, table); err != nil {
+			return err
+		}
+		return finish()
 	})
 }
 

@@ -27,7 +27,7 @@ vendors:
   term: { in: golang.org/x/term }
   filesql: { in: [github.com/nao1215/filesql, github.com/nao1215/filesql/dialect] }
   runewidth: { in: github.com/mattn/go-runewidth }
-  text: { in: [golang.org/x/text/encoding/japanese, golang.org/x/text/encoding/unicode, golang.org/x/text/transform] }
+  text: { in: [golang.org/x/text/encoding, golang.org/x/text/encoding/japanese, golang.org/x/text/encoding/unicode, golang.org/x/text/transform] }
   fileparser: { in: github.com/nao1215/fileparser }
   compress: { in: github.com/klauspost/compress/zstd }
 
@@ -156,6 +156,9 @@ deps:
   persistence-infra:
     canUse:
       - excelize
+      # A write-back rewrites a file in the encoding it was read with, so the
+      # encoders live beside the writers that use them.
+      - text
     mayDependOn:
       - model
       - repository

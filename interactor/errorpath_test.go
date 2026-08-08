@@ -22,7 +22,7 @@ func TestDumpTable_InitCompressionError(t *testing.T) {
 	})
 	out := filepath.Join(t.TempDir(), "out.csv.bz2")
 
-	err := exp.DumpTable(out, table, model.ExportCSV, model.CompressionBzip2)
+	err := exp.DumpTable(out, table, model.ExportCSV, model.CompressionBzip2, model.TextEncodingUTF8)
 	if err == nil {
 		t.Fatal("DumpTable with bzip2 compression = nil error, want error (bzip2 has no writer)")
 	}
@@ -39,7 +39,7 @@ func TestDumpTable_Parquet(t *testing.T) {
 	})
 	out := filepath.Join(t.TempDir(), "people.parquet")
 
-	if err := exp.DumpTable(out, table, model.ExportParquet, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(out, table, model.ExportParquet, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable Parquet failed: %v", err)
 	}
 }
@@ -53,7 +53,7 @@ func TestDumpTable_ParquetEmpty(t *testing.T) {
 	table := model.NewTable("empty", model.Header{"id"}, []model.Record{})
 	out := filepath.Join(t.TempDir(), "empty.parquet")
 
-	if err := exp.DumpTable(out, table, model.ExportParquet, model.CompressionNone); err == nil {
+	if err := exp.DumpTable(out, table, model.ExportParquet, model.CompressionNone, model.TextEncodingUTF8); err == nil {
 		t.Fatal("DumpTable Parquet on empty result = nil error, want error")
 	}
 }
@@ -73,7 +73,7 @@ func TestDumpTable_ReportsTheSerializerFailure(t *testing.T) {
 	})
 	staging := filepath.Join(t.TempDir(), "staging.ltsv")
 
-	if err := exp.DumpTable(staging, table, model.ExportLTSV, model.CompressionNone); err == nil {
+	if err := exp.DumpTable(staging, table, model.ExportLTSV, model.CompressionNone, model.TextEncodingUTF8); err == nil {
 		t.Fatal("DumpTable with a tab in an LTSV value = nil error, want error")
 	}
 }
@@ -93,14 +93,14 @@ func TestDumpTable_WritesOnlyToThePathItIsGiven(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	if err := exp.DumpTable(filepath.Join(dir, "ok.csv"), table, model.ExportCSV, model.CompressionNone); err != nil {
+	if err := exp.DumpTable(filepath.Join(dir, "ok.csv"), table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 		t.Fatalf("DumpTable = %v, want nil", err)
 	}
 	// A serializer failure is the case that used to leave the strays.
 	bad := model.NewTable("t", model.Header{"id"}, []model.Record{
 		model.Record([]string{"a\tb"}),
 	})
-	if err := exp.DumpTable(filepath.Join(dir, "bad.ltsv"), bad, model.ExportLTSV, model.CompressionNone); err == nil {
+	if err := exp.DumpTable(filepath.Join(dir, "bad.ltsv"), bad, model.ExportLTSV, model.CompressionNone, model.TextEncodingUTF8); err == nil {
 		t.Fatal("DumpTable with a tab in an LTSV value = nil error, want error")
 	}
 
@@ -173,7 +173,7 @@ func TestDumpTable_RoundTripsThroughItsOwnOutput(t *testing.T) {
 			t.Parallel()
 
 			out := filepath.Join(t.TempDir(), tt.file)
-			if err := newTestExportInteractor().DumpTable(out, table, model.ExportCSV, tt.comp); err != nil {
+			if err := newTestExportInteractor().DumpTable(out, table, model.ExportCSV, tt.comp, model.TextEncodingUTF8); err != nil {
 				t.Fatalf("DumpTable = %v, want nil", err)
 			}
 			if got := tt.read(t, out); got != want {
@@ -209,7 +209,7 @@ func TestDumpTable_PreservesFilePermissions(t *testing.T) {
 		}
 
 		// Perform successful dump
-		if err := exp.DumpTable(outPath, table, model.ExportLTSV, model.CompressionNone); err != nil {
+		if err := exp.DumpTable(outPath, table, model.ExportLTSV, model.CompressionNone, model.TextEncodingUTF8); err != nil {
 			t.Fatalf("failed to dump table: %v", err)
 		}
 

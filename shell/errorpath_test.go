@@ -146,7 +146,7 @@ func TestCommandList_dumpCommand_propagatesExportError(t *testing.T) {
 	metadata := mock.NewMockMetadataUsecase(ctrl)
 	export := mock.NewMockExportUsecase(ctrl)
 	metadata.EXPECT().List(gomock.Any(), "t").Return(covErrTable(), nil)
-	export.EXPECT().DumpTable(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+	export.EXPECT().DumpTable(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(errors.New("disk full"))
 
 	s := newBoundaryTestShell(t, Usecases{metadata: metadata, export: export})

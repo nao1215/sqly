@@ -21,7 +21,7 @@ func TestWithCompressedWriterErrors(t *testing.T) {
 	t.Run("create failure on nonexistent directory", func(t *testing.T) {
 		t.Parallel()
 		badPath := filepath.Join(t.TempDir(), "no-such-dir", "out.csv")
-		if err := exp.DumpTable(badPath, table, model.ExportCSV, model.CompressionNone); err == nil {
+		if err := exp.DumpTable(badPath, table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8); err == nil {
 			t.Fatal("DumpTable() = nil error, want error when output directory does not exist")
 		}
 	})
@@ -29,7 +29,7 @@ func TestWithCompressedWriterErrors(t *testing.T) {
 	t.Run("compression init failure for write-only-unsupported codec", func(t *testing.T) {
 		t.Parallel()
 		out := filepath.Join(t.TempDir(), "out.csv.bz2")
-		if err := exp.DumpTable(out, table, model.ExportCSV, model.CompressionBzip2); err == nil {
+		if err := exp.DumpTable(out, table, model.ExportCSV, model.CompressionBzip2, model.TextEncodingUTF8); err == nil {
 			t.Fatal("DumpTable() = nil error, want error when compression codec rejects writing")
 		}
 	})
@@ -40,7 +40,7 @@ func TestWithCompressedWriterErrors(t *testing.T) {
 			model.Record([]string{"1", "2"}),
 		})
 		out := filepath.Join(t.TempDir(), "out.json")
-		if err := exp.DumpTable(out, dup, model.ExportJSON, model.CompressionNone); err == nil {
+		if err := exp.DumpTable(out, dup, model.ExportJSON, model.CompressionNone, model.TextEncodingUTF8); err == nil {
 			t.Fatal("DumpTable() = nil error, want error when JSON columns are not unique")
 		}
 	})
