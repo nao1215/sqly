@@ -90,15 +90,31 @@ func DumpExcel(excelFilePath string, table *model.Table) (err error) {
 	}
 
 	const excelRowOffset = 2
-	row := make([]string, 0, table.ColumnCount())
+	values := make([]string, 0, table.ColumnCount())
+	cells := make([]any, table.ColumnCount())
 	for i, record := range table.Rows {
-		row = record.AppendTo(row[:0])
-		for col, value := range row {
+		values = record.AppendTo(values[:0])
+		for col, value := range values {
 			if err := ensureExcelRepresentable(table.ColumnName(col), value); err != nil {
 				return err
 			}
+			// A NULL is written as no cell at all, which is what a workbook has
+			// instead of a null: a reader sees a blank cell rather than a cell
+			// holding the empty string, and those are different values to every
+			// tool that opens the file. Writing the empty string for both made an
+			// export claim the column had a value everywhere.
+			if col < len(cells) {
+				if table.IsNull(i, col) {
+					cells[col] = nil
+					continue
+				}
+				cells[col] = value
+			}
 		}
-		if err := f.SetSheetRow(sheetName, fmt.Sprintf("A%d", i+excelRowOffset), &row); err != nil {
+		for col := len(values); col < len(cells); col++ {
+			cells[col] = nil
+		}
+		if err := f.SetSheetRow(sheetName, fmt.Sprintf("A%d", i+excelRowOffset), &cells); err != nil {
 			return err
 		}
 	}

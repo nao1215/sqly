@@ -339,6 +339,7 @@ func (s *Shell) recordImportedTables(ctx context.Context, claims []claimedTables
 			s.clearDirImported(owned)
 		}
 		s.warnKeywordTableNames(owned)
+		s.warnSkippedRows(owned)
 		imported = append(imported, owned...)
 	}
 	slices.Sort(imported)

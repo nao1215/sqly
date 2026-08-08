@@ -19,3 +19,19 @@ type ImportError struct {
 
 func (e *ImportError) Error() string { return e.Path + ": " + e.Err.Error() }
 func (e *ImportError) Unwrap() error { return e.Err }
+
+// SkippedRows is how much of one table's input the row-mismatch policy dropped.
+//
+// A skip is what the user asked for with --row-mismatch skip, so it is not a
+// failure. Saying nothing about it is: an import that dropped one ragged row
+// and one that dropped most of the file produced the same output, and a
+// write-back afterwards makes either one permanent.
+type SkippedRows struct {
+	// Table is the table that lost rows.
+	Table string
+	// Count is how many data rows were dropped.
+	Count int
+	// Total is how many data rows the input held, dropped ones included, so a
+	// message can say "2 of 4" rather than a bare number.
+	Total int
+}

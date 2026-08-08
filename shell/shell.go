@@ -1593,6 +1593,14 @@ func ensureWritableDestination(path string) error {
 				"output destination %q is a %s, not a regular file; --output replaces a file, so write to stdout and redirect instead",
 				path, describeFileMode(info.Mode()))}
 		}
+		// An existing destination is overwritten without asking, which is what
+		// naming it means — but a file the filesystem refuses to open for
+		// writing is not one the user is offering. The write stages beside it
+		// and renames over it, which the directory's permissions allow on their
+		// own, so nothing else here ever asks the file itself.
+		if err := refuseUnwritableSource(path); err != nil {
+			return &outputPathError{Path: path, Err: fmt.Errorf("output destination %q: %w", path, err)}
+		}
 	}
 	// The parent must already exist. sqly does not create directories for an
 	// output path: a typo in a directory name would otherwise leave a tree of

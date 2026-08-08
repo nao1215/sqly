@@ -233,6 +233,64 @@ func TestExcelDumpKeepsCharactersXLSXCanCarry(t *testing.T) {
 	}
 }
 
+// TestExcelDumpWritesNullAsAnEmptyCell covers the difference a workbook can
+// carry and the export was throwing away. A NULL and an empty string are two
+// values, and writing the empty string for both told every reader of the file
+// that the column had a value in every row. A workbook has no null, but it does
+// have "no cell", which is what a reader shows as blank.
+func TestExcelDumpWritesNullAsAnEmptyCell(t *testing.T) {
+	t.Parallel()
+
+	table, err := model.NewTableFromCells("t", model.Header{"id", "note", "tail"}, [][]model.Cell{
+		{model.NewCell(int64(1)), model.NewCell(nil), model.NewCell("x")},
+		{model.NewCell(int64(2)), model.NewCell(""), model.NewCell("y")},
+	})
+	if err != nil {
+		t.Fatalf("build the table: %v", err)
+	}
+
+	out := filepath.Join(t.TempDir(), "nulls.xlsx")
+	if err := DumpExcel(out, table); err != nil {
+		t.Fatalf("Dump: %v", err)
+	}
+
+	f, err := excelize.OpenFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+
+	// A NULL leaves no cell behind; an empty string leaves a cell holding it.
+	// excelize reports the unset cell as type 0 and the written one as a string.
+	nullType, err := f.GetCellType("t", "B2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nullType != excelize.CellTypeUnset {
+		t.Errorf("the NULL cell has type %v, want unset: a workbook says null by holding no cell", nullType)
+	}
+
+	emptyType, err := f.GetCellType("t", "B3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emptyType == excelize.CellTypeUnset {
+		t.Error("the empty string was written as no cell, which is what NULL means here")
+	}
+
+	// The rows are otherwise intact, so the blank cell cost nothing around it.
+	rows, err := f.GetRows("t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %q, want a header and two data rows", rows)
+	}
+	if rows[1][0] != "1" || rows[1][2] != "x" {
+		t.Errorf("row 1 = %q, want the id and tail unchanged around the NULL", rows[1])
+	}
+}
+
 // TestExcelDumpRefusesInvalidUTF8 pins the hole in the character guard. XLSX is
 // XML and cannot hold a byte that is not valid UTF-8, and the writer replaced
 // each one with U+FFFD: the export succeeded, the file appeared, and the byte

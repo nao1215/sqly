@@ -301,6 +301,23 @@ func (s *Shell) warnKeywordTableNames(names []string) {
 	}
 }
 
+// warnSkippedRows reports what the row-mismatch policy dropped from an import
+// that has just committed.
+//
+// Dropping the rows is what `--row-mismatch skip` asks for, so this is not an
+// error. Saying nothing is the problem it solves: an import that dropped one
+// ragged row and one that dropped most of the file printed the same nothing,
+// and the row count that comes out is only meaningful to someone who already
+// knew what went in. A `.save --in-place` afterwards writes the smaller table
+// back over the source, which is the moment the loss stops being recoverable.
+func (s *Shell) warnSkippedRows(names []string) {
+	for _, skipped := range s.usecases.importer.SkippedRows(names) {
+		fmt.Fprintf(s.importStatusWriter(),
+			"warning: table %q: skipped %d of %d data rows whose field count differs from the header\n",
+			skipped.Table, skipped.Count, skipped.Total)
+	}
+}
+
 // markDirImported records that a table came from a directory import, so
 // write-back can reject it even when its source points at a single file.
 func (s *Shell) markDirImported(name string) {

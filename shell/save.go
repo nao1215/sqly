@@ -422,6 +422,16 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		}
 
 		dest := source
+		if destDir == "" {
+			// An in-place save replaces this file, so the file's own permissions
+			// decide whether it may be. The commit stages beside the destination
+			// and renames over it, which only needs a writable directory, so
+			// nothing else on this path ever asks.
+			if err := refuseUnwritableSource(source); err != nil {
+				problems = append(problems, fmt.Sprintf("%s: %v", name, err))
+				continue
+			}
+		}
 		if destDir != "" {
 			dest = filepath.Join(destDir, filepath.Base(source))
 			// A .save DIR destination that resolves to the source file would
@@ -456,6 +466,38 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 		return nil, &writeBackError{Err: fmt.Errorf("cannot save session:\n  - %s", strings.Join(problems, "\n  - "))}
 	}
 	return targets, nil
+}
+
+// refuseUnwritableSource reports why a file sqly is about to replace may not be
+// replaced, and nil when it may.
+//
+// The question is asked by opening the file for writing rather than by reading
+// its mode bits, because the mode is only one of the answers: an ACL, an owner
+// that is not this user, and a read-only mount all deny the write and none of
+// them shows up in the permission bits. Nothing is written by the open — no
+// truncation, no create — so asking costs a file descriptor.
+//
+// Why it has to be asked at all: the commit stages a file beside the
+// destination and renames over it, which the directory's permissions allow on
+// their own. A file marked unwritable was therefore replaced at exit 0, and its
+// mode was copied onto the new content, so the protection outlived the data it
+// was protecting.
+func refuseUnwritableSource(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0) //nolint:gosec // path is the source the session imported
+	if err == nil {
+		return f.Close()
+	}
+	if !errors.Is(err, os.ErrPermission) {
+		// Anything else — a missing file, a directory — is somebody else's
+		// error to report, and the write will raise it in its own words.
+		return nil
+	}
+
+	mode := ""
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = fmt.Sprintf(" (mode %#o)", info.Mode().Perm())
+	}
+	return fmt.Errorf("%s is read-only%s; make it writable to let sqly rewrite it", filepath.Base(path), mode)
 }
 
 // tableNeedsWriting reports whether a save to this destination has anything to
@@ -533,6 +575,14 @@ func (s *Shell) planFinancialSet(ctx context.Context, source, format string, cur
 	}
 
 	dest := source
+	if destDir == "" {
+		// An in-place save replaces this file, so the file's own permissions
+		// decide whether it may be. See refuseUnwritableSource; an ACH or
+		// Fedwire set is one file like any other here.
+		if err := refuseUnwritableSource(source); err != nil {
+			return writeTarget{}, fmt.Sprintf("%s: %v", label, err), false
+		}
+	}
 	if destDir != "" {
 		dest = filepath.Join(destDir, label)
 		if sameFilePath(dest, source) {

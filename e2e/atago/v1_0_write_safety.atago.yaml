@@ -1,0 +1,176 @@
+# Binary-level regressions for the three write-path bugs found while hunting for
+# v1.0.0: what a skipping import keeps quiet, what a write does to a file the
+# filesystem says may not be written, and what an XLSX export does with NULL.
+#
+# What is pinned below:
+#   1. --row-mismatch skip says how many rows it dropped, and stays quiet when
+#      it dropped none (nao1215/sqly#886)
+#   2. .save --in-place, --output, and .dump refuse a destination that cannot be
+#      opened for writing, and leave it as it was (nao1215/sqly#887)
+#   3. an xlsx export writes SQL NULL as a blank cell rather than as the empty
+#      string (nao1215/sqly#888)
+#
+# Run with: make test-e2e
+version: "1"
+
+suite:
+  name: sqly write safety and skip reporting
+
+scenarios:
+  # 1. Dropping the row is what the flag asks for. Saying nothing about it left
+  # one dropped row and most of the file dropped looking identical, and a
+  # write-back afterwards makes either one permanent.
+  - name: --row-mismatch skip reports how much of the file it dropped
+    steps:
+      - fixture:
+          file: ragged.csv
+          content: |
+            a,b
+            1,2
+            3
+            5,6
+            7
+      - run:
+          command: sqly --row-mismatch skip --output-format csv --sql "SELECT count(*) FROM ragged" ragged.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            contains:
+              - "skipped 2 of 4 data rows"
+              - ragged
+
+  - name: an import that dropped nothing says nothing
+    steps:
+      - fixture:
+          file: clean.csv
+          content: |
+            a,b
+            1,2
+            3,4
+      - run:
+          command: sqly --row-mismatch skip --output-format csv --sql "SELECT count(*) FROM clean" clean.csv
+      - assert:
+          exit_code: 0
+          stderr:
+            not_contains: skipped
+
+  # 2. A file whose permissions deny writing is the filesystem saying so. sqly
+  # stages beside the destination and renames over it, which only needs a
+  # writable directory, so a read-only file was replaced at exit 0 — and its
+  # mode was copied onto the new content, leaving the protection over data the
+  # user had protected.
+  - name: .save --in-place refuses a read-only source and leaves it whole
+    steps:
+      - fixture:
+          file: locked.csv
+          content: |
+            name,age
+            ken,40
+          mode: "0444"
+      - run:
+          command: sqly locked.csv
+          stdin: |
+            UPDATE locked SET age = 41;
+            .save --in-place
+      - assert:
+          exit_code: 4
+          stderr:
+            contains:
+              - read-only
+              - locked.csv
+      - assert:
+          file:
+            path: locked.csv
+            contains: "ken,40"
+      - assert:
+          file:
+            path: locked.csv
+            not_contains: "ken,41"
+
+  - name: --output refuses a read-only destination
+    steps:
+      - fixture: &source
+          file: src.csv
+          content: |
+            a
+            9
+      - fixture: &dest
+          file: dest.csv
+          content: |
+            a
+            1
+          mode: "0444"
+      - run:
+          command: sqly --output dest.csv --output-format csv --sql "SELECT 2 AS a" src.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains:
+              - read-only
+              - dest.csv
+      - assert:
+          file:
+            path: dest.csv
+            contains: "1"
+      - assert:
+          file:
+            path: dest.csv
+            not_contains: "2"
+
+  - name: .dump refuses a read-only destination
+    steps:
+      - fixture: *source
+      - fixture: *dest
+      - run:
+          command: sqly src.csv
+          stdin: |
+            .dump src dest.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains:
+              - read-only
+      - assert:
+          file:
+            path: dest.csv
+            contains: "1"
+      # The source holds 9, so a .dump that landed would leave it here.
+      - assert:
+          file:
+            path: dest.csv
+            not_contains: "9"
+
+  # 3. A workbook has no null, but it does have "no cell", which is what a
+  # reader shows as blank. Writing the empty string for both told every reader
+  # of the file that the column held a value in every row.
+  #
+  # Which of the two the file holds is a question about a worksheet cell, and
+  # the unit test owns it (TestExcelDumpWritesNullAsAnEmptyCell asserts the cell
+  # type). What this scenario owns is the risk that comes with writing no cell
+  # at all: a reader stops at the last cell that has a value, so a row could
+  # come back short or vanish. Every row and every id must survive.
+  - name: an xlsx export with NULL cells loses no row and no column
+    steps:
+      - fixture:
+          file: nulls.csv
+          content: |
+            id,note
+            1,keep
+            2,x
+      - run:
+          command: sqly nulls.csv
+          stdin: |
+            UPDATE nulls SET note = NULL WHERE id = 1;
+            .dump nulls out.xlsx
+      - assert:
+          exit_code: 0
+      # Reading the workbook back: the row whose note is blank comes back with
+      # the id intact, so the blank cell cost nothing around it.
+      - run:
+          command: sqly --output-format csv --sql "SELECT id FROM out_nulls ORDER BY id" out.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1"
+              - "2"
