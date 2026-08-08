@@ -429,7 +429,7 @@ func TestDumpWrite_FallbackCopyFailurePreservesTheDestination(t *testing.T) {
 	// The exporter succeeds, as the real one does whenever the format can hold
 	// every value. Only the commit fails.
 	exporter.EXPECT().
-		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone, gomock.Any()).
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8).
 		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression, _ model.TextEncoding) error {
 			return os.WriteFile(path, []byte("id,name\n9,carol\n"), 0o600)
 		})
@@ -476,7 +476,7 @@ func TestDumpWrite_SucceedsToANewPath(t *testing.T) {
 
 	const written = "id\n1\n"
 	exporter.EXPECT().
-		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone, gomock.Any()).
+		DumpTable(gomock.Any(), table, model.ExportCSV, model.CompressionNone, model.TextEncodingUTF8).
 		DoAndReturn(func(path string, _ *model.Table, _ model.ExportFormat, _ model.Compression, _ model.TextEncoding) error {
 			return os.WriteFile(path, []byte(written), 0o600)
 		})

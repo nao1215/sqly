@@ -595,6 +595,13 @@ func TestSmoke_SavePreservesTheSourceEncoding(t *testing.T) {
 			name: "euc-jp", encoding: "euc-jp",
 			encoder: japanese.EUCJP.NewEncoder(), decoder: japanese.EUCJP.NewDecoder(),
 		},
+		{
+			// The UTF-16 writers emit a byte-order mark, so this case also pins
+			// that what the save produces is what the read side recognizes.
+			name: "utf-16le", encoding: "utf-16le",
+			encoder: unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder(),
+			decoder: unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewDecoder(),
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
