@@ -86,8 +86,11 @@ scenarios:
     steps:
       - fixture: *user_csv
       - run:
-          command: sh -c 'sqly --output-format csv --output empty.csv --sql "SELECT user_name FROM user WHERE 1=0" user.csv && sqly --output-format csv --sql "SELECT count(*) AS n FROM empty" empty.csv'
-          shell: true
+          command: sqly --output-format csv --output empty.csv --sql "SELECT user_name FROM user WHERE 1=0" user.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT count(*) AS n FROM empty" empty.csv
       - assert:
           exit_code: 0
           stdout:
