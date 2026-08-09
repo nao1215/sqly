@@ -74,11 +74,17 @@ sqly --output-format csv --dialect postgresql --sql "SELECT 5/2 AS x" user.csv
 # MySQL: backticks, DATE_ADD, DIV, CAST, EXTRACT, DATE_FORMAT, GROUP_CONCAT ... SEPARATOR
 sqly --output-format csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-31', INTERVAL 1 MONTH) AS d" user.csv
 
+# MySQL's operators that SQLite does not share: && is AND, ! is NOT, ^ is a
+# bitwise exclusive or. || is a logical OR, as MySQL's default sql_mode reads it.
+sqly --output-format csv --dialect mysql --sql "SELECT 1 && 0 AS a, !0 AS b, 5 ^ 3 AS c" user.csv
+
 # PostgreSQL: :: casts, ILIKE, SPLIT_PART, ~ and ~*, STRING_AGG, SIMILAR TO, numeric TO_CHAR
 sqly --output-format csv --dialect postgresql --sql "SELECT 'abc' SIMILAR TO 'a%' AS m" user.csv
 
-# GoogleSQL: SAFE_CAST, SAFE_DIVIDE, DATE_DIFF, FORMAT_DATE, COUNTIF, LOGICAL_AND
+# GoogleSQL: SAFE_CAST, SAFE_DIVIDE, DATE_DIFF, FORMAT_DATE, COUNTIF, LOGICAL_AND.
+# The SAFE. call prefix BigQuery's own documentation uses is the same query.
 sqly --output-format csv --dialect googlesql --sql "SELECT SAFE_DIVIDE(1, 0) AS x" user.csv
+sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.DIVIDE(1, 0) AS x" user.csv
 ```
 
 `LIKE` case sensitivity follows the source dialect, casts raise where the source raises, and `DATE_ADD` on a month boundary clamps the way the source clamps. The full set is in [filesql's dialect package](https://github.com/nao1215/filesql/tree/main/dialect); the behavior is pinned by the `dialect_*.atago.yaml` suites.
@@ -98,9 +104,18 @@ That output is asserted against the binary by
 
 | Dialect | Rejected |
 |:--|:--|
-| PostgreSQL | `DISTINCT ON`, `LATERAL`, array literals (`ARRAY[...]`) |
-| GoogleSQL | `QUALIFY`, `SELECT * EXCEPT`, `ARRAY<T>` types |
-| MySQL | `INTERVAL` units SQLite cannot express, `GROUP_CONCAT` combining `DISTINCT` with `SEPARATOR` |
+| PostgreSQL | `DISTINCT ON`, `LATERAL`, array literals (`ARRAY[...]`), set-returning functions (`generate_series`, `unnest`, ...) |
+| GoogleSQL | `QUALIFY`, `SELECT * EXCEPT`, `ARRAY<T>` types, array literals and subscripts (`[1,2,3]`, `x[OFFSET(0)]`), a `SAFE.` prefix on a function with no safe form |
+| MySQL | `XOR`, `INTERVAL` units SQLite cannot express, `GROUP_CONCAT` combining `DISTINCT` with `SEPARATOR` |
+
+`XOR` is the shape of these judgments. SQLite has no operator whose precedence
+sits between `OR` and `AND`, so `XOR`'s operands are whole `AND`-expressions
+rather than the primaries a rewrite can pick out: translating it would
+reassociate `a AND b XOR c` into something MySQL never meant. The error says
+what to write instead, `(a AND NOT b) OR (NOT a AND b)`. A set-returning
+function and an array are rejected for the same kind of reason — SQLite has no
+form for either — and the rejection is what keeps the message about the query
+you wrote rather than about a column or a table SQLite invented from it.
 
 In a batch script a translate error stops the run and names the statement.
 

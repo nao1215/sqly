@@ -282,3 +282,56 @@ scenarios:
           stdout:
             line: 2
             equals: "0"
+
+  # The operator family "||" belonged to. Each of these was a raw SQLite
+  # tokenizer error under --dialect mysql before filesql v0.41.0: "&&" and "^"
+  # as unrecognized tokens, "!" as one too.
+  - name: "mysql && is a logical AND"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT 1 && 0 AS a, 1 && 2 AS b"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "0,1"
+
+  - name: "mysql ! negates, and binds tighter than a comparison"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT !0 AS a, !1 = 2 AS b"
+      - assert:
+          exit_code: 0
+          # "(!1) = 2" is 0; the bare "NOT 1 = 2" SQLite would parse is 1.
+          stdout:
+            contains: "1,0"
+
+  - name: "mysql ^ is a bitwise exclusive or"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT 5 ^ 3 AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "6"
+
+  - name: "mysql keeps the bitwise operators SQLite shares"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT 6 & 3 AS a, 6 | 3 AS b, 1 << 3 AS c, 8 >> 2 AS d"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "2,7,8,2"
+
+  # XOR has no SQLite operator with its precedence, so it is refused by name
+  # rather than translated into something that reassociates the expression.
+  - name: "mysql XOR is refused by name"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT 1 XOR 0 AS v"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains:
+              - "XOR is not supported"
+              - "(a AND NOT b) OR (NOT a AND b)"
