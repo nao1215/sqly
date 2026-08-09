@@ -76,3 +76,47 @@ scenarios:
           exit_code: 4
           stderr:
             contains: "input-only"
+
+  - name: keeps filesql's own bookkeeping table out of .tables
+    steps:
+      - fixture: *ach
+      - run:
+          command: sqly payment.ach
+          stdin: ".tables\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: payment_entries
+            not_contains: _filesql_
+
+  - name: does not write filesql's own bookkeeping table into a .save directory
+    steps:
+      - fixture: *ach
+      - run:
+          command: sqly payment.ach
+          stdin: |
+            UPDATE payment_entries SET individual_name='Reserved Check' WHERE entry_index=0;
+            .save out
+      - assert:
+          exit_code: 0
+          file:
+            path: out/payment.ach
+            exists: true
+      - assert:
+          file:
+            path: out/_filesql_sources.csv
+            exists: false
+
+  - name: refuses an input whose table name is reserved by filesql
+    steps:
+      - fixture:
+          file: _filesql_report.csv
+          content: |
+            id,amount
+            1,100
+      - run:
+          command: sqly --sql "SELECT amount FROM _filesql_report" _filesql_report.csv
+      - assert:
+          exit_code: 3
+          stderr:
+            contains: _filesql_

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nao1215/sqly/config"
@@ -62,6 +63,41 @@ func TestSQLite3Interactor_LoadFiles(t *testing.T) {
 	}
 	if len(tables) > 0 && tables[0].Name() != "users" {
 		t.Errorf("expected table name 'users', got %q", tables[0].Name())
+	}
+}
+
+// TestSQLite3Interactor_ACHImportListsOnlyItsOwnTables pins that filesql's own
+// bookkeeping table stays out of the session's listing. Loading an ACH or
+// Fedwire file makes filesql record where it came from, in a table of its own
+// inside the same database, and a session that listed it would offer the user a
+// table that is not theirs, and that .save would then try to write out.
+func TestSQLite3Interactor_ACHImportListsOnlyItsOwnTables(t *testing.T) {
+	t.Parallel()
+
+	achPath := filepath.Join("..", "testdata", "ppd-debit.ach")
+	if _, err := os.Stat(achPath); os.IsNotExist(err) {
+		t.Skip("ACH test data not available")
+	}
+
+	si, cleanup := newTestSQLite3InteractorWithAdapter(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := si.LoadFiles(ctx, achPath); err != nil {
+		t.Fatalf("LoadFiles: %v", err)
+	}
+
+	tables, err := si.TablesName(ctx)
+	if err != nil {
+		t.Fatalf("TablesName: %v", err)
+	}
+	if len(tables) == 0 {
+		t.Fatal("TablesName returned nothing for an imported ACH file")
+	}
+	for _, table := range tables {
+		if strings.HasPrefix(table.Name(), "_filesql_") {
+			t.Errorf("TablesName listed filesql's own table %q", table.Name())
+		}
 	}
 }
 

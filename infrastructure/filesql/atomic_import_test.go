@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	libfilesql "github.com/nao1215/filesql"
 	infra "github.com/nao1215/sqly/infrastructure"
 )
 
@@ -63,22 +62,6 @@ func (b *fakeBeginner) BeginTx(_ context.Context, _ *sql.TxOptions) (*fakeTx, er
 	return b.tx, nil
 }
 
-// spyPublisher records whether the registry it stands for was ever published.
-// Asserting on this flag — rather than on a call count — is what makes "the
-// database rolled back but the registry kept the entry" a detectable state.
-type spyPublisher struct {
-	name      string
-	published bool
-	order     *[]string
-}
-
-func (p *spyPublisher) PublishRegistries() {
-	p.published = true
-	if p.order != nil {
-		*p.order = append(*p.order, p.name)
-	}
-}
-
 // TestAtomicImportFailureMatrix drives every failure the import transaction can
 // hit, including the two that only appear in combination, and asserts on both
 // halves of the outcome: which errors the caller can still see, and whether any
@@ -102,19 +85,20 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 		wantErrs []error // every error the caller must still be able to see
 		// wantNotErrs are errors the result must NOT carry, which is how a case
 		// pins the absence of a manufactured cleanup error.
-		wantNotErrs   []error
-		wantPublished bool
+		wantNotErrs []error
+		// wantStaged lists the paths the import must have staged, in order.
+		wantStaged    []string
 		wantCommits   int
 		wantRollbacks int
 	}{
 		{
-			name:          "success publishes every staged registry",
-			wantPublished: true,
+			name:          "success stages every input in the order given",
+			wantStaged:    []string{"a.csv", "b.csv", "c.csv"},
 			wantCommits:   1,
 			wantRollbacks: 0,
 		},
 		{
-			name:     "begin failure never stages or publishes",
+			name:     "begin failure never stages anything",
 			beginErr: errBegin,
 			wantErrs: []error{errBegin},
 		},
@@ -122,22 +106,25 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			name:          "first input fails",
 			stageErrAt:    1,
 			wantErrs:      []error{errStage},
+			wantStaged:    []string{"a.csv"},
 			wantRollbacks: 1,
 		},
 		{
 			name:          "last input fails, so the earlier ones roll back too",
 			stageErrAt:    3,
 			wantErrs:      []error{errStage},
+			wantStaged:    []string{"a.csv", "b.csv", "c.csv"},
 			wantRollbacks: 1,
 		},
 		{
 			// A commit that failed is still a commit: the transaction is over,
 			// so no rollback is attempted and the caller is told about the
 			// commit and nothing else.
-			name:          "commit failure leaves the registry unpublished",
+			name:          "commit failure reports the commit and nothing else",
 			commitErr:     errCommit,
 			wantErrs:      []error{errCommit},
 			wantNotErrs:   []error{infra.ErrRollback, sql.ErrTxDone},
+			wantStaged:    []string{"a.csv", "b.csv", "c.csv"},
 			wantCommits:   1,
 			wantRollbacks: 0,
 		},
@@ -145,7 +132,7 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			name:          "rollback failure alone still surfaces",
 			stageErrAt:    0,
 			rollbackErr:   errRollback,
-			wantPublished: true, // commit succeeded, so rollback is never attempted
+			wantStaged:    []string{"a.csv", "b.csv", "c.csv"},
 			wantCommits:   1,
 			wantRollbacks: 0,
 		},
@@ -154,6 +141,7 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			stageErrAt:    2,
 			rollbackErr:   errRollback,
 			wantErrs:      []error{errStage, errRollback, infra.ErrRollback},
+			wantStaged:    []string{"a.csv", "b.csv"},
 			wantRollbacks: 1,
 		},
 		{
@@ -165,6 +153,7 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			rollbackErr:   errRollback,
 			wantErrs:      []error{errCommit},
 			wantNotErrs:   []error{errRollback, infra.ErrRollback, sql.ErrTxDone},
+			wantStaged:    []string{"a.csv", "b.csv", "c.csv"},
 			wantCommits:   1,
 			wantRollbacks: 0,
 		},
@@ -178,27 +167,15 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 			beginner := &fakeBeginner{tx: tx, beginErr: tt.beginErr}
 
 			paths := []string{"a.csv", "b.csv", "c.csv"}
-			var publishOrder []string
-			publishers := make([]*spyPublisher, len(paths))
-			for i, p := range paths {
-				publishers[i] = &spyPublisher{name: p, order: &publishOrder}
-			}
-
-			staged := 0
+			var stagedPaths []string
 			importer := atomicImport[*fakeTx]{
 				beginner: beginner,
-				stage: func(_ context.Context, _ *fakeTx, path string) (registryPublisher, error) {
-					staged++
-					if tt.stageErrAt == staged {
-						return nil, errStage
+				stage: func(_ context.Context, _ *fakeTx, path string) error {
+					stagedPaths = append(stagedPaths, path)
+					if tt.stageErrAt == len(stagedPaths) {
+						return errStage
 					}
-					for i, p := range paths {
-						if p == path {
-							return publishers[i], nil
-						}
-					}
-					t.Fatalf("unexpected path %q", path)
-					return nil, nil
+					return nil
 				},
 			}
 
@@ -224,23 +201,15 @@ func TestAtomicImportFailureMatrix(t *testing.T) {
 				}
 			}
 
-			for _, p := range publishers {
-				if p.published != tt.wantPublished {
-					t.Errorf("registry %q published = %v, want %v (err = %v)", p.name, p.published, tt.wantPublished, err)
-				}
+			// Staged in the given order.
+			if strings.Join(stagedPaths, ",") != strings.Join(tt.wantStaged, ",") {
+				t.Errorf("staged = %v, want %v", stagedPaths, tt.wantStaged)
 			}
 			if tx.commits != tt.wantCommits {
 				t.Errorf("commits = %d, want %d", tx.commits, tt.wantCommits)
 			}
 			if tx.rollbacks != tt.wantRollbacks {
 				t.Errorf("rollbacks = %d, want %d", tx.rollbacks, tt.wantRollbacks)
-			}
-			if tt.wantPublished {
-				// Publication replays staging order, so the last file to claim a
-				// base name is the one write-back resolves to.
-				if strings.Join(publishOrder, ",") != strings.Join(paths, ",") {
-					t.Errorf("publish order = %v, want %v", publishOrder, paths)
-				}
 			}
 		})
 	}
@@ -256,8 +225,8 @@ func TestAtomicImportNeverRollsBackAfterCommit(t *testing.T) {
 	tx := &fakeTx{rollbackErr: sql.ErrTxDone}
 	importer := atomicImport[*fakeTx]{
 		beginner: &fakeBeginner{tx: tx},
-		stage: func(_ context.Context, _ *fakeTx, _ string) (registryPublisher, error) {
-			return &spyPublisher{}, nil
+		stage: func(_ context.Context, _ *fakeTx, _ string) error {
+			return nil
 		},
 	}
 	if err := importer.run(t.Context(), []string{"a.csv"}); err != nil {
@@ -278,8 +247,8 @@ func TestAtomicImportReportsTxDoneRollback(t *testing.T) {
 	tx := &fakeTx{rollbackErr: sql.ErrTxDone}
 	importer := atomicImport[*fakeTx]{
 		beginner: &fakeBeginner{tx: tx},
-		stage: func(_ context.Context, _ *fakeTx, _ string) (registryPublisher, error) {
-			return nil, stageErr
+		stage: func(_ context.Context, _ *fakeTx, _ string) error {
+			return stageErr
 		},
 	}
 	err := importer.run(t.Context(), []string{"a.csv"})
@@ -358,21 +327,18 @@ func TestLoadFilesRollsBackEveryEarlierInput(t *testing.T) {
 	}
 }
 
-// TestLoadFilesRollbackLeavesNoACHRegistryEntry is the integration form of the
-// rule that the fake-based matrix states in the abstract: an ACH import that is
-// rolled back must not leave write-back metadata behind. Registering it before
-// the commit produced the one state the design forbids — the DB has no tables,
-// but DumpACHFile still believes it can reconstruct the file from them.
-//
-// It inspects filesql's process-global registry, so it must not run in parallel
-// with the other ACH tests.
-func TestLoadFilesRollbackLeavesNoACHRegistryEntry(t *testing.T) {
+// TestLoadFilesRollbackLeavesNoACHWriteBackMetadata is the integration form of
+// the rule that the fake-based matrix states in the abstract: an ACH import that
+// is rolled back must not leave write-back metadata behind. Keeping it would
+// produce the one state the design forbids — the database has no tables, but
+// DumpACHFile still believes it can reconstruct the file from them.
+func TestLoadFilesRollbackLeavesNoACHWriteBackMetadata(t *testing.T) {
+	t.Parallel()
+
 	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
 	if _, err := os.Stat(achFile); os.IsNotExist(err) {
 		t.Skip("ACH test data not available")
 	}
-	libfilesql.UnregisterACHTableSet("ppd_debit")
-	t.Cleanup(func() { libfilesql.UnregisterACHTableSet("ppd_debit") })
 
 	dir := t.TempDir()
 	broken := filepath.Join(dir, "broken.csv")
@@ -393,27 +359,20 @@ func TestLoadFilesRollbackLeavesNoACHRegistryEntry(t *testing.T) {
 		t.Fatal("LoadFiles = nil error, want the broken CSV to fail the import")
 	}
 
-	for _, info := range libfilesql.GetACHTableInfos() {
-		if info.BaseName == "ppd_debit" {
-			t.Fatalf("ACH registry kept ppd_debit after the import rolled back: %+v", info)
-		}
+	out := filepath.Join(dir, "out.ach")
+	if err := adapter.DumpACHFile(t.Context(), "ppd_debit", out); err == nil {
+		t.Error("DumpACHFile = nil error after a rolled-back import, want a failure")
 	}
 	if names := tableNames(t, db); len(names) != 0 {
 		t.Errorf("tables after a rolled-back ACH import = %v, want none", names)
 	}
 
-	// The registry becomes valid only once an import actually commits.
+	// Write-back becomes possible only once an import actually commits.
 	if err := adapter.LoadFiles(t.Context(), achFile); err != nil {
 		t.Fatalf("LoadFiles(ach) = %v, want success", err)
 	}
-	found := false
-	for _, info := range libfilesql.GetACHTableInfos() {
-		if info.BaseName == "ppd_debit" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("ACH registry is empty after a committed import")
+	if err := adapter.DumpACHFile(t.Context(), "ppd_debit", out); err != nil {
+		t.Errorf("DumpACHFile after a committed import = %v, want success", err)
 	}
 }
 

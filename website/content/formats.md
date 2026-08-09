@@ -113,6 +113,17 @@ header refused in one format is refused in all of them.
 
 ACH and Fedwire tables can be exported to csv/tsv/xlsx like any other table. Writing them back into a valid `.ach`/`.fed` file is what `.save` does, not `--output`.
 
+That write-back reads the file the tables were imported from and applies the
+session's edits to it, because neither format can be rebuilt from its SQL tables
+alone: fields no table exposes exist only in the original. The source file must
+therefore still be readable when `.save` runs.
+
+Where each imported file came from is recorded in `_filesql_sources`, a table
+sqly's underlying library keeps for itself. Names beginning with `_filesql_`
+belong to that library: they never appear in `.tables`, and an import whose table
+name would fall under the prefix is refused at exit `3` rather than loaded into a
+table no listing would admit existed.
+
 A format that cannot represent a value refuses the export rather than writing
 something else. LTSV has no way to hold a tab or a newline inside a value, and
 XLSX — being XML — has no way to hold a control character other than tab,

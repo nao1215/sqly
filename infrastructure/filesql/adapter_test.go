@@ -1113,14 +1113,11 @@ func TestFileSQLAdapter_FedWireFile(t *testing.T) {
 	}
 }
 
-// TestLoadFile_ACHRegistryRetainedAfterImport verifies that LoadFile keeps the
-// ACH TableSet registered after import, so the whole-set write-back path
-// (DumpACHFile) can later reconstruct a valid .ach file from the edited tables.
-//
-// This test inspects filesql's process-global ACH registry, so it must not run
-// in parallel with other tests that load ACH files (e.g. TestFileSQLAdapter_ACHFile).
-func TestLoadFile_ACHRegistryRetainedAfterImport(t *testing.T) {
-	libfilesql.UnregisterACHTableSet("ppd_debit") // start from a clean registry
+// TestLoadFile_ACHWriteBackWorksAfterImport verifies that an ACH file imported
+// through LoadFile can still be written back by DumpACHFile.
+func TestLoadFile_ACHWriteBackWorksAfterImport(t *testing.T) {
+	t.Parallel()
+
 	achFile := filepath.Join("..", "..", "testdata", "ppd-debit.ach")
 	if _, err := os.Stat(achFile); os.IsNotExist(err) {
 		t.Skip("ACH test data not available")
@@ -1136,29 +1133,25 @@ func TestLoadFile_ACHRegistryRetainedAfterImport(t *testing.T) {
 	if err := adapter.LoadFile(context.Background(), achFile); err != nil {
 		t.Fatalf("LoadFile failed: %v", err)
 	}
-	defer libfilesql.UnregisterACHTableSet("ppd_debit")
 
-	// The TableSet must remain registered so write-back can find it.
-	infos := libfilesql.GetACHTableInfos()
-	found := false
-	for _, info := range infos {
-		if info.BaseName == "ppd_debit" {
-			found = true
-		}
+	out := filepath.Join(t.TempDir(), "out.ach")
+	if err := adapter.DumpACHFile(context.Background(), "ppd_debit", out); err != nil {
+		t.Fatalf("DumpACHFile after import failed: %v", err)
 	}
-	if !found {
-		t.Errorf("ACH registry should retain ppd_debit after import for write-back, got %d entries: %+v", len(infos), infos)
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat(%s): %v", out, err)
+	}
+	if info.Size() == 0 {
+		t.Error("write-back produced an empty ACH file")
 	}
 }
 
-// TestLoadFile_WireRegistryRetainedAfterImport verifies that LoadFile keeps the
-// Fedwire TableSet registered after import, so DumpFedWireFile can reconstruct a
-// valid .fed file from the edited message table.
-//
-// This test inspects filesql's process-global Fedwire registry, so it must not
-// run in parallel with other tests that load FED files.
-func TestLoadFile_WireRegistryRetainedAfterImport(t *testing.T) {
-	libfilesql.UnregisterWireTableSet("customer_transfer")
+// TestLoadFile_WireWriteBackWorksAfterImport is the Fedwire half: an imported
+// .fed file must still be reconstructible by DumpFedWireFile.
+func TestLoadFile_WireWriteBackWorksAfterImport(t *testing.T) {
+	t.Parallel()
+
 	fedFile := filepath.Join("..", "..", "testdata", "customer-transfer.fed")
 	if _, err := os.Stat(fedFile); os.IsNotExist(err) {
 		t.Skip("FED test data not available")
@@ -1174,17 +1167,17 @@ func TestLoadFile_WireRegistryRetainedAfterImport(t *testing.T) {
 	if err := adapter.LoadFile(context.Background(), fedFile); err != nil {
 		t.Fatalf("LoadFile failed: %v", err)
 	}
-	defer libfilesql.UnregisterWireTableSet("customer_transfer")
 
-	infos := libfilesql.GetWireTableInfos()
-	found := false
-	for _, info := range infos {
-		if info.BaseName == "customer_transfer" {
-			found = true
-		}
+	out := filepath.Join(t.TempDir(), "out.fed")
+	if err := adapter.DumpFedWireFile(context.Background(), "customer_transfer", out); err != nil {
+		t.Fatalf("DumpFedWireFile after import failed: %v", err)
 	}
-	if !found {
-		t.Errorf("Wire registry should retain customer_transfer after import for write-back, got %d entries: %+v", len(infos), infos)
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat(%s): %v", out, err)
+	}
+	if info.Size() == 0 {
+		t.Error("write-back produced an empty Fedwire file")
 	}
 }
 
