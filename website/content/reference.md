@@ -309,6 +309,31 @@ rather than a file holding whichever result happened to be last.
 `--sql-file` run that selects one without `--output` is rejected rather than
 printing something else.
 
+### What a format cannot hold
+
+A format that cannot carry a value refuses the export rather than writing
+something that will not read back. Every refusal names the column and exits `4`,
+and nothing is written.
+
+| Value | csv, tsv, ltsv | json, jsonl | excel | parquet |
+|:--|:--|:--|:--|:--|
+| a BLOB, or any bytes that are not valid UTF-8 | refused | base64 string | refused | the bytes are kept, typed as text on re-import |
+| Infinity, -Infinity | `Infinity`, `-Infinity` | the strings `"Infinity"`, `"-Infinity"` | the same words, as text | kept as a double |
+| NaN | `NaN` | the string `"NaN"` | `NaN` | NULL, which is what SQLite has for it |
+| a tab or a newline inside a value | kept, quoted where the delimiter needs it; ltsv refuses | kept | kept | kept |
+| a result with no rows | csv and tsv write a header; ltsv refuses | `[]` | written | refused |
+
+The three words are how the text formats spell the floats that have no decimal
+form; JSON quotes the same words, which is what PostgreSQL's `row_to_json`
+writes, so a consumer that already handles one database's JSON handles sqly's.
+Parquet is the only format with a number type wide enough for them, and it keeps
+them as doubles: an infinity written there re-imports as a REAL.
+
+A BLOB has one place to go. `--output-format json` base64-encodes it; the text
+formats and Excel refuse it, because the bytes are usually not text at all and a
+file holding them cannot be read back — sqly's own import refuses input that is
+not UTF-8.
+
 ### Where the destination's extension leaves off
 
 `--output` and the extension of the path it names decide the format together,
