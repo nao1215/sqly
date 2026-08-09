@@ -227,11 +227,13 @@ scenarios:
   - name: "googlesql SAFE. prefix matches the underscore form"
     steps:
       - run:
-          command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.DIVIDE(6, 3) AS a, SAFE.ADD(2, 3) AS b"
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.DIVIDE(6, 3) AS a, SAFE_DIVIDE(6, 3) AS b, SAFE.ADD(2, 3) AS c, SAFE_ADD(2, 3) AS d"
       - assert:
           exit_code: 0
+          # Each prefixed form answers what its underscore form answers, which is
+          # the whole claim: the two spellings are one query.
           stdout:
-            contains: "2,5"
+            contains: "2,2,5,5"
 
   - name: "googlesql SAFE.DIVIDE by zero is NULL, like SAFE_DIVIDE"
     steps:
