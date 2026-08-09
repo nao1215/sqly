@@ -454,6 +454,13 @@ the user already had.
 `--output` and `.dump` are unaffected: they create new files rather than
 rewriting one the session read, and a new file is UTF-8.
 
+A write-back preserves values, not bytes. The text writers end every row with
+`\n` and quote a field only when CSV requires it, so a CRLF file saved in place
+comes back LF throughout, untouched rows included, and a field the source quoted
+needlessly comes back bare. That matters to a diff or a repository that expects
+the original bytes; if they must survive, leave the source untouched and export
+a copy with `--output`.
+
 Binary containers are not affected: Parquet and Excel state their own encoding,
 and ACH and Fedwire are fixed-width records, so none of them is validated as
 UTF-8 text.

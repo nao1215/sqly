@@ -1,19 +1,17 @@
 # CHANGELOG
 
-## Release candidates and what v1.0.0 freezes
+## Release candidates and what v1.0.0 froze
 
-`v1.0.0-rc8` is the final release candidate. This is the point to pin a version
-against.
+`v1.0.0` is the stable release. Pin against it.
 
-* Breaking changes landed before this candidate. Each is listed under Breaking
-  Changes in the section for the release that made it, rc1 through rc8.
-* From here on, only bug fixes and documentation changes: no new feature, no
-  breaking change.
-* Nothing user-visible changes between this candidate and v1.0.0 — same flags,
-  same output, same exit codes. A bug fix only moves a run toward what these
-  notes already describe; it does not change what they promise.
+* Breaking changes landed during the release candidates, rc1 through rc8. Each
+  is listed under Breaking Changes in the section for the candidate that made it.
+* Between rc8 and v1.0.0 only bug fixes and documentation changes landed, as
+  rc8 promised: no new flag, no new feature, no changed default. A bug fix
+  moves a run toward what these notes already describe — most turned a silently
+  wrong result into a named error — without changing what the notes promise.
 
-## [Unreleased]
+## [v1.0.0](https://github.com/nao1215/sqly/compare/v1.0.0-rc8...v1.0.0) (2026-08-09)
 
 ### Bug Fixes
 
@@ -52,6 +50,8 @@ against.
 * prompt v0.0.19. Five of its fixes are visible in sqly's shell: input that filled a terminal row exactly no longer erases the line above the prompt (the bottom of the result you are reading), a prompt prefix wider than the terminal no longer leaves a torn copy of itself behind on every line, Ctrl+R redraws its search in place instead of stacking a block per keystroke, a statement recalled from history comes back as it was submitted (a multi-line statement is one entry, and its leading spaces survive), and a completion menu wider than the terminal no longer leaves rows of itself above the prompt.
 
 ### Documentation
+
+* What a write-back does and does not preserve is written down. `.save` keeps a source's compression and encoding but not its bytes: every row it writes ends `\n` and a field is quoted only when CSV requires it, so a saved CRLF file comes back LF and needless quotes are dropped. The formats page says so beside the note that promises the other two, and points at `--output` for a source whose bytes must survive. The line-terminator half is tracked as [filesql#269](https://github.com/nao1215/filesql/issues/269).
 
 * What `--output` does with a destination extension is written down in full. The formats page said the extension "must agree with the chosen format", which holds only for an extension sqly knows: an unknown one is written as given, so `--output report.txt` holds CSV, and a path with no extension gets the format's own, so `--output report` writes `report.csv`. All three are pinned by tests now.
 
