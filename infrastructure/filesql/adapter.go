@@ -141,10 +141,13 @@ type atomicImport[T infra.Tx] struct {
 // run stages every path inside one transaction.
 //
 // Everything an import touches lives in that transaction, including the
-// metadata filesql keeps for writing ACH and Fedwire files back, so a failure
-// anywhere — a bad input, a failed commit, or a rollback that itself failed —
-// leaves nothing behind. WithTransaction owns commit, rollback, and the joining
-// of a cleanup error onto the cause.
+// metadata filesql keeps for writing ACH and Fedwire files back. There is no
+// second channel that can outlive a failure on its own: whatever the
+// transaction's fate, the metadata shares it, so a bad input that rolls back
+// leaves neither the tables nor a record pointing at them. A commit or rollback
+// that itself fails leaves the database in whatever state that failure left it,
+// which the returned error says; WithTransaction owns commit, rollback, and the
+// joining of a cleanup error onto the cause.
 //
 // Staging runs in the order the paths were given, so when several inputs claim
 // the same base name, write-back resolves to the last one.
