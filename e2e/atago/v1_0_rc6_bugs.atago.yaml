@@ -55,11 +55,11 @@ scenarios:
             path: out.xlsx
             exists: false
 
-  # csv and tsv are the formats that can carry such a value unchanged, so they
-  # still do. json keeps encoding/json's U+FFFD on purpose: that is the signal
-  # that a file was read with the wrong --encoding, and it is not a format sqly
-  # can hand the raw bytes to.
-  - name: still writes a value that is not valid UTF-8 as csv
+  # csv and tsv used to carry such a value through unchanged, and sqly's own
+  # reader refuses a file that is not UTF-8: what they wrote at exit 0 could not
+  # be loaded back. They now refuse it the way xlsx does. json can hold a blob,
+  # base64-encoded, and that half is pinned here too though it always held.
+  - name: refuses a csv export of a value that is not valid UTF-8
     skip:
       os: windows
     env: *hist
@@ -67,18 +67,54 @@ scenarios:
       - fixture: *seed
       # The statement is a file so the hex literal's quotes do not have to
       # survive a shell inside a shell.
-      - fixture:
+      - fixture: &bad_sql
           file: bad.sql
           content: |
             SELECT CAST(x'626164ff62797465' AS TEXT) AS v;
       - run:
-          command: sh -c 'sqly --output-format csv --sql-file bad.sql seed.csv | od -An -c | tr -s " "'
+          command: sh -c 'sqly --output-format csv --sql-file bad.sql seed.csv > out.csv; echo "exit=$?"; echo "bytes=$((`wc -c < out.csv`))"'
           shell: true
       - assert:
           exit_code: 0
           stdout:
-            # The byte is written as it stands: b a d \377 b y t e.
-            contains: "b a d 377 b y t e"
+            contains:
+              - "exit=4"
+              - "bytes=0"
+
+  - name: refuses a tsv export of a value that is not valid UTF-8
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *seed
+      - fixture: *bad_sql
+      - run:
+          command: sqly --output out.tsv --sql-file bad.sql seed.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "not valid UTF-8"
+      - assert:
+          file:
+            path: out.tsv
+            exists: false
+
+  - name: base64-encodes a blob in a json export
+    skip:
+      os: windows
+    env: *hist
+    steps:
+      - fixture: *seed
+      - fixture:
+          file: blob.sql
+          content: |
+            SELECT x'00ff41' AS b;
+      - run:
+          command: sqly --output-format json --sql-file blob.sql seed.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"b":"AP9B"'
 
   # 3. ltsv validated each value as it wrote it, so the rows before the bad one
   # were already on stdout. Writing to a file was atomic because it stages; only

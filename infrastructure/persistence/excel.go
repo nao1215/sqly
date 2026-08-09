@@ -181,7 +181,7 @@ func ensureExcelRepresentable(label, value string) error {
 	// door it was not watching. Such a value is almost always a file read with
 	// the wrong --encoding, so the message says so.
 	if !utf8.ValidString(value) {
-		return fmt.Errorf("excel: value for column %q is not valid UTF-8, so XLSX cannot carry it unchanged; re-read the input with the right --encoding, or export to csv/tsv", label)
+		return fmt.Errorf("excel: value for column %q is not valid UTF-8, so XLSX cannot carry it unchanged; re-read the input with the right --encoding, or use --output-format json", label)
 	}
 	for _, r := range value {
 		if !xmlCanCarry(r) {

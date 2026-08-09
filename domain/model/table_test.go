@@ -1200,7 +1200,9 @@ func TestTablePrint_WriteError(t *testing.T) {
 // row 2 left row 1 on stdout and then failed. JSON opened its array before
 // encoding the first row, so an unencodable value left a bare "[" behind. Either
 // way the reader on the other end had already taken a truncated document for a
-// complete one, and only the exit code said otherwise.
+// complete one, and only the exit code said otherwise. csv and tsv had the
+// mirror problem — they wrote bytes no reader could take back, and that refusal
+// has to land before the first row too.
 func TestTablePrintRefusesBeforeWritingAnything(t *testing.T) {
 	t.Parallel()
 
@@ -1227,6 +1229,33 @@ func TestTablePrintRefusesBeforeWritingAnything(t *testing.T) {
 			}),
 			mode:   PrintModeLTSV,
 			reason: "a tab or newline",
+		},
+		{
+			name: "csv with bytes that are not UTF-8 in the second row",
+			table: NewTable("t", Header{"a"}, []Record{
+				{"clean"},
+				{"\x00\xffA"},
+			}),
+			mode:   PrintModeCSV,
+			reason: "not valid UTF-8",
+		},
+		{
+			name: "tsv with bytes that are not UTF-8 in the second row",
+			table: NewTable("t", Header{"a"}, []Record{
+				{"clean"},
+				{"\x00\xffA"},
+			}),
+			mode:   PrintModeTSV,
+			reason: "not valid UTF-8",
+		},
+		{
+			name: "ltsv with bytes that are not UTF-8 in the second row",
+			table: NewTable("t", Header{"a"}, []Record{
+				{"clean"},
+				{"\x00\xffA"},
+			}),
+			mode:   PrintModeLTSV,
+			reason: "not valid UTF-8",
 		},
 	}
 
