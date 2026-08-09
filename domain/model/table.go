@@ -485,6 +485,9 @@ func (t *Table) printCSV(out io.Writer) error {
 	if err := EnsureHeaderReimportable(formatCSV, t.Header()); err != nil {
 		return err
 	}
+	if err := t.ensureDelimitedWritable(formatCSV); err != nil {
+		return err
+	}
 	return t.writeDelimited(out, ',')
 }
 
@@ -493,6 +496,9 @@ func (t *Table) printCSV(out io.Writer) error {
 // so the stream stays a valid tabular record when redirected or piped.
 func (t *Table) printTSV(out io.Writer) error {
 	if err := EnsureHeaderReimportable(formatTSV, t.Header()); err != nil {
+		return err
+	}
+	if err := t.ensureDelimitedWritable(formatTSV); err != nil {
 		return err
 	}
 	return t.writeDelimited(out, '\t')
@@ -667,6 +673,40 @@ func ensureLTSVValueRepresentable(label, value string) error {
 	return nil
 }
 
+// ensureTextValueRepresentable reports an error when a value is not valid UTF-8,
+// so the export is refused before a file is written.
+//
+// SQLite hands a BLOB back as bytes, and a BLOB is usually not text at all. csv,
+// tsv, and ltsv wrote those bytes as they were, and sqly's own reader refuses a
+// file that is not UTF-8: the export succeeded and left behind something that
+// will not load. XLSX already refused such a value; JSON is the one format that
+// can hold it, base64-encoded.
+//
+// A text column read with the wrong --encoding arrives as the same bytes, which
+// is why the message names that flag first: it is the cause a user can fix.
+func ensureTextValueRepresentable(format, label, value string) error {
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("%s: value for column %q is not valid UTF-8, so the file could not be read back; re-read the input with the right --encoding, or use --output-format json", format, label)
+	}
+	return nil
+}
+
+// ensureDelimitedWritable reports whether every value in the table can be
+// written to csv or tsv; format names the one being written and prefixes the
+// error. Like the LTSV and JSON checks, it runs in full before the first byte
+// goes out: a value refused halfway leaves the rows before it on stdout, which
+// the reader on the other end takes for a complete document.
+func (t *Table) ensureDelimitedWritable(format string) error {
+	for _, v := range t.Rows {
+		for i := range v.Len() {
+			if err := ensureTextValueRepresentable(format, t.ColumnName(i), v.At(i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // EnsureJSONWritable reports whether every value in the table can be written as
 // JSON. It is checked in full before any output is produced: a value that could
 // not be encoded used to fail after the opening bracket and the rows before it
@@ -725,7 +765,11 @@ func (t *Table) EnsureLTSVWritable() error {
 	}
 	for _, v := range t.Rows {
 		for i := range v.Len() {
-			if err := ensureLTSVValueRepresentable(t.ColumnName(i), v.At(i)); err != nil {
+			label := t.ColumnName(i)
+			if err := ensureLTSVValueRepresentable(label, v.At(i)); err != nil {
+				return err
+			}
+			if err := ensureTextValueRepresentable(formatLTSV, label, v.At(i)); err != nil {
 				return err
 			}
 		}
@@ -803,8 +847,8 @@ func jsonScalarToken(value any) ([]byte, error) {
 	// character is the signal that says so. Base64, which the []byte path above
 	// uses, would hide the mojibake behind something unreadable, and refusing
 	// would make --output-format json fail on a file the user is still working
-	// out the encoding of. csv and tsv carry the bytes through unchanged for a
-	// caller that needs them exactly.
+	// out the encoding of. csv, tsv, and ltsv refuse such a value, so JSON is the
+	// only format that still carries it.
 	return json.Marshal(value)
 }
 
