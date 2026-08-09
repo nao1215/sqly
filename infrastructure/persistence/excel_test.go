@@ -351,6 +351,19 @@ func TestExcelDumpRefusesAValuePastTheCellLimit(t *testing.T) {
 		}
 	})
 
+	// The limit is in characters, and this is the case that says so: counted in
+	// bytes the value is three times over it. Refusing at 32,768 multi-byte runes
+	// proves nothing on its own, because a byte count refuses that too.
+	t.Run("a multi-byte value of exactly the limit is written whole", func(t *testing.T) {
+		t.Parallel()
+
+		out := filepath.Join(t.TempDir(), "out.xlsx")
+		table := model.NewTable("t", model.Header{"v"}, []model.Record{{strings.Repeat("あ", limit)}})
+		if err := DumpExcel(out, table); err != nil {
+			t.Fatalf("Dump refused a value the cell holds: %v", err)
+		}
+	})
+
 	tests := []struct {
 		name  string
 		table *model.Table
@@ -364,9 +377,7 @@ func TestExcelDumpRefusesAValuePastTheCellLimit(t *testing.T) {
 			table: model.NewTable("t", model.Header{strings.Repeat("x", limit+1)}, []model.Record{{"ok"}}),
 		},
 		{
-			// Characters, not bytes: a multi-byte rune counts once, so a value of
-			// the limit in runes is written however many bytes it takes.
-			name:  "counted in characters, not bytes",
+			name:  "a multi-byte value past the limit",
 			table: model.NewTable("t", model.Header{"v"}, []model.Record{{strings.Repeat("あ", limit+1)}}),
 		},
 	}
