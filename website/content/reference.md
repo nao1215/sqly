@@ -322,6 +322,7 @@ and nothing is written.
 | NaN | `NaN` | the string `"NaN"` | `NaN` | NULL, which is what SQLite has for it |
 | a tab or a newline inside a value | kept, quoted where the delimiter needs it; ltsv refuses | kept | kept | kept |
 | a result with no rows | csv and tsv write a header; ltsv refuses | `[]` | written | refused |
+| a value longer than 32,767 characters | kept | kept | refused, because a cell holds no more | kept |
 
 The three words are how the text formats spell the floats that have no decimal
 form; JSON quotes the same words, which is what PostgreSQL's `row_to_json`

@@ -49,6 +49,39 @@ scenarios:
   # excel and parquet name a file, not a screen. .mode used to accept them and
   # then print CSV under the name, with the banner admitting it was "same as csv
   # mode"; a script scraping that output depended on excel meaning csv forever.
+  # Excel stops a cell at 32,767 characters and excelize cuts a longer value to
+  # fit, so the export used to report success having dropped the tail. A value at
+  # the limit still writes, so the refusal is the length past it, not the length.
+  - name: refuses an excel export of a value past the cell limit
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format excel --output big.xlsx --sql "SELECT printf('%.40000d', 1) AS s FROM user" user.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "an XLSX cell holds 32767"
+      - assert:
+          file:
+            path: big.xlsx
+            exists: false
+
+  - name: writes a value of exactly the cell limit whole
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format excel --output limit.xlsx --sql "SELECT printf('%.32767d', 1) AS s FROM user" user.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT length(s) AS n FROM limit_user" limit.xlsx
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: |
+              n
+              32767
+
   - name: .mode excel is refused and says what to use instead
     steps:
       - fixture: &modegone

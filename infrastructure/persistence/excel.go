@@ -14,6 +14,12 @@ import (
 // excelSheetNameMaxLen is Excel's hard limit on a worksheet name length.
 const excelSheetNameMaxLen = 31
 
+// excelCellMaxLen is Excel's hard limit on the characters one cell holds.
+// A sheet name past its own limit is shortened, because the name is derived from
+// a file name and shortening it costs nothing the data needs; a value is the
+// data, so it is refused instead.
+const excelCellMaxLen = 32767
+
 // excelForbiddenSheetChars are the characters Excel rejects in a worksheet name.
 const excelForbiddenSheetChars = `:\/?*[]`
 
@@ -182,6 +188,12 @@ func ensureExcelRepresentable(label, value string) error {
 	// the wrong --encoding, so the message says so.
 	if !utf8.ValidString(value) {
 		return fmt.Errorf("excel: value for column %q is not valid UTF-8, so XLSX cannot carry it unchanged; re-read the input with the right --encoding, or use --output-format json", label)
+	}
+	// Length is checked in characters because that is the unit Excel's limit is
+	// in. The writer cuts a longer value to fit, which is the same silent loss
+	// the character check above exists to stop, arriving by a different door.
+	if n := utf8.RuneCountInString(value); n > excelCellMaxLen {
+		return fmt.Errorf("excel: value for column %q is %d characters, and an XLSX cell holds %d, so it would be written cut short; export to csv/tsv/json instead", label, n, excelCellMaxLen)
 	}
 	for _, r := range value {
 		if !xmlCanCarry(r) {

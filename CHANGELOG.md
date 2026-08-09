@@ -17,6 +17,8 @@ against.
 
 ### Bug Fixes
 
+* An excel export refuses a value longer than an XLSX cell instead of cutting it to fit. Excel stops a cell at 32,767 characters, and the writer wrote the first 32,767 of a longer value at exit `0` — a 40,000-character value lost 7,233 characters with nothing said. The length is now checked beside the character check that already refuses a value XLSX cannot carry, in characters because that is the unit the limit is in, and the message names the column, the length, and the limit. A value of exactly the limit still writes and reads back whole.
+
 * An infinity exported to parquet keeps its type. sqly wrote a genuine double into the file, but reading it back gave `+Inf` typed as text, because filesql rendered a non-finite double with `%g` and SQLite's REAL affinity cannot read `+Inf`: the value landed as text in a column declared REAL. Fixed in filesql v0.40.1, which this release depends on. The text formats already spelled the three values `Infinity`, `-Infinity`, and `NaN` everywhere, and JSON already quoted the same words as PostgreSQL's `row_to_json` does; what each format does with a value it cannot hold is now written down in the reference under "What a format cannot hold".
 
 * An ltsv export refuses a result with no rows. LTSV records its columns on each row, so a result with no rows has nowhere to put them and the writer produced a zero-byte file — which sqly's own import then refuses as an empty data source, at exit `3`. csv writes its header and json writes `[]`, and both load back as a zero-row table; LTSV has no such form. The export now stops at exit `4`, the way a parquet export of an empty result already does.
