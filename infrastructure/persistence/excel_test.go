@@ -331,6 +331,65 @@ func TestExcelDumpRefusesInvalidUTF8(t *testing.T) {
 	}
 }
 
+// TestExcelDumpRefusesAValuePastTheCellLimit pins the length half of what a cell
+// can hold. Excel stops at 32,767 characters and excelize cuts a longer value to
+// fit, so a 40,000-character value was written as its first 32,767 with the
+// export reporting success — the same silent truncation the character check
+// already refuses for a byte XLSX cannot carry.
+func TestExcelDumpRefusesAValuePastTheCellLimit(t *testing.T) {
+	t.Parallel()
+
+	const limit = 32767
+
+	t.Run("a value of exactly the limit is written whole", func(t *testing.T) {
+		t.Parallel()
+
+		out := filepath.Join(t.TempDir(), "out.xlsx")
+		table := model.NewTable("t", model.Header{"v"}, []model.Record{{strings.Repeat("x", limit)}})
+		if err := DumpExcel(out, table); err != nil {
+			t.Fatalf("Dump refused a value the cell holds: %v", err)
+		}
+	})
+
+	tests := []struct {
+		name  string
+		table *model.Table
+	}{
+		{
+			name:  "in a value",
+			table: model.NewTable("t", model.Header{"v"}, []model.Record{{strings.Repeat("x", limit+1)}}),
+		},
+		{
+			name:  "in a column name",
+			table: model.NewTable("t", model.Header{strings.Repeat("x", limit+1)}, []model.Record{{"ok"}}),
+		},
+		{
+			// Characters, not bytes: a multi-byte rune counts once, so a value of
+			// the limit in runes is written however many bytes it takes.
+			name:  "counted in characters, not bytes",
+			table: model.NewTable("t", model.Header{"v"}, []model.Record{{strings.Repeat("あ", limit+1)}}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out := filepath.Join(t.TempDir(), "out.xlsx")
+			err := DumpExcel(out, tt.table)
+			if err == nil {
+				t.Fatal("Dump succeeded, want a refusal: the value would be cut to the cell limit")
+			}
+			if !strings.Contains(err.Error(), "32767") {
+				t.Errorf("error = %v, want it to name the limit", err)
+			}
+			if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+				t.Errorf("Dump left a file behind at %s; a refused export writes nothing", out)
+			}
+		})
+	}
+}
+
 // TestExcelDumpRefusesATrailingEmptyRow pins the refusal ensureLastRowSurvives
 // exists for: such a file reads back one row short.
 func TestExcelDumpRefusesATrailingEmptyRow(t *testing.T) {
