@@ -512,7 +512,7 @@ Every report opens with two fields that answer different questions:
 ```json
 {
   "schema_version": 1,
-  "sqly_version": "v1.0.0-rc8",
+  "sqly_version": "v1.0.0",
   "tables": []
 }
 ```
@@ -562,7 +562,7 @@ it has sheets, and nothing in `tables` says what is missing.
 ```json
 {
   "schema_version": 1,
-  "sqly_version": "v1.0.0-rc8",
+  "sqly_version": "v1.0.0",
   "tables": [],
   "excel_sheets": [
     {
