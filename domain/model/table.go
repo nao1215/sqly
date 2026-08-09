@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -749,15 +750,23 @@ func jsonRenderableValue(value any) error {
 	}
 }
 
-// EnsureLTSVWritable reports whether the whole table can be written as LTSV: a
-// valid, unique header, and no value holding a tab or a newline. It is checked
+// EnsureLTSVWritable reports whether the whole table can be written as LTSV: at
+// least one row, a valid, unique header, and no value holding a tab or a
+// newline. It is checked
 // in full before any output is produced, so a value LTSV cannot carry fails the
 // export rather than truncating it.
 func (t *Table) EnsureLTSVWritable() error {
 	if err := EnsureLTSVHeaderWritable(t.Header()); err != nil {
 		return err
 	}
-	// The check above compares labels as they are, which leaves the pair an
+	// LTSV records its columns on each row, so a zero-row result has nowhere to
+	// put them and the writer emits nothing. csv's header and json's [] load back
+	// as a zero-row table; an empty file loads as nothing — sqly's own import
+	// refuses it.
+	if t.RowCount() == 0 {
+		return errors.New("ltsv: cannot export a result with no rows; LTSV records its columns on each row, so the file would be empty; use csv/tsv/json")
+	}
+	// The header check above compares labels as they are, which leaves the pair an
 	// import reads as one column: "a" beside "A" is two LTSV labels and one
 	// SQLite column, so the file wrote cleanly and would not load.
 	if err := EnsureHeaderReimportable(formatLTSV, t.Header()); err != nil {

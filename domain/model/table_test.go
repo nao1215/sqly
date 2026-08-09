@@ -984,6 +984,34 @@ func TestTablePrintEscaping(t *testing.T) {
 		}
 	})
 
+	t.Run("LTSV rejects a result with no rows", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"id", "name"}, []Record{})
+		var buf bytes.Buffer
+		err := tbl.Print(&buf, PrintModeLTSV)
+		if err == nil {
+			t.Fatalf("want error for a zero-row LTSV export, got output %q", buf.String())
+		}
+		if !strings.Contains(err.Error(), "no rows") {
+			t.Errorf("error = %v, want it to mention that the result has no rows", err)
+		}
+		if buf.Len() != 0 {
+			t.Errorf("Print wrote %q before failing", buf.String())
+		}
+	})
+
+	t.Run("CSV writes a header for a result with no rows", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"id", "name"}, []Record{})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeCSV); err != nil {
+			t.Fatalf("Print CSV: %v", err)
+		}
+		if got, want := buf.String(), "id,name\n"; got != want {
+			t.Errorf("Print CSV = %q, want %q", got, want)
+		}
+	})
+
 	t.Run("CSV rejects duplicate column names", func(t *testing.T) {
 		t.Parallel()
 		tbl := NewTable("t", Header{"x", "x"}, []Record{{"1", "2"}})

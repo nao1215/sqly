@@ -59,6 +59,42 @@ scenarios:
           stdout:
             equals: "[]"
 
+  # csv writes its header and json writes [], and both load back as a zero-row
+  # table. LTSV carries its columns on each row, so a result with none has
+  # nowhere to record them: the writer produced an empty file, which sqly's own
+  # import then refuses as empty. sqly now refuses the export, the way parquet
+  # already does.
+  - name: "--output-format ltsv refuses an empty result rather than writing an unreadable file"
+    steps:
+      - fixture: &user_csv
+          file: user.csv
+          content: |
+            user_name,identifier
+            booker12,1
+      - run:
+          command: sqly --output-format ltsv --output empty.ltsv --sql "SELECT user_name FROM user WHERE 1=0" user.csv
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "no rows"
+      - assert:
+          file:
+            path: empty.ltsv
+            exists: false
+
+  - name: "--output-format csv writes a header for an empty result, which loads back"
+    steps:
+      - fixture: *user_csv
+      - run:
+          command: sh -c 'sqly --output-format csv --output empty.csv --sql "SELECT user_name FROM user WHERE 1=0" user.csv && sqly --output-format csv --sql "SELECT count(*) AS n FROM empty" empty.csv'
+          shell: true
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: |
+              n
+              0
+
   - name: "--output-format jsonl renders one JSON object per line"
     steps:
       - fixture:

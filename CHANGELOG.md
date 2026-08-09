@@ -17,6 +17,8 @@ against.
 
 ### Bug Fixes
 
+* An ltsv export refuses a result with no rows. LTSV records its columns on each row, so a result with no rows has nowhere to put them and the writer produced a zero-byte file — which sqly's own import then refuses as an empty data source, at exit `3`. csv writes its header and json writes `[]`, and both load back as a zero-row table; LTSV has no such form. The export now stops at exit `4`, the way a parquet export of an empty result already does.
+
 * A csv, tsv, or ltsv export refuses a BLOB rather than writing its raw bytes. A BLOB is usually not text at all, and the bytes went into the file as they were, so the export exited `0` and produced a file sqly's own reader then refuses as not UTF-8. XLSX already refused such a value and JSON base64-encodes it; csv, tsv, and ltsv did neither. They now refuse it at exit `4`, naming the column, before anything is written, and the message points at `--output-format json`. XLSX's message, which used to send the user to csv/tsv, points there too. The same refusal covers a text column read with the wrong `--encoding`, which arrives as the same bytes.
 
 * `--row-mismatch skip` says how many rows it dropped. Skipping ragged rows is what the flag asks for, so it is not an error, but an import that reported nothing left one dropped row and most of the file dropped looking exactly alike — and the row count that came out only meant something to someone who already knew what went in. A `.save --in-place` afterwards writes the smaller table back over the source, which is the moment the loss stops being recoverable. Every import path now prints `skipped N of M data rows` on stderr when rows were dropped, and prints nothing when none were.
