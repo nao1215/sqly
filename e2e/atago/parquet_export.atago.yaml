@@ -120,6 +120,24 @@ scenarios:
               100000
               ""
 
+  # Parquet is the only format with a number type wide enough for an infinity.
+  # sqly wrote a genuine double, but reading it back gave text: filesql rendered
+  # a non-finite double as "+Inf", which SQLite's REAL affinity cannot read, so
+  # the value landed as text in a column declared REAL.
+  - name: an infinity survives a parquet round trip as a real
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output inf.parquet --sql "SELECT 1e308*10 AS big" user.csv
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly --output-format csv --sql "SELECT big, typeof(big) AS t FROM inf" inf.parquet
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Infinity,real"
+
   - name: reports a clear error when exporting an empty result
     steps:
       - fixture: *user
