@@ -195,3 +195,28 @@ scenarios:
           stdout:
             line: 2
             equals: "1"
+
+  # A set-returning function is a row source SQLite has no form for. Passed
+  # through, the error was "no such table: generate_series", which reads as a
+  # missing input file rather than as a construct the translation cannot express.
+  - name: "postgresql refuses a set-returning function by name"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect postgresql --sql "SELECT n FROM generate_series(1, 3) AS n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "generate_series is not supported"
+      - assert:
+          stderr:
+            not_contains: "no such table"
+
+  # The operator MySQL spells "^" is exponentiation in PostgreSQL, and stays so.
+  - name: "postgresql ^ is exponentiation"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect postgresql --sql "SELECT 2 ^ 3 AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "8"

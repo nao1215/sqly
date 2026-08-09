@@ -220,3 +220,49 @@ scenarios:
           stdout:
             line: 2
             equals: "0"
+
+  # BigQuery's own documentation writes the safe functions with a "SAFE." call
+  # prefix. Only the underscore spelling was recognized, so the prefixed form
+  # reached SQLite as a qualified name and reported on the "(" that followed.
+  - name: "googlesql SAFE. prefix matches the underscore form"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.DIVIDE(6, 3) AS a, SAFE_DIVIDE(6, 3) AS b, SAFE.ADD(2, 3) AS c, SAFE_ADD(2, 3) AS d"
+      - assert:
+          exit_code: 0
+          # Each prefixed form answers what its underscore form answers, which is
+          # the whole claim: the two spellings are one query.
+          stdout:
+            contains: "2,2,5,5"
+
+  - name: "googlesql SAFE.DIVIDE by zero is NULL, like SAFE_DIVIDE"
+    steps:
+      - run:
+          command: sqly --output-format json --dialect googlesql --sql "SELECT SAFE.DIVIDE(1, 0) AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: '"v":null'
+
+  - name: "googlesql refuses a SAFE. prefix it cannot honor"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.SUBSTR('abc', 1, 2) AS v"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "SAFE.SUBSTR is not supported"
+
+  # SQLite reads "[...]" as identifier quoting, so an array literal used to come
+  # back as "no such column: 1,2,3" — about a column the query never wrote.
+  - name: "googlesql refuses an array by name"
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT ARRAY_LENGTH([1,2,3]) AS v"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "arrays are not supported"
+      - assert:
+          stderr:
+            not_contains: "no such column"
