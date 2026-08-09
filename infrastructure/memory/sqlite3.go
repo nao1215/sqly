@@ -37,16 +37,22 @@ func (r *sqlite3Repository) inTx(ctx context.Context, fn func(tx *sql.Tx) error)
 }
 
 // TablesName return all table name in import order.
-// SQLite's own bookkeeping tables (sqlite_sequence, sqlite_stat1) are excluded;
-// SQLite reserves that prefix and refuses to create a table under it, so nothing
-// a user imports can be hidden by the exclusion.
+// SQLite's own bookkeeping tables (sqlite_sequence, sqlite_stat1) are excluded,
+// as is the one filesql keeps to remember where an ACH or Fedwire table was
+// loaded from. Each prefix is reserved by the layer that owns it: SQLite refuses
+// to create a table under sqlite_, and filesql refuses an import whose table
+// name would fall under _filesql_. Nothing a user imports can therefore be
+// hidden by the exclusions.
 // Rows are ordered by sqlite_master.rowid, which is assigned in CREATE order, so
 // the result follows the order the source files were imported.
 func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, error) {
 	tables := []*model.Table{}
 	err := r.inTx(ctx, func(tx *sql.Tx) error {
 		rows, err := tx.QueryContext(ctx,
-			"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid")
+			"SELECT name FROM sqlite_master WHERE type = 'table'"+
+				" AND name NOT LIKE 'sqlite_%'"+
+				` AND name NOT LIKE '\_filesql\_%' ESCAPE '\'`+
+				" ORDER BY rowid")
 		if err != nil {
 			return err
 		}
@@ -70,8 +76,9 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 // SchemaObjects returns every queryable table and view in the session: base
 // tables and views in the main schema plus TEMP tables and views. It backs
 // .tables, which should enumerate everything the user can query, not only the
-// file-imported base tables that write-back targets. SQLite's own bookkeeping
-// tables (the reserved sqlite_ prefix) are excluded, and names are sorted for
+// file-imported base tables that write-back targets. The reserved sqlite_ and
+// _filesql_ prefixes are excluded: no import can produce a name under either, so
+// the exclusion hides only the two layers' own bookkeeping. Names are sorted for
 // stable output.
 //
 // Each returned table carries the raw object name in Name() and the owning schema
@@ -79,11 +86,12 @@ func (r *sqlite3Repository) TablesName(ctx context.Context) ([]*model.Table, err
 // main object and a same-named temp object instead of collapsing them. UNION ALL
 // (not UNION) keeps both rows of such a collision.
 func (r *sqlite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
+	const reserved = ` AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\_filesql\_%' ESCAPE '\' `
 	const query = "SELECT name, 'main' AS schema_name FROM sqlite_master " +
-		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' " +
+		"WHERE type IN ('table', 'view')" + reserved +
 		"UNION ALL " +
 		"SELECT name, 'temp' AS schema_name FROM sqlite_temp_master " +
-		"WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' " +
+		"WHERE type IN ('table', 'view')" + reserved +
 		"ORDER BY name"
 
 	tables := []*model.Table{}

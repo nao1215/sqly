@@ -125,23 +125,8 @@ func filesqlRowMismatchPolicy(policy model.RowMismatchPolicy) filesql.MalformedR
 	}
 }
 
-// registryPublisher is the deferred half of an import: metadata that names
-// tables which do not exist until the transaction commits. filesql's
-// *PendingRegistries satisfies it; a test double satisfies it to observe whether
-// publication happened at all.
-//
-// PublishRegistries cannot fail — it moves already-built table sets into
-// process maps — so there is no partially published state to reconcile. The
-// integrity rule is therefore the simple one: nothing is published unless the
-// commit succeeded, and once the commit succeeds every staged registry is
-// published.
-type registryPublisher interface {
-	PublishRegistries()
-}
-
-// stageFunc loads one input path into an open transaction and returns the
-// registry entries to publish after that transaction commits.
-type stageFunc[T infra.Tx] func(ctx context.Context, tx T, path string) (registryPublisher, error)
+// stageFunc loads one input path into an open transaction.
+type stageFunc[T infra.Tx] func(ctx context.Context, tx T, path string) error
 
 // atomicImport is one ordered multi-file import: where the transaction comes
 // from, and how a single path is staged into it. Splitting these two out of
@@ -153,31 +138,22 @@ type atomicImport[T infra.Tx] struct {
 	stage    stageFunc[T]
 }
 
-// run stages every path inside one transaction, then publishes the staged
-// registries — and only then.
+// run stages every path inside one transaction.
 //
-// The two phases are deliberately separate. Everything that touches the
-// database happens inside WithTransaction, which owns commit, rollback, and the
-// joining of a cleanup error onto the cause. Everything that makes state visible
-// to the rest of the process happens after it returns, gated on the transaction
-// having actually committed. A failure anywhere in the first phase — a bad
-// input, a failed commit, or a rollback that itself failed — therefore leaves no
-// registry entry behind, so "the database rolled back but the registry kept the
-// entry" is not a state this code can produce.
+// Everything an import touches lives in that transaction, including the
+// metadata filesql keeps for writing ACH and Fedwire files back, so a failure
+// anywhere — a bad input, a failed commit, or a rollback that itself failed —
+// leaves nothing behind. WithTransaction owns commit, rollback, and the joining
+// of a cleanup error onto the cause.
 //
-// When several inputs register the same base name, the later input wins: staging
-// runs in the order the paths were given and publication replays that same
-// order, so the last file to claim a name is the one write-back resolves to.
+// Staging runs in the order the paths were given, so when several inputs claim
+// the same base name, write-back resolves to the last one.
 func (a atomicImport[T]) run(ctx context.Context, paths []string) error {
-	var pending []registryPublisher
 	committed, err := infra.WithTransaction(ctx, a.beginner, func(tx T) error {
-		pending = pending[:0]
 		for _, path := range paths {
-			publisher, err := a.stage(ctx, tx, path)
-			if err != nil {
+			if err := a.stage(ctx, tx, path); err != nil {
 				return err
 			}
-			pending = append(pending, publisher)
 		}
 		return nil
 	})
@@ -186,12 +162,8 @@ func (a atomicImport[T]) run(ctx context.Context, paths []string) error {
 	}
 	if !committed {
 		// Unreachable while WithTransaction reports success and commitment
-		// together; kept so a future change to that contract fails loudly here
-		// instead of publishing uncommitted registries.
+		// together; kept so a future change to that contract fails loudly here.
 		return errors.New("atomic import finished without committing")
-	}
-	for _, publisher := range pending {
-		publisher.PublishRegistries()
 	}
 	return nil
 }
@@ -214,24 +186,24 @@ func (f *FileSQLAdapter) LoadFiles(ctx context.Context, filePaths ...string) err
 }
 
 // stageFile parses one input and applies it to the open import transaction.
-func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string) (registryPublisher, error) {
+func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string) error {
 	builder := filesql.NewBuilder().
 		AddPath(path).
 		WithMalformedRowPolicy(filesqlRowMismatchPolicy(f.rowMismatchPolicy)).
 		WithExcelSheetPolicy(filesqlExcelSheetPolicy(f.includeHiddenSheets))
 	validated, err := builder.Build(ctx)
 	if err != nil {
-		return nil, importError(path, err)
+		return importError(path, err)
 	}
-	registry, err := validated.LoadIntoTxWithPending(ctx, tx)
+	err = validated.LoadIntoTx(ctx, tx)
 	f.recordSkippedRows(validated.SkippedRows())
 	if err != nil {
 		if f.rowMismatchPolicy == model.RowMismatchPad && errors.Is(err, filesql.ErrColumnMismatch) {
-			return nil, importError(path, fmt.Errorf("--row-mismatch pad refuses to truncate a long row: %w", unnamedCause(err)))
+			return importError(path, fmt.Errorf("--row-mismatch pad refuses to truncate a long row: %w", unnamedCause(err)))
 		}
-		return nil, importError(path, err)
+		return importError(path, err)
 	}
-	return registry, nil
+	return nil
 }
 
 // recordSkippedRows keeps what one import discarded, so the shell can report it
