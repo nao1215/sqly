@@ -82,6 +82,27 @@
       "contributions": [
         "bug"
       ]
+    },
+    {
+      "login": "adamdecaf",
+      "name": "Adam Shannon",
+      "avatar_url": "https://avatars.githubusercontent.com/u/120951?v=4",
+      "profile": "https://ashannon.us",
+      "contributions": [
+        "financial",
+        "ideas"
+      ]
+    },
+    {
+      "login": "sho-hata",
+      "name": "Shoki Hata",
+      "avatar_url": "https://avatars.githubusercontent.com/u/37888628?v=4",
+      "profile": "https://sho-hata.com",
+      "contributions": [
+        "financial",
+        "ideas",
+        "userTesting"
+      ]
     }
   ],
   "contributorsPerLine": 7,

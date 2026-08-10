@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-8-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-10-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   
 ![Coverage](https://raw.githubusercontent.com/nao1215/octocovs-central-repo/main/badges/nao1215/sqly/coverage.svg)
@@ -358,6 +358,14 @@ Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/
 - [prompt](https://github.com/nao1215/prompt) — the line editor behind the interactive shell
 - [atago](https://github.com/nao1215/atago) — the end-to-end test runner: it drives the real `sqly` binary, not a mock, from the plain-YAML specs in `e2e/atago/`. `make test-e2e` runs that suite locally, and CI runs it on Linux, macOS, and Windows after installing atago with [setup-atago](https://github.com/nao1215/setup-atago)
 
+## Acknowledgments
+
+sqly is a memorable project for me because it connected me with two GitHub Sponsors.
+
+[Adam Shannon](https://github.com/adamdecaf), who works in the payments industry at Moov, inspired sqly's support for financial file formats such as ACH and Fedwire. [Shoki Hata](https://github.com/sho-hata), a colleague of mine, has actively used both filesql and sqly; feedback from an actual user improved filesql's performance and led to many bug fixes in sqly.
+
+Thank you both for supporting the project as sponsors, and thanks to everyone who has improved sqly through code, documentation, bug reports, and other contributions.
+
 ## LICENSE
 
 The sqly project is licensed under the terms of [MIT LICENSE](./LICENSE).
@@ -382,6 +390,8 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     </tr>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/SnowleopardXI"><img src="https://avatars.githubusercontent.com/u/69493681?v=4?s=75" width="75px;" alt="Ephraim Steve Micaiah"/><br /><sub><b>Ephraim Steve Micaiah</b></sub></a><br /><a href="https://github.com/nao1215/sqly/issues?q=author%3ASnowleopardXI" title="Bug reports">🐛</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://ashannon.us"><img src="https://avatars.githubusercontent.com/u/120951?v=4?s=75" width="75px;" alt="Adam Shannon"/><br /><sub><b>Adam Shannon</b></sub></a><br /><a href="#financial-adamdecaf" title="Financial">💵</a> <a href="#ideas-adamdecaf" title="Ideas, Planning, &amp; Feedback">🤔</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://sho-hata.com"><img src="https://avatars.githubusercontent.com/u/37888628?v=4?s=75" width="75px;" alt="Shoki Hata"/><br /><sub><b>Shoki Hata</b></sub></a><br /><a href="#financial-sho-hata" title="Financial">💵</a> <a href="#ideas-sho-hata" title="Ideas, Planning, &amp; Feedback">🤔</a> <a href="#userTesting-sho-hata" title="User Testing">📓</a></td>
     </tr>
   </tbody>
   <tfoot>
