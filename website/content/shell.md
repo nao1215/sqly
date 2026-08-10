@@ -9,13 +9,13 @@ weight: 40
 ![the sqly interactive shell](/img/shell-demo.gif)
 
 ```text
-$ sqly testdata/user.csv
-sqly v0.29.0
+$ sqly user.csv
+sqly v1.0.0
 
 enter "SQL query" or "sqly command that begins with a dot".
 .help print usage, .exit exit sqly.
 
-sqly:~/sqly(table)$ SELECT * FROM user LIMIT 1;
+sqly:~/data(table)$ SELECT * FROM user LIMIT 1;
 ```
 
 The prompt shows the working directory and the current output mode. Tab
@@ -34,7 +34,7 @@ in a URL never reaches a message, a refusal, or an `--inspect` report.
 A statement is buffered until a `;` ends it, so a pasted or typed multi-line query runs as one statement. The prompt becomes `...>` while it is buffering:
 
 ```text
-sqly:~/sqly(table)$ SELECT user_name,
+sqly:~/data(table)$ SELECT user_name,
    ...> identifier FROM user;
 ```
 
@@ -44,7 +44,7 @@ body it separates the body's own statements without ending the `CREATE TRIGGER`
 that contains them. In each case the buffer keeps collecting:
 
 ```text
-sqly:~/sqly(table)$ CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN
+sqly:~/data(table)$ CREATE TRIGGER audit_trg AFTER INSERT ON audit BEGIN
    ...>   INSERT INTO log VALUES ('written');
    ...> END;
 statement executed successfully
@@ -58,7 +58,7 @@ One line may hold several statements. Each runs in order and each result is
 printed, which is what pasting a snippet usually needs:
 
 ```text
-sqly:~/sqly(table)$ CREATE TABLE t (a); INSERT INTO t VALUES (1); SELECT a FROM t;
+sqly:~/data(table)$ CREATE TABLE t (a); INSERT INTO t VALUES (1); SELECT a FROM t;
 ```
 
 Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.

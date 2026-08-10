@@ -5,7 +5,7 @@ Output "doc/img/directory-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1320
-Set Height 360
+Set Height 290
 Set Padding 18
 Set CursorBlink false
 Set Framerate 24

@@ -5,7 +5,7 @@ Output "doc/img/writeback-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1180
-Set Height 460
+Set Height 310
 Set Padding 18
 Hide
 Type "WORK=$(mktemp -d); cp testdata/user.csv $WORK/; export PATH=$PWD:$PATH; cd $WORK; export PS1='$ '; clear"

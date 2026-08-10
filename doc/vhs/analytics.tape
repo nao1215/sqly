@@ -5,7 +5,7 @@ Output "doc/img/analytics-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1100
-Set Height 1000
+Set Height 860
 Set Padding 18
 Set CursorBlink false
 Set Framerate 24
