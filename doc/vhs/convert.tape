@@ -5,7 +5,7 @@ Output "doc/img/convert-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1200
-Set Height 480
+Set Height 520
 Set Padding 18
 Set CursorBlink false
 Set Framerate 24

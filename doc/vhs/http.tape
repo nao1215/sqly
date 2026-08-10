@@ -6,15 +6,15 @@ Output "doc/img/http-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1100
-Set Height 620
+Set Height 480
 Set Padding 18
 Set CursorBlink false
 Set Framerate 24
 Set TypingSpeed 60ms
 Hide
-Type "WORK=$(mktemp -d); cp testdata/user.csv $WORK/; python3 -m http.server 18080 --bind 127.0.0.1 --directory $WORK >/tmp/sqly-http-demo.log 2>&1 & HTTP_PID=$!; trap 'kill $HTTP_PID' EXIT; export PATH=$PWD:$PATH PS1='$ '; clear"
+Type "WORK=$(mktemp -d); mkdir -p $WORK/data; cp testdata/user.csv $WORK/data/; python3 -m http.server 18080 --bind 127.0.0.1 --directory $WORK/data >/tmp/sqly-http-demo.log 2>&1 & HTTP_PID=$!; trap 'kill $HTTP_PID' EXIT; export PATH=$PWD:$PATH PS1='$ ' HOME=$WORK; cd $HOME/data"
 Enter
-Type "until curl -fsS http://127.0.0.1:18080/user.csv >/dev/null; do sleep 0.1; done"
+Type "until curl -fsS http://127.0.0.1:18080/user.csv >/dev/null; do sleep 0.1; done; clear"
 Enter
 Show
 Type "sqly --allow-remote --output-format csv --sql 'SELECT user_name FROM user ORDER BY identifier LIMIT 2' http://127.0.0.1:18080/user.csv"

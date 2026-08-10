@@ -4,7 +4,7 @@ Output "doc/img/sql-file-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1100
-Set Height 320
+Set Height 230
 Set Padding 18
 Hide
 Type "export PATH=$PWD:$PATH PS1='$ '; clear"

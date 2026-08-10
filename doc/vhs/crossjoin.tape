@@ -5,7 +5,7 @@ Output "doc/img/crossjoin-demo.gif"
 Set Shell "bash"
 Set FontSize 16
 Set Width 1280
-Set Height 300
+Set Height 250
 Set Padding 18
 Set CursorBlink false
 Set Framerate 24
