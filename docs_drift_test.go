@@ -1787,12 +1787,14 @@ func TestGoReleaser_DescriptionsNameTheCurrentFormats(t *testing.T) {
 		t.Error(".goreleaser.yml's release header does not mention compressed inputs")
 	}
 
-	// Both package descriptions — nFPM and Homebrew — must have moved off the old
-	// four-format list. They are checked by absence of the stale phrasing and by
-	// presence of the formats that were missing from it.
-	descriptions := regexp.MustCompile(`(?m)^\s*description:\s*(.+)$`).FindAllStringSubmatch(config, -1)
-	if len(descriptions) != 2 {
-		t.Fatalf("found %d description fields in .goreleaser.yml, want 2 (nFPM and Homebrew)", len(descriptions))
+	// Every one-line package description — nFPM, winget, and Homebrew — must have
+	// moved off the old four-format list. They are checked by absence of the stale
+	// phrasing and by presence of the formats that were missing from it. winget's
+	// prose description is a block scalar, which the pattern skips: it is covered
+	// by the whole-file format check above.
+	descriptions := regexp.MustCompile(`(?m)^\s*(?:short_)?description:[ \t]+([^|>\s].*)$`).FindAllStringSubmatch(config, -1)
+	if len(descriptions) != 3 {
+		t.Fatalf("found %d one-line description fields in .goreleaser.yml, want 3 (nFPM, winget, and Homebrew)", len(descriptions))
 	}
 	for i, match := range descriptions {
 		desc := strings.TrimSpace(match[1])
@@ -1806,10 +1808,10 @@ func TestGoReleaser_DescriptionsNameTheCurrentFormats(t *testing.T) {
 		}
 	}
 
-	// Homebrew rejects a formula whose desc runs past 80 characters, so the
-	// shorter of the two has to stay short. The second description is the brews
-	// one; the file's order is asserted above by there being exactly two.
-	brew := strings.TrimSpace(descriptions[1][1])
+	// Homebrew rejects a formula whose desc runs past 80 characters, so that one
+	// has to stay short. The last description is the brews one; the file's order is
+	// asserted above by there being exactly three.
+	brew := strings.TrimSpace(descriptions[len(descriptions)-1][1])
 	if len(brew) > 80 {
 		t.Errorf("the Homebrew description is %d characters; brew audit caps it at 80: %q", len(brew), brew)
 	}

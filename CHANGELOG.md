@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Features
+
+* Windows installs through winget: `winget install nao1215.sqly`. A tagged release pushes the generated manifests to a fork of the community repository and opens the pull request against microsoft/winget-pkgs, so the package tracks releases without a separate manual submission. The Windows archives are zips, which winget installs as a portable package — `sqly.exe` lands on PATH with no installer to run. Release-candidate tags are skipped, since the community repository takes stable versions only.
+
 ## Release candidates and what v1.0.0 froze
 
 `v1.0.0` is the stable release. Pin against it.
