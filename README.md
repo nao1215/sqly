@@ -63,6 +63,12 @@ go install github.com/nao1215/sqly@latest
 brew install nao1215/tap/sqly
 ```
 
+On Windows, winget installs it from the community repository:
+
+```shell
+winget install nao1215.sqly
+```
+
 Arch Linux users can install the [AUR package](https://aur.archlinux.org/packages/sqly-bin):
 
 ```shell
