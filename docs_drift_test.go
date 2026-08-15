@@ -1223,9 +1223,13 @@ func TestREADME_E2EClaimsMatchTheWorkflow(t *testing.T) {
 // releases before this check existed, and a contributor following the docs then
 // ran the suite on a runner older than the specs it was reading.
 //
-// The version is written in three places — the workflow and two pages — so the
-// workflow is treated as the source of truth and every `atago@vX.Y.Z` in the
-// documentation is compared against it.
+// The version is written in four places — the workflow, two pages, and the
+// message `scripts/run_e2e.sh` prints when atago is missing — so the workflow is
+// treated as the source of truth and every `atago@vX.Y.Z` outside it is compared
+// against that. The runner's message was the one that drifted next: it still
+// named v0.18.0 after CI had moved to v0.20.0, so the contributor who hit the
+// "atago is not installed" path was handed the stale version by the very script
+// that refused to run.
 func TestDocs_PinTheAtagoVersionCIInstalls(t *testing.T) {
 	t.Parallel()
 
@@ -1242,14 +1246,17 @@ func TestDocs_PinTheAtagoVersionCIInstalls(t *testing.T) {
 	}
 
 	installed := regexp.MustCompile(`atago@(v[0-9]+\.[0-9]+\.[0-9]+)`)
-	for _, page := range []string{"CONTRIBUTING.md", "doc/build_and_test.md", "README.md"} {
+	// README.md may omit the version; the other three must carry it, since they
+	// are where a contributor is told what to install.
+	optional := map[string]bool{"README.md": true}
+	for _, page := range []string{"CONTRIBUTING.md", "doc/build_and_test.md", "README.md", "scripts/run_e2e.sh"} {
 		found := installed.FindAllStringSubmatch(readDoc(t, page), -1)
 		for _, m := range found {
 			if m[1] != want {
 				t.Errorf("%s tells contributors to install atago@%s, but CI runs the suite with %s", page, m[1], want)
 			}
 		}
-		if page != "README.md" && len(found) == 0 {
+		if !optional[page] && len(found) == 0 {
 			t.Errorf("%s no longer shows how to install atago; it is not part of `make tools`, so a contributor has no other way to learn the version", page)
 		}
 	}
