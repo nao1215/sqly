@@ -1,6 +1,6 @@
 module github.com/nao1215/sqly
 
-go 1.25.0
+go 1.25.8
 
 require (
 	github.com/adrg/xdg v0.5.3
@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/compress v1.19.2
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.27
-	github.com/nao1215/filesql v0.43.1
+	github.com/nao1215/filesql v0.44.0
 	github.com/nao1215/prompt v0.0.19
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -44,20 +44,20 @@ require (
 	github.com/mattn/go-tty v0.0.8 // indirect
 	github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 // indirect
 	github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 // indirect
-	github.com/moov-io/ach v1.61.3 // indirect
-	github.com/moov-io/base v0.61.3 // indirect
+	github.com/moov-io/ach v1.63.3 // indirect
+	github.com/moov-io/base v0.63.0 // indirect
 	github.com/moov-io/iso3166 v0.4.0 // indirect
-	github.com/moov-io/iso4217 v0.3.2 // indirect
-	github.com/moov-io/wire v0.15.8 // indirect
+	github.com/moov-io/iso4217 v0.4.0 // indirect
+	github.com/moov-io/wire v0.16.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.3.0 // indirect
 	github.com/olekukonko/ll v0.1.8 // indirect
-	github.com/pierrec/lz4/v4 v4.1.27 // indirect
+	github.com/pierrec/lz4/v4 v4.1.28 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/richardlehane/mscfb v1.0.7 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
-	github.com/rickar/cal/v2 v2.1.27 // indirect
+	github.com/rickar/cal/v2 v2.1.29 // indirect
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/ulikunitz/xz v0.5.16 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
@@ -71,8 +71,8 @@ require (
 	golang.org/x/telemetry v0.0.0-20260708182218-49f421fb7959 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
+	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

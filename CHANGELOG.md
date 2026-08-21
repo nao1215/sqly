@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [v1.0.2](https://github.com/nao1215/sqly/compare/v1.0.1...v1.0.2) (2026-08-21)
+
+### Bug Fixes
+
+* `--dialect mysql` answers `SUBSTR` from position 0 the way MySQL does. MySQL reads position 0 as no position at all and returns an empty string, where SQLite reads it as the slot before the first character; `SUBSTR(s, LOCATE('x', s))` was the whole of `s` for a row without an `x`, which is the shape a lookup takes when it finds nothing. `--dialect postgresql` follows PostgreSQL's rule for the same call, checked against PostgreSQL 17. `--dialect googlesql` is left on SQLite's answer, because no BigQuery was available to check its rule against; the dialects page says so.
+
+* `--dialect mysql` writes the value rather than the letter for twelve `DATE_FORMAT` specifiers. `%f`, `%k`, `%l`, `%r`, `%T`, `%D`, `%u`, `%U`, `%v`, `%V`, `%x` and `%X` came back as their own letter, which is also what MySQL does for a specifier it does not know, so a query asking for `'%Y-%m-%d %T'` returned `2024-02-29 T` and looked like it had worked. Each was checked against MySQL 8.4 for every date from 1995 to 2035.
+
+* `.save` and `--output` to a workbook keep what the file already had. Saving an `.xlsx` back over itself rebuilt it from the values sqly holds, so a column computed by a formula came back empty and a date cell came back as text; the column widths, cell styles, merged ranges and comments went with it, and a sheet no table was loaded from was deleted outright. Only the cells whose value changed are written now.
+
+* A file sqly cannot read fails instead of taking the shell with it. A damaged Parquet or Excel file could crash the process, and a Parquet file whose metadata places a column chunk outside it could allocate until the machine ran out of memory. Both are errors now. A Parquet file whose metadata is consistent and whose page headers are not can still exhaust memory; a program pointed at Parquet from an untrusted source should read it where the process can be lost.
+
+* `.import` of a JSON file that is not JSON reports the same error whether or not it starts with a bracket. A malformed object and a malformed array are the same fault and were reported two ways.
+
+* `.import` reads a column's type from the whole file rather than from its first chunk. A column that looked numeric until a later row proved it text was stored with SQLite's spelling of its numbers rather than the file's, so `2.50` came back as `2.5`.
+
+### Changed
+
+* filesql v0.43.1 → v0.44.0, which is where the fixes above come from. Its release removes exported names sqly does not use, so nothing about sqly's own API changes.
+
+* Building sqly from source needs Go 1.25.8, up from 1.25.0, which is what filesql v0.44.0 declares. A released binary is unaffected.
+
+* Dependencies: `golang.org/x/text` 0.40.0 → 0.41.0, `github.com/pierrec/lz4/v4` 4.1.27 → 4.1.28, `github.com/rickar/cal/v2` 2.1.27 → 2.1.29, `google.golang.org/grpc` 1.82.1 → 1.83.0.
+
 ## [v1.0.1](https://github.com/nao1215/sqly/compare/v1.0.0...v1.0.1) (2026-08-15)
 
 ### Features
