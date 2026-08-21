@@ -38,7 +38,7 @@ specs (`e2e/atago/`) that exercises the real `sqly` binary. It runs in CI
 ```shell
 # Install atago once. CI pins the same version in .github/workflows/e2e_test.yml,
 # and TestContributing_PinsTheAtagoVersionCIInstalls fails when the two drift.
-go install github.com/nao1215/atago@v0.18.0
+go install github.com/nao1215/atago@v0.20.0
 
 # Build the binary and run the suite
 make test-e2e
