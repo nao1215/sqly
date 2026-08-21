@@ -36,11 +36,28 @@ scenarios:
           file:
             path: result.ndjson.gz
             exists: true
-      # The payload is gzip-compressed, so the plaintext value is not present.
+      # What "writes a compressed file" means is checked against the .jsonl.gz
+      # the same query writes: the two are byte-identical, and that one loads
+      # back, so the .ndjson.gz path produced a real gzip of real JSONL.
+      #
+      # Asserting the plaintext is absent from the bytes said this only by
+      # accident. Deflate may store a payload this short verbatim rather than
+      # coding it, and whether it does is up to the compressor, so the same
+      # correct file passed on one Go release and failed on another.
+      - run:
+          command: sqly --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 1" user.csv --output result.jsonl.gz
       - assert:
+          exit_code: 0
           file:
             path: result.ndjson.gz
-            not_contains: booker12
+            equals_file: result.jsonl.gz
+      - run:
+          command: sqly --output-format csv --sql "SELECT json_extract(data, '$.user_name') AS user_name FROM result LIMIT 1" result.jsonl.gz
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: booker12
 
   - name: re-imports a gzip-compressed csv it wrote
     steps:
