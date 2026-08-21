@@ -10,7 +10,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/klauspost/compress v1.19.2
 	github.com/mattn/go-colorable v0.1.15
-	github.com/mattn/go-runewidth v0.0.27
+	github.com/mattn/go-runewidth v0.0.28
 	github.com/nao1215/filesql v0.44.0
 	github.com/nao1215/prompt v0.0.19
 	github.com/olekukonko/tablewriter v1.1.4
