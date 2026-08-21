@@ -61,15 +61,15 @@ scenarios:
             line: 2
             equals: "a,10"
 
-  - name: SUBSTR from position 0 keeps SQLite's answer
+  - name: googlesql SUBSTR from position 0 keeps SQLite's answer
     description: >
-      MySQL and GoogleSQL are 1-based and return an empty string for position 0.
-      SQLite treats 0 as the slot before the first character, so the same call
-      returns one character.
+      MySQL and PostgreSQL each answer this their own way now, each checked
+      against its own engine. GoogleSQL is left on SQLite's, because no BigQuery
+      was available to check its rule against.
     steps:
       - fixture: *rows
       - run:
-          command: sqly --output-format csv --dialect mysql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
       - assert:
           exit_code: 0
           stdout:

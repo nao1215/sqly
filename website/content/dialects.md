@@ -133,8 +133,10 @@ $ sqly --output-format csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
 $ sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
 a,10
 
-# MySQL and GoogleSQL are 1-based and return '' for position 0.
-$ sqly --output-format csv --dialect mysql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
+# MySQL and PostgreSQL each answer SUBSTR at position 0 their own way now.
+# GoogleSQL is left on SQLite's, because no BigQuery was available to check its
+# rule against and a guessed answer is a divergence nobody can look up.
+$ sqly --output-format csv --dialect googlesql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
 a
 
 # BigQuery spells this 'true'. SQLite has no boolean type, so TRUE is already
@@ -149,7 +151,7 @@ Each of the four fails that test for its own reason:
 
 - Collation is a property of the column and the comparison, not of the call being rewritten. Supplying MySQL's would mean attaching it to every string comparison, `ORDER BY`, `DISTINCT`, `GROUP BY`, `LIKE`, and `IN`; doing less leaves `=` case-insensitive while `GROUP BY` stays case-sensitive, which is harder to reason about than one byte ordering everywhere.
 - `ONLY_FULL_GROUP_BY` is a strictness setting rather than a construct to translate, and reproducing it means refusing a query SQLite can answer. sqly answers with a row from each group instead, which is the more useful reading for a tool you point at a file to find out what is in it.
-- `SUBSTR` from position 0 is an off-by-one each dialect resolves its own way, so reproducing it means one helper that knows every dialect's rule, not a MySQL special case bolted onto a shared function.
+- `SUBSTR` from position 0 was an off-by-one every dialect resolves its own way, and MySQL's and PostgreSQL's rules are followed now, each checked against its own engine. GoogleSQL's is not: BigQuery was not available to check against, and reproducing a rule from memory is worse than keeping one that can be looked up.
 - The boolean cast is only recoverable where the expression is syntactically a boolean. `CAST(col AS STRING)` over a column of 0 and 1 is not, because SQLite has no boolean type and nothing downstream can tell that column from a plain integer one.
 
 ## A translated expression keeps the name you wrote

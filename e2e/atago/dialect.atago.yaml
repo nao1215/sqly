@@ -96,6 +96,17 @@ scenarios:
             contains:
               - "unsupported INTERVAL unit"
 
+  - name: "mysql dialect answers SUBSTR from position 0 the way MySQL does"
+    steps:
+      - fixture: *users
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT SUBSTR('abc', 0, 2) AS x" users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: '""'
+
   - name: "mysql dialect passes SQLite-native helpers through untouched"
     description: "CONCAT_WS, POW, and the bitwise operators exist in both MySQL and SQLite; the rewrite must leave them alone."
     steps:
@@ -350,7 +361,7 @@ scenarios:
           exit_code: 1
           stderr:
             contains:
-              - "ARRAY type is not supported"
+              - "ARRAY is not supported; SQLite has no array type"
 
   - name: "googlesql dialect rejects an unsupported construct (QUALIFY)"
     steps:
