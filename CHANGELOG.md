@@ -22,6 +22,8 @@
 
 * filesql v0.43.1 → v0.44.0, which is where the fixes above come from. Its release removes exported names sqly does not use, so nothing about sqly's own API changes.
 
+* Building sqly from source needs Go 1.25.8, up from 1.25.0, which is what filesql v0.44.0 declares. A released binary is unaffected.
+
 * Dependencies: `golang.org/x/text` 0.40.0 → 0.41.0, `github.com/pierrec/lz4/v4` 4.1.27 → 4.1.28, `github.com/rickar/cal/v2` 2.1.27 → 2.1.29, `google.golang.org/grpc` 1.82.1 → 1.83.0.
 
 ## [v1.0.1](https://github.com/nao1215/sqly/compare/v1.0.0...v1.0.1) (2026-08-15)
