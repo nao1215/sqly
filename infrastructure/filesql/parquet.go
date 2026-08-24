@@ -132,19 +132,43 @@ func parquetStagingCreateTable(t *model.Table, types []string) string {
 // duplicateColumnName returns the first column name that appears twice, and
 // reports whether there was one.
 //
-// Names are compared case-folded because that is how the staging table compares
-// them: "x" and "X" are one column to SQLite, so a check that told them apart
-// would pass the pair through to the error this one exists to replace.
+// Two names are the same column if either comparison says so, and the two are
+// kept apart rather than folded into one key. Case is how the staging table
+// compares them, since SQLite folds ASCII case in identifiers: "x" and "X" are
+// one column there. Surrounding whitespace is how filesql compares them when it
+// reads the file back, so " x" beside "x" is a file sqly could write and not
+// load — the round trip an export owes its caller. Folding a trimmed name would
+// apply both at once and refuse " A" beside "a", which neither rule refuses on
+// its own and which both SQLite and filesql keep as two columns.
+//
+// Case folding stops at ASCII for the same reason SQLite's does, so "ä" and "Ä"
+// stay two names.
 func duplicateColumnName(t *model.Table) (string, bool) {
-	seen := make(map[string]struct{}, t.ColumnCount())
+	trimmed := make(map[string]struct{}, t.ColumnCount())
+	folded := make(map[string]struct{}, t.ColumnCount())
 	for _, name := range t.Header() {
-		folded := strings.ToLower(name)
-		if _, ok := seen[folded]; ok {
+		trimmedName := strings.TrimSpace(name)
+		foldedName := asciiFold(name)
+		_, sameTrimmed := trimmed[trimmedName]
+		_, sameFolded := folded[foldedName]
+		if sameTrimmed || sameFolded {
 			return name, true
 		}
-		seen[folded] = struct{}{}
+		trimmed[trimmedName] = struct{}{}
+		folded[foldedName] = struct{}{}
 	}
 	return "", false
+}
+
+// asciiFold lowercases the ASCII letters in s and leaves every other byte as it
+// is, which is how SQLite compares two column names.
+func asciiFold(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			return r + ('a' - 'A')
+		}
+		return r
+	}, s)
 }
 
 const parquetTextType = "TEXT"

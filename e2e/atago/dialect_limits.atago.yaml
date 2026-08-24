@@ -61,11 +61,12 @@ scenarios:
             line: 2
             equals: "a,10"
 
-  - name: googlesql SUBSTR from position 0 keeps SQLite's answer
+  - name: googlesql SUBSTR from position 0 answers BigQuery's rule
     description: >
-      MySQL and PostgreSQL each answer this their own way now, each checked
-      against its own engine. GoogleSQL is left on SQLite's, because no BigQuery
-      was available to check its rule against.
+      This was a limit until a BigQuery to check against turned up: all three
+      dialects now answer their own way, and BigQuery's is a third rule again.
+      Position 0 means position 1, so two characters from the start is "ab",
+      where MySQL gives the empty string and PostgreSQL gives "a".
     steps:
       - fixture: *rows
       - run:
@@ -74,7 +75,7 @@ scenarios:
           exit_code: 0
           stdout:
             line: 2
-            equals: a
+            equals: ab
 
   - name: casting a boolean to text gives SQLite's 1, not the spelled-out word
     description: >
