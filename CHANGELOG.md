@@ -16,6 +16,8 @@
 
 * `.import` with a `prep` struct compares two columns the way the field they land on says. A comparison between two columns answered on the text whatever the columns were, so `007` was neither greater than, nor equal to, nor less than `7` in the same file.
 
+* A parquet export refuses a header sqly cannot read back. Two column names differing only in surrounding whitespace — `SELECT 1 AS "x", 2 AS " x"` — were written at exit 0 and the file then failed to import, because the reader takes those as one column while the export compared only case. The export now compares the way the import does, so the pair is refused before a file is written, as it already was for csv, tsv and excel.
+
 ### Changed
 
 * filesql v0.44.0 → v0.45.0, which is where the fixes above come from. Its release changes the `prep` package's `numeric` and `number` validate tags to the go-playground meanings they are named after, unexports three interfaces sqly does not use, and makes `prep`'s cross-field comparisons follow the field they land on. A program that embeds sqly's own packages is unaffected; a program using filesql's `prep` directly should read that release's notes.
