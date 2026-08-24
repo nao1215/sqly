@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [v1.0.3](https://github.com/nao1215/sqly/compare/v1.0.2...v1.0.3) (2026-08-24)
+
+### Bug Fixes
+
+* `.import` of a workbook or an ACH file leaves the database as it was when the file fails partway. A workbook whose later sheet could not be read left the earlier sheets' tables behind, and a table sqly already held under one of those names was replaced by them, so a failed import both reported an error and changed what was loaded.
+
+* `--dialect postgresql` stops a query that divides by zero, and so does `--dialect googlesql` for `MOD`. Both answered NULL, which is SQLite's answer and neither engine's: a report dividing by a count that turned out to be zero came back with a blank cell rather than the error PostgreSQL gives, and the blank flowed into the next `SUM` unnoticed. `--dialect mysql` still answers NULL, which is what MySQL answers.
+
+* `--dialect postgresql` computes `div`, `trunc(x, n)` and `width_bucket`, and `--dialect googlesql` computes `DIV` and `TRUNC(x, n)`. All five failed with "no such function" or a wrong-argument-count error although both engines define them, while the MySQL spelling of the same truncation already worked.
+
+* A column holding both signs of zero is one value rather than two. `-0.0` and `0.0` grouped apart in the `frame` package, so a summary over a column of deltas reported the zero group twice with the rows split between them.
+
+* `.import` with a `prep` struct compares two columns the way the field they land on says. A comparison between two columns answered on the text whatever the columns were, so `007` was neither greater than, nor equal to, nor less than `7` in the same file.
+
+### Changed
+
+* filesql v0.44.0 → v0.45.0, which is where the fixes above come from. Its release changes the `prep` package's `numeric` and `number` validate tags to the go-playground meanings they are named after, unexports three interfaces sqly does not use, and makes `prep`'s cross-field comparisons follow the field they land on. A program that embeds sqly's own packages is unaffected; a program using filesql's `prep` directly should read that release's notes.
+
+* Dependencies: `github.com/mattn/go-runewidth` 0.0.27 → 0.0.28, `github.com/pierrec/lz4/v4` 4.1.28 → 4.1.29.
+
 ## [v1.0.2](https://github.com/nao1215/sqly/compare/v1.0.1...v1.0.2) (2026-08-21)
 
 ### Bug Fixes
