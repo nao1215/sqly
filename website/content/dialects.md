@@ -133,25 +133,18 @@ $ sqly --output-format csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
 $ sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
 a,10
 
-# MySQL and PostgreSQL each answer SUBSTR at position 0 their own way now.
-# GoogleSQL is left on SQLite's, because no BigQuery was available to check its
-# rule against and a guessed answer is a divergence nobody can look up.
-$ sqly --output-format csv --dialect googlesql --sql "SELECT SUBSTR('abc', 0, 2) AS x" t.csv
-a
-
 # BigQuery spells this 'true'. SQLite has no boolean type, so TRUE is already
 # the integer 1 before the cast runs.
 $ sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
 1
 ```
 
-None of these is going to be fixed one dialect at a time. A rewrite that gives MySQL its answer and leaves PostgreSQL and GoogleSQL on SQLite's replaces one divergence you can look up with three that depend on which `--dialect` you passed. So a case is fixed when it can be fixed for every dialect that has an opinion about it, and documented here when it cannot. `SUBSTR` from position 0 is the one that left this list: MySQL's and PostgreSQL's rules were checked against their own engines and are followed now, and what remains is the GoogleSQL half, which is listed above for the same reason the other three are.
+None of these is going to be fixed one dialect at a time. A rewrite that gives MySQL its answer and leaves PostgreSQL and GoogleSQL on SQLite's replaces one divergence you can look up with three that depend on which `--dialect` you passed. So a case is fixed when it can be fixed for every dialect that has an opinion about it, and documented here when it cannot. `SUBSTR` from position 0 is the one that left this list outright: MySQL's and PostgreSQL's rules were checked against their own engines, and GoogleSQL's was checked against a BigQuery once one could be run locally, so all three answer their own way now.
 
 Each of these fails that test for its own reason:
 
 - Collation is a property of the column and the comparison, not of the call being rewritten. Supplying MySQL's would mean attaching it to every string comparison, `ORDER BY`, `DISTINCT`, `GROUP BY`, `LIKE`, and `IN`; doing less leaves `=` case-insensitive while `GROUP BY` stays case-sensitive, which is harder to reason about than one byte ordering everywhere.
 - `ONLY_FULL_GROUP_BY` is a strictness setting rather than a construct to translate, and reproducing it means refusing a query SQLite can answer. sqly answers with a row from each group instead, which is the more useful reading for a tool you point at a file to find out what is in it.
-- `SUBSTR` from position 0 was an off-by-one every dialect resolves its own way, and MySQL's and PostgreSQL's rules are followed now, each checked against its own engine. GoogleSQL's is not: BigQuery was not available to check against, and reproducing a rule from memory is worse than keeping one that can be looked up.
 - The boolean cast is only recoverable where the expression is syntactically a boolean. `CAST(col AS STRING)` over a column of 0 and 1 is not, because SQLite has no boolean type and nothing downstream can tell that column from a plain integer one.
 
 ## A translated expression keeps the name you wrote
