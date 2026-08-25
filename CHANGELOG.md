@@ -6,7 +6,7 @@
 
 ### Bug Fixes
 
-* `.import` of a directory loads every file in it that sqly can read, and follows a symbolic link to one. The directory walk carried a filter written for filesql's own repository, so a supported file whose name it did not recognise was skipped without a word, and a link to a directory was read as a file and refused.
+* `.import` of a directory loads every file in it that sqly can read, and follows a symbolic link to one. The directory walk carried a filter written for filesql's own repository, so a supported file whose name it did not recognize was skipped without a word, and a link to a directory was read as a file and refused.
 
 * `.import` of a large workbook or Parquet file costs a fraction of what it did. A sheet's blank rows are no longer counted as records, a workbook's cells are read a row at a time rather than one call per cell, and a Parquet file named by path is read where it lies instead of being copied into memory first. An 18.5 MB workbook of 200,000 rows no longer holds gigabytes while it loads.
 
