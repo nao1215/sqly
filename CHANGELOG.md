@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [v1.0.4](https://github.com/nao1215/sqly/compare/v1.0.3...v1.0.4) (2026-08-26)
+
+### Bug Fixes
+
+* `.import` of a directory loads every file in it that sqly can read, and follows a symbolic link to one. The directory walk carried a filter written for filesql's own repository, so a supported file whose name it did not recognize was skipped without a word, and a link to a directory was read as a file and refused.
+
+* `.import` of a large workbook or Parquet file costs a fraction of what it did. A sheet's blank rows are no longer counted as records, a workbook's cells are read a row at a time rather than one call per cell, and a Parquet file named by path is read where it lies instead of being copied into memory first. An 18.5 MB workbook of 200,000 rows no longer holds gigabytes while it loads.
+
+* `.import` of a compressed file reads all of it. A `.z` file holding more than one zlib stream read as the first stream alone and said nothing about the rest, and an xz file's second stream and later were not held to the memory limit the first was.
+
+* `.save` and `--output` work on a destination whose name is close to the filesystem's length limit, and report a staged file they cannot remove instead of losing the report inside the operation's error.
+
+* `.save` of a workbook keeps its sheets apart from those of another source whose name it prefixes. Two files named `report.xlsx` and `report_2026.xlsx` had their sheets attributed to whichever matched first.
+
+* `--dialect mysql` computes `WEEK`, `WEEKOFYEAR`, `YEARWEEK`, `QUARTER`, `ADDDATE` and `SUBDATE`, all of which failed as "no such function" or as a syntax error naming a token the query did not contain. `STR_TO_DATE` reads a month, day or time written without a leading zero, which MySQL accepts and sqly refused.
+
+* `--dialect postgresql` answers a timestamp for a date plus an interval, as PostgreSQL 17 does. `DATE '2026-01-31' + INTERVAL '1 month'` was `2026-02-28` and is now `2026-02-28 00:00:00`, which decides a comparison against a timestamp literal.
+
+* A string with a second point in it keeps the number in front of it where a dialect casts it. `'1.2.3'` cast to a number was 0 rather than 1.2, so a version string sorted as if it had no number at all.
+
+### Changed
+
+* filesql v0.45.0 → v0.46.0, which is where the fixes above come from. Its release also removes five exported symbols sqly does not use, and changes filesql's `prep` package: the cross-field tags read every field and value pair they name, an empty cell passes a cross-field comparison, and `required_with_all` and `required_without_all` are accepted. A program that embeds sqly's own packages is unaffected; a program using filesql's `prep` directly should read that release's notes.
+
+* Dependencies: `github.com/moov-io/wire` 0.16.0 → 0.16.1.
+
 ## [v1.0.3](https://github.com/nao1215/sqly/compare/v1.0.2...v1.0.3) (2026-08-24)
 
 ### Bug Fixes
