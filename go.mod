@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/compress v1.19.2
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.28
-	github.com/nao1215/filesql v0.45.0
+	github.com/nao1215/filesql v0.46.0
 	github.com/nao1215/prompt v0.0.19
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -39,7 +39,7 @@ require (
 	github.com/moov-io/base v0.63.0 // indirect
 	github.com/moov-io/iso3166 v0.4.0 // indirect
 	github.com/moov-io/iso4217 v0.4.0 // indirect
-	github.com/moov-io/wire v0.16.0 // indirect
+	github.com/moov-io/wire v0.16.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.3.0 // indirect
