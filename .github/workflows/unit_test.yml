@@ -18,9 +18,13 @@ jobs:
           - "windows-latest"
           - "macos-latest"
         go:
+          # Pinned to the patch, not the minor. setup-go resolves a bare "1.25"
+          # from its own manifest and pins GOTOOLCHAIN to what it installs, so a
+          # runner that had 1.25.12 refused a go.mod asking for 1.25.13 and the
+          # job failed on a version this repository never chose.
           - "1"
-          - "1.25"
-          - "1.26"
+          - "1.25.13"
+          - "1.26.6"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
