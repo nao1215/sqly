@@ -22,6 +22,8 @@
 
 ### Changed
 
+* The Go baseline moves to 1.25.13, which is what filesql v0.47.0 requires. The unit test matrix pins the patch rather than the minor: `setup-go` resolves a bare `1.25` from its own manifest and pins the toolchain to what it installs, so a runner that had 1.25.12 refused a `go.mod` asking for 1.25.13 and the job failed on a version this repository never chose.
+
 * filesql v0.46.0 → v0.47.0, which is where everything above comes from. That release also removes exported symbols from filesql's `dialect`, `prep` and compression packages and changes `frame.DataFrame`'s `DistinctBy` and `DropNASubset` to return an error. sqly uses none of them, so a program that embeds sqly's own packages is unaffected; a program using filesql directly should read that release's notes.
 
 ## [v1.0.4](https://github.com/nao1215/sqly/compare/v1.0.3...v1.0.4) (2026-08-26)
