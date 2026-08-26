@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [v1.1.0](https://github.com/nao1215/sqly/compare/v1.0.4...v1.1.0) (2026-08-26)
+
+### Added
+
+* `--dialect mysql` answers thirty-eight MySQL functions it used to refuse as "no such function". The names that are a second spelling of something sqly already had: `LCASE`, `UCASE`, `MID`, `DAYOFMONTH`, `ISNULL`, `REGEXP_LIKE`. The strings and numbers: `STRCMP`, `BIT_LENGTH`, `INSERT`, `TO_BASE64`, `FROM_BASE64`, `CONV`, `BIN`, `OCT`, `BIT_COUNT`, `COT`, the two-argument `ATAN`, `CRC32`, `REGEXP_SUBSTR`, `REGEXP_INSTR`, `SHA1`, `SHA2`. The ones a log file wants: `INET_ATON`, `INET_NTOA`, `IS_IPV4`, `IS_IPV6`. And the times and dates: `SEC_TO_TIME`, `TIME_TO_SEC`, `MAKETIME`, `TIME_FORMAT`, `ADDTIME`, `SUBTIME`, `MICROSECOND`, `TO_DAYS`, `FROM_DAYS`, `MAKEDATE`, `PERIOD_ADD`, `PERIOD_DIFF`. A MySQL TIME is a signed span rather than a clock reading, so `SELECT SEC_TO_TIME(360000)` answers `100:00:00` and a negative one keeps its sign.
+
+### Bug Fixes
+
+* `--dialect mysql` matches `REGEXP` and `RLIKE` without regard to case, as MySQL does under its default collation. `WHERE name REGEXP 'a'` used to pass over a row holding `A`, so a filter written against MySQL quietly returned fewer rows, and `REGEXP_REPLACE` quietly left some occurrences alone. `LIKE` already worked this way, so the two halves of one dialect disagreed about the same letter.
+
+* `--dialect mysql` computes `QUOTE`, `ASCII` and `HEX` the way MySQL does. `QUOTE` produced a literal MySQL cannot read back, escaping a quote by doubling it and leaving a number unquoted. `ASCII` answered the code point rather than the first byte, which made it the same function as `ORD`. `HEX` of a negative number answered a decimal with a minus sign in front of it, which holds no hexadecimal digits, so `UNHEX(HEX(n))` came back empty for every negative n.
+
+* `--dialect mysql` shifts with `<<` and `>>` the way MySQL does, on an unsigned 64-bit value. `SELECT -1 >> 1` answered -1 rather than 9223372036854775807, and a shift by 64 or more left a negative value untouched. These were different bits, not a different way of printing the same bits.
+
+* `--dialect mysql` reads a string in the condition of `IF` as the number its leading digits spell, which is what MySQL and SQLite both do. `IF(flag, a, b)` took the a branch for every value that was not a number, and a column sqly typed as text is exactly where that lands: a flag column holding `0` and `1` alongside a stray `no` took the true branch for every `no`.
+
+* `.save` and `--output` of an ACH or Fedwire file no longer write a file with a field replaced by another field's value, and no longer apply an edit to a record other than the one it was made on. A Fedwire message is now read back and compared column by column before a byte reaches the destination, and an ACH row is held against the position it was read from, so a write that cannot be made faithfully fails and leaves the original file where it was.
+
+### Changed
+
+* filesql v0.46.0 → v0.47.0, which is where everything above comes from. That release also removes exported symbols from filesql's `dialect`, `prep` and compression packages and changes `frame.DataFrame`'s `DistinctBy` and `DropNASubset` to return an error. sqly uses none of them, so a program that embeds sqly's own packages is unaffected; a program using filesql directly should read that release's notes.
+
 ## [v1.0.4](https://github.com/nao1215/sqly/compare/v1.0.3...v1.0.4) (2026-08-26)
 
 ### Bug Fixes
