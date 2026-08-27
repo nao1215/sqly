@@ -262,6 +262,9 @@ scenarios:
           command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.PARSE_DATE('%Y-%m-%d', 'nope') AS v"
       - assert:
           exit_code: 0
+          stdout:
+            line: 2
+            equals: '""'
 
   - name: "googlesql refuses SAFE.CAST, which is not how BigQuery spells it"
     description: "Dropping the prefix would leave a plain CAST that raises where the caller asked for a NULL, so the error names SAFE_CAST instead."
