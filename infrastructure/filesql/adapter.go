@@ -194,12 +194,8 @@ func (f *FileSQLAdapter) stageFile(ctx context.Context, tx *sql.Tx, path string)
 		AddPath(path).
 		WithMalformedRowPolicy(filesqlRowMismatchPolicy(f.rowMismatchPolicy)).
 		WithExcelSheetPolicy(filesqlExcelSheetPolicy(f.includeHiddenSheets))
-	validated, err := builder.Build(ctx)
-	if err != nil {
-		return importError(path, err)
-	}
-	err = validated.LoadIntoTx(ctx, tx)
-	f.recordSkippedRows(validated.SkippedRows())
+	err := builder.LoadIntoTx(ctx, tx)
+	f.recordSkippedRows(builder.SkippedRows())
 	if err != nil {
 		if f.rowMismatchPolicy == model.RowMismatchPad && errors.Is(err, filesql.ErrColumnMismatch) {
 			return importError(path, fmt.Errorf("--row-mismatch pad refuses to truncate a long row: %w", unnamedCause(err)))
