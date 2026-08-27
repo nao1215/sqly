@@ -11,6 +11,7 @@ import (
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
+	"github.com/nao1215/sqly/domain/sqltext"
 	infra "github.com/nao1215/sqly/infrastructure"
 )
 
@@ -235,21 +236,95 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	return model.NewTableFromCells(extractTableName(query), header, cells)
 }
 
-// extractTableName extract table name from query.
-// The query must be "SELECT" or "EXPLAIN" statement.
+// extractTableName returns the object named by the query's first FROM clause. It
+// names the result table, which is what an Excel export uses as its worksheet
+// name, so a query with no FROM (or none that names anything) yields "" and the
+// writer falls back to its own name.
+//
+// The FROM is found through sqltext rather than by splitting the query into
+// words. A word split cannot tell code from the rest: it read the "from" of a
+// trailing comment, of a string literal, and of a column aliased `from` as the
+// clause, and then read the word after it — which, when that "from" was the last
+// word, was past the end of the list.
 func extractTableName(query string) string {
-	query = strings.ReplaceAll(query, "`", "")
-	words := strings.Fields(query)
-	for i, v := range words {
-		if strings.EqualFold(v, "FROM") || strings.EqualFold(v, "from") {
-			return words[i+1]
+	for token := range sqltext.Tokens(query) {
+		if token.Kind == sqltext.Word && strings.EqualFold(token.Text(query), "FROM") {
+			return firstIdentifier(query[token.End:])
 		}
 	}
 	return ""
 }
 
+// firstIdentifier returns the table reference that opens s, with one layer of
+// SQLite quoting removed from each of its parts. A schema qualifier is part of
+// the reference, so both main.people and "main"."people" are read whole, and the
+// comments a query may put between FROM and its table are skipped.
+//
+// It returns "" when s opens with something that is not a name — most often the
+// "(" of a subquery, whose SELECT is not a table anyone can refer to.
+func firstIdentifier(s string) string {
+	var parts []string
+	for {
+		part, rest, ok := readIdentifierPart(sqltext.StripNoise(s))
+		if !ok {
+			break
+		}
+		parts = append(parts, part)
+		s = sqltext.StripNoise(rest)
+		if !strings.HasPrefix(s, ".") {
+			break
+		}
+		s = s[1:]
+	}
+	return strings.Join(parts, ".")
+}
+
+// readIdentifierPart reads one part of a table reference off the front of s and
+// returns it unquoted, together with what follows it. ok is false when s does not
+// open with a name at all.
+func readIdentifierPart(s string) (part, rest string, ok bool) {
+	if s == "" {
+		return "", s, false
+	}
+	if closer, quoted := identifierQuotes[s[0]]; quoted {
+		end := strings.IndexByte(s[1:], closer)
+		if end < 0 {
+			return "", s, false // the quote never closes, so there is no name to read
+		}
+		return s[1 : 1+end], s[end+2:], true
+	}
+	end := 0
+	for end < len(s) && isIdentifierByte(s[end]) {
+		end++
+	}
+	if end == 0 {
+		return "", s, false
+	}
+	return s[:end], s[end:], true
+}
+
+// identifierQuotes maps each character that opens a quoted identifier in SQLite
+// to the one that closes it.
+var identifierQuotes = map[byte]byte{'`': '`', '"': '"', '[': ']'}
+
+// isIdentifierByte reports whether c can be part of an unquoted identifier.
+func isIdentifierByte(c byte) bool {
+	return c == '_' ||
+		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
 // Exec execute "INSERT" or "UPDATE" or "DELETE" statement
+//
+// A statement with nothing executable in it — empty, whitespace, a bare ";", a
+// comment — affects no rows and is not sent to the driver. The driver answers
+// such a statement with a result that carries no underlying result, and reading a
+// row count off that crashes rather than returning an error. Callers reach here
+// with one when a dialect translation removes the only thing the statement held.
 func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, error) {
+	if sqltext.StripNoise(statement) == "" {
+		return 0, nil
+	}
+
 	var result sql.Result
 	if err := r.inTx(ctx, func(tx *sql.Tx) error {
 		var err error

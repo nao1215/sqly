@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* A query whose first `FROM` is the last word of a comment, of a string literal, or of a column aliased `from` answers instead of crashing. `sqly --sql "SELECT 1 -- from"` and ``sqly --sql "SELECT 1 AS `from`"`` ended the run with a Go panic, which exits 2 and so read as a rejected command line.
+
+* A statement that is only a `#` comment is refused instead of crashing. `#` opens a line comment in MySQL and in GoogleSQL but not in SQLite, so `sqly --dialect mysql --sql "# hello"` survived the check for an empty statement, was translated into nothing, and panicked on the way back from running nothing.
+
 ## [v1.2.1](https://github.com/nao1215/sqly/compare/v1.2.0...v1.2.1) (2026-08-27)
 
 ### Bug Fixes

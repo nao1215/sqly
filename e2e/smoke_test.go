@@ -462,3 +462,57 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 		t.Fatalf("directory rollback created output, stat err=%v", err)
 	}
 }
+
+// TestSmoke_NoStatementCrashesTheProcess pins two statements that used to end the
+// run with a Go panic instead of an answer. A panic is only visible from outside
+// the process: it writes a goroutine dump to stderr and exits 2, which reads as a
+// rejected command line, so the run that crashed and the run that was refused
+// looked the same to a script.
+//
+// "SELECT 1 -- from" ends with the word the result-table name is read from, and
+// reading the word after it ran off the end of the list. "# hello" is a comment
+// in MySQL and in GoogleSQL but not in SQLite, so it survived the check for an
+// empty statement and was translated into nothing, and running nothing gave the
+// driver no result to count rows from.
+func TestSmoke_NoStatementCrashesTheProcess(t *testing.T) {
+	csv := filepath.Join("testdata", "user.csv")
+
+	tests := []struct {
+		name     string
+		args     []string
+		wantCode int
+	}{
+		{
+			name:     "a trailing comment ending in from still answers",
+			args:     []string{"--sql", "SELECT 1 AS n -- from", csv},
+			wantCode: 0,
+		},
+		{
+			name:     "a column aliased from still answers",
+			args:     []string{"--sql", "SELECT 1 AS `from`", csv},
+			wantCode: 0,
+		},
+		{
+			name:     "a mysql comment-only statement is refused",
+			args:     []string{"--dialect", "mysql", "--sql", "# hello", csv},
+			wantCode: 1,
+		},
+		{
+			name:     "a googlesql comment-only statement is refused",
+			args:     []string{"--dialect", "googlesql", "--sql", "# hello", csv},
+			wantCode: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout, stderr, code := run(t, "", tt.args...)
+			if strings.Contains(stderr, "goroutine 1 [running]") || strings.Contains(stderr, "panic: ") {
+				t.Fatalf("sqly %v crashed:\n%s", tt.args, stderr)
+			}
+			if code != tt.wantCode {
+				t.Fatalf("sqly %v exit = %d, want %d (stdout: %q, stderr: %q)",
+					tt.args, code, tt.wantCode, stdout, stderr)
+			}
+		})
+	}
+}

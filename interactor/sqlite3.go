@@ -132,6 +132,15 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// Rewrite shorthands the engine does not accept (e.g. "TABLE name").
 	stmt = normalizeStatement(stmt)
 
+	// The check above ran on what the user wrote, in SQLite's spelling of a
+	// comment. MySQL and GoogleSQL also write a line comment with "#", which that
+	// check reads as something to run and the translation then removes, leaving
+	// nothing. Asking the engine to run nothing is not a statement, so it is
+	// refused the same way an empty one is.
+	if sqltext.StripNoise(stmt) == "" {
+		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
+	}
+
 	// Reject statements sqly cannot run safely or correctly under its per-statement
 	// transaction and in-memory session model (explicit transaction control,
 	// VACUUM, ATTACH/DETACH), with a clear error instead of SQLite's confusing
