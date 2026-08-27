@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Install sqly with go install, Homebrew, winget, the AUR, aqua, mise, or a prebuilt binary, and verify the release signature.
+description: Install sqly with go install, Homebrew, the AUR, aqua, mise, or a prebuilt binary, and verify the release signature.
 weight: 10
 ---
 
@@ -16,12 +16,6 @@ go install github.com/nao1215/sqly@latest
 
 ```shell
 brew install nao1215/tap/sqly
-```
-
-## winget (Windows)
-
-```shell
-winget install nao1215.sqly
 ```
 
 ## Arch Linux (AUR)
