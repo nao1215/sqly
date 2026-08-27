@@ -3,6 +3,7 @@ package interactor
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/nao1215/filesql/dialect"
@@ -81,5 +82,52 @@ func TestSQLite3Interactor_ExecSQLTranslates(t *testing.T) {
 	si.SetDialect(dialect.SQLite)
 	if _, _, err := si.ExecSQL(ctx, "SELECT name FROM t"); err != nil {
 		t.Fatalf("ExecSQL(sqlite): %v", err)
+	}
+}
+
+// TestSQLite3Interactor_ExecSQLRejectsStatementTranslatedToNothing covers a
+// statement that is only a comment in its own dialect. MySQL and GoogleSQL write
+// a line comment with "#", which SQLite does not, so the check for an empty
+// statement made before the translation still sees something to run. What the
+// translation leaves is empty, and running that reached the driver, which
+// answered with no result and crashed the row count. The dialect that named the
+// comment is the one that has to notice it.
+func TestSQLite3Interactor_ExecSQLRejectsStatementTranslatedToNothing(t *testing.T) {
+	config.InitSQLite3()
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+
+	si := NewSQLite3Interactor(
+		memory.NewSQLite3Repository(db),
+		NewSQL(),
+		ifilesql.NewFileSQLAdapter(db),
+	)
+
+	tests := []struct {
+		name      string
+		dialect   dialect.Dialect
+		statement string
+	}{
+		{name: "mysql hash comment", dialect: dialect.MySQL, statement: "# hello"},
+		{name: "mysql bare hash", dialect: dialect.MySQL, statement: "#"},
+		{name: "mysql block comment then hash comment", dialect: dialect.MySQL, statement: "/* c */ # d"},
+		{name: "googlesql hash comment", dialect: dialect.GoogleSQL, statement: "# hello"},
+		{name: "googlesql bare hash", dialect: dialect.GoogleSQL, statement: "#"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			si.SetDialect(tt.dialect)
+			table, affected, err := si.ExecSQL(context.Background(), tt.statement)
+			if err == nil {
+				t.Fatalf("ExecSQL(%q) = (%v, %d, nil), want an error", tt.statement, table, affected)
+			}
+			if !strings.Contains(err.Error(), "no executable SQL statement") {
+				t.Errorf("ExecSQL(%q) error = %v, want it to say there is no executable statement", tt.statement, err)
+			}
+		})
 	}
 }

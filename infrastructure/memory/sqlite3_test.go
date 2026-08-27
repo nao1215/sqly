@@ -166,6 +166,56 @@ func TestExtractTableName(t *testing.T) {
 			args: args{query: ""},
 			want: "",
 		},
+		{
+			name: "a from in a trailing line comment names nothing",
+			args: args{query: "SELECT 1 -- from"},
+			want: "",
+		},
+		{
+			name: "a from in a block comment names nothing",
+			args: args{query: "SELECT 1 /* from */"},
+			want: "",
+		},
+		{
+			name: "a column aliased from names nothing",
+			args: args{query: "SELECT 1 AS `from`"},
+			want: "",
+		},
+		{
+			name: "a from in a string literal names nothing",
+			args: args{query: "SELECT 'from t' AS s"},
+			want: "",
+		},
+		{
+			name: "a subquery after from names nothing",
+			args: args{query: "SELECT * FROM (SELECT 1 AS a)"},
+			want: "",
+		},
+		{
+			name: "a terminator is not part of the name",
+			args: args{query: "SELECT * FROM people;"},
+			want: "people",
+		},
+		{
+			name: "a schema-qualified name is kept whole",
+			args: args{query: "SELECT * FROM main.people"},
+			want: "main.people",
+		},
+		{
+			name: "a double-quoted name is unquoted",
+			args: args{query: `SELECT * FROM "my table"`},
+			want: "my table",
+		},
+		{
+			name: "a bracket-quoted name is unquoted",
+			args: args{query: "SELECT * FROM [my table]"},
+			want: "my table",
+		},
+		{
+			name: "the first from wins over a later one",
+			args: args{query: "SELECT * FROM a JOIN b ON a.id = b.id WHERE a.x IN (SELECT x FROM c)"},
+			want: "a",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -362,6 +412,23 @@ func TestSqlite3Repository_Exec_InvalidStatementReturnsError(t *testing.T) {
 	r := newSampleRepo(t)
 	if _, err := r.Exec(context.Background(), "UPDATE no_such_table SET x = 1"); err == nil {
 		t.Error("expected error for exec against missing table, got nil")
+	}
+}
+
+// TestSqlite3Repository_Exec_StatementWithNothingToRun covers a statement the
+// driver accepts without running anything: it answers with no result at all, and
+// reading a row count off that answer dereferenced nothing. A dialect that
+// translates its own comment syntax away is how such a statement reaches here.
+func TestSqlite3Repository_Exec_StatementWithNothingToRun(t *testing.T) {
+	r := newSampleRepo(t)
+	for _, statement := range []string{"", "   ", "-- only a comment", "/* only a comment */", ";"} {
+		affected, err := r.Exec(context.Background(), statement)
+		if err != nil {
+			t.Errorf("Exec(%q) error = %v, want nil", statement, err)
+		}
+		if affected != 0 {
+			t.Errorf("Exec(%q) affected = %d, want 0", statement, affected)
+		}
 	}
 }
 
