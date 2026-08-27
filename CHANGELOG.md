@@ -12,13 +12,11 @@
 
 * A blank cell written as a space rather than as nothing is a missing number, so `MAX` over a number column answers the largest value rather than the space, `SUM` and `COUNT` skip it and `IS NULL` finds it. It used to sit in the column as text, which SQLite orders above every number, and only an empty cell was read as missing. This holds for a file imported by path and for one read from a stream, which had disagreed.
 
-* `.save` to Excel refuses a value a worksheet cannot carry -- a control character other than tab, newline and carriage return -- instead of writing it back as the replacement character. The same table saves as CSV, which holds it.
-
-* `.save` to Excel keeps the table's name when the name is longer than a worksheet name may be. A table of 32 characters came back from the saved workbook with its own truncated name appended, 64 characters long, and grew again on every save and reimport.
-
-* `.save` refuses a table whose name or column names an import would spell differently, naming what an import would call them, instead of writing files that cannot be read back: a table named `with space` came back as `with_space`, and two tables named `a b` and `a-b` wrote two files that could not be imported together at all.
+* An Excel workbook whose sheet is named after the file, shortened to what Excel allows, imports as one table named after the file. A worksheet name is at most 31 characters, so a workbook named `quarterly_revenue_by_region_2026.xlsx` holding the sheet Excel had to shorten imported as the table `quarterly_revenue_by_region_2026_quarterly_revenue_by_region_202`.
 
 * A damaged Parquet file costs no more than its own size to refuse. One 473-byte file allocated 98 MiB before failing, and did it again on every import of the same file.
+
+* `--output` to Parquet no longer fails on a result with no table name. The export stages the result in a temporary database, and the staging table now carries a name of its own rather than the result's, which could be empty.
 
 ## [v1.2.1](https://github.com/nao1215/sqly/compare/v1.2.0...v1.2.1) (2026-08-27)
 
