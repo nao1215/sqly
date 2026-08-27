@@ -16,6 +16,14 @@ import (
 	_ "modernc.org/sqlite" // register the "sqlite" driver used for the staging DB
 )
 
+// parquetStagingTableName is the table the export stages its rows in. It is a
+// name of the export's own rather than the result's: a result has whatever name
+// the query gave it, including none, and the staging table becomes a file name
+// that filesql refuses when a load of it would name the table something else.
+// The produced file is renamed to what the caller asked for either way, so the
+// staging name is never seen.
+const parquetStagingTableName = "sqly_export"
+
 // DumpTableToParquet writes a single table to a Parquet file at filePath.
 //
 // filesql can read Parquet but only exposes a whole-database dump
@@ -118,7 +126,7 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 // parquetStagingColumnType decides instead.
 func parquetStagingCreateTable(t *model.Table, types []string) string {
 	var b strings.Builder
-	b.WriteString("CREATE TABLE " + infra.Quote(t.Name()) + " (")
+	b.WriteString("CREATE TABLE " + infra.Quote(parquetStagingTableName) + " (")
 	for i, col := range t.Header() {
 		if i > 0 {
 			b.WriteString(", ")
@@ -239,7 +247,7 @@ func parquetStagingColumnType(t *model.Table, col int) string {
 // the whole export instead of once per row.
 func parquetInsertStatement(t *model.Table) string {
 	var b strings.Builder
-	b.WriteString("INSERT INTO " + infra.Quote(t.Name()) + " VALUES (")
+	b.WriteString("INSERT INTO " + infra.Quote(parquetStagingTableName) + " VALUES (")
 	for col := range t.Header() {
 		if col > 0 {
 			b.WriteString(", ")

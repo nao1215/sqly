@@ -2,11 +2,21 @@
 
 ## [Unreleased]
 
+## [v1.2.2](https://github.com/nao1215/sqly/compare/v1.2.1...v1.2.2) (2026-08-27)
+
 ### Bug Fixes
 
 * A query whose first `FROM` is the last word of a comment, of a string literal, or of a column aliased `from` answers instead of crashing. `sqly --sql "SELECT 1 -- from"` and ``sqly --sql "SELECT 1 AS `from`"`` ended the run with a Go panic, which exits 2 and so read as a rejected command line.
 
 * A statement that is only a `#` comment is refused instead of crashing. `#` opens a line comment in MySQL and in GoogleSQL but not in SQLite, so `sqly --dialect mysql --sql "# hello"` survived the check for an empty statement, was translated into nothing, and panicked on the way back from running nothing.
+
+* A blank cell written as a space rather than as nothing is a missing number, so `MAX` over a number column answers the largest value rather than the space, `SUM` and `COUNT` skip it and `IS NULL` finds it. It used to sit in the column as text, which SQLite orders above every number, and only an empty cell was read as missing. This holds for a file imported by path and for one read from a stream, which had disagreed.
+
+* An Excel workbook whose sheet is named after the file, shortened to what Excel allows, imports as one table named after the file. A worksheet name is at most 31 characters, so a workbook named `quarterly_revenue_by_region_2026.xlsx` holding the sheet Excel had to shorten imported as the table `quarterly_revenue_by_region_2026_quarterly_revenue_by_region_202`.
+
+* A damaged Parquet file costs no more than its own size to refuse. One 473-byte file allocated 98 MiB before failing, and did it again on every import of the same file.
+
+* `--output` to Parquet no longer fails on a result with no table name. The export stages the result in a temporary database, and the staging table now carries a name of its own rather than the result's, which could be empty.
 
 ## [v1.2.1](https://github.com/nao1215/sqly/compare/v1.2.0...v1.2.1) (2026-08-27)
 
