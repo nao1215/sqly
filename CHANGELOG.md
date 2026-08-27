@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [v1.2.1](https://github.com/nao1215/sqly/compare/v1.2.0...v1.2.1) (2026-08-27)
+
+### Bug Fixes
+
+* An import that is canceled -- Ctrl-C on a long `.import`, or a request that goes away under `sqly` used as a library -- stops reading the file it was reading, and reports the cancellation as one. A source arriving over a slow connection used to be read to the end whatever the cancellation said, and the error that came back was about a closed statement rather than about the context, so a caller could not tell a canceled import from a failed one.
+
+* A JSON file whose array is followed by a stray `]` or `}` is refused instead of importing as the rows before it. `[{"a":1}]}[{"a":2}]` imported as a one-row table and reported success, with the second array's rows gone and nothing said about them.
+
+* An LTSV line holding a field that names no label is handled by `--row-mismatch` rather than dropped in silence. A stray log line in the middle of an LTSV file used to vanish, leaving an import that reported success and a table missing a row.
+
+* An import error names sqly's file layer once. Two of them said `filesql: database operation failed:` twice in one message.
+
 ## [v1.2.0](https://github.com/nao1215/sqly/compare/v1.1.0...v1.2.0) (2026-08-27)
 
 ### Added
