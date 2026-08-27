@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [v1.2.0](https://github.com/nao1215/sqly/compare/v1.1.0...v1.2.0) (2026-08-27)
+
+### Added
+
+* `--dialect googlesql` answers the scalar functions it used to refuse, and gains the DATETIME and TIME families it had no arithmetic for: `DATETIME_ADD`, `DATETIME_SUB`, `DATETIME_DIFF`, `TIME_ADD`, `TIME_SUB`, `TIME_DIFF`, `TIME_TRUNC`, `UNIX_DATE`, `DATE_FROM_UNIX_DATE`, `CURRENT_DATETIME`, `LAST_DAY`, alongside `CONTAINS_SUBSTR`, `NORMALIZE`, `EDIT_DISTANCE`, `FROM_HEX`, `TO_BASE32`, `TO_JSON_STRING`, `IEEE_DIVIDE`, `IS_INF` and the rest. `EXTRACT`, `DATE_TRUNC` and `DATE_DIFF` read `WEEK(<WEEKDAY>)`, so a query grouping by a week that starts on Monday works; `EXTRACT` answers `MILLISECOND` and `MICROSECOND` and `DATE_DIFF` answers `ISOWEEK`, `ISOYEAR` and `QUARTER`; the `SAFE.` prefix works in front of any function sqly computes rather than five of them; `APPROX_COUNT_DISTINCT`, `CORR`, `COVAR_POP` and `COVAR_SAMP` are translated; and `CAST('0x10' AS INT64)` answers a number.
+
+* `--dialect postgresql` answers the scalar functions it used to refuse -- `quote_ident`, `regexp_count`, `cbrt`, `factorial`, `gcd`, `lcm`, the degree trigonometry, `to_number`, `to_timestamp`, `make_date`, `date_bin`, the `sha` family, `encode`, `decode`, `gen_random_uuid` and the clock functions among them. `BETWEEN SYMMETRIC` works, `DATE_PART` and `EXTRACT` answer `millennium`, `century`, `decade`, `isoyear` and the sub-second parts, `SUBSTRING(s FROM pattern)` returns what the pattern matched, and `TO_CHAR` implements the date/time and numeric templates rather than a handful of their patterns.
+
+* `--dialect mysql` and `--dialect googlesql` read `x + INTERVAL n unit`, the operator spelling of date arithmetic that both dialects' own documentation writes first. Only the function form worked, so `SELECT d + INTERVAL 1 DAY` failed with a syntax error naming the number.
+
+### Bug Fixes
+
+* A blank cell in a number column is a missing number, so `MAX` answers the largest value rather than the blank, `AVG` divides by the values that are there, `COUNT(column)` counts them and `WHERE column IS NULL` finds the rows that have none. sqly stored the blank as an empty string, which SQLite orders above every number, so a column with one gap gave wrong answers to all four with nothing to say so.
+
+* A TSV or LTSV file whose lines end with a lone carriage return loads as rows even when a value holds a double quote. One quote made every carriage return after it part of the data, so a three-row file loaded as one row holding the other two, and a wider one failed with a message about a column count that named neither the quote nor the line ending.
+
+* `.save` on an Excel workbook leaves the cells it did not change as they were. A number in a column holding decimals was rewritten as text, so a sheet a spreadsheet was summing had text in it after a save that edited nothing, and a large number came back as `1e+15`; a `TRUE` under a date format became the string `TRUE`.
+
+* `.save` to LTSV refuses a column name with a space at either end instead of writing a label that reads back as a different name, and a table name holding a quote or a backtick loads and saves instead of failing with SQLite's tokenizer error.
+
+* Closing after `.save --in-place` with a transaction still open returns instead of hanging forever, and an in-place save replaces no file until every source is known to be writable, so a run that would fail on the third file no longer rewrites the first two. A save through a symbolic link writes the file the link points at and leaves the link a link.
+
+* A record longer than 64 MiB is refused with a message naming the line and the limit, rather than read whole. A file that is not the format it claims -- one long line with no terminator -- used to cost the process the whole of it before anything noticed.
+
+* `--dialect` answers correctly where it used to answer plausibly: a division by zero is reported as one rather than as NULL, `GCD` never answers a negative number, `TO_CHAR` reads its argument to tell a date from a number, `DATE_DIFF` in weeks counts the boundaries crossed, day and hour differences are exact for every date the calendar holds, BigQuery's `MD5` and `SHA1` answer bytes, its `DATE`, `DATETIME` and `TIME` constructors build a value instead of NULL, and `NOW()` and its siblings read UTC and answer once per statement rather than once per appearance.
+
 ## [v1.1.0](https://github.com/nao1215/sqly/compare/v1.0.4...v1.1.0) (2026-08-26)
 
 ### Added
