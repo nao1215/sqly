@@ -227,6 +227,16 @@ func TestExtractTableName(t *testing.T) {
 			want: "people",
 		},
 		{
+			name: "an unterminated quoted name names nothing",
+			args: args{query: `SELECT * FROM "people`},
+			want: "",
+		},
+		{
+			name: "a qualified name whose second part is unterminated keeps the first",
+			args: args{query: "SELECT * FROM main.`people"},
+			want: "main",
+		},
+		{
 			name: "the first from wins over a later one",
 			args: args{query: "SELECT * FROM a JOIN b ON a.id = b.id WHERE a.x IN (SELECT x FROM c)"},
 			want: "a",
