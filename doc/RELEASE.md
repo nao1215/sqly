@@ -32,16 +32,11 @@ The release workflow then:
 - signs the checksums with cosign (keyless) and attaches an SBOM;
 - attests build provenance via GitHub OIDC;
 - updates the Homebrew tap (`nao1215/homebrew-tap`).
-- pushes the winget manifests to `nao1215/winget-pkgs` and opens the pull
-  request against [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs).
-  Release-candidate tags are skipped; the community repository takes stable
-  versions only.
 
 ## Required secrets
 - `GITHUB_TOKEN`: provided automatically; used to create the GitHub Release.
 - `TAP_GITHUB_TOKEN`: a token with write access to `nao1215/homebrew-tap`,
   used to push the updated formula.
-- `WINGET_GITHUB_TOKEN`: a **classic** personal access token with the `public_repo` scope. GoReleaser v2.16.0 uses this one token for both writes: committing the manifests to a branch on `nao1215/winget-pkgs`, the fork of the community repository, and opening the pull request against microsoft/winget-pkgs. A fine-grained token cannot do the second — it can only be scoped to repositories you own, and microsoft/winget-pkgs is not one of them, so the push succeeds and the pull request fails with 403. A failure is logged without failing the release, so a rejected or delayed pull request never blocks a version. If a release finishes but no pull request appears, `dist/winget/manifests/n/nao1215/sqly/<version>/` still holds the three files and they can be submitted by hand from a `sqly-<version>` branch on the fork.
 
 ## After releasing
 - Check the [Releases page](https://github.com/nao1215/sqly/releases) for the

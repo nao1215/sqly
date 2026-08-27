@@ -84,4 +84,4 @@ See [Shell](/shell/) for every dot-command.
 go install github.com/nao1215/sqly@latest
 ```
 
-Homebrew, winget, the AUR, aqua, mise, and prebuilt binaries are on the [install page](/install/).
+Homebrew, the AUR, aqua, mise, and prebuilt binaries are on the [install page](/install/).
