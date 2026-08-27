@@ -212,6 +212,21 @@ func TestExtractTableName(t *testing.T) {
 			want: "my table",
 		},
 		{
+			name: "a comment between from and its table is skipped",
+			args: args{query: "SELECT * FROM /* source */ people"},
+			want: "people",
+		},
+		{
+			name: "a quoted schema-qualified name is read whole",
+			args: args{query: `SELECT * FROM "main"."people"`},
+			want: "main.people",
+		},
+		{
+			name: "a line comment between from and its table is skipped",
+			args: args{query: "SELECT * FROM -- source\npeople"},
+			want: "people",
+		},
+		{
 			name: "the first from wins over a later one",
 			args: args{query: "SELECT * FROM a JOIN b ON a.id = b.id WHERE a.x IN (SELECT x FROM c)"},
 			want: "a",

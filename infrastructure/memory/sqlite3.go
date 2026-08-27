@@ -255,39 +255,61 @@ func extractTableName(query string) string {
 	return ""
 }
 
-// firstIdentifier returns the identifier that opens s, with one layer of SQLite
-// quoting removed (`x`, "x", [x]). A schema qualifier stays part of the name, so
-// "main.people" is reported whole.
+// firstIdentifier returns the table reference that opens s, with one layer of
+// SQLite quoting removed from each of its parts. A schema qualifier is part of
+// the reference, so both main.people and "main"."people" are read whole, and the
+// comments a query may put between FROM and its table are skipped.
 //
 // It returns "" when s opens with something that is not a name — most often the
 // "(" of a subquery, whose SELECT is not a table anyone can refer to.
 func firstIdentifier(s string) string {
-	s = strings.TrimLeft(s, " \t\r\n")
+	var parts []string
+	for {
+		part, rest, ok := readIdentifierPart(sqltext.StripNoise(s))
+		if !ok {
+			break
+		}
+		parts = append(parts, part)
+		s = sqltext.StripNoise(rest)
+		if !strings.HasPrefix(s, ".") {
+			break
+		}
+		s = s[1:]
+	}
+	return strings.Join(parts, ".")
+}
+
+// readIdentifierPart reads one part of a table reference off the front of s and
+// returns it unquoted, together with what follows it. ok is false when s does not
+// open with a name at all.
+func readIdentifierPart(s string) (part, rest string, ok bool) {
 	if s == "" {
-		return ""
+		return "", s, false
 	}
 	if closer, quoted := identifierQuotes[s[0]]; quoted {
 		end := strings.IndexByte(s[1:], closer)
 		if end < 0 {
-			return "" // the quote never closes, so there is no name to read
+			return "", s, false // the quote never closes, so there is no name to read
 		}
-		return s[1 : 1+end]
+		return s[1 : 1+end], s[end+2:], true
 	}
 	end := 0
 	for end < len(s) && isIdentifierByte(s[end]) {
 		end++
 	}
-	return s[:end]
+	if end == 0 {
+		return "", s, false
+	}
+	return s[:end], s[end:], true
 }
 
 // identifierQuotes maps each character that opens a quoted identifier in SQLite
 // to the one that closes it.
 var identifierQuotes = map[byte]byte{'`': '`', '"': '"', '[': ']'}
 
-// isIdentifierByte reports whether c can be part of an unquoted table reference.
-// "." is included so a schema-qualified name is read as one.
+// isIdentifierByte reports whether c can be part of an unquoted identifier.
 func isIdentifierByte(c byte) bool {
-	return c == '_' || c == '.' ||
+	return c == '_' ||
 		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
