@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+* filesql is updated to v0.51.0. Nothing an import or an export does changes: the release refuses two things sqly never asks filesql for -- an LTSV dump of a table with no rows, which sqly writes with its own writer, and a dialect handed to a load into a database the caller owns, which sqly does not pass -- and documents what an Excel load costs. sqly stays current with it.
+
 ### Removed
 
 * The winget release pipe, and with it the `winget install nao1215.sqly` instruction. GoReleaser generated the manifests and opened a pull request against microsoft/winget-pkgs on every stable tag, but none of those pull requests were ever merged — six were open, the oldest for twelve days, all past validation and waiting on a volunteer moderator — so the identifier resolves to nothing and the pipe published nothing. The open pull requests are withdrawn, and `winget:` is gone from `.goreleaser.yml` along with the `WINGET_GITHUB_TOKEN` wiring in the release workflow. Windows users install with `go install`, a prebuilt archive from the release page, aqua, or mise.
