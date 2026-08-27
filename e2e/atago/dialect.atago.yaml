@@ -333,7 +333,7 @@ scenarios:
             equals: "1,2,007,x"
 
   - name: "googlesql dialect translates a negative DATE_DIFF and the WEEK unit"
-    description: "DATE_DIFF must keep its sign when the first argument is the earlier date, and WEEK counts whole week boundaries."
+    description: "DATE_DIFF must keep its sign when the first argument is the earlier date. WEEK counts the week boundaries crossed, not the seven-day spans between the dates: 2026-01-01 is a Thursday and 2026-03-15 a Sunday, and eleven Sundays fall between them."
     steps:
       - fixture: *users
       - run:
@@ -342,7 +342,7 @@ scenarios:
           exit_code: 0
           stdout:
             line: 2
-            equals: "-73,10"
+            equals: "-73,11"
 
   - name: "googlesql dialect rejects SELECT * EXCEPT and ARRAY types"
     description: "Both are GoogleSQL-only syntax with no SQLite equivalent; each must name itself in the error so the user knows which construct to drop."

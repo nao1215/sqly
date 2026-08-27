@@ -244,14 +244,37 @@ scenarios:
           stdout:
             contains: '"v":null'
 
-  - name: "googlesql refuses a SAFE. prefix it cannot honor"
+  - name: "googlesql honors a SAFE. prefix in front of a function it computes"
+    description: "The prefix used to be accepted in front of five names and refused everywhere else, so SAFE.SUBSTR failed on a query BigQuery runs."
     steps:
       - run:
           command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.SUBSTR('abc', 1, 2) AS v"
       - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "ab"
+
+  - name: "googlesql answers NULL where a SAFE. call could not compute one"
+    description: "That is what the prefix is for: a parse that fails answers nothing instead of stopping the query."
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.PARSE_DATE('%Y-%m-%d', 'nope') AS v"
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: '""'
+
+  - name: "googlesql refuses SAFE.CAST, which is not how BigQuery spells it"
+    description: "Dropping the prefix would leave a plain CAST that raises where the caller asked for a NULL, so the error names SAFE_CAST instead."
+    steps:
+      - run:
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.CAST('x' AS INT64) AS v"
+      - assert:
           exit_code: 1
           stderr:
-            contains: "SAFE.SUBSTR is not supported"
+            contains: "SAFE_CAST"
 
   # SQLite reads "[...]" as identifier quoting, so an array literal used to come
   # back as "no such column: 1,2,3" — about a column the query never wrote.
