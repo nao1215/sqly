@@ -9,6 +9,8 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/sqltext"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 // SQL keyword tokens used by statement classification, named once to avoid
@@ -110,7 +112,7 @@ func statementLineSpan(buf string, bufStartLine int, stmt string) (start, end in
 // inside string literals, identifiers, and comments are ignored so they do not
 // split a statement mid-value. Each returned statement has leading comments
 // stripped so it is classified by its first SQL keyword.
-func splitSQLStatements(s string) (stmts []string, remainder string) {
+func splitSQLStatements(s string, d dialect.Dialect) (stmts []string, remainder string) {
 	// A CREATE TRIGGER ... BEGIN ... END statement contains inner ";" that must not
 	// split it. trig tracks whether the current statement is a CREATE TRIGGER and
 	// how deep its BEGIN/CASE ... END nesting is, so a ";" only terminates once the
@@ -119,7 +121,7 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 		start int
 		trig  triggerState
 	)
-	for tok := range sqltext.Tokens(s) {
+	for tok := range sqltext.Tokens(s, d) {
 		switch tok.Kind {
 		case sqltext.Word:
 			trig.observe(strings.ToUpper(tok.Text(s)))
@@ -127,7 +129,7 @@ func splitSQLStatements(s string) (stmts []string, remainder string) {
 			if trig.insideBody() {
 				continue // ";" inside a trigger body does not terminate the statement
 			}
-			if stmt := sqltext.StripNoise(s[start:tok.Start]); stmt != "" {
+			if stmt := sqltext.StripNoise(s[start:tok.Start], d); stmt != "" {
 				stmts = append(stmts, stmt)
 			}
 			start = tok.End
@@ -199,13 +201,13 @@ const sqlCreate = "CREATE"
 // unterminated block comment. At a boundary the next line may start a new
 // statement or a helper command. An unterminated block comment is not a boundary,
 // because following lines (including dot-lines) are still inside the comment.
-func atStatementBoundary(pending string) bool {
-	if sqltext.StripNoise(pending) != "" {
+func atStatementBoundary(pending string, d dialect.Dialect) bool {
+	if sqltext.StripNoise(pending, d) != "" {
 		return false
 	}
 	// StripNoise also strips to "" for an unterminated block comment, so check
 	// that state explicitly to avoid treating an open comment as empty.
-	return !sqltext.EndsInsideBlockComment(pending)
+	return !sqltext.EndsInsideBlockComment(pending, d)
 }
 
 // statementSaveCompatible reports whether a non-interactive write-back run
@@ -232,23 +234,23 @@ var saveIncompatibleKeywords = map[string]bool{
 	"ATTACH": true, "DETACH": true, "GRANT": true, "REVOKE": true,
 }
 
-func statementSaveCompatible(stmt string) bool {
-	if statementModifiesData(stmt) {
+func statementSaveCompatible(stmt string, d dialect.Dialect) bool {
+	if statementModifiesData(stmt, d) {
 		return true
 	}
 	// A TEMP table is scratch space that never reaches a file: it is dropped with
 	// the session and write-back skips it like any other SQL-created table. A
 	// script is allowed to build one and still save the tables it imported.
-	if createsTempTable(stmt) {
+	if createsTempTable(stmt, d) {
 		return true
 	}
-	return !saveIncompatibleKeywords[sqltext.LeadingKeyword(stmt)]
+	return !saveIncompatibleKeywords[sqltext.LeadingKeyword(stmt, d)]
 }
 
 // createsTempTable reports whether a statement creates a temporary table or
 // view: "CREATE TEMP ..." or "CREATE TEMPORARY ...", in any case.
-func createsTempTable(stmt string) bool {
-	fields := strings.Fields(strings.ToUpper(sqltext.StripNoise(stmt)))
+func createsTempTable(stmt string, d dialect.Dialect) bool {
+	fields := strings.Fields(strings.ToUpper(sqltext.StripNoise(stmt, d)))
 	if len(fields) < 2 || fields[0] != sqlCreate {
 		return false
 	}
@@ -263,7 +265,7 @@ func createsTempTable(stmt string) bool {
 // the session has changed by the time it runs, so a statement after the final
 // one cannot alter what was written: a script that saves and then builds a
 // scratch table was refused outright, and the save it asked for never happened.
-func firstSaveIncompatibleStatement(elements []scriptElement) string {
+func firstSaveIncompatibleStatement(elements []scriptElement, d dialect.Dialect) string {
 	last := -1
 	for i, e := range elements {
 		if e.commandName() == saveCommand {
@@ -274,7 +276,7 @@ func firstSaveIncompatibleStatement(elements []scriptElement) string {
 		return ""
 	}
 	for _, stmt := range sqlStatements(elements[:last]) {
-		if !statementSaveCompatible(stmt) {
+		if !statementSaveCompatible(stmt, d) {
 			return stmt
 		}
 	}
@@ -285,12 +287,12 @@ func firstSaveIncompatibleStatement(elements []scriptElement) string {
 // an INSERT/UPDATE/DELETE/REPLACE, or a WITH whose main statement is one of those.
 // An EXPLAIN of such a statement is read-only and reports false, so it never
 // triggers write-back.
-func statementModifiesData(stmt string) bool {
-	switch sqltext.LeadingKeyword(stmt) {
+func statementModifiesData(stmt string, d dialect.Dialect) bool {
+	switch sqltext.LeadingKeyword(stmt, d) {
 	case kwInsert, kwUpdate, kwDelete, kwReplace:
 		return true
 	case "WITH":
-		switch sqltext.MainVerb(stmt) {
+		switch sqltext.MainVerb(stmt, d) {
 		case kwInsert, kwUpdate, kwDelete, kwReplace:
 			return true
 		}
@@ -303,8 +305,8 @@ func statementModifiesData(stmt string) bool {
 // reports its affected-row count; any other no-rowset statement (DDL, PRAGMA,
 // maintenance) reports neutral success, because an "affected is N row(s)" line for
 // a CREATE VIEW, PRAGMA, or ANALYZE implies a row change that did not happen.
-func statementResultMessage(stmt string, affected int64) string {
-	if statementModifiesData(stmt) {
+func statementResultMessage(stmt string, affected int64, d dialect.Dialect) string {
+	if statementModifiesData(stmt, d) {
 		return fmt.Sprintf("affected is %d row(s)\n", affected)
 	}
 	return msgStatementExecuted
@@ -336,7 +338,7 @@ func readScriptFile(path string) (string, error) {
 // error for a missing or unreadable file (wrapping the OS error so callers can
 // inspect it with errors.Is) and rejects a file with no SQL, so an empty or
 // whitespace-only script fails loudly instead of running nothing.
-func readSQLFile(path string) (string, error) {
+func readSQLFile(path string, d dialect.Dialect) (string, error) {
 	// The two kinds of failure below are told apart deliberately. A path that
 	// cannot be read is a problem with the file, like any other input; a file that
 	// was read and holds no statement is a problem with what the user wrote. They
@@ -355,8 +357,8 @@ func readSQLFile(path string) (string, error) {
 	// an empty file: splitting yields no terminated statements and the remainder
 	// strips down to nothing once leading comments are removed. Reject it instead
 	// of silently running nothing.
-	stmts, remainder := splitSQLStatements(content)
-	if len(stmts) == 0 && sqltext.StripNoise(remainder) == "" {
+	stmts, remainder := splitSQLStatements(content, d)
+	if len(stmts) == 0 && sqltext.StripNoise(remainder, d) == "" {
 		return "", &scriptError{Err: fmt.Errorf("--sql-file %q contains no executable SQL statements", path)}
 	}
 	return content, nil

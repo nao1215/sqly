@@ -117,8 +117,11 @@ func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Ta
 // - For unsupported commands: (nil, 0, error)
 func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
 	// Strip a leading BOM and leading comments so the statement classifies and
-	// runs the same way it does on the batch and --sql-file paths.
-	stmt := sqltext.StripNoise(statement)
+	// runs the same way it does on the batch and --sql-file paths. The session's
+	// dialect decides what a comment is: MySQL and GoogleSQL open one with "#"
+	// as well, and reading such a line as something to run made it reach the
+	// engine as an empty statement.
+	stmt := sqltext.StripNoise(statement, si.Dialect())
 	if stmt == "" {
 		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
@@ -132,12 +135,11 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// Rewrite shorthands the engine does not accept (e.g. "TABLE name").
 	stmt = normalizeStatement(stmt)
 
-	// The check above ran on what the user wrote, in SQLite's spelling of a
-	// comment. MySQL and GoogleSQL also write a line comment with "#", which that
-	// check reads as something to run and the translation then removes, leaving
-	// nothing. Asking the engine to run nothing is not a statement, so it is
-	// refused the same way an empty one is.
-	if sqltext.StripNoise(stmt) == "" {
+	// The check above ran on what the user wrote. This one runs on what the
+	// translation produced, which is SQLite, and catches a statement that
+	// translates to nothing at all. Asking the engine to run nothing is not a
+	// statement, so it is refused the same way an empty one is.
+	if sqltext.StripNoise(stmt, dialect.SQLite) == "" {
 		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
 
@@ -164,7 +166,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		// result columns, so the query path reports ErrNoRows. Re-run it on the exec
 		// path so it commits and reports neutral success instead of a misleading "no
 		// records" error.
-		if !errors.Is(err, repository.ErrNoRows) || sqltext.LeadingKeyword(stmt) != sqlPRAGMA {
+		if !errors.Is(err, repository.ErrNoRows) || sqltext.LeadingKeyword(stmt, dialect.SQLite) != sqlPRAGMA {
 			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}
 	}

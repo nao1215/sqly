@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"testing/quick"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 func featureQuickConfig() *quick.Config {
@@ -68,7 +70,7 @@ func TestSQLInputCompleteProperties(t *testing.T) {
 
 	terminated := func(body string, trailing uint8) bool {
 		in := sqlSafeBody(body) + ";" + strings.Repeat(" ", int(trailing%4))
-		return sqlInputComplete(in)
+		return sqlInputComplete(in, dialect.SQLite)
 	}
 	if err := quick.Check(terminated, featureQuickConfig()); err != nil {
 		t.Errorf("input whose semicolon ends the statement must be complete: %v", err)
@@ -81,14 +83,14 @@ func TestSQLInputCompleteProperties(t *testing.T) {
 		if strings.TrimSpace(in) == "" || strings.HasPrefix(strings.TrimSpace(in), ".") {
 			return true // empty and dot-commands are complete by design
 		}
-		return !sqlInputComplete(in)
+		return !sqlInputComplete(in, dialect.SQLite)
 	}
 	if err := quick.Check(openLiteralContinues, featureQuickConfig()); err != nil {
 		t.Errorf("input left inside a string literal must continue: %v", err)
 	}
 
 	blankLineSubmits := func(body string) bool {
-		return sqlInputComplete(body + "\n")
+		return sqlInputComplete(body+"\n", dialect.SQLite)
 	}
 	if err := quick.Check(blankLineSubmits, featureQuickConfig()); err != nil {
 		t.Errorf("blank continuation line must force submit: %v", err)
@@ -99,7 +101,7 @@ func TestSQLInputCompleteProperties(t *testing.T) {
 		if w == "" || strings.HasPrefix(w, ".") {
 			return true // empty and dot-commands are complete by design
 		}
-		return !sqlInputComplete(w)
+		return !sqlInputComplete(w, dialect.SQLite)
 	}
 	if err := quick.Check(bareSingleLineContinues, featureQuickConfig()); err != nil {
 		t.Errorf("bare single-line query must continue, not submit: %v", err)

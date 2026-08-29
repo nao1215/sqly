@@ -3,6 +3,8 @@ package shell
 import (
 	"testing"
 	"unicode/utf8"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 // FuzzSplitSQLStatements asserts the batch statement splitter never panics and
@@ -29,7 +31,7 @@ func FuzzSplitSQLStatements(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		stmts, remainder := splitSQLStatements(s)
+		stmts, remainder := splitSQLStatements(s, dialect.SQLite)
 		// The splitter works on runes and only removes top-level ";" and leading
 		// comments, so the retained content can only shrink. Compare in runes, since
 		// []rune normalizes invalid UTF-8 to U+FFFD (which changes the byte length).

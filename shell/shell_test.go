@@ -22,6 +22,8 @@ import (
 	"github.com/nao1215/sqly/interactor"
 	"github.com/nao1215/sqly/testutil"
 	"golang.org/x/text/encoding/japanese"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 func TestShellRun(t *testing.T) {
@@ -4399,8 +4401,8 @@ func TestSQLInputComplete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := sqlInputComplete(tt.input); got != tt.want {
-				t.Errorf("sqlInputComplete(%q) = %v, want %v", tt.input, got, tt.want)
+			if got := sqlInputComplete(tt.input, dialect.SQLite); got != tt.want {
+				t.Errorf("sqlInputComplete(%q, dialect.SQLite) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}

@@ -246,7 +246,9 @@ func NewShell(
 				prompt.WithMemoryHistory(historySize),
 				prompt.WithTheme(prompt.ThemeNightOwl),
 				prompt.WithMultiline(true),
-				prompt.WithIsComplete(sqlInputComplete),
+				prompt.WithIsComplete(func(input string) bool {
+					return sqlInputComplete(input, arg.Dialect)
+				}),
 				prompt.WithContinuationPrefix(continuationPrefix),
 				prompt.WithWordEscape(),
 				prompt.WithKeyMap(sqlyKeyMap()),
@@ -435,7 +437,7 @@ func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 	case modeInlineSQL:
 		script, origin = s.argument.Query, flagSQL
 	case modeSQLFile:
-		loaded, err := readSQLFile(s.argument.SQLFilePath)
+		loaded, err := readSQLFile(s.argument.SQLFilePath, s.dialect())
 		if err != nil {
 			// readSQLFile already classifies: a path it could not read is an input
 			// failure, a file holding no statement is a script failure.
@@ -458,7 +460,7 @@ func (s *Shell) loadScript(ctx context.Context) ([]scriptElement, error) {
 		return nil, nil
 	}
 
-	elements, err := parseScript(script)
+	elements, err := parseScript(script, s.dialect())
 	if err != nil {
 		return nil, &scriptError{Err: fmt.Errorf("%s: %w", origin, err)}
 	}
@@ -868,6 +870,17 @@ func (s *Shell) promptPrefix() string {
 	return fmt.Sprintf("sqly:%s(%s)$ ", s.state.shortCWD(), s.state.mode.String())
 }
 
+// dialect is the SQL dialect the session's queries are written in, which is what
+// says where a statement ends: "#" opens a comment in MySQL and GoogleSQL, a
+// backslash escapes a quote there, and PostgreSQL alone writes a dollar-quoted
+// string and nests its block comments.
+func (s *Shell) dialect() dialect.Dialect {
+	if s.argument == nil {
+		return dialect.SQLite
+	}
+	return s.argument.Dialect
+}
+
 // sqlInputComplete reports whether the interactive buffer holds a statement
 // ready to run, so the prompt submits on Enter instead of continuing on a new
 // line. Without this, every newline submits, splitting a pasted or typed
@@ -878,7 +891,7 @@ func (s *Shell) promptPrefix() string {
 // submit. Pressing Enter on a blank continuation line force-submits whatever is
 // buffered, so a query typed without a trailing ";" still runs without forcing
 // the user to add one.
-func sqlInputComplete(input string) bool {
+func sqlInputComplete(input string, d dialect.Dialect) bool {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return true
@@ -886,7 +899,7 @@ func sqlInputComplete(input string) bool {
 	if strings.HasPrefix(trimmed, ".") {
 		return true
 	}
-	if endsAtStatementBoundary(input) {
+	if endsAtStatementBoundary(input, d) {
 		return true
 	}
 	// The current line is the text after the last newline. When it is blank the
@@ -912,16 +925,16 @@ func sqlInputComplete(input string) bool {
 // nothing.
 // The batch reader has always answered this with the same scanner, which is why
 // a script could do what could not be typed.
-func endsAtStatementBoundary(input string) bool {
-	if sqltext.EndsInsideBlockComment(input) {
+func endsAtStatementBoundary(input string, d dialect.Dialect) bool {
+	if sqltext.EndsInsideBlockComment(input, d) {
 		return false
 	}
 	// The remainder is what follows the last ";" that terminated a statement, so
 	// it is shorter than the input exactly when one did. Counting terminators
 	// rather than statements is what makes a bare ";" a complete (empty) input
 	// instead of a buffer the prompt would wait on forever.
-	_, remainder := splitSQLStatements(input)
-	return len(remainder) < len(input) && sqltext.StripNoise(remainder) == ""
+	_, remainder := splitSQLStatements(input, d)
+	return len(remainder) < len(input) && sqltext.StripNoise(remainder, d) == ""
 }
 
 // Suggest is a local struct to maintain compatibility with old code structure
@@ -1240,7 +1253,7 @@ func (s *Shell) execInteractive(ctx context.Context, input string) error {
 		return s.dispatch(ctx, req)
 	}
 
-	elements, err := parseScript(input)
+	elements, err := parseScript(input, s.dialect())
 	if err != nil {
 		return err
 	}
@@ -1382,7 +1395,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	}
 	// Track whether this statement actually changed data, so write-back runs only
 	// for a run that modified a table (not an EXPLAIN or a zero-row DML).
-	if statementModifiesData(req) {
+	if statementModifiesData(req, s.dialect()) {
 		if table != nil {
 			if table.RowCount() > 0 {
 				s.dataChanged = true
@@ -1400,7 +1413,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		// UPDATE change" has an answer in every format rather than only in the
 		// ones a person reads.
 		if s.collectingOutput {
-			fmt.Fprint(config.Stderr, statementResultMessage(req, affectedRows))
+			fmt.Fprint(config.Stderr, statementResultMessage(req, affectedRows, s.dialect()))
 			return nil
 		}
 		// --output is only meaningful for a statement that produces a rowset. An
@@ -1409,7 +1422,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 		if s.argument.NeedsOutputToFile() {
 			return errors.New("--output requires a statement that returns rows; an INSERT/UPDATE/DELETE without RETURNING produces none")
 		}
-		msg := statementResultMessage(req, affectedRows)
+		msg := statementResultMessage(req, affectedRows, s.dialect())
 		// In a non-interactive run the count is buffered rather than printed now: a
 		// later statement (or a .save) can still fail the run, and stdout must not
 		// carry success text from a run that exits non-zero. finishNonInteractive

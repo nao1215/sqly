@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/domain/sqltext"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 const (
@@ -43,6 +45,11 @@ func NewSQL() *SQL {
 	return &SQL{}
 }
 
+// Every question this file asks about a statement is asked after the
+// translation has run, so the text is SQLite whatever dialect the caller wrote
+// it in. That is why each call names dialect.SQLite rather than the session's
+// dialect: by this point the session's dialect is not what the text is.
+
 // unsupportedStatementReason reports why sqly cannot run a statement, or "" when
 // it is supported. sqly executes every statement in its own transaction on a
 // single in-memory connection, so explicit transaction control cannot span
@@ -53,7 +60,7 @@ func NewSQL() *SQL {
 // are rejected up front with a clear sqly-specific error instead of surfacing
 // SQLite's confusing internal message or silently escaping the session model.
 func unsupportedStatementReason(stmt string) string {
-	switch sqltext.LeadingKeyword(stmt) {
+	switch sqltext.LeadingKeyword(stmt, dialect.SQLite) {
 	case sqlBEGIN, sqlCOMMIT, sqlEND, sqlROLLBACK, sqlSAVEPOINT, sqlRELEASE:
 		// END (and END TRANSACTION) is an alias for COMMIT, so it must be rejected
 		// with the same sqly-specific message rather than falling through to
@@ -72,7 +79,7 @@ func unsupportedStatementReason(stmt string) string {
 // shorthand (which the sqlite3 CLI accepts but modernc.org/sqlite rejects) is
 // rewritten to "SELECT * FROM name". The input must already be noise-stripped.
 func normalizeStatement(stmt string) string {
-	if sqltext.LeadingKeyword(stmt) == sqlTABLE {
+	if sqltext.LeadingKeyword(stmt, dialect.SQLite) == sqlTABLE {
 		if rest := strings.TrimSpace(stmt[len(sqlTABLE):]); rest != "" {
 			return "SELECT * FROM " + rest
 		}
@@ -88,13 +95,13 @@ func normalizeStatement(stmt string) string {
 // produces rows only with RETURNING, and everything else (DDL, transaction
 // control, ATTACH, ANALYZE, ...) runs as a no-rowset statement.
 func (sql *SQL) producesRowset(stmt string) bool {
-	switch sqltext.LeadingKeyword(stmt) {
+	switch sqltext.LeadingKeyword(stmt, dialect.SQLite) {
 	case sqlSELECT, sqlVALUES, sqlTABLE, sqlEXPLAIN, sqlPRAGMA:
 		return true
 	case sqlINSERT, sqlUPDATE, sqlDELETE, sqlREPLACE:
 		return hasReturningClause(stmt)
 	case sqlWITH:
-		switch sqltext.MainVerb(stmt) {
+		switch sqltext.MainVerb(stmt, dialect.SQLite) {
 		case sqlINSERT, sqlUPDATE, sqlDELETE, sqlREPLACE:
 			return hasReturningClause(stmt)
 		default:
@@ -112,5 +119,5 @@ func (sql *SQL) producesRowset(stmt string) bool {
 // rowset-producing statement, so the caller runs such a statement through the
 // query path.
 func hasReturningClause(stmt string) bool {
-	return sqltext.HasWord(stmt, "RETURNING")
+	return sqltext.HasWord(stmt, "RETURNING", dialect.SQLite)
 }

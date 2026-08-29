@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/nao1215/sqly/config"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 // TestRunBatchReaderLineByLine covers the batch parsing bugs where a helper
@@ -121,7 +123,9 @@ func TestStatementModifiesData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := slices.ContainsFunc(sqlStatements(mustParse(t, tt.script)), statementModifiesData)
+			got := slices.ContainsFunc(sqlStatements(mustParse(t, tt.script)), func(stmt string) bool {
+				return statementModifiesData(stmt, dialect.SQLite)
+			})
 			if got != tt.want {
 				t.Errorf("statementModifiesData over %q = %v, want %v", tt.script, got, tt.want)
 			}
@@ -187,9 +191,9 @@ func TestSplitSQLStatements_TriggerBody(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			gotStmts, gotRem := splitSQLStatements(tt.input)
+			gotStmts, gotRem := splitSQLStatements(tt.input, dialect.SQLite)
 			if len(gotStmts) != len(tt.wantStmts) {
-				t.Fatalf("splitSQLStatements(%q) stmts = %#v, want %#v", tt.input, gotStmts, tt.wantStmts)
+				t.Fatalf("splitSQLStatements(%q, dialect.SQLite) stmts = %#v, want %#v", tt.input, gotStmts, tt.wantStmts)
 			}
 			for i := range gotStmts {
 				if gotStmts[i] != tt.wantStmts[i] {
@@ -235,8 +239,8 @@ func TestStatementResultMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := statementResultMessage(tt.stmt, tt.affected); got != tt.want {
-				t.Errorf("statementResultMessage(%q, %d) = %q, want %q", tt.stmt, tt.affected, got, tt.want)
+			if got := statementResultMessage(tt.stmt, tt.affected, dialect.SQLite); got != tt.want {
+				t.Errorf("statementResultMessage(%q, %d, dialect.SQLite) = %q, want %q", tt.stmt, tt.affected, got, tt.want)
 			}
 		})
 	}
@@ -343,8 +347,8 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	for _, script := range compatible {
 		t.Run("compatible: "+firstLine(script), func(t *testing.T) {
 			t.Parallel()
-			if got := firstSaveIncompatibleStatement(mustParse(t, withSave(script))); got != "" {
-				t.Errorf("firstSaveIncompatibleStatement(%q) = %q, want \"\"", script, got)
+			if got := firstSaveIncompatibleStatement(mustParse(t, withSave(script)), dialect.SQLite); got != "" {
+				t.Errorf("firstSaveIncompatibleStatement(%q, dialect.SQLite) = %q, want \"\"", script, got)
 			}
 		})
 	}
@@ -369,8 +373,8 @@ func TestFirstSaveIncompatibleStatement(t *testing.T) {
 	for _, script := range incompatible {
 		t.Run("incompatible: "+firstLine(script), func(t *testing.T) {
 			t.Parallel()
-			if got := firstSaveIncompatibleStatement(mustParse(t, withSave(script))); got == "" {
-				t.Errorf("firstSaveIncompatibleStatement(%q) = \"\", want a non-empty incompatible statement", script)
+			if got := firstSaveIncompatibleStatement(mustParse(t, withSave(script)), dialect.SQLite); got == "" {
+				t.Errorf("firstSaveIncompatibleStatement(%q, dialect.SQLite) = \"\", want a non-empty incompatible statement", script)
 			}
 		})
 	}
@@ -424,9 +428,9 @@ func TestSaveIncompatibleIsNotADiagnosisOfEverythingUnrecognized(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := firstSaveIncompatibleStatement(mustParse(t, tt.script))
+			got := firstSaveIncompatibleStatement(mustParse(t, tt.script), dialect.SQLite)
 			if got != tt.want {
-				t.Errorf("firstSaveIncompatibleStatement(%q) = %q, want %q", tt.script, got, tt.want)
+				t.Errorf("firstSaveIncompatibleStatement(%q, dialect.SQLite) = %q, want %q", tt.script, got, tt.want)
 			}
 		})
 	}
@@ -471,9 +475,9 @@ func firstLine(s string) string {
 // exercises the one path production uses.
 func (s *Shell) runParsedScript(t *testing.T, script string) (bool, error) {
 	t.Helper()
-	elements, err := parseScript(script)
+	elements, err := parseScript(script, dialect.SQLite)
 	if err != nil {
-		t.Fatalf("parseScript(%q): %v", script, err)
+		t.Fatalf("parseScript(%q, dialect.SQLite): %v", script, err)
 	}
 	return s.runScriptElements(context.Background(), elements)
 }
@@ -482,9 +486,9 @@ func (s *Shell) runParsedScript(t *testing.T, script string) (bool, error) {
 // parse the shell uses.
 func scriptRunsImport(t *testing.T, script string) bool {
 	t.Helper()
-	elements, err := parseScript(script)
+	elements, err := parseScript(script, dialect.SQLite)
 	if err != nil {
-		t.Fatalf("parseScript(%q): %v", script, err)
+		t.Fatalf("parseScript(%q, dialect.SQLite): %v", script, err)
 	}
 	return runsHelper(elements, importCommand)
 }
@@ -493,9 +497,70 @@ func scriptRunsImport(t *testing.T, script string) bool {
 // parsed script.
 func mustParse(t *testing.T, script string) []scriptElement {
 	t.Helper()
-	elements, err := parseScript(script)
+	elements, err := parseScript(script, dialect.SQLite)
 	if err != nil {
-		t.Fatalf("parseScript(%q): %v", script, err)
+		t.Fatalf("parseScript(%q, dialect.SQLite): %v", script, err)
 	}
 	return elements
+}
+
+// TestSplitSQLStatements_ReadsTheSessionsDialect covers the splitter under a
+// dialect that is not SQLite. The scanner read every dialect by SQLite's rules,
+// so a "#" comment, a backslash-escaped quote and a dollar-quoted string each cut
+// a statement where the dialect had no boundary.
+func TestSplitSQLStatements_ReadsTheSessionsDialect(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name    string
+		script  string
+		dialect dialect.Dialect
+		want    []string
+	}{
+		{
+			name:    "a hash comment is not a statement of its own",
+			script:  "SELECT 1 AS x; # comment\nSELECT 2 AS y;\n",
+			dialect: dialect.MySQL,
+			want:    []string{"SELECT 1 AS x", "SELECT 2 AS y"},
+		},
+		{
+			name:    "a semicolon inside a hash comment ends nothing",
+			script:  "SELECT 1 # note; more\n",
+			dialect: dialect.MySQL,
+			want:    nil,
+		},
+		{
+			name:    "a backslash-escaped quote keeps the string open",
+			script:  `SELECT 'a\';b' AS x;` + "\n",
+			dialect: dialect.MySQL,
+			want:    []string{`SELECT 'a\';b' AS x`},
+		},
+		{
+			name:    "a dollar-quoted string keeps the semicolon inside it",
+			script:  "SELECT $$a;b$$ AS x;\n",
+			dialect: dialect.PostgreSQL,
+			want:    []string{"SELECT $$a;b$$ AS x"},
+		},
+		{
+			name:    "a tripled quote keeps the semicolon inside it",
+			script:  `SELECT '''a;b''' AS x;` + "\n",
+			dialect: dialect.GoogleSQL,
+			want:    []string{`SELECT '''a;b''' AS x`},
+		},
+		{
+			name:    "under SQLite the same text splits as it always did",
+			script:  "SELECT 1 AS x; -- comment\nSELECT 2 AS y;\n",
+			dialect: dialect.SQLite,
+			want:    []string{"SELECT 1 AS x", "SELECT 2 AS y"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, _ := splitSQLStatements(tt.script, tt.dialect)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("splitSQLStatements(%q, %s) = %q, want %q", tt.script, tt.dialect, got, tt.want)
+			}
+		})
+	}
 }
