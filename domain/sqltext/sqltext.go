@@ -160,7 +160,7 @@ func StripNoise(s string, d dialect.Dialect) string {
 	for {
 		s = strings.TrimSpace(s)
 		switch {
-		case strings.HasPrefix(s, "--"), rules.hashComment && strings.HasPrefix(s, "#"):
+		case rules.opensLineComment(s):
 			_, rest, found := strings.Cut(s, "\n")
 			if !found {
 				return "" // the line comment runs to the end of the input
@@ -252,6 +252,13 @@ type syntax struct {
 	// tripleQuote says a tripled quote opens a string, which GoogleSQL alone
 	// writes.
 	tripleQuote bool
+	// dashNeedsBlank says a double dash opens a line comment only when a blank
+	// or a control character follows it, which is MySQL's rule and no other
+	// dialect's: MySQL answers 2 for "SELECT 1--1" where PostgreSQL answers 1.
+	dashNeedsBlank bool
+	// backtickEscape says a backslash escapes inside a backtick-quoted
+	// identifier, which GoogleSQL alone does.
+	backtickEscape bool
 }
 
 // syntaxOf is the rules of one dialect. An unknown one reads as SQLite, which is
@@ -259,11 +266,14 @@ type syntax struct {
 func syntaxOf(d dialect.Dialect) syntax {
 	switch d {
 	case dialect.MySQL:
-		return syntax{hashComment: true, backslashEscape: true, backtickIdent: true}
+		return syntax{hashComment: true, backslashEscape: true, backtickIdent: true, dashNeedsBlank: true}
 	case dialect.PostgreSQL:
 		return syntax{escapeStringPrefix: true, dollarQuote: true, nestedComment: true}
 	case dialect.GoogleSQL:
-		return syntax{hashComment: true, backslashEscape: true, backtickIdent: true, tripleQuote: true}
+		return syntax{
+			hashComment: true, backslashEscape: true, backtickIdent: true,
+			tripleQuote: true, backtickEscape: true,
+		}
 	default:
 		return syntax{bracketIdent: true, backtickIdent: true}
 	}
@@ -326,7 +336,7 @@ func scan(s string, rules syntax, yield func(Token) bool) (inBlockComment bool) 
 func (sc *scanner) skipRegion() bool {
 	rest := sc.s[sc.i:]
 	switch {
-	case strings.HasPrefix(rest, "--"), sc.rules.hashComment && rest[0] == '#':
+	case sc.rules.opensLineComment(rest):
 		sc.skipLineComment()
 	case strings.HasPrefix(rest, "/*"):
 		sc.skipBlockComment()
@@ -337,7 +347,7 @@ func (sc *scanner) skipRegion() bool {
 	case rest[0] == '"':
 		sc.skipQuoted(`"`, 1, sc.rules.backslashEscape)
 	case sc.rules.backtickIdent && rest[0] == '`':
-		sc.skipQuoted("`", 1, false)
+		sc.skipQuoted("`", 1, sc.rules.backtickEscape)
 	case sc.rules.bracketIdent && rest[0] == '[':
 		sc.skipQuoted("]", 1, false)
 	case sc.rules.dollarQuote && rest[0] == '$':
@@ -346,6 +356,22 @@ func (sc *scanner) skipRegion() bool {
 		return false
 	}
 	return true
+}
+
+// opensLineComment reports whether s opens a line comment under these rules.
+// MySQL alone asks for a blank after the double dash, which is why "1--1" is
+// arithmetic there and a comment everywhere else.
+func (r syntax) opensLineComment(s string) bool {
+	if r.hashComment && strings.HasPrefix(s, "#") {
+		return true
+	}
+	if !strings.HasPrefix(s, "--") {
+		return false
+	}
+	if !r.dashNeedsBlank {
+		return true
+	}
+	return len(s) == 2 || s[2] <= ' '
 }
 
 // The GoogleSQL string delimiters that are three characters long.

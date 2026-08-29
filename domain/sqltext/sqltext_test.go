@@ -334,6 +334,21 @@ func TestEachDialectReadsItsOwnRules(t *testing.T) {
 		{"sqlite brackets quote an identifier", "SELECT [a;b] FROM t", dialect.SQLite, 0},
 		{"postgresql brackets subscript", "SELECT a[1]; SELECT 2", dialect.PostgreSQL, 1},
 
+		// MySQL asks for a blank after the double dash, so "1--1" is arithmetic
+		// there and the ";" behind it still ends the statement. Every other
+		// dialect reads a comment. Measured against mysql:8.4, which answers 2
+		// for "SELECT 1--1", and postgres:17, which answers 1.
+		{"mysql needs a blank after the dashes", "SELECT 1--1; SELECT 2", dialect.MySQL, 1},
+		{"mysql reads a comment when the blank is there", "SELECT 1-- x; SELECT 2", dialect.MySQL, 0},
+		{"mysql reads a comment at the end of the input", "SELECT 1--", dialect.MySQL, 0},
+		{"postgresql needs no blank", "SELECT 1--1; SELECT 2", dialect.PostgreSQL, 0},
+		{"sqlite needs no blank", "SELECT 1--1; SELECT 2", dialect.SQLite, 0},
+
+		// GoogleSQL escapes inside a backtick-quoted identifier, so a backtick
+		// written as an escape does not close the name.
+		{"googlesql escapes inside a backtick name", "SELECT " + backtickWithEscape, dialect.GoogleSQL, 0},
+		{"mysql closes the backtick name at the backtick", "SELECT " + backtickWithEscape, dialect.MySQL, 1},
+
 		// What every dialect agrees on, so the rules above did not cost the
 		// rules underneath.
 		{"a semicolon in a single-quoted string", "SELECT 'a;b'", dialect.MySQL, 0},
@@ -354,6 +369,12 @@ func TestEachDialectReadsItsOwnRules(t *testing.T) {
 // to step over. A "#" line under MySQL was left in place, so the statement was
 // classified by a keyword that was not there and reached the engine as an empty
 // one.
+// backtickWithEscape is a quoted identifier holding an escaped backtick and a
+// semicolon: a, an escaped backtick, ";b". GoogleSQL reads the escape and the
+// name runs to the last backtick; every other dialect closes the name at the
+// escaped one.
+const backtickWithEscape = "`a\\`;b` AS x"
+
 func TestStripNoiseReadsTheDialectsComments(t *testing.T) {
 	t.Parallel()
 
@@ -371,6 +392,8 @@ func TestStripNoiseReadsTheDialectsComments(t *testing.T) {
 		{"postgresql steps over a nested block comment", "/* a /* b */ c */ SELECT 1", dialect.PostgreSQL, "SELECT 1"},
 		{"sqlite closes the comment at the first end", "/* a /* b */ c */ SELECT 1", dialect.SQLite, "c */ SELECT 1"},
 		{"every dialect strips a line comment", "-- note\nSELECT 1", dialect.MySQL, "SELECT 1"},
+		{"mysql keeps a double dash with no blank after it", "--1+2", dialect.MySQL, "--1+2"},
+		{"postgresql strips it", "--1+2", dialect.PostgreSQL, ""},
 		{"and a leading empty statement", ";SELECT 1", dialect.PostgreSQL, "SELECT 1"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
