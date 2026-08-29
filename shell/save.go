@@ -132,7 +132,7 @@ func (s *Shell) preflightSave(elements []scriptElement) error {
 	// statement runs, so it is a script that was not accepted (exit 2) rather than
 	// a statement that ran and failed (exit 1), which is what a bare error would
 	// have been classified as.
-	if stmt := firstSaveIncompatibleStatement(elements); stmt != "" {
+	if stmt := firstSaveIncompatibleStatement(elements, s.dialect()); stmt != "" {
 		return &invocationError{Err: fmt.Errorf(
 			".save cannot persist %q: it changes schema or runs a maintenance statement that has no file write-back; only INSERT/UPDATE/DELETE on imported tables are saved",
 			trimGaps(stmt))}

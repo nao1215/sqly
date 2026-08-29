@@ -59,13 +59,18 @@ commonComponents:
   # Every layer has something to release, so the rule has to be reachable from
   # all of them; that is why it is common rather than a dependency edge.
   - cleanup
-  # sqltext is the same shape: a dependency-free leaf holding the one walk over
-  # SQL text that tells code from string literals, quoted identifiers, and
-  # comments. The shell asks it where a statement ends, the interactor asks it
-  # what kind of statement this is, and neither owns the other.
+  # sqltext is the same shape: a leaf holding the one walk over SQL text that
+  # tells code from string literals, quoted identifiers, and comments. The shell
+  # asks it where a statement ends, the interactor asks it what kind of statement
+  # this is, and neither owns the other. Its one dependency is the dialect
+  # vocabulary of filesql, declared below, because the answers differ by dialect
+  # and that is where sqly's --dialect value comes from.
   - sqltext
 
 deps:
+  sqltext:
+    canUse:
+      - filesql
   di:
     mayDependOn:
       - model

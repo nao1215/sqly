@@ -84,17 +84,17 @@ scenarios:
             contains:
               - "2025-11-15,c.d"
 
-  - name: "mysql dialect rejects an unsupported INTERVAL unit"
-    description: "MySQL's compound units (DAY_HOUR and friends) have no single-unit equivalent, so they must be reported rather than silently approximated."
+  - name: "mysql dialect adds a compound INTERVAL unit"
+    description: "MySQL's compound units (DAY_HOUR and friends) have no single-unit equivalent, and filesql answers them with a helper of its own; the value is what mysql:8.4 answers for the same expression."
     steps:
       - fixture: *users
       - run:
-          command: sqly --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 DAY_HOUR)" users.csv
+          command: sqly --output-format csv --dialect mysql --sql "SELECT DATE_ADD('2026-01-01', INTERVAL 1 DAY_HOUR) AS v" users.csv
       - assert:
-          exit_code: 1
-          stderr:
+          exit_code: 0
+          stdout:
             contains:
-              - "unsupported INTERVAL unit"
+              - "2026-01-01 01:00:00"
 
   - name: "mysql dialect answers SUBSTR from position 0 the way MySQL does"
     steps:
@@ -354,14 +354,14 @@ scenarios:
           exit_code: 1
           stderr:
             contains:
-              - "SELECT * EXCEPT is not supported"
+              - "the EXCEPT clause of SELECT * is not supported"
       - run:
           command: sqly --dialect bigquery --sql "SELECT ARRAY<INT64>[1] AS v" users.csv
       - assert:
           exit_code: 1
           stderr:
             contains:
-              - "ARRAY is not supported; SQLite has no array type"
+              - "arrays are not supported; SQLite has no array type"
 
   - name: "googlesql dialect rejects an unsupported construct (QUALIFY)"
     steps:
@@ -480,7 +480,7 @@ scenarios:
           command: sqly --output-format csv users.csv
           stdin: |
             .dialect mysql
-            SELECT DATE_ADD('2026-01-01', INTERVAL 1 DAY_HOUR) AS v;
+            SELECT BIT_XOR(1) AS v;
             SELECT 'not reached' AS v;
             .exit
       - assert:
@@ -489,8 +489,74 @@ scenarios:
             not_contains: "not reached"
           stderr:
             contains:
-              - "unsupported INTERVAL unit"
+              - "BIT_XOR is not supported"
               - "batch stopped"
+
+  # sqly split a script into statements by SQLite's lexical rules whatever the
+  # --dialect said, so a "#" comment cut a statement in the wrong place, a
+  # backslash-escaped quote closed a string that was still open, and a
+  # dollar-quoted string ended at the first ";" inside it.
+  - name: "a hash comment does not cut a mysql statement"
+    steps:
+      - fixture: *users
+      - fixture:
+          file: inline.sql
+          content: |
+            SELECT 1 AS x # note; more
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql-file inline.sql users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1"
+
+  - name: "a hash comment line in a mysql script is skipped"
+    steps:
+      - fixture: *users
+      - fixture:
+          file: hash.sql
+          content: |
+            SELECT 1 AS x; # comment
+            SELECT 2 AS y;
+      - run:
+          command: sqly --output-format markdown --dialect mysql --sql-file hash.sql users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "1"
+              - "2"
+
+  - name: "a backslash-escaped quote holds a mysql statement together"
+    steps:
+      - fixture: *users
+      - fixture:
+          file: escaped.sql
+          content: |
+            SELECT 'a\';b' AS x;
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql-file escaped.sql users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "a';b"
+
+  - name: "a dollar-quoted string holds a postgresql statement together"
+    steps:
+      - fixture: *users
+      - fixture:
+          file: dollar.sql
+          content: |
+            SELECT $$a;b$$ AS x;
+      - run:
+          command: sqly --output-format csv --dialect postgresql --sql-file dollar.sql users.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "a;b"
 
   - name: "an unsupported construct is rejected with a clear error"
     steps:

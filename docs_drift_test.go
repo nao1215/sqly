@@ -2241,7 +2241,7 @@ func TestDocs_QuotedMessagesAreTheOnesTheBinaryPrints(t *testing.T) {
 		},
 		{
 			name:    "the construct a dialect rejects rather than passing to SQLite",
-			message: "translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported: SELECT DISTINCT ON (g) g, v FROM t",
+			message: "translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported; write the first row of each group with a window function at line 1, column 1: SELECT DISTINCT ON (g) g, v FROM t",
 			doc:     "website/content/dialects.md",
 			spec:    "e2e/atago/v1_0_bugs.atago.yaml",
 		},

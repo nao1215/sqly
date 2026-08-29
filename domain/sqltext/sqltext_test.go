@@ -3,6 +3,8 @@ package sqltext
 import (
 	"slices"
 	"testing"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 // TestMainVerb covers what the scanner has to get right to answer "which verb do
@@ -57,8 +59,8 @@ func TestMainVerb(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := MainVerb(tt.stmt); got != tt.want {
-				t.Errorf("MainVerb(%q) = %q, want %q", tt.stmt, got, tt.want)
+			if got := MainVerb(tt.stmt, dialect.SQLite); got != tt.want {
+				t.Errorf("MainVerb(%q, dialect.SQLite) = %q, want %q", tt.stmt, got, tt.want)
 			}
 		})
 	}
@@ -98,8 +100,8 @@ func TestHasWord(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := HasWord(tt.stmt, "RETURNING"); got != tt.want {
-				t.Errorf("HasWord(%q, RETURNING) = %v, want %v", tt.stmt, got, tt.want)
+			if got := HasWord(tt.stmt, "RETURNING", dialect.SQLite); got != tt.want {
+				t.Errorf("HasWord(%q, RETURNING, dialect.SQLite) = %v, want %v", tt.stmt, got, tt.want)
 			}
 		})
 	}
@@ -131,8 +133,8 @@ func TestEndsInsideBlockComment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := EndsInsideBlockComment(tt.in); got != tt.want {
-				t.Errorf("EndsInsideBlockComment(%q) = %v, want %v", tt.in, got, tt.want)
+			if got := EndsInsideBlockComment(tt.in, dialect.SQLite); got != tt.want {
+				t.Errorf("EndsInsideBlockComment(%q, dialect.SQLite) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -163,8 +165,8 @@ func TestStripNoise(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := StripNoise(tt.in); got != tt.want {
-				t.Errorf("StripNoise(%q) = %q, want %q", tt.in, got, tt.want)
+			if got := StripNoise(tt.in, dialect.SQLite); got != tt.want {
+				t.Errorf("StripNoise(%q, dialect.SQLite) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -193,8 +195,8 @@ func TestLeadingKeyword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := LeadingKeyword(tt.in); got != tt.want {
-				t.Errorf("LeadingKeyword(%q) = %q, want %q", tt.in, got, tt.want)
+			if got := LeadingKeyword(tt.in, dialect.SQLite); got != tt.want {
+				t.Errorf("LeadingKeyword(%q, dialect.SQLite) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -215,7 +217,7 @@ func TestTokensReportsOffsetsAndDepth(t *testing.T) {
 		depth int
 	}
 	var tokens []got
-	for tok := range Tokens(stmt) {
+	for tok := range Tokens(stmt, dialect.SQLite) {
 		tokens = append(tokens, got{tok.Kind, tok.Text(stmt), tok.Depth})
 	}
 
@@ -230,7 +232,7 @@ func TestTokensReportsOffsetsAndDepth(t *testing.T) {
 		{Semicolon, ";", 0},
 	}
 	if !slices.Equal(tokens, want) {
-		t.Errorf("Tokens(%q) =\n  %v\nwant\n  %v", stmt, tokens, want)
+		t.Errorf("Tokens(%q, dialect.SQLite) =\n  %v\nwant\n  %v", stmt, tokens, want)
 	}
 }
 
@@ -240,7 +242,7 @@ func TestTokensStopsWhenCallerBreaks(t *testing.T) {
 	t.Parallel()
 
 	seen := 0
-	for range Tokens("SELECT a, b, c, d, e FROM t") {
+	for range Tokens("SELECT a, b, c, d, e FROM t", dialect.SQLite) {
 		seen++
 		break
 	}
@@ -255,13 +257,151 @@ func TestTokensStopsWhenCallerBreaks(t *testing.T) {
 func TestScannerIgnoresMultibyteText(t *testing.T) {
 	t.Parallel()
 
-	if got := MainVerb("WITH c AS (SELECT '日本語;--/*') UPDATE 表 SET a = 1"); got != "UPDATE" {
+	if got := MainVerb("WITH c AS (SELECT '日本語;--/*') UPDATE 表 SET a = 1", dialect.SQLite); got != "UPDATE" {
 		t.Errorf("MainVerb over multibyte text = %q, want UPDATE", got)
 	}
-	if HasWord("SELECT '返却RETURNING'", "RETURNING") {
+	if HasWord("SELECT '返却RETURNING'", "RETURNING", dialect.SQLite) {
 		t.Error("RETURNING inside a multibyte literal was matched")
 	}
-	if EndsInsideBlockComment("SELECT '/*日本語*/'") {
+	if EndsInsideBlockComment("SELECT '/*日本語*/'", dialect.SQLite) {
 		t.Error("a comment opener inside a multibyte literal opened a comment")
+	}
+}
+
+// TestEachDialectReadsItsOwnRules covers what changes between the dialects sqly
+// accepts. The scanner read every one of them by SQLite's rules, so a statement
+// was cut where the dialect had no boundary -- or one was invented that was never
+// there.
+//
+// The answer is the semicolons the walk finds, because that is what decides where
+// a statement ends: none means the text is one statement, and one means it is
+// two.
+func TestEachDialectReadsItsOwnRules(t *testing.T) {
+	t.Parallel()
+
+	semicolons := func(s string, d dialect.Dialect) int {
+		n := 0
+		for tok := range Tokens(s, d) {
+			if tok.Kind == Semicolon {
+				n++
+			}
+		}
+		return n
+	}
+
+	for _, tt := range []struct {
+		name    string
+		stmt    string
+		dialect dialect.Dialect
+		want    int
+	}{
+		// "#" opens a line comment in MySQL and GoogleSQL, so a ";" behind one
+		// ends nothing.
+		{"mysql hash comment hides a semicolon", "SELECT 1 # note; more", dialect.MySQL, 0},
+		{"googlesql hash comment hides a semicolon", "SELECT 1 # note; more", dialect.GoogleSQL, 0},
+		{"sqlite has no hash comment", "SELECT 1 # note; more", dialect.SQLite, 1},
+		// In PostgreSQL "#" begins an operator, so the text after it is code.
+		{"postgresql reads a hash as an operator", "SELECT a #> b; SELECT 2", dialect.PostgreSQL, 1},
+
+		// A backslash escapes a quote in MySQL and GoogleSQL, so the string runs
+		// past the ";" and the whole text is one statement.
+		{"mysql backslash keeps the string open", `SELECT 'a\';b' AS x`, dialect.MySQL, 0},
+		{"googlesql backslash keeps the string open", `SELECT 'a\';b' AS x`, dialect.GoogleSQL, 0},
+		{"sqlite reads the backslash as a character", `SELECT 'a\';b' AS x`, dialect.SQLite, 1},
+		// PostgreSQL escapes only in an E-prefixed string.
+		{"postgresql escapes in an E string", `SELECT E'a\';b' AS x`, dialect.PostgreSQL, 0},
+		{"postgresql does not escape in a plain string", `SELECT 'a\';b' AS x`, dialect.PostgreSQL, 1},
+		// A word ending in E is not an escape prefix.
+		{"a word ending in E is not a prefix", `SELECT CASE'a\';b'`, dialect.PostgreSQL, 1},
+
+		// A dollar-quoted string is PostgreSQL's alone.
+		{"postgresql dollar quoting hides a semicolon", "SELECT $$a;b$$ AS x", dialect.PostgreSQL, 0},
+		{"postgresql tagged dollar quoting", "SELECT $tag$a;b$tag$ AS x", dialect.PostgreSQL, 0},
+		{"a parameter is not a dollar quote", "SELECT $1; SELECT $2", dialect.PostgreSQL, 1},
+		{"sqlite has no dollar quoting", "SELECT $$a;b$$ AS x", dialect.SQLite, 1},
+
+		// A block comment nests in PostgreSQL, so the first "*/" does not close
+		// the outer one and the ";" inside stays commented out.
+		{"postgresql nests block comments", "SELECT /* a /* b */ ;c */ 1", dialect.PostgreSQL, 0},
+		{"sqlite closes at the first end", "SELECT /* a /* b */ ;c */ 1", dialect.SQLite, 1},
+
+		// GoogleSQL writes a tripled quote, which holds a quote of its own.
+		{"googlesql triple quoting hides a semicolon", `SELECT '''a;b''' AS x`, dialect.GoogleSQL, 0},
+		{"googlesql triple double quoting", `SELECT """a;b""" AS x`, dialect.GoogleSQL, 0},
+
+		// A bracket quotes an identifier in SQLite alone; elsewhere it
+		// subscripts, and the ";" after it still ends the statement.
+		{"sqlite brackets quote an identifier", "SELECT [a;b] FROM t", dialect.SQLite, 0},
+		{"postgresql brackets subscript", "SELECT a[1]; SELECT 2", dialect.PostgreSQL, 1},
+
+		// MySQL asks for a blank after the double dash, so "1--1" is arithmetic
+		// there and the ";" behind it still ends the statement. Every other
+		// dialect reads a comment. Measured against mysql:8.4, which answers 2
+		// for "SELECT 1--1", and postgres:17, which answers 1.
+		{"mysql needs a blank after the dashes", "SELECT 1--1; SELECT 2", dialect.MySQL, 1},
+		{"mysql reads a comment when the blank is there", "SELECT 1-- x; SELECT 2", dialect.MySQL, 0},
+		{"mysql reads a comment at the end of the input", "SELECT 1--", dialect.MySQL, 0},
+		{"postgresql needs no blank", "SELECT 1--1; SELECT 2", dialect.PostgreSQL, 0},
+		{"sqlite needs no blank", "SELECT 1--1; SELECT 2", dialect.SQLite, 0},
+
+		// GoogleSQL escapes inside a backtick-quoted identifier, so a backtick
+		// written as an escape does not close the name.
+		{"googlesql escapes inside a backtick name", "SELECT " + backtickWithEscape, dialect.GoogleSQL, 0},
+		{"mysql closes the backtick name at the backtick", "SELECT " + backtickWithEscape, dialect.MySQL, 1},
+
+		// What every dialect agrees on, so the rules above did not cost the
+		// rules underneath.
+		{"a semicolon in a single-quoted string", "SELECT 'a;b'", dialect.MySQL, 0},
+		{"a semicolon in a line comment", "SELECT 1 -- a;b", dialect.PostgreSQL, 0},
+		{"two statements", "SELECT 1; SELECT 2", dialect.GoogleSQL, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := semicolons(tt.stmt, tt.dialect); got != tt.want {
+				t.Errorf("semicolons in %q under %s = %d, want %d", tt.stmt, tt.dialect, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestStripNoiseReadsTheDialectsComments covers the comment forms StripNoise has
+// to step over. A "#" line under MySQL was left in place, so the statement was
+// classified by a keyword that was not there and reached the engine as an empty
+// one.
+// backtickWithEscape is a quoted identifier holding an escaped backtick and a
+// semicolon: a, an escaped backtick, ";b". GoogleSQL reads the escape and the
+// name runs to the last backtick; every other dialect closes the name at the
+// escaped one.
+const backtickWithEscape = "`a\\`;b` AS x"
+
+func TestStripNoiseReadsTheDialectsComments(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name    string
+		stmt    string
+		dialect dialect.Dialect
+		want    string
+	}{
+		{"mysql strips a leading hash comment", "# note\nSELECT 1", dialect.MySQL, "SELECT 1"},
+		{"googlesql strips a leading hash comment", "# note\nSELECT 1", dialect.GoogleSQL, "SELECT 1"},
+		{"a hash-only statement strips to nothing", "# note", dialect.MySQL, ""},
+		{"sqlite keeps a hash, which is not a comment there", "# note\nSELECT 1", dialect.SQLite, "# note\nSELECT 1"},
+		{"postgresql keeps a hash, which begins an operator", "# note\nSELECT 1", dialect.PostgreSQL, "# note\nSELECT 1"},
+		{"postgresql steps over a nested block comment", "/* a /* b */ c */ SELECT 1", dialect.PostgreSQL, "SELECT 1"},
+		{"sqlite closes the comment at the first end", "/* a /* b */ c */ SELECT 1", dialect.SQLite, "c */ SELECT 1"},
+		{"every dialect strips a line comment", "-- note\nSELECT 1", dialect.MySQL, "SELECT 1"},
+		{"mysql keeps a double dash with no blank after it", "--1+2", dialect.MySQL, "--1+2"},
+		{"postgresql strips it", "--1+2", dialect.PostgreSQL, ""},
+		{"and a leading empty statement", ";SELECT 1", dialect.PostgreSQL, "SELECT 1"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := StripNoise(tt.stmt, tt.dialect); got != tt.want {
+				t.Errorf("StripNoise(%q, %s) = %q, want %q", tt.stmt, tt.dialect, got, tt.want)
+			}
+		})
 	}
 }

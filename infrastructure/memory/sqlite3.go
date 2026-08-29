@@ -13,6 +13,8 @@ import (
 	"github.com/nao1215/sqly/domain/repository"
 	"github.com/nao1215/sqly/domain/sqltext"
 	infra "github.com/nao1215/sqly/infrastructure"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 type sqlite3Repository struct {
@@ -246,8 +248,11 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 // trailing comment, of a string literal, and of a column aliased `from` as the
 // clause, and then read the word after it — which, when that "from" was the last
 // word, was past the end of the list.
+// The query reaching this repository has already been translated, so it is
+// SQLite whatever the caller wrote it in, which is the dialect every question
+// below is asked in.
 func extractTableName(query string) string {
-	for token := range sqltext.Tokens(query) {
+	for token := range sqltext.Tokens(query, dialect.SQLite) {
 		if token.Kind == sqltext.Word && strings.EqualFold(token.Text(query), "FROM") {
 			return firstIdentifier(query[token.End:])
 		}
@@ -265,12 +270,12 @@ func extractTableName(query string) string {
 func firstIdentifier(s string) string {
 	var parts []string
 	for {
-		part, rest, ok := readIdentifierPart(sqltext.StripNoise(s))
+		part, rest, ok := readIdentifierPart(sqltext.StripNoise(s, dialect.SQLite))
 		if !ok {
 			break
 		}
 		parts = append(parts, part)
-		s = sqltext.StripNoise(rest)
+		s = sqltext.StripNoise(rest, dialect.SQLite)
 		if !strings.HasPrefix(s, ".") {
 			break
 		}
@@ -321,7 +326,7 @@ func isIdentifierByte(c byte) bool {
 // row count off that crashes rather than returning an error. Callers reach here
 // with one when a dialect translation removes the only thing the statement held.
 func (r *sqlite3Repository) Exec(ctx context.Context, statement string) (int64, error) {
-	if sqltext.StripNoise(statement) == "" {
+	if sqltext.StripNoise(statement, dialect.SQLite) == "" {
 		return 0, nil
 	}
 

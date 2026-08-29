@@ -91,12 +91,12 @@ sqly --output-format csv --dialect googlesql --sql "SELECT SAFE.DIVIDE(1, 0) AS 
 
 ## What is rejected
 
-A construct with no SQLite equivalent fails with an error that names it, rather than reaching SQLite and producing a confusing parse error:
+A construct with no SQLite equivalent fails with an error that names it, says where it was written, and where there is one says what to write instead, rather than reaching SQLite and producing a confusing parse error:
 
 ```shell
 $ sqly --dialect postgresql --sql "SELECT DISTINCT ON (g) g, v FROM t" t.csv
 Warning: PostgreSQL syntax is translated to SQLite; execution uses SQLite semantics, not PostgreSQL semantics.
-translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported: SELECT DISTINCT ON (g) g, v FROM t
+translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported; write the first row of each group with a window function at line 1, column 1: SELECT DISTINCT ON (g) g, v FROM t
 ```
 
 That output is asserted against the binary by

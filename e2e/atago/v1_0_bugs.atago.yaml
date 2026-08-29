@@ -433,7 +433,7 @@ scenarios:
           exit_code: 0
           stdout:
             line: 1
-            equals: "translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported: SELECT DISTINCT ON (g) g, v FROM t"
+            equals: "translate error (postgresql): dialect: syntax not supported on SQLite backend: DISTINCT ON is not supported; write the first row of each group with a window function at line 1, column 1: SELECT DISTINCT ON (g) g, v FROM t"
       - assert:
           stdout:
             not_contains:

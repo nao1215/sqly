@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/nao1215/sqly/domain/sqltext"
+
+	"github.com/nao1215/filesql/dialect"
 )
 
 // A script is what sqly reads when it is not being typed at: a `--sql-file`, a
@@ -78,7 +80,7 @@ func (e scriptElement) commandName() string {
 // its commands. A helper command sharing a line with SQL is rejected: reading
 // "SELECT 1; .save" as two things depends on knowing where the statement ended,
 // which is exactly what the reader cannot show the writer.
-func parseScript(script string) ([]scriptElement, error) {
+func parseScript(script string, d dialect.Dialect) ([]scriptElement, error) {
 	script = strings.TrimPrefix(script, string(utf8BOM))
 
 	var (
@@ -88,7 +90,7 @@ func parseScript(script string) ([]scriptElement, error) {
 	)
 	for lineIndex, line := range strings.Split(script, "\n") {
 		lineNo := lineIndex + 1
-		if atStatementBoundary(pending.String()) {
+		if atStatementBoundary(pending.String(), d) {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" {
 				continue
@@ -111,7 +113,7 @@ func parseScript(script string) ([]scriptElement, error) {
 		pending.WriteString("\n")
 
 		buf := pending.String()
-		stmts, remainder := splitSQLStatements(buf)
+		stmts, remainder := splitSQLStatements(buf, d)
 		if len(stmts) == 0 {
 			continue
 		}
@@ -147,7 +149,7 @@ func parseScript(script string) ([]scriptElement, error) {
 	}
 
 	// A trailing statement with no ";" still runs; trailing comments alone do not.
-	if leftover := sqltext.StripNoise(pending.String()); leftover != "" {
+	if leftover := sqltext.StripNoise(pending.String(), d); leftover != "" {
 		start, end := statementLineSpan(pending.String(), pendingStart, leftover)
 		elements = append(elements, scriptElement{
 			kind: elementSQL, text: leftover, startLine: start, endLine: end,

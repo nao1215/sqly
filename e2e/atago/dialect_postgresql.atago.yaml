@@ -206,7 +206,7 @@ scenarios:
       - assert:
           exit_code: 1
           stderr:
-            contains: "generate_series is not supported"
+            contains: "GENERATE_SERIES returns a set of rows"
       - assert:
           stderr:
             not_contains: "no such table"

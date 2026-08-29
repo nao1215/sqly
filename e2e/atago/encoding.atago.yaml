@@ -196,10 +196,10 @@ scenarios:
           stderr:
             not_contains: "--encoding"
 
-  # filesql v0.36.0 also names the column a duplicate name is, which a header
-  # whose duplicate is the empty name could not say before: the message ended at
-  # the colon.
-  - name: says which column a duplicate name is
+  # filesql v0.52.0 gives a blank header the name of its position instead of
+  # refusing the file as a duplicate of the empty name, so a header written with
+  # two trailing commas loads and every column can be named in a query.
+  - name: a blank header takes the name of its position
     steps:
       - fixture:
           file: unnamed.csv
@@ -207,7 +207,23 @@ scenarios:
             a,,
             1,2,3
       - run:
-          command: sqly --sql "SELECT * FROM unnamed" unnamed.csv
+          command: sqly --output-format csv --sql "SELECT a, column_2, column_3 FROM unnamed" unnamed.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "1,2,3"
+
+  # A name the file wrote twice is still refused, and the message says which
+  # column it is.
+  - name: says which column a duplicate name is
+    steps:
+      - fixture:
+          file: repeated.csv
+          content: |
+            a,b,a
+            1,2,3
+      - run:
+          command: sqly --sql "SELECT * FROM repeated" repeated.csv
       - assert:
           exit_code: 3
           stderr:
