@@ -2,9 +2,29 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* A script is split into statements by the rules of the dialect it is written in, so `--dialect` reaches the splitter and not only the translator. sqly read every dialect by SQLite's lexical rules, and cut a statement where the dialect had no boundary or invented one that was never there. `sqly --dialect mysql --sql "SELECT 1 # note; more"` was refused as two statements, and a `#` line in a script became a statement of its own rather than a comment sqly skips. A backslash-escaped quote closed a string that MySQL and GoogleSQL leave open, so `SELECT 'a\';b'` was cut in half and the half reached the translator as an unterminated literal. A PostgreSQL dollar-quoted string ended at the first `;` inside it, and a PostgreSQL block comment did not nest, so a comment holding a comment was closed early. A GoogleSQL tripled quote is one string now rather than three. What `#` means is the reason this could not be one rule for every dialect: it opens a comment in MySQL and GoogleSQL, and begins the `#>` and `#>>` operators in PostgreSQL.
+
+* Importing a CSV whose header row holds two blank cells works. `a,,` -- a header written with two trailing commas, which a spreadsheet export produces -- was refused with `duplicate column name: ""`, naming a column name the file never wrote, and neither the file nor any file beside it could be read. A blank header now takes the name of its position, so that file imports with the columns `a`, `column_2` and `column_3`, and each can be named in a query. A name the file did write twice is still refused, with the column it is.
+
+* An Excel export followed by an import keeps a row whose cells are all empty. `.save data.xlsx` wrote such a row as a row holding no cell, and reading that file back dropped it, so a table of ten rows came back with nine. A cell holding only spaces in a number column is stored as missing, so an ordinary sheet reached this without ever holding an empty string.
+
+* A number around a million written into a CSV, TSV or LTSV export keeps the notation the source used. `.save` of a column holding `2500000` wrote `2.5e+06`, so a file exported from sqly and handed to another tool no longer read the way the file that was imported did.
+
+* A CSV cell holding a decimal too large for a float64, such as `1e400`, keeps its digits instead of importing as an infinity. Such a column is imported as text now, which is how an integer too large to hold has always been imported.
+
+* A CSV, TSV or LTSV file wider than 2000 columns is refused with a message saying how wide it is and how wide a table can be. It used to fail with SQLite's own `too many columns`, which named an internal staging table for a file read from stdin.
+
+* An LTSV file read from standard input cannot ask for unbounded memory. A record with no terminator was read however long it was, where the same input in CSV or JSONL is refused at 64 MiB.
+
 ### Changed
 
-* filesql is updated to v0.51.0. Nothing an import or an export does changes: the release refuses two things sqly never asks filesql for -- an LTSV dump of a table with no rows, which sqly writes with its own writer, and a dialect handed to a load into a database the caller owns, which sqly does not pass -- and documents what an Excel load costs. sqly stays current with it.
+* filesql is updated to v0.52.0, which rebuilt the dialect translation as a lexer, parser, syntax tree, lowering and renderer. Two things change for sqly. A query outside the supported subset is refused by name, with the line and column it was written at, instead of being handed to SQLite to fail on its own terms: `sqly --dialect postgresql --sql "SELECT a #> b"` now says the JSON path operators are not supported and what to write instead, where it used to reach SQLite as an unrecognized token. And a query holding only comments is refused as holding no statement rather than translating to nothing.
+
+* The dialects answer more of what their own engines answer. MySQL's compound `INTERVAL` units work -- `DATE_ADD('2026-01-01', INTERVAL 1 DAY_HOUR)` answers what mysql:8.4 answers rather than being refused -- and so do `MAKE_SET`, `EXPORT_SET`, `JSON_LENGTH`, `TO_SECONDS`, `CONVERT_TZ`, `STR_TO_DATE` with `%j` and `%f`, PostgreSQL's `to_date` and `to_timestamp` over the templates `to_char` writes, its `age`, `scale`, `trim_scale` and `json_typeof`, and its `|/`, `||/`, `@` and JSON `-` and `#-` operators. A value a dialect refuses is refused here too rather than answered: `to_date('2024-02-30', 'YYYY-MM-DD')` is an error, `REGEXP_LIKE(x, '')` is an error, and `to_number` with an empty template is NULL.
+
+* An error message from a rejected query carries the line and column of the construct and, where there is one, what to write instead. Scripts that match on the old wording need updating.
 
 ### Removed
 

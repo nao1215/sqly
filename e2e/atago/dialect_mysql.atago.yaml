@@ -180,7 +180,7 @@ scenarios:
           exit_code: 1
           stderr:
             contains:
-              - "DISTINCT with SEPARATOR"
+              - "cannot combine DISTINCT with a separator"
 
   - name: "mysql should accept typed date literals"
     description: "DATE '2026-01-01' and TIMESTAMP '...' are valid MySQL. SQLite parses neither, so the keyword has to be dropped ahead of the literal."

@@ -202,4 +202,4 @@ scenarios:
           exit_code: 1
           stderr:
             contains:
-              - "array literals are not supported"
+              - "arrays are not supported"
