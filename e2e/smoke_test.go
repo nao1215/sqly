@@ -474,6 +474,11 @@ func TestSmoke_AtomicPadAndEmptyJSON(t *testing.T) {
 // in MySQL and in GoogleSQL but not in SQLite, so it survived the check for an
 // empty statement and was translated into nothing, and running nothing gave the
 // driver no result to count rows from.
+//
+// The "#" statements are refused as a command line now rather than as a
+// statement that ran and failed, because the check for an empty statement reads
+// the session's dialect and sees the comment for what it is. That is the same
+// answer, and the same exit code, that "--sql \"-- hello\"" has always given.
 func TestSmoke_NoStatementCrashesTheProcess(t *testing.T) {
 	csv := filepath.Join("testdata", "user.csv")
 
@@ -495,11 +500,21 @@ func TestSmoke_NoStatementCrashesTheProcess(t *testing.T) {
 		{
 			name:     "a mysql comment-only statement is refused",
 			args:     []string{"--dialect", "mysql", "--sql", "# hello", csv},
-			wantCode: 1,
+			wantCode: 2,
 		},
 		{
 			name:     "a googlesql comment-only statement is refused",
 			args:     []string{"--dialect", "googlesql", "--sql", "# hello", csv},
+			wantCode: 2,
+		},
+		{
+			name:     "a sqlite line comment is refused the same way",
+			args:     []string{"--sql", "-- hello", csv},
+			wantCode: 2,
+		},
+		{
+			name:     "a hash is not a comment under sqlite and reaches the engine",
+			args:     []string{"--sql", "# hello", csv},
 			wantCode: 1,
 		},
 	}
