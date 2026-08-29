@@ -22,7 +22,11 @@ jobs:
           # from its own manifest and pins GOTOOLCHAIN to what it installs, so a
           # runner that had 1.25.12 refused a go.mod asking for 1.25.13 and the
           # job failed on a version this repository never chose.
-          - "1"
+          #
+          # "stable" rather than "1" for the ceiling: setup-go resolves "1" from
+          # the same manifest, which lags a fresh Go release, so "1" was still
+          # handing out 1.26 after 1.27.0 shipped.
+          - "stable"
           - "1.25.13"
           - "1.26.6"
       fail-fast: false
