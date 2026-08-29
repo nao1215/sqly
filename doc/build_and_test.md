@@ -32,7 +32,7 @@ E2E suite runs the built `sqly` binary rather than linking a library; install it
 separately with the version CONTRIBUTING.md pins, which is the one CI uses:
 
 ```shell
-$ go install github.com/nao1215/atago@v0.20.0
+$ go install github.com/nao1215/atago@v0.21.0
 ```
 
 ### Build & Test
