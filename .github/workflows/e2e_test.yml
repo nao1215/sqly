@@ -30,12 +30,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: "go.mod"
+          go-version: "stable"
 
       - name: Install atago
         uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
         with:
-          version: v0.20.0
+          version: v0.21.0
 
       - name: Run atago end-to-end tests
         # The hermetic runner builds sqly and runs the suite in a temp-backed
@@ -71,12 +71,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: "go.mod"
+          go-version: "stable"
 
       - name: Install atago
         uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
         with:
-          version: v0.20.0
+          version: v0.21.0
 
       - name: Build sqly
         run: go build -o sqly.exe main.go

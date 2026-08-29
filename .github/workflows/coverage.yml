@@ -32,13 +32,13 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1"
+          go-version: "stable"
           check-latest: true
 
       - name: Install atago
         uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
         with:
-          version: v0.20.0
+          version: v0.21.0
 
       # Combines unit-test coverage with self-hosted E2E coverage (the atago
       # suite runs a `go build -cover` sqly and collects covdata via
