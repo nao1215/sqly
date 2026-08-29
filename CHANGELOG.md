@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v1.3.0](https://github.com/nao1215/sqly/compare/v1.2.2...v1.3.0) (2026-08-29)
 
 ### Bug Fixes
 
