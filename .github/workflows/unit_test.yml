@@ -23,9 +23,15 @@ jobs:
           # runner that had 1.25.12 refused a go.mod asking for 1.25.13 and the
           # job failed on a version this repository never chose.
           #
-          # "stable" rather than "1" for the ceiling: setup-go resolves "1" from
-          # the same manifest, which lags a fresh Go release, so "1" was still
-          # handing out 1.26 after 1.27.0 shipped.
+          # "1" and "stable" are both here, and they are not redundant: setup-go
+          # resolves "1" from the same manifest, which lags a fresh Go release,
+          # so "1" was still handing out 1.26 after 1.27.0 shipped. "stable" is
+          # the leg that actually tests the newest Go. "1" stays because main's
+          # branch protection requires the three "Unit test (linux) (<os>, 1)"
+          # contexts by name; dropping it would leave those permanently absent
+          # and every pull request blocked. It can go once the protection rule
+          # names the "stable" contexts instead.
+          - "1"
           - "stable"
           - "1.25.13"
           - "1.26.6"
