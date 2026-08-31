@@ -1432,10 +1432,30 @@ func (s *Shell) dispatch(ctx context.Context, req string) error {
 		if s.commands.hasCmd(argv[0]) {
 			return s.commands[argv[0]].execute(ctx, s, argv[1:])
 		}
-		return errors.New("no such sqly command: " + color.CyanString(req))
+		msg := "no such sqly command: " + color.CyanString(req)
+		if guess := s.nearestCommand(argv[0]); guess != "" {
+			msg += ". " + guess
+		}
+		return errors.New(msg)
 	}
 
 	return s.execSQL(ctx, req)
+}
+
+// nearestCommand names the helper command a mistyped one is a typo of, or is
+// empty when nothing is close enough to offer. The set of names is small and
+// fixed, so a typo in one has an answer the shell can give rather than leaving
+// the reader to run .help and scan it.
+func (s *Shell) nearestCommand(typed string) string {
+	names := make([]string, 0, len(s.commands))
+	for _, c := range s.commands {
+		names = append(names, c.name)
+	}
+	// Sorted, so a typo equally far from two commands names the same one every
+	// time rather than whichever the map happened to yield first.
+	sort.Strings(names)
+
+	return didYouMean(typed, names)
 }
 
 // runScript runs a multi-statement script that prints to stdout.

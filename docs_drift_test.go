@@ -2221,7 +2221,7 @@ func TestDocs_QuotedMessagesAreTheOnesTheBinaryPrints(t *testing.T) {
 		},
 		{
 			name:    "the hint that lists the tables a session has",
-			message: `hint: this session has no table "staf". Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules`,
+			message: `hint: this session has no table "staf". Did you mean "staff"? Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules`,
 			doc:     referencePage,
 			spec:    "e2e/atago/error_hygiene.atago.yaml",
 		},
