@@ -4,6 +4,7 @@ Session
   .help              show this help
   .mode MODE         change output mode (table, vertical, csv, tsv, ltsv, json, jsonl, markdown, ...)
   .dialect [NAME]    show or set the query dialect (sqlite, mysql, postgresql, googlesql)
+  .edit              edit the last statement in $VISUAL or $EDITOR and run what is saved
   .clear             clear the terminal screen
   .exit              exit sqly
 

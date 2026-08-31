@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### New Features
+
+* `.edit` opens the last statement in `$VISUAL` or `$EDITOR` and runs what is saved. A long query is edited rather than retyped, and the file it opens ends in `.sql` so an editor that highlights by extension does. An empty file runs nothing, and so does an editor that exits non-zero, which is how an edit is abandoned. It needs a terminal to hand to the editor, so it is refused in a script.
+
 ### Bug Fixes
 
 * `.dialect` decides where a statement ends, the way `--dialect` already did. Translation and execution used the dialect `.dialect` had set, while everything that reads the text — where a statement ends, whether the interactive buffer holds a finished one — used the dialect the process started with, so the two halves of one setting disagreed for the rest of the session. `.dialect mysql` followed by `SELECT 1 # note; more` was cut at a semicolon MySQL has commented out, and `more` was run as a statement of its own; the same line under `--dialect mysql` ran correctly. At the prompt the same statement waited on a continuation for a rest that had already been written and never ran. A script is now read as it goes, so a `.dialect` inside one applies to the lines after it.

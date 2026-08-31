@@ -617,6 +617,126 @@ scenarios:
             contains: "RAN_ON_ENTER"
             not_contains: "...>" # it ran on that Enter rather than buffering
 
+  # .edit hands the terminal to an editor and takes it back. A prompt owns the
+  # terminal while it lives -- raw mode, and a goroutine reading it -- so the
+  # session is closed for the editor and a fresh one opened after. What the
+  # editor saves is echoed and run, and the prompt that follows is a working
+  # one, which is the half that used to be broken: before prompt v0.0.21 the
+  # reopened session received nothing at all.
+  #
+  # The "editor" is a shell script that rewrites the file, which is what an
+  # editor does; a real one cannot be driven from a scripted session. What is
+  # under test is the handover, not the editing.
+  - name: .edit runs what the editor saved and returns to a working prompt
+    skip:
+      os: windows # the fake editor is a POSIX shell script
+    steps:
+      - fixture: *capability_people
+      - fixture:
+          file: fake-editor.sh
+          mode: "0755"
+          content: |
+            #!/bin/sh
+            printf "SELECT 'FROM' || '_EDITOR' AS e;\n" > "$1"
+      - pty:
+          command: sqly people.csv
+          env:
+            EDITOR: "${workdir}/fake-editor.sh"
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            # A statement first, so the session has used WatchInterrupt before
+            # the editor runs: that is what left a reader on the terminal, and
+            # without it the reopened prompt worked by accident.
+            - send: "SELECT 'BEFORE' || '_EDIT' AS b;\r"
+            - expect: "BEFORE_EDIT"
+            - expect: '\(table\)\$'
+            - send: ".edit\r"
+            - expect: "FROM_EDITOR" # echoed, then run
+            - expect: '\(table\)\$' # a fresh session, reading input again
+            - send: "SELECT 'STILL' || '_ALIVE' AS a;\r"
+            - expect: "STILL_ALIVE" # the reopened prompt reads what is typed into it
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "FROM_EDITOR"
+              - "STILL_ALIVE"
+
+  # .edit opens the statement that ran before it, which is the whole point: a
+  # long query is edited rather than retyped.
+  - name: .edit opens the statement that ran before it
+    skip:
+      os: windows
+    steps:
+      - fixture: *capability_people
+      - fixture:
+          file: echo-editor.sh
+          mode: "0755"
+          content: |
+            #!/bin/sh
+            # Turn what the editor was given into a statement that prints it.
+            # The marker is concatenated by the engine, so it exists only in the
+            # result and never in the echo of a line typed earlier.
+            seed=$(tr -d '\n;' < "$1")
+            printf "SELECT 'SEED' || '_WAS_%s' AS seed;\n" "$seed" > "$1"
+      - pty:
+          command: sqly people.csv
+          env:
+            EDITOR: "${workdir}/echo-editor.sh"
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 25;\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: ".edit\r"
+            - expect: "SEED_WAS_SELECT name FROM people WHERE age = 25"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "SEED_WAS_SELECT name FROM people WHERE age = 25"
+
+  # An editor that exits non-zero is how an edit is abandoned (":cq" in vim).
+  # Nothing runs, and the session carries on.
+  - name: .edit runs nothing when the editor is abandoned
+    skip:
+      os: windows
+    steps:
+      - fixture: *capability_people
+      - fixture:
+          file: refusing-editor.sh
+          mode: "0755"
+          content: |
+            #!/bin/sh
+            printf "SELECT 'NEVER' || '_RUN' AS n;\n" > "$1"
+            exit 1
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          env:
+            EDITOR: "${workdir}/refusing-editor.sh"
+          session:
+            - expect: '\(table\)\$'
+            - send: ".edit\r"
+            - expect: "nothing was run"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            not_contains: "NEVER_RUN"
+
   # Editing an earlier line of a buffered statement leaves the screen alone. The
   # renderer erased the block it had drawn by moving up its height, which is
   # where the cursor is only while it sits on the last line; a left arrow
