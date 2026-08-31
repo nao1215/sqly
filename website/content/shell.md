@@ -86,6 +86,21 @@ sqly:~/data(table)$ CREATE TABLE t (a); INSERT INTO t VALUES (1); SELECT a FROM 
 
 Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
 
+A continuation line opens where the statement is, not at the margin: it keeps
+the indentation of the line it continues and steps in one level for each
+parenthesis that line left open.
+
+```text
+sqly:~/data(table)$ SELECT name FROM user WHERE identifier IN (
+   ...>   SELECT identifier FROM orders WHERE total > (
+   ...>     SELECT avg(total) FROM orders
+   ...>   )
+   ...> );
+```
+
+A parenthesis inside a string literal, a quoted name, or a comment is text and
+indents nothing, and which is which follows the current dialect.
+
 ## Editing a long statement
 
 `.edit` opens the last statement in your editor and runs what you save:

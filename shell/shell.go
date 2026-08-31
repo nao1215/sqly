@@ -274,6 +274,9 @@ func NewShell(
 			prompt.WithIsComplete(func(input string) bool {
 				return sqlInputComplete(input, shell.dialect())
 			}),
+			prompt.WithAutoIndent(func(before string) string {
+				return sqlIndent(before, shell.dialect())
+			}),
 			prompt.WithContinuationPrefix(continuationPrefix),
 			prompt.WithWordEscape(),
 			prompt.WithKeyMap(sqlyKeyMap()),

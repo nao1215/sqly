@@ -83,6 +83,16 @@ func Tokens(s string, d dialect.Dialect) iter.Seq[Token] {
 	}
 }
 
+// OpenDepth reports how many parentheses are open at the end of s: the nesting
+// a statement continued on the next line would be written at.
+//
+// A parenthesis inside a string literal, a quoted identifier, or a comment is
+// text and is not counted, which is the reason this cannot be a subtraction of
+// two counts over the raw string.
+func OpenDepth(s string, d dialect.Dialect) int {
+	return scanned(s, syntaxOf(d), func(Token) bool { return true }).depth
+}
+
 // EndsInsideBlockComment reports whether s stops before the "*/" that would
 // close a block comment it opened. A "/*" inside a string literal or a line
 // comment opens nothing, which is the reason this cannot be a search for the
@@ -295,6 +305,13 @@ type scanner struct {
 // case that answer describes only the part reached -- which is why
 // EndsInsideBlockComment never stops early.
 func scan(s string, rules syntax, yield func(Token) bool) (inBlockComment bool) {
+	return scanned(s, rules, yield).commentDepth > 0
+}
+
+// scanned is scan with the scanner handed back, for a caller that wants what
+// the walk ended in rather than what it found on the way: the parenthesis
+// nesting still open, or whether a block comment is still unclosed.
+func scanned(s string, rules syntax, yield func(Token) bool) *scanner {
 	sc := &scanner{s: s, rules: rules}
 	for sc.i < len(sc.s) {
 		if sc.skipRegion() {
@@ -311,7 +328,7 @@ func scan(s string, rules syntax, yield func(Token) bool) (inBlockComment bool) 
 			sc.i++
 		case c == ';':
 			if !yield(Token{Kind: Semicolon, Start: sc.i, End: sc.i + 1, Depth: sc.depth}) {
-				return sc.commentDepth > 0
+				return sc
 			}
 			sc.i++
 		case isWordByte(c):
@@ -320,13 +337,13 @@ func scan(s string, rules syntax, yield func(Token) bool) (inBlockComment bool) 
 				sc.i++
 			}
 			if !yield(Token{Kind: Word, Start: start, End: sc.i, Depth: sc.depth}) {
-				return sc.commentDepth > 0
+				return sc
 			}
 		default:
 			sc.i++
 		}
 	}
-	return sc.commentDepth > 0
+	return sc
 }
 
 // skipRegion steps over a comment or a quoted region beginning at the cursor,
