@@ -14,6 +14,14 @@
 
 * Pasting a line whose tab lands near the right edge of the terminal no longer draws the cursor a row below the text, or erases the line above the prompt on the next keystroke.
 
+* Ctrl+R finds a statement written in Japanese by its characters. The prompt's fuzzy match walked the candidate a byte at a time, so nothing outside ASCII could match unless the query was a prefix or a substring of it.
+
+* Up followed by Down brings back the statement that was being typed, instead of emptying the line.
+
+* The history file is created readable by its owner alone. It was created with the umask's mode, which on a common default left every query -- including a connection string with a password in it -- readable by everyone on the machine.
+
+* The history file stays under its size limit, and rotates once rather than on every save. Rotation used to write a file the size of the one it had just moved aside, so within three saves every backup held a near-identical copy of the newest history and the oldest queries had been deleted.
+
 ## [v1.4.0](https://github.com/nao1215/sqly/compare/v1.3.0...v1.4.0) (2026-08-31)
 
 ### New Features
