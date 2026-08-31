@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e coverage smoke demo clean vet fmt chkfmt website website-serve
+.PHONY: build test test-e2e coverage smoke demo themes clean vet fmt chkfmt website website-serve
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
@@ -39,6 +39,9 @@ website: ## Build the documentation website into website/public (requires hugo)
 
 website-serve: ## Serve the documentation website locally with live reload (requires hugo)
 	cd website && hugo server
+
+themes: ## Render one screenshot per shell theme into doc/img/themes (requires vhs, ttyd, ffmpeg)
+	sh scripts/render_themes.sh
 
 demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, ffmpeg)
 	for tape in doc/vhs/*.tape; do vhs "$$tape"; done

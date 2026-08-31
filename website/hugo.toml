@@ -41,6 +41,11 @@ pageRef = "/shell"
 weight = 40
 
 [[menus.main]]
+name = "Themes"
+pageRef = "/themes"
+weight = 45
+
+[[menus.main]]
 name = "Formats"
 pageRef = "/formats"
 weight = 50
