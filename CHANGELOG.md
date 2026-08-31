@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Bug Fixes
+
+* The prompt no longer crashes on a statement ending in a backslash when the line holds a name written in Japanese, or any other character outside ASCII: the continuation was found by counting bytes into a buffer indexed in runes, and the slice went past its end. sqly went down with it and left the terminal in raw mode.
+
+* Ctrl+W deletes one word on a line that is not written in ASCII. Every letter outside ASCII counted as a separator, so `SELECT 名前` followed by Ctrl+W deleted `SELECT` as well, and a word holding an accented letter was cut in the middle.
+
+* Ctrl+R over a statement entered across several lines leaves nothing on screen. The search listed each match as one row but drew a multiline statement across several, and only the rows it had counted were erased.
+
+* An arrow key during Ctrl+R moves through the matches instead of cancelling the search and typing `[A` into the line.
+
+* Pasting a line whose tab lands near the right edge of the terminal no longer draws the cursor a row below the text, or erases the line above the prompt on the next keystroke.
+
 ## [v1.4.0](https://github.com/nao1215/sqly/compare/v1.3.0...v1.4.0) (2026-08-31)
 
 ### New Features
