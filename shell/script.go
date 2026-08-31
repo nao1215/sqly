@@ -61,6 +61,23 @@ func (e scriptElement) commandName() string {
 	return ""
 }
 
+// dialectSelectedBy reports the dialect a ".dialect NAME" line selects. It
+// answers false for every other line, and for a .dialect the command itself
+// would reject — a bare one, which only prints the setting, one with too many
+// arguments, and an unknown name — so a line that changes nothing when it runs
+// changes nothing about how the script is read either.
+func dialectSelectedBy(line string) (dialect.Dialect, bool) {
+	argv, err := splitArgs(line)
+	if err != nil || len(argv) != 2 || argv[0] != dialectCommand {
+		return dialect.SQLite, false
+	}
+	d, err := dialect.Parse(argv[1])
+	if err != nil {
+		return dialect.SQLite, false
+	}
+	return d, true
+}
+
 // parseScript splits a script into the statements and helper commands it runs.
 //
 // A line is a helper command when it begins with "." and no SQL statement is
@@ -80,6 +97,14 @@ func (e scriptElement) commandName() string {
 // its commands. A helper command sharing a line with SQL is rejected: reading
 // "SELECT 1; .save" as two things depends on knowing where the statement ended,
 // which is exactly what the reader cannot show the writer.
+//
+// d is the dialect the script opens in, not the one it keeps: a ".dialect" the
+// script runs changes how the lines after it are read. Where a statement ends
+// is a question only the dialect answers — "#" opens a comment in MySQL and
+// GoogleSQL, PostgreSQL alone writes a dollar-quoted string — and the whole
+// script used to be split by the dialect the process started with, so a
+// statement written for the dialect the script had just selected was cut where
+// that dialect has no boundary, or run together where it has one.
 func parseScript(script string, d dialect.Dialect) ([]scriptElement, error) {
 	script = strings.TrimPrefix(script, string(utf8BOM))
 
@@ -102,6 +127,12 @@ func parseScript(script string, d dialect.Dialect) ([]scriptElement, error) {
 				elements = append(elements, scriptElement{
 					kind: elementDotCommand, text: trimmed, startLine: lineNo, endLine: lineNo,
 				})
+				// The one helper command that changes how the rest of the script is
+				// read. It is applied here, as the line is parsed, rather than when
+				// the script runs: by then the split has already happened.
+				if selected, ok := dialectSelectedBy(trimmed); ok {
+					d = selected
+				}
 				continue
 			}
 		}

@@ -232,36 +232,42 @@ func NewShell(
 	// Apply the initial SQL dialect from --dialect. Loading always uses SQLite;
 	// only user queries run through ExecSQL are translated.
 	usecases.query.SetDialect(arg.Dialect)
-	return &Shell{
-		argument: arg,
-		config:   cfg,
-		commands: cmds,
-		usecases: usecases,
-		state:    state,
-		files:    defaultFileOps(),
-		newPrompt: func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
-			return prompt.New(
-				prefix,
-				prompt.WithCompleter(completer),
-				prompt.WithMemoryHistory(historySize),
-				prompt.WithTheme(prompt.ThemeNightOwl),
-				prompt.WithMultiline(true),
-				prompt.WithIsComplete(func(input string) bool {
-					return sqlInputComplete(input, arg.Dialect)
-				}),
-				prompt.WithContinuationPrefix(continuationPrefix),
-				prompt.WithWordEscape(),
-				prompt.WithKeyMap(sqlyKeyMap()),
-				prompt.WithPersistentRawMode(),
-			)
-		},
+	shell := &Shell{
+		argument:       arg,
+		config:         cfg,
+		commands:       cmds,
+		usecases:       usecases,
+		state:          state,
+		files:          defaultFileOps(),
 		stdin:          os.Stdin,
 		isTTY:          config.IsInputFromTTY,
 		historyEnabled: true,
 		tableSources:   make(map[string]string),
 		allowRemote:    arg.AllowRemote,
 		httpClient:     newRemoteClient(),
-	}, nil
+	}
+	// The factory closes over the shell rather than over arg, so the question
+	// "is what has been typed a finished statement" is asked of the dialect in
+	// effect now. Closed over arg it was asked of the one --dialect started
+	// with, and a statement typed after .dialect mysql waited on a continuation
+	// for a rest that had already been written.
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+		return prompt.New(
+			prefix,
+			prompt.WithCompleter(completer),
+			prompt.WithMemoryHistory(historySize),
+			prompt.WithTheme(prompt.ThemeNightOwl),
+			prompt.WithMultiline(true),
+			prompt.WithIsComplete(func(input string) bool {
+				return sqlInputComplete(input, shell.dialect())
+			}),
+			prompt.WithContinuationPrefix(continuationPrefix),
+			prompt.WithWordEscape(),
+			prompt.WithKeyMap(sqlyKeyMap()),
+			prompt.WithPersistentRawMode(),
+		)
+	}
+	return shell, nil
 }
 
 // Run start sqly shell.
@@ -874,7 +880,19 @@ func (s *Shell) promptPrefix() string {
 // says where a statement ends: "#" opens a comment in MySQL and GoogleSQL, a
 // backslash escapes a quote there, and PostgreSQL alone writes a dollar-quoted
 // string and nests its block comments.
+//
+// It is the dialect in effect now, not the one --dialect started with. The query
+// usecase holds it because that is what .dialect sets and what translation
+// reads; taking it from the startup flag instead left the two halves of one
+// setting disagreeing for the rest of the session, so a statement was translated
+// as MySQL and split as SQLite.
+//
+// The fallbacks are for a partially built shell in a test: neither is nil in a
+// session the DI container assembled.
 func (s *Shell) dialect() dialect.Dialect {
+	if s.usecases.query != nil {
+		return s.usecases.query.Dialect()
+	}
 	if s.argument == nil {
 		return dialect.SQLite
 	}

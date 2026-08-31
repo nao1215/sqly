@@ -24,6 +24,10 @@ current dialect: mysql (available: sqlite, mysql, postgresql, googlesql)
 Both lines go to stderr, so a script that switches dialect still writes only its
 rows to stdout.
 
+The choice also decides where a statement ends, for every line after it: `#`
+opens a comment in MySQL and GoogleSQL, PostgreSQL alone writes a dollar-quoted
+string. In a script, a `.dialect` applies to the lines that follow it.
+
 Loading a file always uses SQLite. Only the query text is translated.
 
 ## This is translation, not emulation

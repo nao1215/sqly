@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* `.dialect` decides where a statement ends, the way `--dialect` already did. Translation and execution used the dialect `.dialect` had set, while everything that reads the text — where a statement ends, whether the interactive buffer holds a finished one — used the dialect the process started with, so the two halves of one setting disagreed for the rest of the session. `.dialect mysql` followed by `SELECT 1 # note; more` was cut at a semicolon MySQL has commented out, and `more` was run as a statement of its own; the same line under `--dialect mysql` ran correctly. At the prompt the same statement waited on a continuation for a rest that had already been written and never ran. A script is now read as it goes, so a `.dialect` inside one applies to the lines after it.
+
 ### New Features
 
 * Completion reads the statement being typed. A table position — after `FROM`, `JOIN`, `INSERT INTO`, `UPDATE` — offers table names and no longer offers columns, which cannot go there. A `SELECT` list, a `WHERE`, `ON`, `GROUP BY`, `ORDER BY` or `SET` offers the columns of the tables the statement names before the rest of the session's. And `alias.` or `table.` offers that table's columns spelled with the qualifier, resolving the alias from the statement's own `FROM` and `JOIN` clauses. The statement is read with the dialect's own lexical rules, so a keyword inside a string literal or a comment is the text it is.

@@ -586,6 +586,37 @@ scenarios:
           stdout:
             contains: "nickname"
 
+  # Whether what has been typed is a finished statement is a question only the
+  # dialect answers. The prompt asked it under the dialect the process started
+  # with, so after ".dialect mysql" a line whose terminator is followed by a "#"
+  # comment -- a comment MySQL has and SQLite does not -- waited on a
+  # continuation for a rest that had already been written, and the statement
+  # never ran.
+  - name: a statement finished under the dialect .dialect selected runs on that Enter
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".dialect mysql\r"
+            - expect: "dialect set to mysql"
+            - expect: '\(table\)\$'
+            # CONCAT because "||" is logical OR in MySQL, not concatenation, so
+            # the marker is built by a function the translation carries over.
+            - send: "SELECT CONCAT('RAN','_ON_ENTER') AS r; # a mysql comment\r"
+            - expect: "RAN_ON_ENTER"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "RAN_ON_ENTER"
+            not_contains: "...>" # it ran on that Enter rather than buffering
+
   # Editing an earlier line of a buffered statement leaves the screen alone. The
   # renderer erased the block it had drawn by moving up its height, which is
   # where the cursor is only while it sits on the last line; a left arrow
