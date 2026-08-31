@@ -304,3 +304,22 @@ scenarios:
             contains:
               - "needs an interactive terminal"
               - "--sql-file"
+
+  # A theme sqly does not have is refused by name, with the ones it does have.
+  # The exit code says the invocation was wrong rather than the statement.
+  - name: .theme with a name no theme has is refused
+    steps:
+      - fixture:
+          file: users.csv
+          content: |
+            id,name
+            1,Alice
+      - run:
+          command: sqly users.csv
+          stdin: ".theme no-such-theme\n"
+      - assert:
+          exit_code: 2
+          stderr:
+            contains:
+              - 'unknown theme "no-such-theme"'
+              - "dracula"

@@ -56,6 +56,21 @@ const (
 	Word Kind = iota
 	// Semicolon is a ";" in code, which is where a statement can end.
 	Semicolon
+	// String is a string literal, from its opening delimiter to its closing
+	// one, or to the end of the text when it was never closed.
+	//
+	// A doubled quote inside a literal closes one and opens the next, so such a
+	// literal arrives as two String regions that touch. Nothing between them is
+	// code, which is what the distinction is for.
+	String
+	// QuotedIdentifier is a name written in quotes, delimiters included. Which
+	// quotes those are is the dialect's business: a backtick everywhere but
+	// PostgreSQL, a bracket in SQLite, and a double quote everywhere MySQL's
+	// reading of it as a string does not apply.
+	QuotedIdentifier
+	// Comment is a line or block comment, opener included, and closer where it
+	// has one -- for a line comment that is the newline ending it.
+	Comment
 )
 
 // Token is one significant thing found in code — outside every string literal,
@@ -76,8 +91,32 @@ type Token struct {
 // carries offsets rather than a copy of every word in the statement.
 func (t Token) Text(s string) string { return s[t.Start:t.End] }
 
-// Tokens iterates the code tokens of s in order, reading s as d spells SQL.
+// Tokens iterates the code tokens of s in order, reading s as d spells SQL: the
+// words and semicolons that are code, and nothing that is a string literal, a
+// quoted identifier, or a comment. It is what a caller asking "what does this
+// statement say" wants, because those regions say nothing.
+//
+// See Regions for the walk that reports them too.
 func Tokens(s string, d dialect.Dialect) iter.Seq[Token] {
+	return func(yield func(Token) bool) {
+		scan(s, syntaxOf(d), func(tok Token) bool {
+			if tok.Kind != Word && tok.Kind != Semicolon {
+				return true
+			}
+			return yield(tok)
+		})
+	}
+}
+
+// Regions iterates everything s is made of, in order and without overlapping:
+// the code tokens Tokens yields, and the string literals, quoted identifiers,
+// and comments it does not.
+//
+// It is the walk for a caller that needs to say something about those regions
+// rather than see past them -- coloring them on screen, counting them, pointing
+// at one. Whitespace, operators, and parentheses are not reported, so a caller
+// covering the whole of s has to fill the gaps between what it is given.
+func Regions(s string, d dialect.Dialect) iter.Seq[Token] {
 	return func(yield func(Token) bool) {
 		scan(s, syntaxOf(d), yield)
 	}
@@ -259,6 +298,10 @@ type syntax struct {
 	// backtickIdent says a backtick quotes an identifier. PostgreSQL alone does
 	// not.
 	backtickIdent bool
+	// doubleQuoteIsString says a double-quoted run is a string rather than a
+	// name, which is MySQL's default reading and no other dialect's. It changes
+	// nothing about where the run ends, only what it is called.
+	doubleQuoteIsString bool
 	// tripleQuote says a tripled quote opens a string, which GoogleSQL alone
 	// writes.
 	tripleQuote bool
@@ -276,7 +319,10 @@ type syntax struct {
 func syntaxOf(d dialect.Dialect) syntax {
 	switch d {
 	case dialect.MySQL:
-		return syntax{hashComment: true, backslashEscape: true, backtickIdent: true, dashNeedsBlank: true}
+		return syntax{
+			hashComment: true, backslashEscape: true, backtickIdent: true,
+			dashNeedsBlank: true, doubleQuoteIsString: true,
+		}
 	case dialect.PostgreSQL:
 		return syntax{escapeStringPrefix: true, dollarQuote: true, nestedComment: true}
 	case dialect.GoogleSQL:
@@ -314,7 +360,11 @@ func scan(s string, rules syntax, yield func(Token) bool) (inBlockComment bool) 
 func scanned(s string, rules syntax, yield func(Token) bool) *scanner {
 	sc := &scanner{s: s, rules: rules}
 	for sc.i < len(sc.s) {
-		if sc.skipRegion() {
+		start := sc.i
+		if kind, ok := sc.skipRegion(); ok {
+			if !yield(Token{Kind: kind, Start: start, End: sc.i, Depth: sc.depth}) {
+				return sc
+			}
 			continue
 		}
 		switch c := sc.s[sc.i]; {
@@ -350,29 +400,43 @@ func scanned(s string, rules syntax, yield func(Token) bool) *scanner {
 // reporting whether it stepped over one. A region that never closes runs to the
 // end of the input, which is what leaves an unterminated block comment open for
 // EndsInsideBlockComment to report.
-func (sc *scanner) skipRegion() bool {
+func (sc *scanner) skipRegion() (Kind, bool) {
 	rest := sc.s[sc.i:]
 	switch {
 	case sc.rules.opensLineComment(rest):
 		sc.skipLineComment()
+		return Comment, true
 	case strings.HasPrefix(rest, "/*"):
 		sc.skipBlockComment()
+		return Comment, true
 	case sc.rules.tripleQuote && (strings.HasPrefix(rest, tripleSingle) || strings.HasPrefix(rest, tripleDouble)):
 		sc.skipQuoted(rest[:3], 3, sc.rules.backslashEscape)
+		return String, true
 	case rest[0] == '\'':
 		sc.skipQuoted("'", 1, sc.rules.backslashEscape || sc.escapeStringOpens())
+		return String, true
 	case rest[0] == '"':
 		sc.skipQuoted(`"`, 1, sc.rules.backslashEscape)
+		// A double-quoted run is a name in standard SQL and a string in MySQL,
+		// which is the one dialect that reads it that way by default.
+		if sc.rules.doubleQuoteIsString {
+			return String, true
+		}
+		return QuotedIdentifier, true
 	case sc.rules.backtickIdent && rest[0] == '`':
 		sc.skipQuoted("`", 1, sc.rules.backtickEscape)
+		return QuotedIdentifier, true
 	case sc.rules.bracketIdent && rest[0] == '[':
 		sc.skipQuoted("]", 1, false)
+		return QuotedIdentifier, true
 	case sc.rules.dollarQuote && rest[0] == '$':
-		return sc.skipDollarQuoted()
+		if sc.skipDollarQuoted() {
+			return String, true
+		}
+		return Word, false
 	default:
-		return false
+		return Word, false
 	}
-	return true
 }
 
 // opensLineComment reports whether s opens a line comment under these rules.

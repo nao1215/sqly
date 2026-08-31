@@ -229,10 +229,33 @@ func atStatementBoundary(pending string, d dialect.Dialect) bool {
 // change that was never there while hiding the syntax error that actually
 // stopped the run. An unrecognized statement is left to run and to fail with
 // SQLite's own message.
-var saveIncompatibleKeywords = map[string]bool{
-	"CREATE": true, "DROP": true, "ALTER": true, "RENAME": true,
-	kwReindex: true, kwAnalyze: true, "PRAGMA": true, "VACUUM": true,
-	"ATTACH": true, "DETACH": true, "GRANT": true, "REVOKE": true,
+// ddlKeywords are the verbs that change what tables a session holds or what
+// shape they have. They are named once because three questions are asked of
+// them: whether a statement invalidates the cached schema, whether .save can
+// persist what a script did, and whether a word is drawn as a keyword.
+var ddlKeywords = map[string]bool{
+	sqlCreate: true, "ALTER": true, "DROP": true,
+	"RENAME": true, "ATTACH": true, "DETACH": true,
+}
+
+// saveIncompatibleKeywords are the DDL verbs plus the maintenance and
+// permission statements .save cannot persist either: they change the database
+// rather than the tables sqly imported, so a run holding one has nothing to
+// write back.
+var saveIncompatibleKeywords = withDDLKeywords(
+	kwReindex, kwAnalyze, "PRAGMA", "VACUUM", "GRANT", "REVOKE",
+)
+
+// withDDLKeywords is the DDL verbs together with the extra ones given.
+func withDDLKeywords(extra ...string) map[string]bool {
+	out := make(map[string]bool, len(ddlKeywords)+len(extra))
+	for word := range ddlKeywords {
+		out[word] = true
+	}
+	for _, word := range extra {
+		out[word] = true
+	}
+	return out
 }
 
 func statementSaveCompatible(stmt string, d dialect.Dialect) bool {
@@ -310,11 +333,7 @@ func statementModifiesData(stmt string, d dialect.Dialect) bool {
 // "ALTER TABLE t ADD COLUMN c" leaves that set untouched and the cached columns
 // would stay as they were before the statement ran.
 func statementChangesSchema(stmt string, d dialect.Dialect) bool {
-	switch sqltext.LeadingKeyword(stmt, d) {
-	case "CREATE", "ALTER", "DROP", "ATTACH", "DETACH", "RENAME":
-		return true
-	}
-	return false
+	return ddlKeywords[sqltext.LeadingKeyword(stmt, d)]
 }
 
 // statementResultMessage returns the stdout line for a no-rowset statement. A

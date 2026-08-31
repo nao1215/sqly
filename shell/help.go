@@ -32,6 +32,7 @@ func helpGroups() []helpGroup {
 			{helpCommand, "show this help"},
 			{modeCommand + " MODE", "change output mode (table, vertical, csv, tsv, ltsv, json, jsonl, markdown, ...)"},
 			{dialectCommand + " [NAME]", "show or set the query dialect (sqlite, mysql, postgresql, googlesql)"},
+			{themeCommand + " [NAME]", "show or set the colors SQL is drawn in (remembered across sessions)"},
 			{editCommand, "edit the last statement in $VISUAL or $EDITOR and run what is saved"},
 			{clearCommand, "clear the terminal screen"},
 			{exitCommand, "exit sqly"},

@@ -39,6 +39,7 @@ func NewCommands() CommandList {
 	c[saveCommand] = command{execute: c.saveCommand, name: saveCommand, description: "write tables back to files: .save DIR (to a directory) or .save --in-place (overwrite sources)"}
 	c[dialectCommand] = command{execute: c.dialectCommand, name: dialectCommand, description: "show or set the SQL dialect for queries (sqlite, mysql, postgresql, googlesql)"}
 	c[editCommand] = command{execute: c.editCommand, name: editCommand, description: "edit the last statement in $VISUAL or $EDITOR and run what is saved"}
+	c[themeCommand] = command{execute: c.themeCommand, name: themeCommand, description: "show or set the colors SQL is drawn in; the choice is remembered"}
 	return c
 }
 
