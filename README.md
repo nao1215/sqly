@@ -288,8 +288,8 @@ sqly:~/data(json)$ .save ./out
 
 `.edit` reopens the last statement in `$VISUAL` or `$EDITOR` and runs what you
 save, so a long query is edited rather than retyped. SQL is colored as you type
-it, over twelve themes `.theme` switches between; the choice is remembered
-across sessions.
+it; `.theme` switches between the
+[themes](https://nao1215.github.io/sqly/themes/) and remembers the choice.
 
 `.help` lists every command; the [shell page](https://nao1215.github.io/sqly/shell/) documents them.
 

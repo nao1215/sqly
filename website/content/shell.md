@@ -120,6 +120,8 @@ directory, so the next session opens the same way. `SQLY_SETTINGS_PATH` names
 that file if you want it elsewhere. `.theme none` turns coloring off and is
 remembered like any other choice.
 
+The [themes page](/themes/) shows every one of them on the same statement.
+
 A theme sets the prompt's own colors too, so a light theme is light throughout.
 What counts as a string, a name in quotes, or a comment follows the current
 dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is.
