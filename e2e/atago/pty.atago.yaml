@@ -559,6 +559,33 @@ scenarios:
           stdout:
             contains: "Carol"
 
+  # A column added by SQL is completable in the same session. Completion caches
+  # each table's columns and keys the cache by the table-name set, which an
+  # ALTER TABLE ... ADD COLUMN leaves untouched, so the columns offered stayed
+  # as they were before the statement ran.
+  - name: completes a column added by ALTER TABLE
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "ALTER TABLE people ADD COLUMN nickname;\r"
+            - expect: "statement executed successfully"
+            - expect: '\(table\)\$'
+            - send: "SELECT nickn\t"
+            - expect: "nickname" # the new column reached completion
+            - send: " FROM people WHERE name = 'Alice';\r"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "nickname"
+
   # Editing an earlier line of a buffered statement leaves the screen alone. The
   # renderer erased the block it had drawn by moving up its height, which is
   # where the cursor is only while it sits on the last line; a left arrow

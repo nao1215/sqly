@@ -1322,9 +1322,10 @@ func completionTableKey(tables []*model.Table) string {
 	return strings.Join(names, "\x00")
 }
 
-// invalidateCompletionCache drops the cached table/column completion
-// suggestions, forcing the next completion to rebuild them. It is called after an
-// import, which can change a table's columns without changing the table-name set.
+// invalidateCompletionCache drops the cached completion schema, forcing the next
+// completion to rebuild it. It is called after an import and after a
+// schema-changing statement, both of which can change a table's columns without
+// changing the table-name set the cache is keyed by.
 func (s *Shell) invalidateCompletionCache() {
 	s.completionTableKey = ""
 	s.completionSchema = nil
@@ -1511,6 +1512,13 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	table, affectedRows, err := s.usecases.query.ExecSQL(ctx, req)
 	if err != nil {
 		return s.withMissingNameHint(ctx, err)
+	}
+	// A statement that changes what tables exist or what columns they have
+	// invalidates the completion schema. The cache is keyed by the table-name
+	// set, which an "ALTER TABLE t ADD COLUMN c" leaves untouched, so without
+	// this the columns offered are the ones from before the statement ran.
+	if statementChangesSchema(req, s.dialect()) {
+		s.invalidateCompletionCache()
 	}
 	// Track whether this statement actually changed data, so write-back runs only
 	// for a run that modified a table (not an EXPLAIN or a zero-row DML).

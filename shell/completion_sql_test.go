@@ -113,6 +113,11 @@ func TestCompletionResolvesQualifiedColumns(t *testing.T) {
 			want:  []string{"U.name"},
 		},
 		{
+			name:  "an alias for a table typed in another case still offers its columns",
+			input: "SELECT * FROM USERS u WHERE u.em",
+			want:  []string{"u.email"},
+		},
+		{
 			name:  "an unknown qualifier offers nothing rather than every column",
 			input: "SELECT * FROM users u WHERE nosuch.",
 			want:  nil,
@@ -309,5 +314,36 @@ func TestCompletionEveryCandidateMatchesTheTypedWord(t *testing.T) {
 				t.Errorf("getCompletions(%q) offered %q, which the typed word %q does not prefix", input, text, word)
 			}
 		}
+	}
+}
+
+// TestCompletionSeesAColumnAddedBySQL covers the cache after a statement that
+// changes a table's shape. The cache is keyed by the table-name set, which an
+// ALTER TABLE ... ADD COLUMN leaves untouched, so the columns kept were the
+// ones from before the statement ran and the new one could not be completed.
+func TestCompletionSeesAColumnAddedBySQL(t *testing.T) {
+	// Serial: newShell builds an in-memory DB and a temp history path.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := s.exec(ctx, "CREATE TABLE t (a)"); err != nil {
+		t.Fatalf("CREATE TABLE: %v", err)
+	}
+	// Warm the cache so the ALTER below has a stale entry to invalidate.
+	if got := completionTexts(s.getCompletions(ctx, "SELECT a")); !slices.Contains(got, "a") {
+		t.Fatalf("the column a was not completed before the ALTER: %v", got)
+	}
+
+	if err := s.exec(ctx, "ALTER TABLE t ADD COLUMN newcol"); err != nil {
+		t.Fatalf("ALTER TABLE: %v", err)
+	}
+
+	got := completionTexts(s.getCompletions(ctx, "SELECT newc"))
+	if !slices.Contains(got, "newcol") {
+		t.Errorf("a column added by ALTER TABLE is not completed: %v", got)
 	}
 }

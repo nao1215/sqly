@@ -184,6 +184,8 @@ func TestAnalysisTableOf(t *testing.T) {
 		{name: "resolution is case-insensitive", text: "SELECT * FROM users u WHERE U.", wantTable: "users", wantOK: true},
 		{name: "an unknown qualifier resolves to nothing", text: "SELECT * FROM users u WHERE x.", wantTable: "", wantOK: false},
 		{name: "an alias shadows a table of the same name", text: "SELECT * FROM orders users WHERE users.", wantTable: "orders", wantOK: true},
+		{name: "an alias whose table is spelled in another case resolves to the name the session holds", text: "SELECT * FROM USERS u WHERE u.", wantTable: "users", wantOK: true},
+		{name: "an alias for a table the session does not hold resolves to nothing", text: "SELECT * FROM missing m WHERE m.", wantTable: "", wantOK: false},
 		{name: "a table not in the statement still resolves if the session holds it", text: "SELECT * FROM users WHERE orders.", wantTable: "orders", wantOK: true},
 	}
 

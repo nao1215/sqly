@@ -55,18 +55,29 @@ type sqlAnalysis struct {
 //
 // Why the alias wins: a statement may alias one table with another's name
 // ("FROM orders users"), and inside it the alias is what "users." means.
+//
+// The answer is always a name from known, never the spelling the statement
+// used. The caller looks the name up in the session's schema, which is keyed by
+// what the metadata reports, so "FROM USERS u" has to resolve "u" to "users"
+// rather than to the upper-cased text it was written with.
 func (a sqlAnalysis) tableOf(qualifier string, known []string) (string, bool) {
 	if qualifier == "" {
 		return "", false
 	}
 	for _, ref := range a.refs {
 		if strings.EqualFold(ref.alias, qualifier) {
-			return ref.name, true
+			return canonicalTableName(ref.name, known)
 		}
 	}
-	for _, name := range known {
-		if strings.EqualFold(name, qualifier) {
-			return name, true
+	return canonicalTableName(qualifier, known)
+}
+
+// canonicalTableName returns name as the session spells it, or reports that the
+// session holds no such table.
+func canonicalTableName(name string, known []string) (string, bool) {
+	for _, candidate := range known {
+		if strings.EqualFold(candidate, name) {
+			return candidate, true
 		}
 	}
 	return "", false

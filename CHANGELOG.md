@@ -12,6 +12,8 @@
 
 * Completion works on the continuation line of a multi-line statement. The word being completed was taken as everything after the last space on the line, which on a fresh continuation line still held the newline, so nothing matched it and the menu was empty exactly where a long statement is written.
 
+* A column added by a schema-changing statement is completable in the same session. Completion caches each table's columns and keys the cache by the table-name set, which an `ALTER TABLE t ADD COLUMN c` leaves untouched, so the columns offered stayed as they were before the statement ran.
+
 * A filename is no longer offered where a table goes. A bare word in a SQL statement was also completed against the working directory whenever the line held `SELECT` or `FROM`, but no SQL statement in sqly takes a path. The file a table was read from shares the table's prefix, so `FROM peo` offered both `people` and `people.csv` and neither completed.
 
 ### Dependencies

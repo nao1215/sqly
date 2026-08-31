@@ -301,6 +301,22 @@ func statementModifiesData(stmt string, d dialect.Dialect) bool {
 	return false
 }
 
+// statementChangesSchema reports whether a statement can change what tables the
+// session holds or what columns they have: the DDL verbs, plus ATTACH/DETACH,
+// which add and remove whole sets of tables.
+//
+// It is what tells completion to drop its cached schema. The cache is keyed by
+// the table-name set, so a CREATE or DROP rebuilds it on its own, but an
+// "ALTER TABLE t ADD COLUMN c" leaves that set untouched and the cached columns
+// would stay as they were before the statement ran.
+func statementChangesSchema(stmt string, d dialect.Dialect) bool {
+	switch sqltext.LeadingKeyword(stmt, d) {
+	case "CREATE", "ALTER", "DROP", "ATTACH", "DETACH", "RENAME":
+		return true
+	}
+	return false
+}
+
 // statementResultMessage returns the stdout line for a no-rowset statement. A
 // data-modifying statement (INSERT/UPDATE/DELETE/REPLACE, or a WITH feeding one)
 // reports its affected-row count; any other no-rowset statement (DDL, PRAGMA,
