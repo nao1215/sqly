@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -267,5 +268,31 @@ func TestLookupThemeIgnoresCaseAndBlanks(t *testing.T) {
 	}
 	if _, ok := lookupTheme("no-such-theme"); ok {
 		t.Error("lookupTheme accepted a name no theme has")
+	}
+}
+
+// BenchmarkHighlightLongStatement measures what runs on every keystroke over a
+// statement long enough for the cost to matter, and with multi-byte text in it,
+// which is what makes the byte-to-rune conversion do any work at all.
+func BenchmarkHighlightLongStatement(b *testing.B) {
+	theme, ok := lookupTheme("dracula")
+	if !ok {
+		b.Fatal("the dracula theme is missing")
+	}
+
+	var sb strings.Builder
+	sb.WriteString("SELECT ")
+	for i := range 200 {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		fmt.Fprintf(&sb, "t.列%d AS '名前%d'", i, i)
+	}
+	sb.WriteString(" FROM 売上 t WHERE t.id = 1 -- コメント")
+	input := sb.String()
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = highlightSQL(input, theme, dialect.SQLite)
 	}
 }

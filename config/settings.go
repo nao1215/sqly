@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 )
 
-// settingsFileName is what the settings file is called inside the config
-// directory. It sits beside the history file, which is the other thing a
-// session leaves behind.
+// settingsFileName is what the settings file is called. It sits beside the
+// history file, which is the other thing a session leaves behind, so a run told
+// where to keep its history keeps its settings there too.
 const settingsFileName = "settings.json"
 
 // defaultFilePerm keeps the settings file readable by its owner alone, like the
@@ -34,9 +34,19 @@ type Settings struct {
 
 // settingsFilePath returns where the settings file is kept, resolving the
 // default when SQLY_SETTINGS_PATH named none.
+//
+// The default is beside the history, not in the config directory regardless: a
+// run told where to keep its history has said where its per-session state
+// lives, and creating the config directory to write a theme into would ignore
+// that. It matters most to a test, which isolates itself by routing history to
+// a temp directory and would otherwise read and write the developer's real
+// settings.
 func (c *Config) settingsFilePath() string {
 	if c.SettingsPath != "" {
 		return c.SettingsPath
+	}
+	if c.HistoryPath != "" {
+		return filepath.Join(filepath.Dir(c.HistoryPath), settingsFileName)
 	}
 	return filepath.Join(c.Dir(), settingsFileName)
 }

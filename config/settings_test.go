@@ -127,3 +127,52 @@ func TestSaveSettingsOverwrites(t *testing.T) {
 		t.Errorf("theme = %q, want the last one saved", got.Theme)
 	}
 }
+
+// TestSettingsDefaultToBesideTheHistory covers where the file goes when
+// SQLY_SETTINGS_PATH named nowhere. A run told where to keep its history has
+// said where its per-session state lives, and a test that routes history to a
+// temp directory is isolated by that alone.
+func TestSettingsDefaultToBesideTheHistory(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfg := &config.Config{HistoryPath: filepath.Join(dir, "history")}
+	if err := cfg.SaveSettings(config.Settings{Theme: "nord"}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	want := filepath.Join(dir, "settings.json")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("the settings file is not beside the history at %s: %v", want, err)
+	}
+
+	got, err := cfg.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if got.Theme != "nord" {
+		t.Errorf("theme read back = %q, want nord", got.Theme)
+	}
+}
+
+// TestSettingsPathWinsOverTheHistory covers the two being named at once: the
+// one that names the settings file is the one that decides.
+func TestSettingsPathWinsOverTheHistory(t *testing.T) {
+	t.Parallel()
+
+	historyDir, settingsPath := t.TempDir(), filepath.Join(t.TempDir(), "chosen.json")
+	cfg := &config.Config{
+		HistoryPath:  filepath.Join(historyDir, "history"),
+		SettingsPath: settingsPath,
+	}
+	if err := cfg.SaveSettings(config.Settings{Theme: "nord"}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	if _, err := os.Stat(settingsPath); err != nil {
+		t.Errorf("the settings file was not written where SQLY_SETTINGS_PATH named: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(historyDir, "settings.json")); err == nil {
+		t.Error("a settings file was also written beside the history, which nothing asked for")
+	}
+}

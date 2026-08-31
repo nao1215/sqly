@@ -27,8 +27,8 @@ type Config struct {
 	HistoryPath string `env:"SQLY_HISTORY_PATH"`
 	// SettingsPath is where the session settings that outlive a session are
 	// kept, named by SQLY_SETTINGS_PATH the way SQLY_HISTORY_PATH names the
-	// history. Empty means the default beside it; settingsFilePath resolves
-	// that, so nothing has to check.
+	// history. Empty means beside the history; settingsFilePath resolves that,
+	// so nothing has to check.
 	SettingsPath string `env:"SQLY_SETTINGS_PATH"`
 }
 
