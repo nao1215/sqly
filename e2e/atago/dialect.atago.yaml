@@ -692,3 +692,55 @@ scenarios:
       - assert:
           stdout:
             not_contains: "postgresql_cast"
+
+  # Where a statement ends is a question only the dialect answers, and .dialect
+  # answers it for the lines after it. The whole script used to be split by the
+  # dialect the process started with, so "#" -- a comment opener in MySQL --
+  # left "SELECT 1 # note; more" cut at the semicolon and "more" run as a
+  # statement of its own. What --dialect already did, .dialect now does too.
+  - name: ".dialect changes where a later statement ends, like --dialect does"
+    steps:
+      - fixture: &splitting_users
+          file: users.csv
+          content: |
+            id,name
+            1,Alice
+      - run:
+          command: sqly users.csv
+          stdin: |
+            .dialect mysql
+            SELECT CONCAT('SPLIT','_OK') AS s # note; more
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "SPLIT_OK"
+
+  # The same line without the .dialect is read by SQLite's rules, where "#" opens
+  # no comment and is not a token any statement may hold. Without this the
+  # scenario above would pass on a build that ignored the dialect entirely.
+  - name: "without .dialect the same line is read by SQLite's rules"
+    steps:
+      - fixture: *splitting_users
+      - run:
+          command: sqly users.csv
+          stdin: |
+            SELECT CONCAT('SPLIT','_OK') AS s # note; more
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: 'unrecognized token: "#"'
+
+  # A dialect the command would reject changes nothing about how the rest is
+  # read, so the failure is the one .dialect reports and not a mis-split line.
+  - name: ".dialect with an unknown name leaves the reading rules alone"
+    steps:
+      - fixture: *splitting_users
+      - run:
+          command: sqly users.csv
+          stdin: |
+            .dialect nosuch
+            SELECT 1;
+      - assert:
+          exit_code: 2
+          stderr:
+            contains: "unknown SQL dialect"
