@@ -45,7 +45,7 @@ func TestRegionsReportsWhatTokensSkips(t *testing.T) {
 		{
 			// A doubled quote closes one literal and opens the next, so the text
 			// arrives as two regions that touch. Nothing between them is code,
-			// which is what a caller cares about: a highlighter colours the pair
+			// which is what a caller cares about: a highlighter colors the pair
 			// as one uninterrupted run, and the walk that skips them skips all of
 			// it either way.
 			name:    "a doubled quote leaves two literals that touch",
@@ -200,7 +200,7 @@ func TestTokensStillReportsOnlyCode(t *testing.T) {
 
 // TestRegionsCoverTheirText checks that every region reported is a real slice
 // of the text and that they arrive in order without overlapping. A caller
-// colouring the input walks them expecting exactly that.
+// coloring the input walks them expecting exactly that.
 func TestRegionsCoverTheirText(t *testing.T) {
 	t.Parallel()
 
