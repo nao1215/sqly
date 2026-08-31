@@ -16,11 +16,12 @@ The choice is remembered, so it is made once rather than every time. The
 [shell page](/shell/#colors) has the details; this page is the pictures.
 
 Each screenshot below is the same statement, chosen to hold one of everything
-the highlighter names: a keyword, a string literal, a number, a name you chose,
-and a comment.
+the highlighter names: a keyword, a column, a table, a string literal, a number,
+and a comment. `actor` is both a column of the file and the table it was read
+from, so the two colors for a name are visible side by side.
 
 ```sql
-SELECT actor, 'star' AS role, 42 AS n FROM actor -- a comment
+SELECT actor, gross AS 'top' FROM actor WHERE gross > 42 -- a comment
 ```
 
 sqly colors the text; your terminal supplies the background. A theme meant for a

@@ -28,6 +28,12 @@
 #     Enter can. After a query, wait for a token that appears only in the
 #     executed result before expecting the prompt again, or the prompt echoed
 #     mid-typing would match too early.
+#   * Match `expect:` within one colored run. SQL is colored as it is typed, so
+#     the stream carries an escape sequence at every boundary between a keyword,
+#     a name the session has, a literal, a comment, and the rest -- and a pattern
+#     spanning one never matches. "SELECT name" is two runs; "name" is one. Where
+#     the whole line is what matters, `expect_screen:` sees the text without the
+#     escapes, but it does not wait, so sync with an `expect:` first.
 #   * Give the pty a wide terminal (cols: 220). The prompt embeds the working
 #     directory, and under CI the temp sandbox path is long, so prefix plus command
 #     can land a character exactly on the last column. ConPTY defers the wrap at the
@@ -500,7 +506,7 @@ scenarios:
             # "ci" names only the city column of people, so the completion is
             # unambiguous and applies without a menu selection.
             - send: "SELECT * FROM people p WHERE p.ci\t"
-            - expect: "p.city"
+            - expect: "city" # inside one colored run; see the note at the top
             - send: " = 'Tokyo';\r"
             - expect: "Alice" # the only Tokyo row: the completed column really ran
             - expect: '\(table\)\$'
@@ -761,7 +767,7 @@ scenarios:
             # A fragment inside one colored run: highlighting puts escape
             # sequences at every color boundary, so a pattern spanning one
             # never matches the stream. expect_screen below sees the text.
-            - expect: "max\\(age\\)"
+            - expect: "max\\(" # inside one colored run; see the note at the top
             # The open parenthesis stepped this line in one level: the
             # continuation prompt, then two spaces nobody typed. The screen is
             # what is checked rather than the stream, because the prompt writes

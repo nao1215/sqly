@@ -104,9 +104,11 @@ indents nothing, and which is which follows the current dialect.
 ## Colors
 
 SQL is colored as you type it: keywords, string literals, comments, numbers, and
-names in quotes each get a color, and the names you chose stay in the prompt's
-own. `.theme` shows the theme in effect and the ones available, and takes one to
-switch to:
+the names of tables and columns this session actually has. A name it does not
+recognize — an alias, a function, a table not imported yet — keeps the prompt's
+own color, so a misspelled table is the one word on the line with no color of
+its own. `.theme` shows the theme in effect and the ones available, and takes
+one to switch to:
 
 ```text
 sqly:~/data(table)$ .theme
@@ -124,7 +126,9 @@ The [themes page](/themes/) shows every one of them on the same statement.
 
 A theme sets the prompt's own colors too, so a light theme is light throughout.
 What counts as a string, a name in quotes, or a comment follows the current
-dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is.
+dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is. A
+name in quotes is looked up like a bare one, so `"my col"` is colored as the
+column it is.
 
 ## Editing a long statement
 

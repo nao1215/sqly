@@ -57,11 +57,8 @@ const (
 	// Semicolon is a ";" in code, which is where a statement can end.
 	Semicolon
 	// String is a string literal, from its opening delimiter to its closing
-	// one, or to the end of the text when it was never closed.
-	//
-	// A doubled quote inside a literal closes one and opens the next, so such a
-	// literal arrives as two String regions that touch. Nothing between them is
-	// code, which is what the distinction is for.
+	// one, or to the end of the text when it was never closed. A doubled
+	// delimiter inside is the delimiter itself, so 'it''s' is one region.
 	String
 	// QuotedIdentifier is a name written in quotes, delimiters included. Which
 	// quotes those are is the dialect's business: a backtick everywhere but
@@ -120,6 +117,76 @@ func Regions(s string, d dialect.Dialect) iter.Seq[Token] {
 	return func(yield func(Token) bool) {
 		scan(s, syntaxOf(d), yield)
 	}
+}
+
+// Unquote returns the name a quoted identifier holds, or the text a string
+// literal does: the delimiters off, a doubled delimiter collapsed to the one
+// character it stands for, and a backslash escape resolved where d has them.
+//
+// It is here rather than in the caller because which characters delimit a name
+// and what escapes inside one are the same dialect knowledge the walk already
+// holds. A caller comparing a quoted name against names it knows -- a
+// highlighter, a completer -- needs the name, not the way it was written.
+//
+// Text that is not quoted comes back unchanged.
+func Unquote(s string, d dialect.Dialect) string {
+	if len(s) < 2 {
+		return s
+	}
+	open, closing := s[0], s[len(s)-1]
+	if closerFor(open) != closing {
+		return s // not quoted, or not closed by what opened it
+	}
+	inner := s[1 : len(s)-1]
+
+	// A bracketed name has nothing to undo: its delimiters differ from each
+	// other, and SQLite's [a]]b] holds two brackets rather than an escape.
+	if open != closing {
+		return inner
+	}
+
+	rules := syntaxOf(d)
+
+	backslash := false
+	switch open {
+	case '`':
+		backslash = rules.backtickEscape
+	case '\'', '"':
+		backslash = rules.backslashEscape
+	}
+	return unescapeQuoted(inner, open, backslash)
+}
+
+// closerFor returns the character that closes a region the given one opens, or
+// zero when it opens none.
+func closerFor(open byte) byte {
+	switch open {
+	case '\'', '"', '`':
+		return open
+	case '[':
+		return ']'
+	default:
+		return 0
+	}
+}
+
+// unescapeQuoted resolves the escapes inside a quoted region's text.
+func unescapeQuoted(inner string, delimiter byte, backslash bool) string {
+	var b strings.Builder
+	b.Grow(len(inner))
+	for i := 0; i < len(inner); i++ {
+		switch {
+		case backslash && inner[i] == '\\' && i+1 < len(inner):
+			i++
+			b.WriteByte(inner[i])
+		case inner[i] == delimiter && i+1 < len(inner) && inner[i+1] == delimiter:
+			i++
+			b.WriteByte(delimiter)
+		default:
+			b.WriteByte(inner[i])
+		}
+	}
+	return b.String()
 }
 
 // OpenDepth reports how many parentheses are open at the end of s: the nesting
@@ -410,13 +477,13 @@ func (sc *scanner) skipRegion() (Kind, bool) {
 		sc.skipBlockComment()
 		return Comment, true
 	case sc.rules.tripleQuote && (strings.HasPrefix(rest, tripleSingle) || strings.HasPrefix(rest, tripleDouble)):
-		sc.skipQuoted(rest[:3], 3, sc.rules.backslashEscape)
+		sc.skipQuoted(rest[:3], 3, sc.rules.backslashEscape, false)
 		return String, true
 	case rest[0] == '\'':
-		sc.skipQuoted("'", 1, sc.rules.backslashEscape || sc.escapeStringOpens())
+		sc.skipQuoted("'", 1, sc.rules.backslashEscape || sc.escapeStringOpens(), true)
 		return String, true
 	case rest[0] == '"':
-		sc.skipQuoted(`"`, 1, sc.rules.backslashEscape)
+		sc.skipQuoted(`"`, 1, sc.rules.backslashEscape, true)
 		// A double-quoted run is a name in standard SQL and a string in MySQL,
 		// which is the one dialect that reads it that way by default.
 		if sc.rules.doubleQuoteIsString {
@@ -424,10 +491,10 @@ func (sc *scanner) skipRegion() (Kind, bool) {
 		}
 		return QuotedIdentifier, true
 	case sc.rules.backtickIdent && rest[0] == '`':
-		sc.skipQuoted("`", 1, sc.rules.backtickEscape)
+		sc.skipQuoted("`", 1, sc.rules.backtickEscape, true)
 		return QuotedIdentifier, true
 	case sc.rules.bracketIdent && rest[0] == '[':
-		sc.skipQuoted("]", 1, false)
+		sc.skipQuoted("]", 1, false, false)
 		return QuotedIdentifier, true
 	case sc.rules.dollarQuote && rest[0] == '$':
 		if sc.skipDollarQuoted() {
@@ -510,7 +577,7 @@ func (sc *scanner) skipBlockComment() {
 // skipQuoted steps past a region the cursor opens, which closer ends. The opener
 // is as long as the closer for a quote that is its own delimiter, which is what
 // makes a tripled quote one region rather than three.
-func (sc *scanner) skipQuoted(closer string, opener int, backslashEscapes bool) {
+func (sc *scanner) skipQuoted(closer string, opener int, backslashEscapes, doubledCloser bool) {
 	sc.i += opener
 	for sc.i < len(sc.s) {
 		if backslashEscapes && sc.s[sc.i] == '\\' {
@@ -519,6 +586,14 @@ func (sc *scanner) skipQuoted(closer string, opener int, backslashEscapes bool) 
 		}
 		if strings.HasPrefix(sc.s[sc.i:], closer) {
 			sc.i += len(closer)
+			// A doubled delimiter is the delimiter itself rather than the end
+			// of the region: 'it''s' is one literal and "a""b" is one name.
+			// Where the delimiters differ from each other there is nothing to
+			// double -- SQLite's [a]]b] holds two brackets, not one.
+			if doubledCloser && strings.HasPrefix(sc.s[sc.i:], closer) {
+				sc.i += len(closer)
+				continue
+			}
 			return
 		}
 		sc.i++

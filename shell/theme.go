@@ -20,16 +20,35 @@ type syntaxTheme struct {
 	// prompt is the scheme the prompt draws itself with: the prefix, the input,
 	// and the completion menu.
 	prompt *prompt.ColorScheme
-	// keyword is a SQL keyword, quoted is a name in quotes, and the rest are
-	// what they say.
+	// keyword is a SQL keyword and the rest are what they say.
 	keyword prompt.Color
 	str     prompt.Color
 	comment prompt.Color
 	number  prompt.Color
-	quoted  prompt.Color
+	// table and column are names the session actually has, which is what sqly
+	// knows and an editor does not. A name it does not recognize -- an alias,
+	// a function, a table not imported yet -- keeps the input color, so a
+	// misspelling is visible as the one word on the line with no color.
+	table  prompt.Color
+	column prompt.Color
 	// command is a helper command's name, the ".mode" of a ".mode csv".
 	command prompt.Color
 }
+
+// The themes .theme takes, named once because each appears as a map key, as the
+// theme's own name, and as the name of the scheme it draws the prompt with.
+const (
+	themeDracula     = "dracula"
+	themeMonokai     = "monokai"
+	themeNord        = "nord"
+	themeSolarized   = "solarized"
+	themeGruvbox     = "gruvbox"
+	themeTokyoNight  = "tokyo-night"
+	themeCatppuccin  = "catppuccin"
+	themeVscode      = "vscode"
+	themeGithubLight = "github-light"
+	themeAccessible  = "accessible"
+)
 
 // noHighlightTheme is the way out for a terminal or a reader that wants none.
 // It names no colors, so nothing is highlighted and the prompt draws the input
@@ -40,6 +59,174 @@ const noHighlightTheme = "none"
 // because that is the scheme the prompt has always drawn sqly with.
 const defaultTheme = "night-owl"
 
+// schemeNightOwl draws the prompt in night-owl's own colors.
+var schemeNightOwl = &prompt.ColorScheme{
+	Name:   defaultTheme,
+	Prefix: prompt.Color{R: 0x82, G: 0xaa, B: 0xff, Bold: true},
+	Input:  prompt.Color{R: 0xd6, G: 0xde, B: 0xeb},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x7f, G: 0xdb, B: 0xca},
+		Description: prompt.Color{R: 0x63, G: 0x77, B: 0x77},
+		Match:       prompt.Color{R: 0xec, G: 0xc4, B: 0x8d, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xc7, G: 0x92, B: 0xea, Bold: true},
+	Cursor:   prompt.Color{R: 0xd6, G: 0xde, B: 0xeb},
+}
+
+// schemeDracula draws the prompt in dracula's own colors.
+var schemeDracula = &prompt.ColorScheme{
+	Name:   themeDracula,
+	Prefix: prompt.Color{R: 0xff, G: 0x79, B: 0xc6, Bold: true},
+	Input:  prompt.Color{R: 0xf8, G: 0xf8, B: 0xf2},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x8b, G: 0xe9, B: 0xfd},
+		Description: prompt.Color{R: 0x62, G: 0x72, B: 0xa4},
+		Match:       prompt.Color{R: 0xf1, G: 0xfa, B: 0x8c, Bold: true},
+	},
+	Selected: prompt.Color{R: 0x50, G: 0xfa, B: 0x7b, Bold: true},
+	Cursor:   prompt.Color{R: 0xf8, G: 0xf8, B: 0xf2},
+}
+
+// schemeMonokai draws the prompt in monokai's own colors.
+var schemeMonokai = &prompt.ColorScheme{
+	Name:   themeMonokai,
+	Prefix: prompt.Color{R: 0xf9, G: 0x26, B: 0x72, Bold: true},
+	Input:  prompt.Color{R: 0xf8, G: 0xf8, B: 0xf2},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x66, G: 0xd9, B: 0xef},
+		Description: prompt.Color{R: 0x75, G: 0x71, B: 0x5e},
+		Match:       prompt.Color{R: 0xe6, G: 0xdb, B: 0x74, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xa6, G: 0xe2, B: 0x2e, Bold: true},
+	Cursor:   prompt.Color{R: 0xf8, G: 0xf8, B: 0xf2},
+}
+
+// schemeNord draws the prompt in nord's own colors.
+var schemeNord = &prompt.ColorScheme{
+	Name:   themeNord,
+	Prefix: prompt.Color{R: 0x88, G: 0xc0, B: 0xd0, Bold: true},
+	Input:  prompt.Color{R: 0xd8, G: 0xde, B: 0xe9},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x8f, G: 0xbc, B: 0xbb},
+		Description: prompt.Color{R: 0x61, G: 0x6e, B: 0x88},
+		Match:       prompt.Color{R: 0xeb, G: 0xcb, B: 0x8b, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xa3, G: 0xbe, B: 0x8c, Bold: true},
+	Cursor:   prompt.Color{R: 0xd8, G: 0xde, B: 0xe9},
+}
+
+// schemeSolarized draws the prompt in solarized's own colors.
+var schemeSolarized = &prompt.ColorScheme{
+	Name:   themeSolarized,
+	Prefix: prompt.Color{R: 0xb5, G: 0x89, B: 0x00, Bold: true},
+	Input:  prompt.Color{R: 0x93, G: 0xa1, B: 0xa1},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x26, G: 0x8b, B: 0xd2},
+		Description: prompt.Color{R: 0x58, G: 0x6e, B: 0x75},
+		Match:       prompt.Color{R: 0x2a, G: 0xa1, B: 0x98, Bold: true},
+	},
+	Selected: prompt.Color{R: 0x85, G: 0x99, B: 0x00, Bold: true},
+	Cursor:   prompt.Color{R: 0x93, G: 0xa1, B: 0xa1},
+}
+
+// schemeGruvbox draws the prompt in gruvbox's own colors.
+var schemeGruvbox = &prompt.ColorScheme{
+	Name:   themeGruvbox,
+	Prefix: prompt.Color{R: 0xfa, G: 0xbd, B: 0x2f, Bold: true},
+	Input:  prompt.Color{R: 0xeb, G: 0xdb, B: 0xb2},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x83, G: 0xa5, B: 0x98},
+		Description: prompt.Color{R: 0x92, G: 0x83, B: 0x74},
+		Match:       prompt.Color{R: 0xb8, G: 0xbb, B: 0x26, Bold: true},
+	},
+	Selected: prompt.Color{R: 0x8e, G: 0xc0, B: 0x7c, Bold: true},
+	Cursor:   prompt.Color{R: 0xeb, G: 0xdb, B: 0xb2},
+}
+
+// schemeTokyoNight draws the prompt in tokyo-night's own colors.
+var schemeTokyoNight = &prompt.ColorScheme{
+	Name:   themeTokyoNight,
+	Prefix: prompt.Color{R: 0x7a, G: 0xa2, B: 0xf7, Bold: true},
+	Input:  prompt.Color{R: 0xc0, G: 0xca, B: 0xf5},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x7d, G: 0xcf, B: 0xff},
+		Description: prompt.Color{R: 0x56, G: 0x5f, B: 0x89},
+		Match:       prompt.Color{R: 0x9e, G: 0xce, B: 0x6a, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xbb, G: 0x9a, B: 0xf7, Bold: true},
+	Cursor:   prompt.Color{R: 0xc0, G: 0xca, B: 0xf5},
+}
+
+// schemeCatppuccin draws the prompt in catppuccin's own colors.
+var schemeCatppuccin = &prompt.ColorScheme{
+	Name:   themeCatppuccin,
+	Prefix: prompt.Color{R: 0x89, G: 0xb4, B: 0xfa, Bold: true},
+	Input:  prompt.Color{R: 0xcd, G: 0xd6, B: 0xf4},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x89, G: 0xdc, B: 0xeb},
+		Description: prompt.Color{R: 0x6c, G: 0x70, B: 0x86},
+		Match:       prompt.Color{R: 0xa6, G: 0xe3, B: 0xa1, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xcb, G: 0xa6, B: 0xf7, Bold: true},
+	Cursor:   prompt.Color{R: 0xcd, G: 0xd6, B: 0xf4},
+}
+
+// schemeVscode draws the prompt in vscode's own colors.
+var schemeVscode = &prompt.ColorScheme{
+	Name:   themeVscode,
+	Prefix: prompt.Color{R: 0x56, G: 0x9c, B: 0xd6, Bold: true},
+	Input:  prompt.Color{R: 0xd4, G: 0xd4, B: 0xd4},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x4e, G: 0xc9, B: 0xb0},
+		Description: prompt.Color{R: 0x6a, G: 0x99, B: 0x55},
+		Match:       prompt.Color{R: 0xce, G: 0x91, B: 0x78, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xdc, G: 0xdc, B: 0xaa, Bold: true},
+	Cursor:   prompt.Color{R: 0xd4, G: 0xd4, B: 0xd4},
+}
+
+// schemeGithubLight draws the prompt in github-light's own colors.
+var schemeGithubLight = &prompt.ColorScheme{
+	Name:   themeGithubLight,
+	Prefix: prompt.Color{R: 0x09, G: 0x69, B: 0xda, Bold: true},
+	Input:  prompt.Color{R: 0x24, G: 0x29, B: 0x2f},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x95, G: 0x38, B: 0x00},
+		Description: prompt.Color{R: 0x6e, G: 0x77, B: 0x81},
+		Match:       prompt.Color{R: 0x0a, G: 0x30, B: 0x69, Bold: true},
+	},
+	Selected: prompt.Color{R: 0x82, G: 0x50, B: 0xdf, Bold: true},
+	Cursor:   prompt.Color{R: 0x24, G: 0x29, B: 0x2f},
+}
+
+// schemeAccessible draws the prompt in accessible's own colors.
+var schemeAccessible = &prompt.ColorScheme{
+	Name:   themeAccessible,
+	Prefix: prompt.Color{R: 0x00, G: 0xff, B: 0xff, Bold: true},
+	Input:  prompt.Color{R: 0xff, G: 0xff, B: 0xff},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x00, G: 0xff, B: 0x00},
+		Description: prompt.Color{R: 0xc0, G: 0xc0, B: 0xc0},
+		Match:       prompt.Color{R: 0xff, G: 0xff, B: 0x00, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xff, G: 0x00, B: 0xff, Bold: true},
+	Cursor:   prompt.Color{R: 0xff, G: 0xff, B: 0xff},
+}
+
+// schemeNone draws the prompt in none's own colors.
+var schemeNone = &prompt.ColorScheme{
+	Name:   noHighlightTheme,
+	Prefix: prompt.Color{R: 0x82, G: 0xaa, B: 0xff, Bold: true},
+	Input:  prompt.Color{R: 0xd6, G: 0xde, B: 0xeb},
+	Suggestion: prompt.SuggestionColors{
+		Text:        prompt.Color{R: 0x7f, G: 0xdb, B: 0xca},
+		Description: prompt.Color{R: 0x63, G: 0x77, B: 0x77},
+		Match:       prompt.Color{R: 0xec, G: 0xc4, B: 0x8d, Bold: true},
+	},
+	Selected: prompt.Color{R: 0xc7, G: 0x92, B: 0xea, Bold: true},
+	Cursor:   prompt.Color{R: 0xd6, G: 0xde, B: 0xeb},
+}
+
 // syntaxThemes are the themes .theme can select, by name.
 //
 // The names follow the palettes they come from, which is what someone who has
@@ -49,116 +236,127 @@ func syntaxThemes() map[string]syntaxTheme {
 	return map[string]syntaxTheme{
 		noHighlightTheme: {
 			name:   noHighlightTheme,
-			prompt: prompt.ThemeNightOwl,
+			prompt: schemeNone,
 		},
 		defaultTheme: {
 			name:    defaultTheme,
-			prompt:  prompt.ThemeNightOwl,
+			prompt:  schemeNightOwl,
 			keyword: prompt.Color{R: 0xc7, G: 0x92, B: 0xea, Bold: true},
 			str:     prompt.Color{R: 0xec, G: 0xc4, B: 0x8d},
 			comment: prompt.Color{R: 0x63, G: 0x77, B: 0x7d},
 			number:  prompt.Color{R: 0xf7, G: 0x8c, B: 0x6c},
-			quoted:  prompt.Color{R: 0x7f, G: 0xdb, B: 0xca},
+			table:   prompt.Color{R: 0x7f, G: 0xdb, B: 0xca},
+			column:  prompt.Color{R: 0xad, G: 0xdb, B: 0x67},
 			command: prompt.Color{R: 0x82, G: 0xaa, B: 0xff, Bold: true},
 		},
-		"dracula": {
-			name:    "dracula",
-			prompt:  prompt.ThemeDracula,
+		themeDracula: {
+			name:    themeDracula,
+			prompt:  schemeDracula,
 			keyword: prompt.Color{R: 0xff, G: 0x79, B: 0xc6, Bold: true},
 			str:     prompt.Color{R: 0xf1, G: 0xfa, B: 0x8c},
 			comment: prompt.Color{R: 0x62, G: 0x72, B: 0xa4},
 			number:  prompt.Color{R: 0xbd, G: 0x93, B: 0xf9},
-			quoted:  prompt.Color{R: 0x8b, G: 0xe9, B: 0xfd},
+			table:   prompt.Color{R: 0x8b, G: 0xe9, B: 0xfd},
+			column:  prompt.Color{R: 0x50, G: 0xfa, B: 0x7b},
 			command: prompt.Color{R: 0x50, G: 0xfa, B: 0x7b, Bold: true},
 		},
-		"monokai": {
-			name:    "monokai",
-			prompt:  prompt.ThemeMonokai,
+		themeMonokai: {
+			name:    themeMonokai,
+			prompt:  schemeMonokai,
 			keyword: prompt.Color{R: 0xf9, G: 0x26, B: 0x72, Bold: true},
 			str:     prompt.Color{R: 0xe6, G: 0xdb, B: 0x74},
 			comment: prompt.Color{R: 0x75, G: 0x71, B: 0x5e},
 			number:  prompt.Color{R: 0xae, G: 0x81, B: 0xff},
-			quoted:  prompt.Color{R: 0x66, G: 0xd9, B: 0xef},
+			table:   prompt.Color{R: 0x66, G: 0xd9, B: 0xef},
+			column:  prompt.Color{R: 0xa6, G: 0xe2, B: 0x2e},
 			command: prompt.Color{R: 0xa6, G: 0xe2, B: 0x2e, Bold: true},
 		},
-		"nord": {
-			name:    "nord",
-			prompt:  prompt.ThemeDark,
+		themeNord: {
+			name:    themeNord,
+			prompt:  schemeNord,
 			keyword: prompt.Color{R: 0x81, G: 0xa1, B: 0xc1, Bold: true},
 			str:     prompt.Color{R: 0xa3, G: 0xbe, B: 0x8c},
 			comment: prompt.Color{R: 0x61, G: 0x6e, B: 0x88},
 			number:  prompt.Color{R: 0xb4, G: 0x8e, B: 0xad},
-			quoted:  prompt.Color{R: 0x8f, G: 0xbc, B: 0xbb},
+			table:   prompt.Color{R: 0x8f, G: 0xbc, B: 0xbb},
+			column:  prompt.Color{R: 0xa3, G: 0xbe, B: 0x8c},
 			command: prompt.Color{R: 0x88, G: 0xc0, B: 0xd0, Bold: true},
 		},
-		"solarized": {
-			name:    "solarized",
-			prompt:  prompt.ThemeSolarizedDark,
+		themeSolarized: {
+			name:    themeSolarized,
+			prompt:  schemeSolarized,
 			keyword: prompt.Color{R: 0x85, G: 0x99, B: 0x00, Bold: true},
 			str:     prompt.Color{R: 0x2a, G: 0xa1, B: 0x98},
 			comment: prompt.Color{R: 0x58, G: 0x6e, B: 0x75},
 			number:  prompt.Color{R: 0xd3, G: 0x36, B: 0x82},
-			quoted:  prompt.Color{R: 0x26, G: 0x8b, B: 0xd2},
+			table:   prompt.Color{R: 0x26, G: 0x8b, B: 0xd2},
+			column:  prompt.Color{R: 0x2a, G: 0xa1, B: 0x98},
 			command: prompt.Color{R: 0xb5, G: 0x89, B: 0x00, Bold: true},
 		},
-		"gruvbox": {
-			name:    "gruvbox",
-			prompt:  prompt.ThemeDark,
+		themeGruvbox: {
+			name:    themeGruvbox,
+			prompt:  schemeGruvbox,
 			keyword: prompt.Color{R: 0xfb, G: 0x49, B: 0x34, Bold: true},
 			str:     prompt.Color{R: 0xb8, G: 0xbb, B: 0x26},
 			comment: prompt.Color{R: 0x92, G: 0x83, B: 0x74},
 			number:  prompt.Color{R: 0xd3, G: 0x86, B: 0x9b},
-			quoted:  prompt.Color{R: 0x83, G: 0xa5, B: 0x98},
+			table:   prompt.Color{R: 0x83, G: 0xa5, B: 0x98},
+			column:  prompt.Color{R: 0x8e, G: 0xc0, B: 0x7c},
 			command: prompt.Color{R: 0xfa, G: 0xbd, B: 0x2f, Bold: true},
 		},
-		"tokyo-night": {
-			name:    "tokyo-night",
-			prompt:  prompt.ThemeNightOwl,
+		themeTokyoNight: {
+			name:    themeTokyoNight,
+			prompt:  schemeTokyoNight,
 			keyword: prompt.Color{R: 0xbb, G: 0x9a, B: 0xf7, Bold: true},
 			str:     prompt.Color{R: 0x9e, G: 0xce, B: 0x6a},
 			comment: prompt.Color{R: 0x56, G: 0x5f, B: 0x89},
 			number:  prompt.Color{R: 0xff, G: 0x9e, B: 0x64},
-			quoted:  prompt.Color{R: 0x7d, G: 0xcf, B: 0xff},
+			table:   prompt.Color{R: 0x7d, G: 0xcf, B: 0xff},
+			column:  prompt.Color{R: 0x73, G: 0xda, B: 0xca},
 			command: prompt.Color{R: 0x7a, G: 0xa2, B: 0xf7, Bold: true},
 		},
-		"catppuccin": {
-			name:    "catppuccin",
-			prompt:  prompt.ThemeDark,
+		themeCatppuccin: {
+			name:    themeCatppuccin,
+			prompt:  schemeCatppuccin,
 			keyword: prompt.Color{R: 0xcb, G: 0xa6, B: 0xf7, Bold: true},
 			str:     prompt.Color{R: 0xa6, G: 0xe3, B: 0xa1},
 			comment: prompt.Color{R: 0x6c, G: 0x70, B: 0x86},
 			number:  prompt.Color{R: 0xfa, G: 0xb3, B: 0x87},
-			quoted:  prompt.Color{R: 0x89, G: 0xdc, B: 0xeb},
+			table:   prompt.Color{R: 0x89, G: 0xdc, B: 0xeb},
+			column:  prompt.Color{R: 0x94, G: 0xe2, B: 0xd5},
 			command: prompt.Color{R: 0x89, G: 0xb4, B: 0xfa, Bold: true},
 		},
-		"vscode": {
-			name:    "vscode",
-			prompt:  prompt.ThemeVSCode,
+		themeVscode: {
+			name:    themeVscode,
+			prompt:  schemeVscode,
 			keyword: prompt.Color{R: 0x56, G: 0x9c, B: 0xd6, Bold: true},
 			str:     prompt.Color{R: 0xce, G: 0x91, B: 0x78},
 			comment: prompt.Color{R: 0x6a, G: 0x99, B: 0x55},
 			number:  prompt.Color{R: 0xb5, G: 0xce, B: 0xa8},
-			quoted:  prompt.Color{R: 0x4e, G: 0xc9, B: 0xb0},
+			table:   prompt.Color{R: 0x4e, G: 0xc9, B: 0xb0},
+			column:  prompt.Color{R: 0x9c, G: 0xdc, B: 0xfe},
 			command: prompt.Color{R: 0xdc, G: 0xdc, B: 0xaa, Bold: true},
 		},
-		"github-light": {
-			name:    "github-light",
-			prompt:  prompt.ThemeLight,
+		themeGithubLight: {
+			name:    themeGithubLight,
+			prompt:  schemeGithubLight,
 			keyword: prompt.Color{R: 0xcf, G: 0x22, B: 0x2e, Bold: true},
 			str:     prompt.Color{R: 0x0a, G: 0x30, B: 0x69},
 			comment: prompt.Color{R: 0x6e, G: 0x77, B: 0x81},
 			number:  prompt.Color{R: 0x05, G: 0x50, B: 0xae},
-			quoted:  prompt.Color{R: 0x95, G: 0x38, B: 0x00},
+			table:   prompt.Color{R: 0x95, G: 0x38, B: 0x00},
+			column:  prompt.Color{R: 0x11, G: 0x63, B: 0x29},
 			command: prompt.Color{R: 0x82, G: 0x50, B: 0xdf, Bold: true},
 		},
-		"accessible": {
-			name:    "accessible",
-			prompt:  prompt.ThemeAccessible,
+		themeAccessible: {
+			name:    themeAccessible,
+			prompt:  schemeAccessible,
 			keyword: prompt.Color{R: 0xff, G: 0xff, B: 0x00, Bold: true},
 			str:     prompt.Color{R: 0x00, G: 0xff, B: 0xff},
 			comment: prompt.Color{R: 0xc0, G: 0xc0, B: 0xc0},
 			number:  prompt.Color{R: 0xff, G: 0xff, B: 0xff, Bold: true},
-			quoted:  prompt.Color{R: 0x00, G: 0xff, B: 0x00},
+			table:   prompt.Color{R: 0x00, G: 0xff, B: 0x00},
+			column:  prompt.Color{R: 0x00, G: 0xff, B: 0xff},
 			command: prompt.Color{R: 0xff, G: 0xff, B: 0xff, Bold: true},
 		},
 	}

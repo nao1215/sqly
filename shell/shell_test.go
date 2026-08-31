@@ -1365,7 +1365,7 @@ func TestShellRun_TerminalStartupFailureIsGracefulAndQuiet(t *testing.T) {
 
 	wantCause := errors.New("open /dev/tty: no such device or address")
 	shell.isTTY = func() bool { return true }
-	shell.newPrompt = func(string, func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		return nil, wantCause
 	}
 
@@ -1410,7 +1410,7 @@ func TestShellCommunicate_ReusesPromptSessionForMultilineSQL(t *testing.T) {
 		},
 	}
 	factoryCalls := 0
-	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		factoryCalls++
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
@@ -1472,7 +1472,7 @@ func TestShellCommunicate_EOFExitsCleanly(t *testing.T) {
 			defer cleanup()
 
 			fakePrompt := &fakePromptSession{exhaustErr: tt.eof}
-			shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+			shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 				fakePrompt.initialPrefix = prefix
 				return fakePrompt, nil
 			}
@@ -1524,7 +1524,7 @@ func TestShellCommunicate_CtrlCDiscardsTheLineAndKeepsTheSession(t *testing.T) {
 		results: []string{"SELECT 'after_ctrl_c' AS marker;", ".exit"},
 		runErrs: map[int]error{0: prompt.ErrInterrupted},
 	}
-	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
 	}
@@ -1578,7 +1578,7 @@ func TestShellCommunicate_CtrlCCancelsTheRunningStatement(t *testing.T) {
 		results:     []string{longRunningQuery, "SELECT 'after_cancel' AS marker;", ".exit"},
 		cancelWatch: map[int]bool{0: true}, // the first submission is interrupted
 	}
-	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
 	}
@@ -1620,7 +1620,7 @@ func TestShellCommunicate_UninterruptedStatementSaysNothing(t *testing.T) {
 	defer cleanup()
 
 	fakePrompt := &fakePromptSession{results: []string{"SELECT 'plain' AS marker;", ".exit"}}
-	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
 	}
@@ -1701,7 +1701,7 @@ func TestShellCommunicate_RunsEveryStatementOfOneLine(t *testing.T) {
 			defer cleanup()
 
 			fakePrompt := &fakePromptSession{results: []string{tt.input, ".exit"}}
-			shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+			shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 				fakePrompt.initialPrefix = prefix
 				return fakePrompt, nil
 			}
@@ -1738,7 +1738,7 @@ func TestShellCommunicate_MultiStatementLineIsOneHistoryEntry(t *testing.T) {
 
 	const line = "SELECT 1 AS a; SELECT 2 AS b;"
 	fakePrompt := &fakePromptSession{results: []string{line, ".exit"}}
-	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
 	}
@@ -1775,7 +1775,7 @@ func TestShellCommunicate_PreloadsHistoryAndCompletion(t *testing.T) {
 	}
 
 	fakePrompt := &fakePromptSession{results: []string{".exit"}}
-	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		fakePrompt.capturedSuggest = completer(prompt.Document{
 			Text:           "SEL",
@@ -1812,7 +1812,7 @@ func TestShellCommunicate_RefreshesPromptPrefixBetweenRuns(t *testing.T) {
 			".exit",
 		},
 	}
-	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		fakePrompt.initialPrefix = prefix
 		return fakePrompt, nil
 	}
@@ -1843,7 +1843,7 @@ func TestShellCommunicate_LogsPromptCloseError(t *testing.T) {
 		results:  []string{".exit"},
 		closeErr: errors.New("prompt close failed"),
 	}
-	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		return fakePrompt, nil
 	}
 
@@ -1878,7 +1878,7 @@ func TestShellNewPromptSession_DisablesHistoryOnPreloadFailure(t *testing.T) {
 	// from opening. The session continues with history disabled.
 	listErr := errors.New("history list failed")
 	fakePrompt := &fakePromptSession{}
-	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		return fakePrompt, nil
 	}
 	shell.usecases.history = historyUsecaseStub{listErr: listErr}
@@ -1918,7 +1918,7 @@ func TestNewPromptSession_PreloadsOnlyTheNewestEntries(t *testing.T) {
 	}
 
 	fakePrompt := &fakePromptSession{}
-	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		return fakePrompt, nil
 	}
 	shell.usecases.history = historyUsecaseStub{histories: stored}
@@ -1950,7 +1950,7 @@ func TestNewPromptSession_PreloadsEveryEntryItHasWhenFewerThanTheCap(t *testing.
 
 	stored := model.Histories{model.NewHistory("SELECT 1"), model.NewHistory("SELECT 2")}
 	fakePrompt := &fakePromptSession{}
-	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		return fakePrompt, nil
 	}
 	shell.usecases.history = historyUsecaseStub{histories: stored}
@@ -2286,7 +2286,7 @@ func TestShellRun_BatchModeReadsStdin(t *testing.T) {
 	defer cleanup()
 
 	promptCalled := false
-	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		promptCalled = true
 		return nil, errors.New("prompt must not be created in batch mode")
 	}
@@ -2346,7 +2346,7 @@ func TestShellRun_StartupImportFailureDoesNotOpenAShell(t *testing.T) {
 
 	shell.isTTY = func() bool { return true }
 	promptOpened := false
-	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		promptOpened = true
 		return nil, errors.New("stop before interactive loop")
 	}
