@@ -86,6 +86,26 @@ sqly:~/data(table)$ CREATE TABLE t (a); INSERT INTO t VALUES (1); SELECT a FROM 
 
 Dot-commands are single-line and run on Enter. To run a query without typing `;`, press Enter on a blank line.
 
+## Editing a long statement
+
+`.edit` opens the last statement in your editor and runs what you save:
+
+```text
+sqly:~/data(table)$ SELECT user_name FROM user WHERE identifier = 1;
+sqly:~/data(table)$ .edit
+```
+
+The editor is `$VISUAL`, or `$EDITOR` when that is unset; without either, `.edit`
+says so and nothing happens. Flags come with it, so `EDITOR="code -w"` works. The
+file it opens ends in `.sql`, so an editor that highlights by extension does.
+
+What you save is echoed and run, and it may hold several statements. Saving an
+empty file runs nothing, and so does leaving the editor with a non-zero status
+(`:cq` in vim), which is how an editor says the edit was abandoned.
+
+`.edit` needs a terminal to hand to the editor, so it is refused in a script or a
+piped session; write the SQL in a file and use `--sql-file`.
+
 ## Keys
 
 | Key | Does |
@@ -126,6 +146,7 @@ afterward still exits 0.
 | `.mode [MODE]` | show or set the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
 | `.row-mismatch [POLICY]` | show or set how a CSV/TSV row whose field count differs from the header is imported: `error` fails the import, `skip` drops the row, `pad` fills a short row with empty values and fails on a long one |
+| `.edit` | open the last statement in `$VISUAL` or `$EDITOR` and run what is saved |
 | `.clear` | clear the screen |
 | `.exit` | quit (so does `Ctrl-D`) |
 

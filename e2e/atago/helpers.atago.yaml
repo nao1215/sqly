@@ -284,3 +284,23 @@ scenarios:
           exit_code: 0
           stdout:
             not_contains: ".header"
+
+  # .edit needs a terminal to hand to an editor, which a script does not have.
+  # It is in the command table so .help lists it and completion offers it, so
+  # what is left is to say what to do instead rather than to fail obscurely.
+  - name: .edit is refused in a script and says what to do instead
+    steps:
+      - fixture:
+          file: users.csv
+          content: |
+            id,name
+            1,Alice
+      - run:
+          command: sqly users.csv
+          stdin: ".edit\n"
+      - assert:
+          exit_code: 2
+          stderr:
+            contains:
+              - "needs an interactive terminal"
+              - "--sql-file"

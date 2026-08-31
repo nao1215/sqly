@@ -54,6 +54,7 @@ const (
 	describeCommand = ".describe"
 	saveCommand     = ".save"
 	dialectCommand  = ".dialect"
+	editCommand     = ".edit"
 	helpFlag        = "--help"
 	versionFlag     = "--version"
 	helpArgument    = "help"
@@ -202,6 +203,16 @@ type Shell struct {
 	// limit; only tests set it, so the limit can be exercised without moving two
 	// gigabytes through the disk on every CI run.
 	maxDownloadBytes int64
+	// getenv reads the environment .edit consults for an editor, and editorRunner
+	// starts it. Both are fields so a test can choose an editor and watch what it
+	// was given without setting a process-wide variable, which t.Setenv forbids in
+	// a parallel test. Production always gets the real ones from NewShell.
+	getenv       func(string) string
+	editorRunner func(ctx context.Context, argv []string, path string) error
+	// lastStatement is the last SQL submitted at the prompt, which is what .edit
+	// opens. A statement worth editing is almost always the one that just ran or
+	// just failed, and retyping it is the work .edit exists to remove.
+	lastStatement string
 }
 
 type promptSession interface {
@@ -245,6 +256,8 @@ func NewShell(
 		tableSources:   make(map[string]string),
 		allowRemote:    arg.AllowRemote,
 		httpClient:     newRemoteClient(),
+		getenv:         os.Getenv,
+		editorRunner:   runEditorProcess,
 	}
 	// The factory closes over the shell rather than over arg, so the question
 	// "is what has been typed a finished statement" is asked of the dialect in
@@ -551,6 +564,30 @@ func (s *Shell) communicate(ctx context.Context) error {
 			}
 			return err
 		}
+		// .edit is answered here rather than through the command table, because
+		// running it means giving up the prompt session and taking a new one, and
+		// this loop is what holds it.
+		if edit, err := isEditRequest(input); edit {
+			if err != nil {
+				fmt.Fprintf(config.Stderr, "%v\n", err)
+				continue
+			}
+			replacement, session, err := s.editThenReopen(ctx, p)
+			if session != nil {
+				p = session
+			}
+			if err != nil {
+				fmt.Fprintf(config.Stderr, "%v\n", err)
+				if session == nil {
+					return err // no prompt to go back to
+				}
+				continue
+			}
+			if replacement == "" {
+				continue
+			}
+			input = replacement
+		}
 		if err := s.execWatchingForInterrupt(ctx, p, input); err != nil {
 			if errors.Is(err, ErrExitSqly) {
 				return nil // user input ".exit"
@@ -559,6 +596,44 @@ func (s *Shell) communicate(ctx context.Context) error {
 			continue
 		}
 	}
+}
+
+// editThenReopen hands the terminal to the user's editor and takes it back,
+// returning what was saved and the prompt session to carry on with.
+//
+// The session is closed for the duration and a new one opened after, because a
+// prompt owns the terminal while it lives: it holds raw mode and reads the
+// terminal from a goroutine of its own. Nothing is lost by reopening — history
+// is on disk and is reloaded — and prompt v0.0.21 is what makes it work: before
+// it, Close left that goroutine reading, and the session opened afterwards
+// received nothing at all.
+//
+// A returned session of nil means the terminal could not be taken back, which
+// ends the shell: there is no prompt left to return to.
+func (s *Shell) editThenReopen(ctx context.Context, p promptSession) (string, promptSession, error) {
+	if err := p.Close(); err != nil {
+		return "", p, fmt.Errorf("failed to release the terminal for the editor: %w", err)
+	}
+
+	edited, editErr := s.runEditor(ctx, s.lastStatement)
+
+	session, err := s.newPromptSession(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("the editor finished but the prompt could not be reopened: %w", err)
+	}
+	if editErr != nil {
+		return "", session, editErr
+	}
+	if edited == "" {
+		fmt.Fprintf(config.Stderr, "%s: nothing to run; the file was left empty\n", editCommand)
+		return "", session, nil
+	}
+
+	// Echo what is about to run. The editor has drawn over the screen, so
+	// without this a statement appears to arrive from nowhere and its result
+	// cannot be told from the one before it.
+	fmt.Fprintf(config.Stdout, "%s\n", edited)
+	return edited, session, nil
 }
 
 // execWatchingForInterrupt runs one submission with Ctrl-C watched for, so a
@@ -1390,6 +1465,13 @@ func (s *Shell) execInteractive(ctx context.Context, input string) error {
 	if looksLikeCommand(req) && !strings.ContainsAny(req, "\r\n") {
 		return s.dispatch(ctx, req)
 	}
+
+	// Remember the SQL, not the helper commands, as what .edit opens: a
+	// dot-command is retyped in less time than an editor takes to start, while
+	// the statement before it is the one worth editing. It is recorded before
+	// the statement runs, because a statement that failed is the one most worth
+	// opening again.
+	s.lastStatement = req
 
 	elements, err := parseScript(input, s.dialect())
 	if err != nil {

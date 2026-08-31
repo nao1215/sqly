@@ -281,9 +281,13 @@ in full and the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
 sqly:~/data(table)$ .import user.csv
 sqly:~/data(table)$ SELECT user_name FROM user
    ...> WHERE identifier = 1;
+sqly:~/data(table)$ .edit
 sqly:~/data(table)$ .mode json
 sqly:~/data(json)$ .save ./out
 ```
+
+`.edit` reopens the last statement in `$VISUAL` or `$EDITOR` and runs what you
+save, so a long query is edited rather than retyped.
 
 `.help` lists every command; the [shell page](https://nao1215.github.io/sqly/shell/) documents them.
 

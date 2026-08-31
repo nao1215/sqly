@@ -2,17 +2,17 @@
 
 ## [Unreleased]
 
-### Bug Fixes
-
-* `.dialect` decides where a statement ends, the way `--dialect` already did. Translation and execution used the dialect `.dialect` had set, while everything that reads the text — where a statement ends, whether the interactive buffer holds a finished one — used the dialect the process started with, so the two halves of one setting disagreed for the rest of the session. `.dialect mysql` followed by `SELECT 1 # note; more` was cut at a semicolon MySQL has commented out, and `more` was run as a statement of its own; the same line under `--dialect mysql` ran correctly. At the prompt the same statement waited on a continuation for a rest that had already been written and never ran. A script is now read as it goes, so a `.dialect` inside one applies to the lines after it.
-
 ### New Features
+
+* `.edit` opens the last statement in `$VISUAL` or `$EDITOR` and runs what is saved. A long query is edited rather than retyped, and the file it opens ends in `.sql` so an editor that highlights by extension does. An empty file runs nothing, and so does an editor that exits non-zero, which is how an edit is abandoned. It needs a terminal to hand to the editor, so it is refused in a script.
 
 * A mistyped name is answered with the one it is a typo of. An unknown helper command, a table this session does not have, and a column no table has each name the closest thing sqly knows, when there is one near enough: `.tabels` answers `.tables`, and `SELECT naem` answers `name`. Nearness is edit distance, where a letter dropped, doubled, mistyped, or two swapped each count as one edit; a name of five characters or more may be two edits away, a shorter one only one, and a name of two characters or fewer is never guessed at. Nothing is offered when no name is that close, and the rest of each message is unchanged.
 
 * Completion reads the statement being typed. A table position — after `FROM`, `JOIN`, `INSERT INTO`, `UPDATE` — offers table names and no longer offers columns, which cannot go there. A `SELECT` list, a `WHERE`, `ON`, `GROUP BY`, `ORDER BY` or `SET` offers the columns of the tables the statement names before the rest of the session's. And `alias.` or `table.` offers that table's columns spelled with the qualifier, resolving the alias from the statement's own `FROM` and `JOIN` clauses. The statement is read with the dialect's own lexical rules, so a keyword inside a string literal or a comment is the text it is.
 
 ### Bug Fixes
+
+* `.dialect` decides where a statement ends, the way `--dialect` already did. Translation and execution used the dialect `.dialect` had set, while everything that reads the text — where a statement ends, whether the interactive buffer holds a finished one — used the dialect the process started with, so the two halves of one setting disagreed for the rest of the session. `.dialect mysql` followed by `SELECT 1 # note; more` was cut at a semicolon MySQL has commented out, and `more` was run as a statement of its own; the same line under `--dialect mysql` ran correctly. At the prompt the same statement waited on a continuation for a rest that had already been written and never ran. A script is now read as it goes, so a `.dialect` inside one applies to the lines after it.
 
 * Tab after a lower-cased SQL keyword completes it. Keywords are offered upper-cased and matched case-insensitively, but the prompt library filtered the answer again with a case-sensitive test and discarded all of it, so `sel` followed by Tab produced no menu, no completion, and no change to the line. Completion now tells the prompt which span each suggestion replaces, which also fixes a suggestion whose text differs in case from what was typed being appended beside the word instead of completing it.
 
@@ -24,8 +24,7 @@
 
 ### Dependencies
 
-* prompt is updated to v0.0.20 for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites.
-
+* prompt is updated to v0.0.21 for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites, and for a `Close` that ends the goroutine reading the terminal. The second is what `.edit` rests on: before it, the prompt opened after the editor received nothing at all.
 ## [v1.3.0](https://github.com/nao1215/sqly/compare/v1.2.2...v1.3.0) (2026-08-29)
 
 ### Bug Fixes
