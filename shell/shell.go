@@ -1440,7 +1440,14 @@ func (s *Shell) schemaNames(ctx context.Context) schemaNames {
 			names.columns[strings.ToLower(column)] = true
 		}
 	}
-	s.completionNames = &names
+
+	// Only a schema the metadata really produced is worth keeping. A failed
+	// lookup returns an empty one without filling the cache behind it, and
+	// remembering that would leave every name uncolored until something else
+	// happened to invalidate it -- long after the metadata had recovered.
+	if s.completionSchema != nil {
+		s.completionNames = &names
+	}
 	return names
 }
 

@@ -57,11 +57,8 @@ const (
 	// Semicolon is a ";" in code, which is where a statement can end.
 	Semicolon
 	// String is a string literal, from its opening delimiter to its closing
-	// one, or to the end of the text when it was never closed.
-	//
-	// A doubled quote inside a literal closes one and opens the next, so such a
-	// literal arrives as two String regions that touch. Nothing between them is
-	// code, which is what the distinction is for.
+	// one, or to the end of the text when it was never closed. A doubled
+	// delimiter inside is the delimiter itself, so 'it''s' is one region.
 	String
 	// QuotedIdentifier is a name written in quotes, delimiters included. Which
 	// quotes those are is the dialect's business: a backtick everywhere but
@@ -410,13 +407,13 @@ func (sc *scanner) skipRegion() (Kind, bool) {
 		sc.skipBlockComment()
 		return Comment, true
 	case sc.rules.tripleQuote && (strings.HasPrefix(rest, tripleSingle) || strings.HasPrefix(rest, tripleDouble)):
-		sc.skipQuoted(rest[:3], 3, sc.rules.backslashEscape)
+		sc.skipQuoted(rest[:3], 3, sc.rules.backslashEscape, false)
 		return String, true
 	case rest[0] == '\'':
-		sc.skipQuoted("'", 1, sc.rules.backslashEscape || sc.escapeStringOpens())
+		sc.skipQuoted("'", 1, sc.rules.backslashEscape || sc.escapeStringOpens(), true)
 		return String, true
 	case rest[0] == '"':
-		sc.skipQuoted(`"`, 1, sc.rules.backslashEscape)
+		sc.skipQuoted(`"`, 1, sc.rules.backslashEscape, true)
 		// A double-quoted run is a name in standard SQL and a string in MySQL,
 		// which is the one dialect that reads it that way by default.
 		if sc.rules.doubleQuoteIsString {
@@ -424,10 +421,10 @@ func (sc *scanner) skipRegion() (Kind, bool) {
 		}
 		return QuotedIdentifier, true
 	case sc.rules.backtickIdent && rest[0] == '`':
-		sc.skipQuoted("`", 1, sc.rules.backtickEscape)
+		sc.skipQuoted("`", 1, sc.rules.backtickEscape, true)
 		return QuotedIdentifier, true
 	case sc.rules.bracketIdent && rest[0] == '[':
-		sc.skipQuoted("]", 1, false)
+		sc.skipQuoted("]", 1, false, false)
 		return QuotedIdentifier, true
 	case sc.rules.dollarQuote && rest[0] == '$':
 		if sc.skipDollarQuoted() {
@@ -510,7 +507,7 @@ func (sc *scanner) skipBlockComment() {
 // skipQuoted steps past a region the cursor opens, which closer ends. The opener
 // is as long as the closer for a quote that is its own delimiter, which is what
 // makes a tripled quote one region rather than three.
-func (sc *scanner) skipQuoted(closer string, opener int, backslashEscapes bool) {
+func (sc *scanner) skipQuoted(closer string, opener int, backslashEscapes, doubledCloser bool) {
 	sc.i += opener
 	for sc.i < len(sc.s) {
 		if backslashEscapes && sc.s[sc.i] == '\\' {
@@ -519,6 +516,14 @@ func (sc *scanner) skipQuoted(closer string, opener int, backslashEscapes bool) 
 		}
 		if strings.HasPrefix(sc.s[sc.i:], closer) {
 			sc.i += len(closer)
+			// A doubled delimiter is the delimiter itself rather than the end
+			// of the region: 'it''s' is one literal and "a""b" is one name.
+			// Where the delimiters differ from each other there is nothing to
+			// double -- SQLite's [a]]b] holds two brackets, not one.
+			if doubledCloser && strings.HasPrefix(sc.s[sc.i:], closer) {
+				sc.i += len(closer)
+				continue
+			}
 			return
 		}
 		sc.i++

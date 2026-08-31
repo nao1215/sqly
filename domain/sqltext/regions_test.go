@@ -43,18 +43,33 @@ func TestRegionsReportsWhatTokensSkips(t *testing.T) {
 			},
 		},
 		{
-			// A doubled quote closes one literal and opens the next, so the text
-			// arrives as two regions that touch. Nothing between them is code,
-			// which is what a caller cares about: a highlighter colors the pair
-			// as one uninterrupted run, and the walk that skips them skips all of
-			// it either way.
-			name:    "a doubled quote leaves two literals that touch",
+			name:    "a doubled quote stays inside the literal that holds it",
 			text:    "SELECT 'it''s'",
 			dialect: dialect.SQLite,
 			want: []region{
 				{sqltext.Word, "SELECT"},
-				{sqltext.String, "'it'"},
-				{sqltext.String, "'s'"},
+				{sqltext.String, "'it''s'"},
+			},
+		},
+		{
+			name:    "a doubled quote stays inside the name that holds it",
+			text:    `SELECT "a""b"`,
+			dialect: dialect.SQLite,
+			want: []region{
+				{sqltext.Word, "SELECT"},
+				{sqltext.QuotedIdentifier, `"a""b"`},
+			},
+		},
+		{
+			// SQLite's bracket quoting has no escape, so a doubled closer is two
+			// brackets and the name ends at the first of them.
+			name:    "a bracketed name has no doubling to undo",
+			text:    "SELECT [a]]b]",
+			dialect: dialect.SQLite,
+			want: []region{
+				{sqltext.Word, "SELECT"},
+				{sqltext.QuotedIdentifier, "[a]"},
+				{sqltext.Word, "b"},
 			},
 		},
 		{

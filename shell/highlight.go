@@ -104,6 +104,11 @@ func highlightSQL(input string, theme syntaxTheme, d dialect.Dialect, names sche
 // still being typed.
 type identifierPosition struct {
 	wantTable bool
+	// prevEnd is where the last region ended, so the punctuation before the
+	// next one can be read. A "." between two names makes them one qualified
+	// name, and the table position belongs to the part after it: "FROM
+	// main.actor" reads from actor, not from main.
+	prevEnd int
 }
 
 // regionColor is what one region is drawn in, and whether it is drawn at all.
@@ -114,6 +119,12 @@ type identifierPosition struct {
 // names at all: sqly knows which ones exist, which an editor highlighting the
 // same text does not.
 func regionColor(tok sqltext.Token, input string, theme syntaxTheme, names schemaNames, position *identifierPosition) (prompt.Color, bool) {
+	// A "." joins two names into one, and the name that matters is the one
+	// after it, so the table position carries across rather than being spent
+	// on the schema qualifier.
+	qualified := position.prevEnd > 0 && separatorBetween(input, position.prevEnd, tok.Start) == "."
+	position.prevEnd = tok.End
+
 	switch tok.Kind {
 	case sqltext.String:
 		return theme.str, true
@@ -123,19 +134,21 @@ func regionColor(tok sqltext.Token, input string, theme syntaxTheme, names schem
 		// A name in quotes is a name: it is looked up like a bare one, with the
 		// quotes taken off first. Unknown, it keeps the input color, the same
 		// answer a bare name it does not recognize gets.
-		return wordColor(unquoteIdentifier(tok.Text(input)), theme, names, position)
+		return wordColor(unquoteIdentifier(tok.Text(input)), theme, names, position, qualified)
 	case sqltext.Semicolon:
 		position.wantTable = false
 		return prompt.Color{}, false
 	case sqltext.Word:
-		return wordColor(tok.Text(input), theme, names, position)
+		return wordColor(tok.Text(input), theme, names, position, qualified)
 	default:
 		return prompt.Color{}, false
 	}
 }
 
-// wordColor is what one word in code is drawn in.
-func wordColor(text string, theme syntaxTheme, names schemaNames, position *identifierPosition) (prompt.Color, bool) {
+// wordColor is what one word in code is drawn in. qualified says the word is
+// the part of a dotted name after the dot, which is what keeps a table position
+// alive across a schema qualifier.
+func wordColor(text string, theme syntaxTheme, names schemaNames, position *identifierPosition, qualified bool) (prompt.Color, bool) {
 	upper := strings.ToUpper(text)
 	if highlightKeywords()[upper] {
 		// A keyword decides what the next word is: after these, a name is the
@@ -144,8 +157,10 @@ func wordColor(text string, theme syntaxTheme, names schemaNames, position *iden
 		return theme.keyword, true
 	}
 
+	// A name after a dot inherits the position of the name before it, so
+	// "FROM main.actor" still expects a table when it reaches actor.
 	wantTable := position.wantTable
-	position.wantTable = false
+	position.wantTable = position.wantTable && qualified
 
 	switch {
 	case startsWithDigit(text):
@@ -220,15 +235,25 @@ func startsWithDigit(s string) bool {
 	return s != "" && s[0] >= '0' && s[0] <= '9'
 }
 
-// unquoteIdentifier strips the delimiters from a quoted name. Which characters
-// those are is the dialect's business, but every one of them opens and closes
-// with a single character, so taking one off each end is enough to look the
-// name up.
+// unquoteIdentifier returns the name a quoted identifier holds: the delimiters
+// off, and a doubled delimiter inside collapsed to the one character it stands
+// for, which is how a name containing its own quote is written.
+//
+// Which characters the delimiters are is the dialect's business, but every one
+// of them opens and closes with a single character, so the ends say what to
+// undouble without having to ask.
 func unquoteIdentifier(text string) string {
 	if len(text) < 2 {
 		return text
 	}
-	return text[1 : len(text)-1]
+	open, closing := text[0], text[len(text)-1]
+	inner := text[1 : len(text)-1]
+	// A bracketed name has nothing to undouble: its delimiters differ from each
+	// other, and SQLite's "[a]" cannot hold a "]" at all.
+	if open != closing {
+		return inner
+	}
+	return strings.ReplaceAll(inner, string([]byte{closing, closing}), string(closing))
 }
 
 // schemaNames are the table and column names the session has, lower-cased,
