@@ -47,8 +47,11 @@ func roleOf(theme syntaxTheme, c prompt.Color) string {
 // name is around.
 func testNames() schemaNames {
 	return schemaNames{
-		tables:  map[string]bool{"users": true, "orders": true},
-		columns: map[string]bool{"id": true, "name": true, "total": true},
+		tables: map[string]bool{"users": true, "orders": true, "actor": true},
+		// "actor" is a column as well as a table, the way a one-column file
+		// gives its own name to both. A rule that gets the table position
+		// wrong shows up here and nowhere else.
+		columns: map[string]bool{"id": true, "name": true, "total": true, "actor": true},
 	}
 }
 
@@ -157,9 +160,9 @@ func TestHighlightSQL(t *testing.T) {
 			// after the dot is the relation. "users" is a table and "id" a
 			// column here, so getting this wrong colors the table as a column.
 			name:    "a schema-qualified table is still a table",
-			input:   "SELECT id FROM main.users",
+			input:   "SELECT id FROM main.actor",
 			dialect: dialect.SQLite,
-			want:    []string{"keyword:SELECT", "column:id", "keyword:FROM", "table:users"},
+			want:    []string{"keyword:SELECT", "column:id", "keyword:FROM", "table:actor"},
 		},
 		{
 			name:    "a quoted schema-qualified table is still a table",
@@ -358,43 +361,9 @@ func BenchmarkHighlightLongStatement(b *testing.B) {
 	}
 }
 
-// TestUnquoteIdentifier covers reading the name out of a quoted one, including
-// the doubled delimiter that is how a name holding its own quote is written.
-// Getting it wrong costs a color rather than a wrong one -- the name simply
-// does not match anything the session has -- which is why it is easy to miss.
-func TestUnquoteIdentifier(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{name: "a double-quoted name", input: `"col"`, want: "col"},
-		{name: "a backtick-quoted name", input: "`col`", want: "col"},
-		{name: "a bracketed name", input: "[col]", want: "col"},
-		{name: "a doubled double quote is one quote", input: `"a""b"`, want: `a"b`},
-		{name: "a doubled backtick is one backtick", input: "`a``b`", want: "a`b"},
-		{name: "a name holding a space", input: `"my col"`, want: "my col"},
-		{name: "an empty quoted name", input: `""`, want: ""},
-		{name: "something too short to be quoted is left alone", input: `"`, want: `"`},
-		{name: "a bracketed name has nothing to undouble", input: "[a]]b]", want: "a]]b"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := unquoteIdentifier(tt.input); got != tt.want {
-				t.Errorf("unquoteIdentifier(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestHighlightFindsANameHoldingItsOwnQuote is the same thing through the
-// highlighter: a column whose name contains a quote is colored, because the
-// doubling is undone before the lookup.
+// TestHighlightFindsANameHoldingItsOwnQuote covers a column whose name contains
+// a quote: the doubling is undone before the lookup, so it is found and
+// colored. A name that reached the lookup as it was written would not be.
 func TestHighlightFindsANameHoldingItsOwnQuote(t *testing.T) {
 	t.Parallel()
 
@@ -413,6 +382,32 @@ func TestHighlightFindsANameHoldingItsOwnQuote(t *testing.T) {
 	}
 
 	want := []string{"keyword:SELECT", `column:"a""b"`, "keyword:FROM", "table:t"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("highlightSQL(%q) = %v, want %v", input, got, want)
+	}
+}
+
+// TestHighlightFindsABacktickEscapedName is the same through the dialect that
+// escapes with a backslash rather than by doubling, which is the reason the
+// unquoting asks which dialect it is reading.
+func TestHighlightFindsABacktickEscapedName(t *testing.T) {
+	t.Parallel()
+
+	theme := testTheme(t)
+	names := schemaNames{
+		tables:  map[string]bool{"t": true},
+		columns: map[string]bool{"a`b": true},
+	}
+
+	const input = "SELECT `a\\`b` FROM t"
+	runes := []rune(input)
+	spans := highlightSQL(input, theme, dialect.GoogleSQL, names)
+	got := make([]string, 0, len(spans))
+	for _, span := range spans {
+		got = append(got, roleOf(theme, span.Color)+":"+string(runes[span.Start:span.End]))
+	}
+
+	want := []string{"keyword:SELECT", "column:`a\\`b`", "keyword:FROM", "table:t"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("highlightSQL(%q) = %v, want %v", input, got, want)
 	}

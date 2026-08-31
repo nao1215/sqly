@@ -242,3 +242,66 @@ func TestRegionsCoverTheirText(t *testing.T) {
 		}
 	}
 }
+
+// TestUnquote covers reading the name out of a quoted one: the delimiters off,
+// a doubled delimiter collapsed, and a backslash escape resolved where the
+// dialect has them.
+//
+// Getting it wrong costs a caller a match rather than a crash -- a highlighter
+// simply does not recognize the name -- which is why it is worth pinning.
+func TestUnquote(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		text    string
+		dialect dialect.Dialect
+		want    string
+	}{
+		{name: "a double-quoted name", text: `"col"`, dialect: dialect.SQLite, want: "col"},
+		{name: "a backtick-quoted name", text: "`col`", dialect: dialect.MySQL, want: "col"},
+		{name: "a bracketed name", text: "[col]", dialect: dialect.SQLite, want: "col"},
+		{name: "a name holding a space", text: `"my col"`, dialect: dialect.SQLite, want: "my col"},
+		{name: "a doubled double quote is one quote", text: `"a""b"`, dialect: dialect.SQLite, want: `a"b`},
+		{name: "a doubled backtick is one backtick", text: "`a``b`", dialect: dialect.MySQL, want: "a`b"},
+		{name: "a doubled single quote is one quote", text: "'it''s'", dialect: dialect.SQLite, want: "it's"},
+		{
+			// GoogleSQL alone escapes inside a backtick-quoted name, which is
+			// the reason this takes the dialect at all.
+			name: "a backslash escape inside a backtick resolves in GoogleSQL",
+			text: "`a\\`b`", dialect: dialect.GoogleSQL, want: "a`b",
+		},
+		{
+			name: "and stays as written where the dialect has no such escape",
+			text: "`a\\`b`", dialect: dialect.MySQL, want: "a\\`b",
+		},
+		{
+			name: "a backslash escape inside a string resolves in MySQL",
+			text: `'a\'b'`, dialect: dialect.MySQL, want: "a'b",
+		},
+		{
+			// SQLite has no backslash escape, so the backslash is a character.
+			name: "and stays as written in SQLite",
+			text: `'a\b'`, dialect: dialect.SQLite, want: `a\b`,
+		},
+		{
+			// SQLite's bracket quoting has no escape at all.
+			name: "a bracketed name has nothing to undouble",
+			text: "[a]]b]", dialect: dialect.SQLite, want: "a]]b",
+		},
+		{name: "an empty quoted name", text: `""`, dialect: dialect.SQLite, want: ""},
+		{name: "something too short to be quoted is left alone", text: `"`, dialect: dialect.SQLite, want: `"`},
+		{name: "text that is not quoted is left alone", text: "col", dialect: dialect.SQLite, want: "col"},
+		{name: "text opened but not closed by a delimiter is left alone", text: `"col`, dialect: dialect.SQLite, want: `"col`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := sqltext.Unquote(tt.text, tt.dialect); got != tt.want {
+				t.Errorf("Unquote(%q, %v) = %q, want %q", tt.text, tt.dialect, got, tt.want)
+			}
+		})
+	}
+}

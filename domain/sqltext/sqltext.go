@@ -119,6 +119,76 @@ func Regions(s string, d dialect.Dialect) iter.Seq[Token] {
 	}
 }
 
+// Unquote returns the name a quoted identifier holds, or the text a string
+// literal does: the delimiters off, a doubled delimiter collapsed to the one
+// character it stands for, and a backslash escape resolved where d has them.
+//
+// It is here rather than in the caller because which characters delimit a name
+// and what escapes inside one are the same dialect knowledge the walk already
+// holds. A caller comparing a quoted name against names it knows -- a
+// highlighter, a completer -- needs the name, not the way it was written.
+//
+// Text that is not quoted comes back unchanged.
+func Unquote(s string, d dialect.Dialect) string {
+	if len(s) < 2 {
+		return s
+	}
+	open, closing := s[0], s[len(s)-1]
+	if closerFor(open) != closing {
+		return s // not quoted, or not closed by what opened it
+	}
+	inner := s[1 : len(s)-1]
+
+	// A bracketed name has nothing to undo: its delimiters differ from each
+	// other, and SQLite's [a]]b] holds two brackets rather than an escape.
+	if open != closing {
+		return inner
+	}
+
+	rules := syntaxOf(d)
+
+	backslash := false
+	switch open {
+	case '`':
+		backslash = rules.backtickEscape
+	case '\'', '"':
+		backslash = rules.backslashEscape
+	}
+	return unescapeQuoted(inner, open, backslash)
+}
+
+// closerFor returns the character that closes a region the given one opens, or
+// zero when it opens none.
+func closerFor(open byte) byte {
+	switch open {
+	case '\'', '"', '`':
+		return open
+	case '[':
+		return ']'
+	default:
+		return 0
+	}
+}
+
+// unescapeQuoted resolves the escapes inside a quoted region's text.
+func unescapeQuoted(inner string, delimiter byte, backslash bool) string {
+	var b strings.Builder
+	b.Grow(len(inner))
+	for i := 0; i < len(inner); i++ {
+		switch {
+		case backslash && inner[i] == '\\' && i+1 < len(inner):
+			i++
+			b.WriteByte(inner[i])
+		case inner[i] == delimiter && i+1 < len(inner) && inner[i+1] == delimiter:
+			i++
+			b.WriteByte(delimiter)
+		default:
+			b.WriteByte(inner[i])
+		}
+	}
+	return b.String()
+}
+
 // OpenDepth reports how many parentheses are open at the end of s: the nesting
 // a statement continued on the next line would be written at.
 //
