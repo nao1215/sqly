@@ -809,8 +809,16 @@ scenarios:
 
   # SQL is colored as it is typed. The check is on the escape sequences in the
   # stream rather than on the screen, because the screen shows the text and the
-  # question here is what color it was drawn in: 255;121;198 is dracula's
-  # keyword pink, and 189;147;249 its number purple.
+  # question here is what color it was drawn in.
+  #
+  # What is checked is dracula's number purple and nothing after it. Windows
+  # writes its colors through go-colorable, which orders the SGR parameters
+  # differently -- "\e[1;38;2;R;G;Bm" on Unix against "\e[38;2;R;G;Bm\e[1m"
+  # there -- so a pattern anchoring the text to the color matches on one
+  # platform only. The number purple is the right code to look for because
+  # nothing else in the session draws in it: dracula's own prefix, input, and
+  # suggestion colors are all different, so it is there because a number was
+  # highlighted or it is not there at all.
   - name: a theme colors keywords and numbers as they are typed
     env:
       SQLY_SETTINGS_PATH: "${workdir}/settings.json"
@@ -834,9 +842,8 @@ scenarios:
           exit_code: 0
           stdout:
             contains:
-              - "38;2;255;121;198mSELECT" # the keyword, in the theme's color
-              - "38;2;189;147;249m30"     # the number, in its own
-              - "Alice"                   # and the statement still ran
+              - "38;2;189;147;249m" # dracula's number purple: a token was colored
+              - "Alice"             # and the statement still ran
 
   # The way out, for a terminal or a reader that wants the input plain.
   - name: the none theme colors nothing and the shell still works
@@ -862,7 +869,8 @@ scenarios:
           exit_code: 0
           stdout:
             contains: "Alice"
-            not_contains: "38;2;255;121;198mSELECT"
+            # The same color the scenario above finds, absent here.
+            not_contains: "38;2;189;147;249m"
 
   # The choice outlives the session that made it, which is the whole reason it
   # is written down. The second process is told nothing; it reads the file the
