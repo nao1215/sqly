@@ -67,10 +67,8 @@ var schemeNightOwl = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x7f, G: 0xdb, B: 0xca},
 		Description: prompt.Color{R: 0x63, G: 0x77, B: 0x77},
-		Match:       prompt.Color{R: 0xec, G: 0xc4, B: 0x8d, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xc7, G: 0x92, B: 0xea, Bold: true},
-	Cursor:   prompt.Color{R: 0xd6, G: 0xde, B: 0xeb},
 }
 
 // schemeDracula draws the prompt in dracula's own colors.
@@ -81,10 +79,8 @@ var schemeDracula = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x8b, G: 0xe9, B: 0xfd},
 		Description: prompt.Color{R: 0x62, G: 0x72, B: 0xa4},
-		Match:       prompt.Color{R: 0xf1, G: 0xfa, B: 0x8c, Bold: true},
 	},
 	Selected: prompt.Color{R: 0x50, G: 0xfa, B: 0x7b, Bold: true},
-	Cursor:   prompt.Color{R: 0xf8, G: 0xf8, B: 0xf2},
 }
 
 // schemeMonokai draws the prompt in monokai's own colors.
@@ -95,10 +91,8 @@ var schemeMonokai = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x66, G: 0xd9, B: 0xef},
 		Description: prompt.Color{R: 0x75, G: 0x71, B: 0x5e},
-		Match:       prompt.Color{R: 0xe6, G: 0xdb, B: 0x74, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xa6, G: 0xe2, B: 0x2e, Bold: true},
-	Cursor:   prompt.Color{R: 0xf8, G: 0xf8, B: 0xf2},
 }
 
 // schemeNord draws the prompt in nord's own colors.
@@ -109,10 +103,8 @@ var schemeNord = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x8f, G: 0xbc, B: 0xbb},
 		Description: prompt.Color{R: 0x61, G: 0x6e, B: 0x88},
-		Match:       prompt.Color{R: 0xeb, G: 0xcb, B: 0x8b, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xa3, G: 0xbe, B: 0x8c, Bold: true},
-	Cursor:   prompt.Color{R: 0xd8, G: 0xde, B: 0xe9},
 }
 
 // schemeSolarized draws the prompt in solarized's own colors.
@@ -123,10 +115,8 @@ var schemeSolarized = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x26, G: 0x8b, B: 0xd2},
 		Description: prompt.Color{R: 0x58, G: 0x6e, B: 0x75},
-		Match:       prompt.Color{R: 0x2a, G: 0xa1, B: 0x98, Bold: true},
 	},
 	Selected: prompt.Color{R: 0x85, G: 0x99, B: 0x00, Bold: true},
-	Cursor:   prompt.Color{R: 0x93, G: 0xa1, B: 0xa1},
 }
 
 // schemeGruvbox draws the prompt in gruvbox's own colors.
@@ -137,10 +127,8 @@ var schemeGruvbox = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x83, G: 0xa5, B: 0x98},
 		Description: prompt.Color{R: 0x92, G: 0x83, B: 0x74},
-		Match:       prompt.Color{R: 0xb8, G: 0xbb, B: 0x26, Bold: true},
 	},
 	Selected: prompt.Color{R: 0x8e, G: 0xc0, B: 0x7c, Bold: true},
-	Cursor:   prompt.Color{R: 0xeb, G: 0xdb, B: 0xb2},
 }
 
 // schemeTokyoNight draws the prompt in tokyo-night's own colors.
@@ -151,10 +139,8 @@ var schemeTokyoNight = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x7d, G: 0xcf, B: 0xff},
 		Description: prompt.Color{R: 0x56, G: 0x5f, B: 0x89},
-		Match:       prompt.Color{R: 0x9e, G: 0xce, B: 0x6a, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xbb, G: 0x9a, B: 0xf7, Bold: true},
-	Cursor:   prompt.Color{R: 0xc0, G: 0xca, B: 0xf5},
 }
 
 // schemeCatppuccin draws the prompt in catppuccin's own colors.
@@ -165,10 +151,8 @@ var schemeCatppuccin = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x89, G: 0xdc, B: 0xeb},
 		Description: prompt.Color{R: 0x6c, G: 0x70, B: 0x86},
-		Match:       prompt.Color{R: 0xa6, G: 0xe3, B: 0xa1, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xcb, G: 0xa6, B: 0xf7, Bold: true},
-	Cursor:   prompt.Color{R: 0xcd, G: 0xd6, B: 0xf4},
 }
 
 // schemeVscode draws the prompt in vscode's own colors.
@@ -179,10 +163,8 @@ var schemeVscode = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x4e, G: 0xc9, B: 0xb0},
 		Description: prompt.Color{R: 0x6a, G: 0x99, B: 0x55},
-		Match:       prompt.Color{R: 0xce, G: 0x91, B: 0x78, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xdc, G: 0xdc, B: 0xaa, Bold: true},
-	Cursor:   prompt.Color{R: 0xd4, G: 0xd4, B: 0xd4},
 }
 
 // schemeGithubLight draws the prompt in github-light's own colors.
@@ -193,10 +175,8 @@ var schemeGithubLight = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x95, G: 0x38, B: 0x00},
 		Description: prompt.Color{R: 0x6e, G: 0x77, B: 0x81},
-		Match:       prompt.Color{R: 0x0a, G: 0x30, B: 0x69, Bold: true},
 	},
 	Selected: prompt.Color{R: 0x82, G: 0x50, B: 0xdf, Bold: true},
-	Cursor:   prompt.Color{R: 0x24, G: 0x29, B: 0x2f},
 }
 
 // schemeAccessible draws the prompt in accessible's own colors.
@@ -207,10 +187,8 @@ var schemeAccessible = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x00, G: 0xff, B: 0x00},
 		Description: prompt.Color{R: 0xc0, G: 0xc0, B: 0xc0},
-		Match:       prompt.Color{R: 0xff, G: 0xff, B: 0x00, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xff, G: 0x00, B: 0xff, Bold: true},
-	Cursor:   prompt.Color{R: 0xff, G: 0xff, B: 0xff},
 }
 
 // schemeNone draws the prompt in none's own colors.
@@ -221,10 +199,8 @@ var schemeNone = &prompt.ColorScheme{
 	Suggestion: prompt.SuggestionColors{
 		Text:        prompt.Color{R: 0x7f, G: 0xdb, B: 0xca},
 		Description: prompt.Color{R: 0x63, G: 0x77, B: 0x77},
-		Match:       prompt.Color{R: 0xec, G: 0xc4, B: 0x8d, Bold: true},
 	},
 	Selected: prompt.Color{R: 0xc7, G: 0x92, B: 0xea, Bold: true},
-	Cursor:   prompt.Color{R: 0xd6, G: 0xde, B: 0xeb},
 }
 
 // syntaxThemes are the themes .theme can select, by name.
