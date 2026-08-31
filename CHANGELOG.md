@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v1.4.0](https://github.com/nao1215/sqly/compare/v1.3.0...v1.4.0) (2026-08-31)
 
 ### New Features
 
@@ -29,6 +29,8 @@
 * A filename is no longer offered where a table goes. A bare word in a SQL statement was also completed against the working directory whenever the line held `SELECT` or `FROM`, but no SQL statement in sqly takes a path. The file a table was read from shares the table's prefix, so `FROM peo` offered both `people` and `people.csv` and neither completed.
 
 ### Dependencies
+
+* filesql is updated to v0.53.0. Three things change for sqly. A path that is not a regular file is refused rather than opened, so `sqly named.pipe` and a directory holding one are answered with an error instead of waiting forever on a read that never returns. A MySQL query translated by `--dialect mysql` spells a number the way MySQL spells it wherever a string function reads one, and `NULLIF`, `FIELD` and `FORMAT` compare and group their arguments the way MySQL does, so a query that ran under both engines no longer answers differently under sqly. And a leading byte-order mark is stripped from the first column name whether the file carries one or several, so a CSV exported by a spreadsheet imports under the name it shows rather than under a name with an invisible character at its head.
 
 * prompt is updated to v0.0.22 for `WithAutoIndent`, which decides what a new line opens with, and for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites, and for a `Close` that ends the goroutine reading the terminal. The second is what `.edit` rests on: before it, the prompt opened after the editor received nothing at all.
 ## [v1.3.0](https://github.com/nao1215/sqly/compare/v1.2.2...v1.3.0) (2026-08-29)
