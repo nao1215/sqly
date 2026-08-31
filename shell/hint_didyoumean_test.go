@@ -114,3 +114,35 @@ func TestMissingColumnHintNamesTheNearestColumn(t *testing.T) {
 		t.Errorf("hint for an unrecognizable column dropped the advice: %v", got)
 	}
 }
+
+// TestMissingColumnHintSeesAColumnAddedBySQL covers the hint against a warmed
+// completion cache. The hint reads the same cached schema completion does, and
+// that cache is keyed by the table-name set, which an ALTER TABLE ... ADD COLUMN
+// leaves untouched — so a stale cache would have the hint search the columns a
+// table had before the statement ran.
+func TestMissingColumnHintSeesAColumnAddedBySQL(t *testing.T) {
+	// Serial: newShell builds an in-memory DB and a temp history path.
+	s, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := s.exec(ctx, "CREATE TABLE t (alpha)"); err != nil {
+		t.Fatalf("CREATE TABLE: %v", err)
+	}
+	// Warm the cache, so the ALTER below has a stale entry to invalidate.
+	if got := completionTexts(s.getCompletions(ctx, "SELECT alph")); len(got) == 0 {
+		t.Fatal("the column alpha was not completed before the ALTER, so the cache was never warmed")
+	}
+
+	if err := s.exec(ctx, "ALTER TABLE t ADD COLUMN bravo"); err != nil {
+		t.Fatalf("ALTER TABLE: %v", err)
+	}
+
+	got := s.withMissingNameHint(ctx, errors.New(`SQL logic error: no such column: bravoo (1)`))
+	if !strings.Contains(got.Error(), `Did you mean "bravo"?`) {
+		t.Errorf("hint after ALTER TABLE ADD COLUMN = %v, want it to name the column just added", got)
+	}
+}

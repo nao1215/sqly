@@ -760,10 +760,12 @@ hint: this session has no table "staf". Did you mean "staff"? Available tables: 
 Twenty names are listed; past that the list is cut and the total follows it as
 `... (N total)`. A missing column gets a line of the same kind, pointing at
 `.describe TABLE` and `sqly --inspect FILE`. A mistyped helper command is
-answered the same way. The name offered is the one a typo away — a letter
-dropped, doubled, mistyped, or two swapped — and nothing is offered when no
-name is that close. All are hints, not errors: stdout stays empty and the run
-still exits `1`.
+answered the same way. The name offered is the nearest by edit distance, where a
+letter dropped, doubled, mistyped, or two swapped each count as one edit: a name
+of five characters or more may be two edits away, a shorter one only one, and a
+name of two characters or fewer is never guessed at, being one edit from too much
+to mean anything. Nothing is offered when no name is that close. All are hints,
+not errors: stdout stays empty and the run still exits `1`.
 
 ## Exit codes
 
