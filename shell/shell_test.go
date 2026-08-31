@@ -1223,6 +1223,8 @@ type fakePromptSession struct {
 	runCalls        int
 	initialPrefix   string
 	capturedSuggest []prompt.Suggestion
+	// themes are the color schemes SetTheme was given, newest last.
+	themes []*prompt.ColorScheme
 	// exhaustErr is returned once results are exhausted. It defaults to io.EOF,
 	// modeling Ctrl-D; set it to prompt.ErrEOF to model a closed input stream.
 	exhaustErr error
@@ -1242,6 +1244,12 @@ type fakePromptSession struct {
 
 func (f *fakePromptSession) AddHistory(history string) {
 	f.addedHistories = append(f.addedHistories, history)
+}
+
+// SetTheme records the schemes .theme applied, so a test can see that a theme
+// chosen mid-session reached the prompt rather than only the shell.
+func (f *fakePromptSession) SetTheme(scheme *prompt.ColorScheme) {
+	f.themes = append(f.themes, scheme)
 }
 
 func (f *fakePromptSession) Close() error {

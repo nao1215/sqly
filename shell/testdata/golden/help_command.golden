@@ -4,6 +4,7 @@ Session
   .help              show this help
   .mode MODE         change output mode (table, vertical, csv, tsv, ltsv, json, jsonl, markdown, ...)
   .dialect [NAME]    show or set the query dialect (sqlite, mysql, postgresql, googlesql)
+  .theme [NAME]      show or set the colors SQL is drawn in (remembered across sessions)
   .edit              edit the last statement in $VISUAL or $EDITOR and run what is saved
   .clear             clear the terminal screen
   .exit              exit sqly

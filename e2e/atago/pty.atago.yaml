@@ -395,7 +395,10 @@ scenarios:
             - expect: "unterminated single quote in command"
             - expect: '\(table\)\$'
             - send: { key: up }
-            - expect: "\\.import 'oops"
+            # The screen, not the stream: the stream still holds the line as it
+            # was first typed, so only the screen shows the recall happened.
+            - expect_screen:
+                contains: ".import 'oops"
             # Clear the recalled line before EOF: Ctrl-D on a line with text is
             # not an end of input.
             - send: { key: ctrl-u }
@@ -755,7 +758,10 @@ scenarios:
             - send: "SELECT name FROM people WHERE age IN (\r"
             - expect: '\.\.\.>'
             - send: "SELECT max(age) FROM people\r"
-            - expect: "SELECT max"
+            # A fragment inside one colored run: highlighting puts escape
+            # sequences at every color boundary, so a pattern spanning one
+            # never matches the stream. expect_screen below sees the text.
+            - expect: "max\\(age\\)"
             # The open parenthesis stepped this line in one level: the
             # continuation prompt, then two spaces nobody typed. The screen is
             # what is checked rather than the stream, because the prompt writes
@@ -787,7 +793,7 @@ scenarios:
             - send: "SELECT '(' AS paren,\r"
             - expect: '\.\.\.>'
             - send: "name FROM people WHERE age = 25"
-            - expect: "name FROM people"
+            - expect: "25" # inside one colored run; see above
             # No indent, because the parenthesis it holds is inside a string.
             - expect_screen:
                 contains: "...> name FROM people WHERE age = 25"
@@ -800,6 +806,100 @@ scenarios:
           stdout:
             contains: "Bob"
             not_contains: "...>   name FROM" # one level would add two spaces
+
+  # SQL is colored as it is typed. The check is on the escape sequences in the
+  # stream rather than on the screen, because the screen shows the text and the
+  # question here is what color it was drawn in: 255;121;198 is dracula's
+  # keyword pink, and 189;147;249 its number purple.
+  - name: a theme colors keywords and numbers as they are typed
+    env:
+      SQLY_SETTINGS_PATH: "${workdir}/settings.json"
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".theme dracula\r"
+            - expect: "theme set to dracula"
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 30;\r"
+            - expect: "Alice"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains:
+              - "38;2;255;121;198mSELECT" # the keyword, in the theme's color
+              - "38;2;189;147;249m30"     # the number, in its own
+              - "Alice"                   # and the statement still ran
+
+  # The way out, for a terminal or a reader that wants the input plain.
+  - name: the none theme colors nothing and the shell still works
+    env:
+      SQLY_SETTINGS_PATH: "${workdir}/settings.json"
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".theme none\r"
+            - expect: "theme set to none"
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age = 30;\r"
+            - expect: "Alice"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Alice"
+            not_contains: "38;2;255;121;198mSELECT"
+
+  # The choice outlives the session that made it, which is the whole reason it
+  # is written down. The second process is told nothing; it reads the file the
+  # first one left.
+  - name: a theme chosen in one session is what the next one opens in
+    env:
+      SQLY_SETTINGS_PATH: "${workdir}/settings.json"
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".theme monokai\r"
+            - expect: "theme set to monokai"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: ".theme\r"
+            - expect: "current theme: monokai"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "current theme: monokai"
 
   # Editing an earlier line of a buffered statement leaves the screen alone. The
   # renderer erased the block it had drawn by moving up its height, which is
@@ -824,7 +924,7 @@ scenarios:
             - send: "SELECT name\r"
             - expect: '\.\.\.>'
             - send: "FROM people"
-            - expect: "FROM people"
+            - expect: "people" # inside one colored run; SQL is colored as it is typed
             - send: { key: left }
             - send: { key: left }
             - send: { key: left }
@@ -845,7 +945,7 @@ scenarios:
             # arrows left the cursor, so seeing it proves every one of them has
             # been processed and the screen below is the settled one.
             - send: "X"
-            - expect: "SELECT Xname"
+            - expect: "Xname" # inside one colored run
             # The screen is checked while the statement is still being edited:
             # after the exit below it holds neither line.
             - expect_screen:
@@ -1077,7 +1177,9 @@ scenarios:
           session:
             - expect: '\(table\)\$'
             - send: { key: up }
-            - expect: "SELECT name FROM people WHERE id = 2"
+            # The screen, not the stream, for the same reason as above.
+            - expect_screen:
+                contains: "SELECT name FROM people WHERE id = 2"
             - send: { key: ctrl-u }
             - send: { key: ctrl-d }
       - assert:

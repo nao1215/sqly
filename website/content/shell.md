@@ -101,6 +101,29 @@ sqly:~/data(table)$ SELECT name FROM user WHERE identifier IN (
 A parenthesis inside a string literal, a quoted name, or a comment is text and
 indents nothing, and which is which follows the current dialect.
 
+## Colors
+
+SQL is colored as you type it: keywords, string literals, comments, numbers, and
+names in quotes each get a color, and the names you chose stay in the prompt's
+own. `.theme` shows the theme in effect and the ones available, and takes one to
+switch to:
+
+```text
+sqly:~/data(table)$ .theme
+current theme: night-owl (available: accessible, catppuccin, dracula, github-light, gruvbox, monokai, night-owl, none, nord, solarized, tokyo-night, vscode)
+sqly:~/data(table)$ .theme dracula
+theme set to dracula
+```
+
+The choice is remembered: it is written to `settings.json` in sqly's config
+directory, so the next session opens the same way. `SQLY_SETTINGS_PATH` names
+that file if you want it elsewhere. `.theme none` turns coloring off and is
+remembered like any other choice.
+
+A theme sets the prompt's own colors too, so a light theme is light throughout.
+What counts as a string, a name in quotes, or a comment follows the current
+dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is.
+
 ## Editing a long statement
 
 `.edit` opens the last statement in your editor and runs what you save:
@@ -161,6 +184,7 @@ afterward still exits 0.
 | `.mode [MODE]` | show or set the output mode: `table`, `vertical`, `csv`, `tsv`, `ltsv`, `json`, `jsonl`, `markdown` |
 | `.dialect [NAME]` | show or set the query dialect: `sqlite`, `mysql`, `postgresql`, `googlesql` |
 | `.row-mismatch [POLICY]` | show or set how a CSV/TSV row whose field count differs from the header is imported: `error` fails the import, `skip` drops the row, `pad` fills a short row with empty values and fails on a long one |
+| `.theme [NAME]` | show or set the colors SQL is drawn in; the choice is remembered across sessions |
 | `.edit` | open the last statement in `$VISUAL` or `$EDITOR` and run what is saved |
 | `.clear` | clear the screen |
 | `.exit` | quit (so does `Ctrl-D`) |

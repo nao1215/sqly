@@ -54,6 +54,7 @@ const (
 	describeCommand = ".describe"
 	saveCommand     = ".save"
 	dialectCommand  = ".dialect"
+	themeCommand    = ".theme"
 	editCommand     = ".edit"
 	helpFlag        = "--help"
 	versionFlag     = "--version"
@@ -213,6 +214,16 @@ type Shell struct {
 	// opens. A statement worth editing is almost always the one that just ran or
 	// just failed, and retyping it is the work .edit exists to remove.
 	lastStatement string
+	// theme is the colors this session draws SQL in, loaded from the settings
+	// file and changed by .theme. promptSession is the prompt it draws through,
+	// held so a theme chosen mid-session reaches the screen rather than waiting
+	// for the next one.
+	theme         syntaxTheme
+	promptSession promptSession
+	// settingsErr is what reading the settings file said, kept until the shell
+	// has a place to say it. A first run reports nothing, because a missing
+	// file is what a first run looks like.
+	settingsErr error
 }
 
 type promptSession interface {
@@ -220,6 +231,9 @@ type promptSession interface {
 	Close() error
 	Run() (string, error)
 	SetPrefix(string)
+	// SetTheme changes the colors the prompt draws itself with, so .theme
+	// applies to the session it was typed in rather than the next one.
+	SetTheme(*prompt.ColorScheme)
 	// WatchInterrupt watches the terminal for Ctrl-C while a submission runs and
 	// returns a context canceled when it arrives. Between prompts nothing else is
 	// reading the terminal, and raw mode makes Ctrl-C a byte rather than a
@@ -243,7 +257,14 @@ func NewShell(
 	// Apply the initial SQL dialect from --dialect. Loading always uses SQLite;
 	// only user queries run through ExecSQL are translated.
 	usecases.query.SetDialect(arg.Dialect)
+	// The theme a session opens in is the one the last session saved. A settings
+	// file that cannot be read costs a warning rather than the shell, so the
+	// error is carried to where there is somewhere to print it.
+	settings, settingsErr := cfg.LoadSettings()
+
 	shell := &Shell{
+		theme:          themeFromSettings(settings),
+		settingsErr:    settingsErr,
 		argument:       arg,
 		config:         cfg,
 		commands:       cmds,
@@ -269,13 +290,16 @@ func NewShell(
 			prefix,
 			prompt.WithCompleter(completer),
 			prompt.WithMemoryHistory(historySize),
-			prompt.WithTheme(prompt.ThemeNightOwl),
+			prompt.WithTheme(shell.theme.prompt),
 			prompt.WithMultiline(true),
 			prompt.WithIsComplete(func(input string) bool {
 				return sqlInputComplete(input, shell.dialect())
 			}),
 			prompt.WithAutoIndent(func(before string) string {
 				return sqlIndent(before, shell.dialect())
+			}),
+			prompt.WithHighlighter(func(input string) []prompt.StyleSpan {
+				return highlightSQL(input, shell.theme, shell.dialect())
 			}),
 			prompt.WithContinuationPrefix(continuationPrefix),
 			prompt.WithWordEscape(),
@@ -540,8 +564,20 @@ func (s *Shell) communicate(ctx context.Context) error {
 		}
 	}()
 
+	// Held so .theme applies to the session it was typed in. It is cleared on
+	// the way out, because a closed prompt is not one to draw through.
+	s.promptSession = p
+	defer func() { s.promptSession = nil }()
+
 	// The prompt session is ready, so it is now safe to announce the shell.
 	s.printWelcomeMessage()
+
+	// A settings file that could not be read is worth one line, once, now that
+	// there is a screen to say it on. The session runs with the defaults.
+	if s.settingsErr != nil {
+		fmt.Fprintf(config.Stderr, "warning: %v; using the default theme\n", s.settingsErr)
+		s.settingsErr = nil
+	}
 
 	// Persistent raw mode disables the terminal's LF-to-CRLF mapping, so route
 	// command output through CRLF translation for the session. Restored on exit.
@@ -624,6 +660,7 @@ func (s *Shell) editThenReopen(ctx context.Context, p promptSession) (string, pr
 	if err != nil {
 		return "", nil, fmt.Errorf("the editor finished but the prompt could not be reopened: %w", err)
 	}
+	s.promptSession = session
 	if editErr != nil {
 		return "", session, editErr
 	}

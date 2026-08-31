@@ -25,6 +25,11 @@ type Config struct {
 	// file, one entry per line, so SQLY_HISTORY_PATH is what names it; the
 	// SQLY_HISTORY_DB_PATH that preceded it named a SQLite database.
 	HistoryPath string `env:"SQLY_HISTORY_PATH"`
+	// SettingsPath is where the session settings that outlive a session are
+	// kept, named by SQLY_SETTINGS_PATH the way SQLY_HISTORY_PATH names the
+	// history. Empty means the default beside it; settingsFilePath resolves
+	// that, so nothing has to check.
+	SettingsPath string `env:"SQLY_SETTINGS_PATH"`
 }
 
 // NewConfig return *Config.

@@ -4,6 +4,10 @@
 
 ### New Features
 
+* SQL is colored as it is typed. Keywords, string literals, comments, numbers, and names in quotes each get a color, and the names you chose stay in the prompt's own, so what is colored is the shape of the statement rather than all of it. What counts as a string, a name in quotes, or a comment follows the current dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is.
+
+* `.theme` shows the colors in effect and switches them, over twelve themes: accessible, catppuccin, dracula, github-light, gruvbox, monokai, night-owl, none, nord, solarized, tokyo-night, and vscode. A theme sets the prompt's own colors too, so a light theme is light throughout, and `none` turns coloring off. The choice is written to `settings.json` in sqly's config directory and read back by the next session, so it is made once rather than every time; `SQLY_SETTINGS_PATH` names that file if it belongs elsewhere. A settings file that cannot be read or written costs a warning rather than the session.
+
 * A continuation line opens where the statement is, not at the margin. It keeps the indentation of the line it continues and steps in one level for each parenthesis that line left open, so a subquery typed at the prompt reads as one. A parenthesis inside a string literal, a quoted name, or a comment is text and indents nothing, and which is which follows the current dialect. Indentation typed by hand is kept rather than recomputed, so only the change in nesting is sqly's to add.
 
 * `.edit` opens the last statement in `$VISUAL` or `$EDITOR` and runs what is saved. A long query is edited rather than retyped, and the file it opens ends in `.sql` so an editor that highlights by extension does. An empty file runs nothing, and so does an editor that exits non-zero, which is how an edit is abandoned. It needs a terminal to hand to the editor, so it is refused in a script.

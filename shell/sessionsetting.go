@@ -38,4 +38,5 @@ const (
 	settingDialect     = "dialect"
 	settingOutputMode  = "output mode"
 	settingRowMismatch = "row-mismatch policy"
+	settingTheme       = "theme"
 )
