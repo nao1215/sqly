@@ -26,6 +26,8 @@
 
 * A pasted statement longer than 64KB no longer makes the history file unreadable. sqly could not start again until the file was deleted by hand, because loading the history is part of opening the prompt.
 
+* The twelve themes drop the two colors the prompt never drew. `Cursor` and the completion menu's `Match` were set on every theme and had no effect on screen; the prompt has removed the fields, so `.theme` shows exactly what it changes.
+
 ## [v1.4.0](https://github.com/nao1215/sqly/compare/v1.3.0...v1.4.0) (2026-08-31)
 
 ### New Features
