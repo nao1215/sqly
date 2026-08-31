@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mattn/go-runewidth v0.0.28
 	github.com/nao1215/filesql v0.52.0
-	github.com/nao1215/prompt v0.0.20
+	github.com/nao1215/prompt v0.0.21
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/pflag v1.0.10
@@ -66,5 +66,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
-
-replace github.com/nao1215/prompt => ../prompt

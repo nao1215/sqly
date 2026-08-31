@@ -24,7 +24,7 @@
 
 ### Dependencies
 
-* prompt is updated to v0.0.20 for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites.
+* prompt is updated to v0.0.21 for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites, and for a `Close` that ends the goroutine reading the terminal. The second is what `.edit` rests on: before it, the prompt opened after the editor received nothing at all.
 ## [v1.3.0](https://github.com/nao1215/sqly/compare/v1.2.2...v1.3.0) (2026-08-29)
 
 ### Bug Fixes
