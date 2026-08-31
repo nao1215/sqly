@@ -58,8 +58,8 @@ github.com/moov-io/iso4217 v0.4.0 h1:+97e9chdg8Cx3kMLmGmvN64+CtmtodPLfUT2PaCXUUE
 github.com/moov-io/iso4217 v0.4.0/go.mod h1:QvQE6pvu9KItHusChPLOJS10EhJnyQpcKHloIqHkQVM=
 github.com/moov-io/wire v0.16.1 h1:JbeIS8JcmJJuxkXVXG6uGt4xYfEwkYk7xKzf5VbP0yQ=
 github.com/moov-io/wire v0.16.1/go.mod h1:UQ0xtx/uE3jzokvi21n7tjLN3kEpwVJbBL0pVtxFDZs=
-github.com/nao1215/filesql v0.52.0 h1:BjDvC62Iq31WUJRKpTn2YzOFfisd02sU0jjo+dN/ZTI=
-github.com/nao1215/filesql v0.52.0/go.mod h1:CG00RrOty2HfSVKJASywuUCSCVauBnfH1bc7qbxLz8U=
+github.com/nao1215/filesql v0.53.0 h1:x/p015NFD7epkzxJbkc+mA/q0ZY55CtT7iPpwoCMgwU=
+github.com/nao1215/filesql v0.53.0/go.mod h1:9d2olsHF3uBjZSw/1xvIFWcAzIikcWOlVtHIWSJtTVg=
 github.com/nao1215/prompt v0.0.22 h1:HNsVISOi00mK22wrnfoZVqL94psuyEYxPhO1sQ2p+6o=
 github.com/nao1215/prompt v0.0.22/go.mod h1:vCduz5KRTOmRLh2ek9gb4OwZ96F28pbnky0R2QAEkHc=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=
