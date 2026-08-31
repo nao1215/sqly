@@ -309,7 +309,7 @@ func TestCommunicate_PromptSessionCreationFails(t *testing.T) {
 
 	shell.historyEnabled = false
 	backendErr := errors.New("open /dev/tty: no such device")
-	shell.newPrompt = func(string, func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		return nil, backendErr
 	}
 

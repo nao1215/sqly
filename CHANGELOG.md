@@ -4,7 +4,7 @@
 
 ### New Features
 
-* SQL is colored as it is typed. Keywords, string literals, comments, numbers, and names in quotes each get a color, and the names you chose stay in the prompt's own, so what is colored is the shape of the statement rather than all of it. What counts as a string, a name in quotes, or a comment follows the current dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is.
+* SQL is colored as it is typed. Keywords, string literals, comments, numbers, and the names of tables and columns the session actually has each get a color. A name sqly does not recognize -- an alias, a function, a table not imported yet -- keeps the prompt's own color, so a misspelled table is the one word on the line with no color of its own. Knowing which names exist is what sqly has and an editor highlighting the same text does not. What counts as a string, a name in quotes, or a comment follows the current dialect, so `SELECT '(' -- not a comment'` is colored as the one string it is.
 
 * `.theme` shows the colors in effect and switches them, over twelve themes: accessible, catppuccin, dracula, github-light, gruvbox, monokai, night-owl, none, nord, solarized, tokyo-night, and vscode. A theme sets the prompt's own colors too, so a light theme is light throughout, and `none` turns coloring off. The choice is written to `settings.json` in sqly's config directory and read back by the next session, so it is made once rather than every time; `SQLY_SETTINGS_PATH` names that file if it belongs elsewhere. A settings file that cannot be read or written costs a warning rather than the session.
 

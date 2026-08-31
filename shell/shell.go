@@ -184,6 +184,9 @@ type Shell struct {
 	// rebuilding only when the table set changes (or after an import).
 	completionTableKey string
 	completionSchema   *completionSchema
+	// completionNames is the same schema as the set of names highlighting asks
+	// about, built once because it is asked on every keystroke.
+	completionNames *schemaNames
 	// allowRemote is this session's permission to download http(s) inputs, taken
 	// from --allow-remote when the shell is built. It is session state rather
 	// than a package-level flag so a capability granted to one invocation cannot
@@ -241,7 +244,7 @@ type promptSession interface {
 	WatchInterrupt(context.Context) (context.Context, context.CancelFunc)
 }
 
-type promptFactory func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error)
+type promptFactory func(prefix string, completer func(prompt.Document) []prompt.Suggestion, highlighter func(string) []prompt.StyleSpan) (promptSession, error)
 
 // NewShell return *Shell.
 func NewShell(
@@ -285,7 +288,7 @@ func NewShell(
 	// effect now. Closed over arg it was asked of the one --dialect started
 	// with, and a statement typed after .dialect mysql waited on a continuation
 	// for a rest that had already been written.
-	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	shell.newPrompt = func(prefix string, completer func(prompt.Document) []prompt.Suggestion, highlighter func(string) []prompt.StyleSpan) (promptSession, error) {
 		return prompt.New(
 			prefix,
 			prompt.WithCompleter(completer),
@@ -298,9 +301,7 @@ func NewShell(
 			prompt.WithAutoIndent(func(before string) string {
 				return sqlIndent(before, shell.dialect())
 			}),
-			prompt.WithHighlighter(func(input string) []prompt.StyleSpan {
-				return highlightSQL(input, shell.theme, shell.dialect())
-			}),
+			prompt.WithHighlighter(highlighter),
 			prompt.WithContinuationPrefix(continuationPrefix),
 			prompt.WithWordEscape(),
 			prompt.WithKeyMap(sqlyKeyMap()),
@@ -722,9 +723,14 @@ func sqlyKeyMap() *prompt.KeyMap {
 }
 
 func (s *Shell) newPromptSession(ctx context.Context) (promptSession, error) {
-	p, err := s.newPrompt(s.promptPrefix(), func(d prompt.Document) []prompt.Suggestion {
-		return s.completeDocument(ctx, d)
-	})
+	p, err := s.newPrompt(s.promptPrefix(),
+		func(d prompt.Document) []prompt.Suggestion {
+			return s.completeDocument(ctx, d)
+		},
+		func(input string) []prompt.StyleSpan {
+			return highlightSQL(input, s.theme, s.dialect(), s.schemaNames(ctx))
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1411,6 +1417,33 @@ func (s *Shell) schemaForCompletion(ctx context.Context) *completionSchema {
 	return schema
 }
 
+// schemaNames returns the table and column names highlighting draws in their
+// own colors, from a cache the schema itself fills.
+//
+// Highlighting runs on every keystroke, so this must not query the database on
+// each one. The cache is dropped exactly when the names can have changed -- an
+// import, a statement that alters the schema -- which is the same moment the
+// completion schema beside it is dropped.
+func (s *Shell) schemaNames(ctx context.Context) schemaNames {
+	if s.completionNames != nil {
+		return *s.completionNames
+	}
+
+	schema := s.schemaForCompletion(ctx)
+	names := schemaNames{
+		tables:  make(map[string]bool, len(schema.tables)),
+		columns: make(map[string]bool),
+	}
+	for _, table := range schema.tables {
+		names.tables[strings.ToLower(table)] = true
+		for _, column := range schema.columns[table] {
+			names.columns[strings.ToLower(column)] = true
+		}
+	}
+	s.completionNames = &names
+	return names
+}
+
 // columnSuggestions splits the schema's columns into the ones belonging to the
 // tables inScope — those the statement being typed names — and the rest. The
 // split is what lets a WHERE clause offer the columns of its own FROM before
@@ -1462,6 +1495,7 @@ func completionTableKey(tables []*model.Table) string {
 func (s *Shell) invalidateCompletionCache() {
 	s.completionTableKey = ""
 	s.completionSchema = nil
+	s.completionNames = nil
 }
 
 // exec execute sqly helper command or sql query.

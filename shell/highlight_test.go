@@ -31,12 +31,24 @@ func roleOf(theme syntaxTheme, c prompt.Color) string {
 		return "comment"
 	case theme.number:
 		return "number"
-	case theme.quoted:
-		return "quoted"
+	case theme.table:
+		return "table"
+	case theme.column:
+		return "column"
 	case theme.command:
 		return "command"
 	default:
 		return "unknown"
+	}
+}
+
+// testNames is the schema the highlighting tests run against: a table named
+// "users" whose columns are "id" and "name", plus "orders" so a second table
+// name is around.
+func testNames() schemaNames {
+	return schemaNames{
+		tables:  map[string]bool{"users": true, "orders": true},
+		columns: map[string]bool{"id": true, "name": true, "total": true},
 	}
 }
 
@@ -47,7 +59,7 @@ func highlighted(t *testing.T, input string, d dialect.Dialect) []string {
 
 	theme := testTheme(t)
 	runes := []rune(input)
-	spans := highlightSQL(input, theme, d)
+	spans := highlightSQL(input, theme, d, testNames())
 	out := make([]string, 0, len(spans))
 	for _, span := range spans {
 		out = append(out, roleOf(theme, span.Color)+":"+string(runes[span.Start:span.End]))
@@ -66,16 +78,16 @@ func TestHighlightSQL(t *testing.T) {
 		want    []string
 	}{
 		{
-			name:    "keywords are colored and names are not",
+			name:    "a keyword, a column, and a table each get their own color",
 			input:   "SELECT name FROM users",
 			dialect: dialect.SQLite,
-			want:    []string{"keyword:SELECT", "keyword:FROM"},
+			want:    []string{"keyword:SELECT", "column:name", "keyword:FROM", "table:users"},
 		},
 		{
 			name:    "a keyword typed in lower case is still a keyword",
 			input:   "select name from users",
 			dialect: dialect.SQLite,
-			want:    []string{"keyword:select", "keyword:from"},
+			want:    []string{"keyword:select", "column:name", "keyword:from", "table:users"},
 		},
 		{
 			name:    "a string literal is colored whole, quotes included",
@@ -102,10 +114,43 @@ func TestHighlightSQL(t *testing.T) {
 			want:    []string{"keyword:WHERE", "number:25"},
 		},
 		{
-			name:    "a quoted name is colored as one",
-			input:   `SELECT "my col" FROM t`,
+			name:    "a name in quotes is looked up like a bare one",
+			input:   `SELECT "name" FROM "users"`,
 			dialect: dialect.SQLite,
-			want:    []string{"keyword:SELECT", `quoted:"my col"`, "keyword:FROM"},
+			want:    []string{"keyword:SELECT", `column:"name"`, "keyword:FROM", `table:"users"`},
+		},
+		{
+			name:    "a name in quotes the session does not have keeps the input color",
+			input:   `SELECT "no such col" FROM users`,
+			dialect: dialect.SQLite,
+			want:    []string{"keyword:SELECT", "keyword:FROM", "table:users"},
+		},
+		{
+			name:    "a name is a table where the statement says it is one",
+			input:   "SELECT id FROM users JOIN orders ON id = total",
+			dialect: dialect.SQLite,
+			want: []string{
+				"keyword:SELECT", "column:id", "keyword:FROM", "table:users",
+				"keyword:JOIN", "table:orders", "keyword:ON", "column:id", "column:total",
+			},
+		},
+		{
+			name:    "a name the session does not have keeps the input color",
+			input:   "SELECT nosuchcol FROM nosuchtable",
+			dialect: dialect.SQLite,
+			want:    []string{"keyword:SELECT", "keyword:FROM"},
+		},
+		{
+			name:    "an alias is a name the session does not have, so it is not colored",
+			input:   "SELECT id AS whatever FROM users",
+			dialect: dialect.SQLite,
+			want:    []string{"keyword:SELECT", "column:id", "keyword:AS", "keyword:FROM", "table:users"},
+		},
+		{
+			name:    "a qualifier naming a table is colored as one outside a table position",
+			input:   "SELECT users.id FROM users",
+			dialect: dialect.SQLite,
+			want:    []string{"keyword:SELECT", "table:users", "column:id", "keyword:FROM", "table:users"},
 		},
 		{
 			name:    "a helper command marks its name and nothing else",
@@ -141,7 +186,7 @@ func TestHighlightSQL(t *testing.T) {
 			name:    "a multi-line statement is colored across its lines",
 			input:   "SELECT name\nFROM users",
 			dialect: dialect.SQLite,
-			want:    []string{"keyword:SELECT", "keyword:FROM"},
+			want:    []string{"keyword:SELECT", "column:name", "keyword:FROM", "table:users"},
 		},
 	}
 
@@ -180,7 +225,7 @@ func TestHighlightSQLWithNoThemeColorsNothing(t *testing.T) {
 	if !ok {
 		t.Fatalf("the %q theme is missing", noHighlightTheme)
 	}
-	if got := highlightSQL("SELECT 'a' -- b", theme, dialect.SQLite); got != nil {
+	if got := highlightSQL("SELECT 'a' -- b", theme, dialect.SQLite, testNames()); got != nil {
 		t.Errorf("the %q theme colored %d run(s), want none", noHighlightTheme, len(got))
 	}
 }
@@ -206,7 +251,7 @@ func TestHighlightSQLSpansAreWellFormed(t *testing.T) {
 				limit := len([]rune(input))
 				for _, d := range dialects {
 					end := 0
-					for _, span := range highlightSQL(input, theme, d) {
+					for _, span := range highlightSQL(input, theme, d, testNames()) {
 						switch {
 						case span.Start < 0 || span.End > limit:
 							t.Fatalf("highlightSQL(%q, %v): span [%d,%d) is outside the input of %d runes", input, d, span.Start, span.End, limit)
@@ -245,7 +290,8 @@ func TestEveryThemeNamesEveryRole(t *testing.T) {
 		}
 		roles := map[string]prompt.Color{
 			"keyword": theme.keyword, "string": theme.str, "comment": theme.comment,
-			"number": theme.number, "quoted": theme.quoted, "command": theme.command,
+			"number": theme.number, "table": theme.table,
+			"column": theme.column, "command": theme.command,
 		}
 		for role, color := range roles {
 			if (color == prompt.Color{}) {
@@ -293,6 +339,6 @@ func BenchmarkHighlightLongStatement(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = highlightSQL(input, theme, dialect.SQLite)
+		_ = highlightSQL(input, theme, dialect.SQLite, testNames())
 	}
 }

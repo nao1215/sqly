@@ -314,7 +314,7 @@ func TestCommunicateEditClosesAndReopensThePromptSession(t *testing.T) {
 		{results: []string{".exit"}},
 	}
 	factoryCalls := 0
-	s.newPrompt = func(string, func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	s.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		session := sessions[min(factoryCalls, len(sessions)-1)]
 		factoryCalls++
 		return session, nil
@@ -380,7 +380,7 @@ func TestCommunicateEditWithoutAnEditorKeepsTheSessionAlive(t *testing.T) {
 		{results: []string{"SELECT 'ALIVE' AS a;", ".exit"}},
 	}
 	factoryCalls := 0
-	s.newPrompt = func(string, func(prompt.Document) []prompt.Suggestion) (promptSession, error) {
+	s.newPrompt = func(_ string, _ func(prompt.Document) []prompt.Suggestion, _ func(string) []prompt.StyleSpan) (promptSession, error) {
 		session := sessions[min(factoryCalls, len(sessions)-1)]
 		factoryCalls++
 		return session, nil

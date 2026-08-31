@@ -32,7 +32,7 @@ mkdir -p "$OUT"
 
 # The statement holds one of everything the highlighter names: a keyword, a
 # string literal, a number, a name the user chose, and a comment.
-STATEMENT="SELECT actor, 'star' AS role, 42 AS n FROM actor -- a comment"
+STATEMENT="SELECT actor, gross AS 'top' FROM actor WHERE gross > 42 -- a comment"
 
 # The themes to render, and the terminal background each is shown on.
 THEMES="night-owl:dark dracula:dark monokai:dark nord:dark solarized:dark
