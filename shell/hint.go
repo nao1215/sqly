@@ -49,8 +49,7 @@ func (s *Shell) withMissingNameHint(ctx context.Context, err error) error {
 		return fmt.Errorf("%w\n%s", err, hint)
 	}
 	if name, ok := missingName(err.Error(), "no such column: "); ok {
-		hint := fmt.Sprintf("hint: no column %q. Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.", name)
-		return fmt.Errorf("%w\n%s", err, hint)
+		return fmt.Errorf("%w\n%s", err, s.missingColumnHint(ctx, name))
 	}
 	return err
 }
@@ -116,6 +115,53 @@ func (s *Shell) missingTableHint(ctx context.Context, missing string) (string, b
 	if len(names) > maxHintedTables {
 		listed = append(names[:maxHintedTables:maxHintedTables], fmt.Sprintf("... (%d total)", len(names)))
 	}
-	return fmt.Sprintf("hint: this session has no table %q. Available tables: %s. sqly derives table names from file names: %s",
-		missing, strings.Join(listed, ", "), tableNameRulesURL), true
+	sentences := []string{fmt.Sprintf("hint: this session has no table %q.", missing)}
+	if guess := didYouMean(missing, names); guess != "" {
+		sentences = append(sentences, guess)
+	}
+	sentences = append(sentences,
+		fmt.Sprintf("Available tables: %s.", strings.Join(listed, ", ")),
+		"sqly derives table names from file names: "+tableNameRulesURL)
+	return strings.Join(sentences, " "), true
+}
+
+// missingColumnHint is what to say about a column the engine could not find.
+//
+// The advice on its own — run .describe — asks the reader to do what the shell
+// can already do: it holds every column of every table it imported, so a name
+// that is one typo from one of them can be named outright. The advice stays for
+// the names that are not, which is when listing the columns is the only answer
+// there is.
+//
+// The columns of every table are searched, in the order the metadata reports
+// them, because the message SQLite gives says which column is missing and not
+// which table was supposed to have it.
+func (s *Shell) missingColumnHint(ctx context.Context, missing string) string {
+	schema := s.schemaForCompletion(ctx)
+	var columns []string
+	for _, table := range schema.tables {
+		columns = append(columns, schema.columns[table]...)
+	}
+
+	sentences := []string{fmt.Sprintf("hint: no column %q.", missing)}
+	if guess := didYouMean(missing, columns); guess != "" {
+		sentences = append(sentences, guess)
+	}
+	sentences = append(sentences, "Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.")
+	return strings.Join(sentences, " ")
+}
+
+// didYouMean is the sentence naming what a mistyped name is a typo of, or "" when
+// nothing is close enough. A guess at a name nothing resembles is worse than no
+// guess: it sends the reader after a name that was never the one they wanted.
+//
+// It is a sentence of its own rather than a clause, so a message can carry it
+// between what it already said and what it already advised, and so a message
+// that has no guess to offer reads exactly as it did before.
+func didYouMean(missing string, candidates []string) string {
+	nearest, ok := nearestName(missing, candidates)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("Did you mean %q?", nearest)
 }

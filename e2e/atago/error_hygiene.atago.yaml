@@ -86,7 +86,7 @@ scenarios:
               - "no such table"
               # Quoted whole, because website/content/reference.md shows this
               # exact line and a drift test requires both to hold the same string.
-              - 'hint: this session has no table "staf". Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules' 
+              - 'hint: this session has no table "staf". Did you mean "staff"? Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules' 
 
   - name: says how to get a table when the session has none
     steps:
@@ -109,7 +109,7 @@ scenarios:
           stdout:
             empty: true
           stderr:
-            contains: 'hint: no column "nam". Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.'
+            contains: 'hint: no column "nam". Did you mean "name"? Run .describe TABLE in the shell, or sqly --inspect FILE, to list columns.'
 
   # The hint is a diagnostic, so it belongs on stderr with the error it explains.
   - name: keeps the hint off stdout and out of the exit code
@@ -217,3 +217,58 @@ scenarios:
           exit_code: 3
           stderr:
             contains: "download the file first and pass its local path"
+
+  # A mistyped name is what a failure most often is, and sqly knows what the
+  # names are: the helper commands are a fixed set, and the tables and columns
+  # are what it just imported. Naming the one a typo is one edit from turns a
+  # message that ends the run into one that finishes the sentence.
+  - name: names the helper command a mistyped one is a typo of
+    steps:
+      - fixture: &typo_users
+          file: users.csv
+          content: |
+            identifier,user_name
+            1,Alice
+      - run:
+          command: sqly users.csv
+          stdin: ".tabels\n"
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: 'Did you mean ".tables"?'
+
+  - name: names the column a mistyped one is a typo of
+    steps:
+      - fixture: *typo_users
+      - run:
+          command: sqly --sql "SELECT user_naem FROM users" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: 'Did you mean "user_name"?'
+
+  - name: names the table a mistyped one is a typo of
+    steps:
+      - fixture: *typo_users
+      - run:
+          command: sqly --sql "SELECT 1 FROM uesrs" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: 'Did you mean "users"?'
+
+  # A guess at a name nothing resembles is worse than no guess: it sends the
+  # reader after a name that was never the one they wanted. The advice that does
+  # not depend on guessing stays.
+  - name: does not guess at a name nothing resembles
+    steps:
+      - fixture: *typo_users
+      - run:
+          command: sqly --sql "SELECT zzzzzzzz FROM users" users.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            not_contains: "Did you mean"
+      - assert:
+          stderr:
+            contains: ".describe"
