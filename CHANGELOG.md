@@ -4,6 +4,8 @@
 
 ### New Features
 
+* A continuation line opens where the statement is, not at the margin. It keeps the indentation of the line it continues and steps in one level for each parenthesis that line left open, so a subquery typed at the prompt reads as one. A parenthesis inside a string literal, a quoted name, or a comment is text and indents nothing, and which is which follows the current dialect. Indentation typed by hand is kept rather than recomputed, so only the change in nesting is sqly's to add.
+
 * `.edit` opens the last statement in `$VISUAL` or `$EDITOR` and runs what is saved. A long query is edited rather than retyped, and the file it opens ends in `.sql` so an editor that highlights by extension does. An empty file runs nothing, and so does an editor that exits non-zero, which is how an edit is abandoned. It needs a terminal to hand to the editor, so it is refused in a script.
 
 * A mistyped name is answered with the one it is a typo of. An unknown helper command, a table this session does not have, and a column no table has each name the closest thing sqly knows, when there is one near enough: `.tabels` answers `.tables`, and `SELECT naem` answers `name`. Nearness is edit distance, where a letter dropped, doubled, mistyped, or two swapped each count as one edit; a name of five characters or more may be two edits away, a shorter one only one, and a name of two characters or fewer is never guessed at. Nothing is offered when no name is that close, and the rest of each message is unchanged.
@@ -24,7 +26,7 @@
 
 ### Dependencies
 
-* prompt is updated to v0.0.21 for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites, and for a `Close` that ends the goroutine reading the terminal. The second is what `.edit` rests on: before it, the prompt opened after the editor received nothing at all.
+* prompt is updated to v0.0.22 for `WithAutoIndent`, which decides what a new line opens with, and for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites, and for a `Close` that ends the goroutine reading the terminal. The second is what `.edit` rests on: before it, the prompt opened after the editor received nothing at all.
 ## [v1.3.0](https://github.com/nao1215/sqly/compare/v1.2.2...v1.3.0) (2026-08-29)
 
 ### Bug Fixes

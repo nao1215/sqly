@@ -737,6 +737,70 @@ scenarios:
           stdout:
             not_contains: "NEVER_RUN"
 
+  # A continuation line opens where the statement is, not at the margin. Every
+  # line of a buffered statement used to start hard against the continuation
+  # prompt however deep in a parenthesis the writer was, so a subquery typed at
+  # the prompt read as a flat wall of text and had to be indented by hand -- and
+  # what was typed by hand was thrown away by the next Enter.
+  - name: a continuation line is indented by the parentheses left open
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM people WHERE age IN (\r"
+            - expect: '\.\.\.>'
+            - send: "SELECT max(age) FROM people\r"
+            - expect: "SELECT max"
+            # The open parenthesis stepped this line in one level: the
+            # continuation prompt, then two spaces nobody typed. The screen is
+            # what is checked rather than the stream, because the prompt writes
+            # color between the prefix and the input.
+            - expect_screen:
+                contains: "...>   SELECT max(age) FROM people"
+            - send: ");\r"
+            - expect: "Alice" # the oldest of the two, so the statement really ran
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Alice"
+
+  # A parenthesis inside a string is text, so it indents nothing. The count comes
+  # from the dialect-aware reader rather than from counting brackets in the raw
+  # line, and this is the case that tells the two apart.
+  - name: a parenthesis inside a string literal does not indent
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT '(' AS paren,\r"
+            - expect: '\.\.\.>'
+            - send: "name FROM people WHERE age = 25"
+            - expect: "name FROM people"
+            # No indent, because the parenthesis it holds is inside a string.
+            - expect_screen:
+                contains: "...> name FROM people WHERE age = 25"
+            - send: ";\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+            not_contains: "...>   name FROM" # one level would add two spaces
+
   # Editing an earlier line of a buffered statement leaves the screen alone. The
   # renderer erased the block it had drawn by moving up its height, which is
   # where the cursor is only while it sits on the last line; a left arrow
