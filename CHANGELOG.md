@@ -22,6 +22,10 @@
 
 * The history file stays under its size limit, and rotates once rather than on every save. Rotation used to write a file the size of the one it had just moved aside, so within three saves every backup held a near-identical copy of the newest history and the oldest queries had been deleted.
 
+* Ctrl+C while the completion menu is open no longer leaves the terminal without a cursor. sqly exits on the second Ctrl+C, and the shell it returned to had no cursor for the rest of that terminal's life.
+
+* A pasted statement longer than 64KB no longer makes the history file unreadable. sqly could not start again until the file was deleted by hand, because loading the history is part of opening the prompt.
+
 ## [v1.4.0](https://github.com/nao1215/sqly/compare/v1.3.0...v1.4.0) (2026-08-31)
 
 ### New Features
