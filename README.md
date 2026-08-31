@@ -273,7 +273,7 @@ in full and the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
 
 ## The shell
 
-`sqly` with no `--sql` opens a REPL: tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for everything SQL has no syntax for.
+`sqly` with no `--sql` opens a REPL: tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for everything SQL has no syntax for. Completion reads the statement being typed — a table position offers tables, a condition offers the columns of the tables in the `FROM`, and `alias.` offers that table's columns.
 
 ![shell demo](./doc/img/shell-demo.gif)
 

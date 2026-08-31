@@ -21,13 +21,36 @@ sqly:~/data(table)$ SELECT * FROM user LIMIT 1;
 The prompt shows the working directory and the current output mode. Tab
 completes SQL keywords, table names, column names, and paths, and after a
 dot-command it completes that command's arguments: `.dialect m` reaches `mysql`,
-`.mode m` reaches `markdown`. History persists across sessions, and records a
+`.mode m` reaches `markdown`. What it offers depends on where the cursor is in
+the statement; see below. History persists across sessions, and records a
 line even when sqly rejected it, so the up-arrow brings it back to be fixed. It
 records the line as typed, so a URL carrying credentials is stored as typed too —
 `SQLY_HISTORY_PATH` says where, and the file is a plain text one with an entry
 per line, readable and editable with anything (a statement typed across several
 lines is stored on one, with its newlines escaped). What sqly prints back is redacted: a password
 in a URL never reaches a message, a refusal, or an `--inspect` report.
+
+## Completion reads the statement
+
+What Tab offers depends on where the cursor is in the statement:
+
+| Where | What is offered |
+|:--|:--|
+| after `FROM`, `JOIN`, `INSERT INTO`, `UPDATE` | table names; columns are left out, since none can go there |
+| in a `SELECT` list, `WHERE`, `ON`, `GROUP BY`, `ORDER BY`, `SET` | columns of the tables the statement names, then the rest |
+| after `alias.` or `table.` | that table's columns, spelled with the qualifier |
+
+An alias comes from the statement's own `FROM` and `JOIN` clauses, spelled with
+`AS` or without it. Typing `o.us` below and pressing Tab gives `o.user_id`, the
+one column of `orders` that starts with `us`:
+
+```text
+sqly:~/data(table)$ SELECT * FROM user AS u JOIN orders o ON u.id = o.us
+```
+
+Keywords match whatever case they are typed in, so `sel` reaches `SELECT`. A
+keyword inside a string literal or a comment is read as the text it is, so
+`SELECT 'FROM ' || na` still completes a column.
 
 ## Multi-line statements
 

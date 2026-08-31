@@ -451,6 +451,141 @@ scenarios:
       - assert:
           exit_code: 0
 
+  # A SQL keyword is offered upper-cased and nobody types it that way, so the
+  # match has to ignore case. The prompt then discarded the answer with a
+  # case-sensitive filter of its own, so Tab after a lower-cased word did
+  # nothing at all: no menu, no completion, no change to the line. Completion
+  # now says which span each suggestion replaces, so the match sqly made is the
+  # one the prompt applies.
+  - name: completes a lower-cased SQL keyword
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "sel\t"
+            - expect: "SELECT" # the typed "sel" was replaced, not appended to
+            - send: " 'KEYWORD' || '_DONE' AS k;\r"
+            - expect: "KEYWORD_DONE" # the completed line is runnable SQL
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "KEYWORD_DONE"
+            not_contains: "sel SELECT" # what appending instead of replacing produced
+
+  # A table alias followed by a dot is one word to the line editor, so filtering
+  # the flat candidate list by it matched nothing: writing a join, where the
+  # qualifier is the point, was the case completion helped with least. The
+  # alias is now resolved against the statement's FROM clause and the columns
+  # are offered under it.
+  - name: completes a column through its table alias
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            # "ci" names only the city column of people, so the completion is
+            # unambiguous and applies without a menu selection.
+            - send: "SELECT * FROM people p WHERE p.ci\t"
+            - expect: "p.city"
+            - send: " = 'Tokyo';\r"
+            - expect: "Alice" # the only Tokyo row: the completed column really ran
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Alice"
+
+  # A table position takes a table name and nothing else. Completion used to
+  # answer it from one flat list of keywords, tables, and every column of every
+  # table, so the name that could go there was buried among names that could
+  # not.
+  - name: completes a table name after FROM
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name FROM peo\t"
+            - expect: "people"
+            - send: " WHERE age = 25;\r"
+            - expect: "Bob"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Bob"
+
+  # Completion on a continuation line, which is where a statement long enough to
+  # need one is being written. The word being completed was taken as everything
+  # after the last space, and on a fresh line that still held the newline, so it
+  # matched nothing and the menu was empty exactly where it was most wanted.
+  - name: completes on the continuation line of a multi-line statement
+    steps:
+      - fixture: *people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "SELECT name\r" # unfinished: the buffer continues
+            - expect: '\.\.\.>'
+            - send: "FROM people WHERE ci\t"
+            - expect: "city" # the column completed from the second line
+            - send: " = 'Kyoto';\r"
+            - expect: "Carol"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Carol"
+
+  # A column added by SQL is completable in the same session. Completion caches
+  # each table's columns and keys the cache by the table-name set, which an
+  # ALTER TABLE ... ADD COLUMN leaves untouched, so the columns offered stayed
+  # as they were before the statement ran.
+  - name: completes a column added by ALTER TABLE
+    steps:
+      - fixture: *capability_people
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: "ALTER TABLE people ADD COLUMN nickname;\r"
+            - expect: "statement executed successfully"
+            - expect: '\(table\)\$'
+            - send: "SELECT nickn\t"
+            - expect: "nickname" # the new column reached completion
+            - send: " FROM people WHERE name = 'Alice';\r"
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "nickname"
+
   # Editing an earlier line of a buffered statement leaves the screen alone. The
   # renderer erased the block it had drawn by moving up its height, which is
   # where the cursor is only while it sits on the last line; a left arrow
