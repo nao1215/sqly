@@ -564,11 +564,15 @@ func TestGetQuotedFilePathCompletions_DirAndBadDir(t *testing.T) {
 	})
 }
 
-// TestGetCompletions_SQLFromFilePathFallback covers the FROM/SELECT fallback in
-// getCompletions where a bare word after FROM is tried as an importable file in
-// the current directory.
-func TestGetCompletions_SQLFromFilePathFallback(t *testing.T) {
-	// Serial: uses t.Chdir to make an importable file resolve from ".".
+// TestGetCompletionsDoesNotOfferAFileInATablePosition covers what a SQL
+// statement can name. A bare word after FROM used to also be completed as a
+// filename in the working directory, but no SQL statement in sqly takes a path:
+// a file becomes a table through .import or the command line, and the engine
+// rejects the path itself ("no such table: user.csv"). Worse, the file a table
+// was read from shares its prefix, so the invalid candidate sat beside the
+// valid one and neither completed.
+func TestGetCompletionsDoesNotOfferAFileInATablePosition(t *testing.T) {
+	// Serial: uses t.Chdir so the importable files resolve from ".".
 	shell, cleanup, err := newShell(t, []string{"sqly"})
 	if err != nil {
 		t.Fatal(err)
@@ -577,18 +581,9 @@ func TestGetCompletions_SQLFromFilePathFallback(t *testing.T) {
 
 	t.Chdir("testdata")
 
-	// currentWord "us" has no path separator, so it is not treated as a path up
-	// front; the FROM keyword triggers the file-completion fallback that finds
-	// user.csv in the working directory.
-	got := shell.getCompletions(context.Background(), "SELECT * FROM us")
-	found := false
-	for _, s := range got {
-		if strings.HasPrefix(s.Text, "us") {
-			found = true
-			break
+	for _, s := range shell.getCompletions(context.Background(), "SELECT * FROM us") {
+		if strings.HasSuffix(s.Text, ".csv") {
+			t.Fatalf("getCompletions offered the file %q where only a table can go", s.Text)
 		}
-	}
-	if !found {
-		t.Fatalf("getCompletions FROM fallback = %#v, want a user.csv suggestion", got)
 	}
 }

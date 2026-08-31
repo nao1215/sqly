@@ -22,6 +22,7 @@ const (
 	kwDelete  = "DELETE"
 	kwReplace = "REPLACE"
 	kwValues  = "VALUES"
+	kwCase    = "CASE"
 	kwAnalyze = "ANALYZE"
 	kwReindex = "REINDEX"
 )
@@ -171,7 +172,7 @@ func (t *triggerState) observe(word string) {
 	case "BEGIN":
 		t.bodyOpen = true
 		t.depth++
-	case "CASE":
+	case kwCase:
 		if t.bodyOpen {
 			t.depth++
 		}

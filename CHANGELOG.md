@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### New Features
+
+* Completion reads the statement being typed. A table position — after `FROM`, `JOIN`, `INSERT INTO`, `UPDATE` — offers table names and no longer offers columns, which cannot go there. A `SELECT` list, a `WHERE`, `ON`, `GROUP BY`, `ORDER BY` or `SET` offers the columns of the tables the statement names before the rest of the session's. And `alias.` or `table.` offers that table's columns spelled with the qualifier, resolving the alias from the statement's own `FROM` and `JOIN` clauses. The statement is read with the dialect's own lexical rules, so a keyword inside a string literal or a comment is the text it is.
+
+### Bug Fixes
+
+* Tab after a lower-cased SQL keyword completes it. Keywords are offered upper-cased and matched case-insensitively, but the prompt library filtered the answer again with a case-sensitive test and discarded all of it, so `sel` followed by Tab produced no menu, no completion, and no change to the line. Completion now tells the prompt which span each suggestion replaces, which also fixes a suggestion whose text differs in case from what was typed being appended beside the word instead of completing it.
+
+* Completion works on the continuation line of a multi-line statement. The word being completed was taken as everything after the last space on the line, which on a fresh continuation line still held the newline, so nothing matched it and the menu was empty exactly where a long statement is written.
+
+* A filename is no longer offered where a table goes. A bare word in a SQL statement was also completed against the working directory whenever the line held `SELECT` or `FROM`, but no SQL statement in sqly takes a path. The file a table was read from shares the table's prefix, so `FROM peo` offered both `people` and `people.csv` and neither completed.
+
+### Dependencies
+
+* prompt is updated to v0.0.20 for `Suggestion.Replace`, which lets a completer name the span of the input its suggestion overwrites.
+
 ## [v1.3.0](https://github.com/nao1215/sqly/compare/v1.2.2...v1.3.0) (2026-08-29)
 
 ### Bug Fixes

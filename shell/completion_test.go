@@ -298,7 +298,7 @@ func TestCompletionRespectsCursorPositionForSQLIdentifier(t *testing.T) {
 
 	// Completing the whole line (cursor ignored) filters by the trailing "user",
 	// so it would not surface "identifier"; this contrast proves cursor-awareness.
-	full := promptSuggestionTexts(shell.completerNew(context.Background(), text))
+	full := promptSuggestionTexts(shell.completerNew(context.Background(), text, nil))
 	if slices.Contains(full, "identifier") {
 		t.Errorf("line-end completion unexpectedly surfaced identifier: %v", full)
 	}

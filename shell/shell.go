@@ -175,13 +175,13 @@ type Shell struct {
 	// set. The one-result-set contract is enforced after the script finishes: zero
 	// or more than one captured rowset is an error.
 	capturedRowsets []*model.Table
-	// completionTableKey fingerprints the table-name set the cached table/column
-	// completion suggestions were built from. completionTableCols holds those
-	// suggestions. Together they let interactive completion reuse table and column
-	// metadata across keystrokes instead of querying every table's header on each
-	// one, rebuilding only when the table set changes (or after an import).
-	completionTableKey  string
-	completionTableCols []Suggest
+	// completionTableKey fingerprints the table-name set the cached completion
+	// schema was built from. completionSchema holds that schema. Together they
+	// let interactive completion reuse table and column metadata across
+	// keystrokes instead of querying every table's header on each one,
+	// rebuilding only when the table set changes (or after an import).
+	completionTableKey string
+	completionSchema   *completionSchema
 	// allowRemote is this session's permission to download http(s) inputs, taken
 	// from --allow-remote when the shell is built. It is session state rather
 	// than a package-level flag so a capability granted to one invocation cannot
@@ -943,16 +943,29 @@ type Suggest struct {
 	Description string
 }
 
-// completerNew returns completions for the new prompt library
-func (s *Shell) completerNew(ctx context.Context, input string) []prompt.Suggestion {
+// completerNew converts sqly's suggestions into the prompt library's, telling
+// it that each one replaces the word being typed.
+//
+// Saying so is what makes the match sqly performs the one the prompt applies.
+// Left to itself the prompt keeps only the suggestions the typed word is a
+// case-sensitive prefix of and replaces that word with the accepted one. sqly
+// matches case-insensitively, because nobody types SQL keywords in upper case,
+// so every keyword suggestion was discarded before it reached the screen:
+// "sel" followed by TAB did nothing at all. And a qualified name is one word to
+// the line editor, so a suggestion for "u.na" has to say it stands for the
+// whole of it rather than for a tail the prompt would have to guess at.
+//
+// replace is shared by every suggestion because it is the same span for all of
+// them and nothing mutates it.
+func (s *Shell) completerNew(ctx context.Context, input string, replace *prompt.Range) []prompt.Suggestion {
 	oldSuggestions := s.getCompletions(ctx, input)
 	completions := make([]prompt.Suggestion, 0, len(oldSuggestions))
 
-	// Convert old suggestions to new format
 	for _, suggest := range oldSuggestions {
 		completions = append(completions, prompt.Suggestion{
 			Text:        suggest.Text,
 			Description: suggest.Description,
+			Replace:     replace,
 		})
 	}
 
@@ -963,7 +976,17 @@ func (s *Shell) completerNew(ctx context.Context, input string) []prompt.Suggest
 // text before the cursor (not the whole line) so editing an earlier token and
 // pressing TAB completes that token instead of the line ending.
 func (s *Shell) completeDocument(ctx context.Context, d prompt.Document) []prompt.Suggestion {
-	return s.completerNew(ctx, d.TextBeforeCursor())
+	before := d.TextBeforeCursor()
+	// Every suggestion sqly offers is a whole replacement for the word being
+	// typed — a path, a table, a qualified column, a keyword — so the span is
+	// the same for all of them: the word, counted in runes the way the prompt
+	// counts its cursor.
+	word := currentCompletionWord(before)
+	replace := &prompt.Range{
+		Start: d.CursorPosition - len([]rune(word)),
+		End:   d.CursorPosition,
+	}
+	return s.completerNew(ctx, before, replace)
 }
 
 // getCompletions returns suggestions for auto-completion.
@@ -1034,30 +1057,13 @@ func (s *Shell) getCompletions(ctx context.Context, input string) []Suggest {
 		}
 	}
 
-	// Check if this might be at the end where we expect a file path
-	// (after a SQL query). Helper-command path completion is handled above.
-	words := strings.Fields(text)
-	if len(words) > 0 {
-		// If we have a SQL query and the current word might be a filename
-		if strings.Contains(strings.ToUpper(text), "FROM") ||
-			strings.Contains(strings.ToUpper(text), "SELECT") {
-			// Check if current word looks like it could be a file path
-			if len(currentWord) > 0 && !strings.ContainsAny(currentWord, " \t") {
-				// Try file completion as a fallback
-				fileCompletions := s.getFilePathCompletions(currentWord)
-				if len(fileCompletions) > 0 {
-					// Slashify the word so a Windows-style prefix matches the
-					// slash-normalized suggestions; table and keyword prefixes
-					// have no backslash, so they are unaffected.
-					regularCompletions := s.getRegularCompletions(ctx, input)
-					regularCompletions = append(regularCompletions, fileCompletions...)
-					return filterHasPrefix(regularCompletions, slashifyBase(currentWord))
-				}
-			}
-		}
-	}
-
-	// Default to regular completions
+	// A bare word inside a SQL statement used to also be offered as a filename
+	// whenever the line held "SELECT" or "FROM" anywhere. A SQL statement never
+	// takes a path in sqly — files enter through .import or the command line,
+	// both handled above — so every such candidate named something the engine
+	// would reject, and it took the table completion down with it: "FROM peo"
+	// offered both the table "people" and the file "people.csv" it was read
+	// from, which is two candidates where one is valid, so nothing completed.
 	return s.getRegularCompletions(ctx, input)
 }
 
@@ -1075,9 +1081,107 @@ func filterHasPrefix(suggestions []Suggest, prefix string) []Suggest {
 	return filtered
 }
 
-// getRegularCompletions returns the original completion logic
+// getRegularCompletions returns the SQL and helper-command suggestions for the
+// word being typed, ordered by what the statement expects at the cursor.
+//
+// The list is ordered rather than truncated to one category, because the
+// analysis reads unfinished text and can be wrong: a keyword still reaches the
+// menu where a table is expected, since the table position of a subquery opens
+// with SELECT. What it does remove is a category the position rules out — a
+// column is not a table name — and that is where most of the noise was.
 func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Suggest {
-	suggest := []Suggest{
+	word := currentCompletionWord(input)
+
+	// A line still typing a dot-command names no table, column, or SQL keyword,
+	// so it is answered from the command list alone.
+	if isTypingDotCommand(input) {
+		return filterHasPrefix(s.commandSuggestions(), word)
+	}
+
+	// The dialect decides what is a string, a quoted identifier, or a comment,
+	// so the analysis reads the line the same way sqlInputComplete and the
+	// statement splitter read it.
+	analysis := analyzeSQL(input, s.dialect())
+
+	// A qualified name says exactly which table its columns come from, so it is
+	// answered from that table alone. An unresolvable qualifier is answered with
+	// nothing: offering every column under a name that cannot carry them is
+	// worse than an empty menu.
+	if analysis.qualifier != "" {
+		return s.qualifiedColumnSuggestions(ctx, analysis)
+	}
+
+	return filterHasPrefix(s.orderedSuggestions(ctx, analysis), word)
+}
+
+// qualifiedColumnSuggestions offers the columns of the table the cursor's
+// qualifier names, spelled with the qualifier so accepting one completes the
+// whole word ("u.na" -> "u.name") rather than only its tail.
+func (s *Shell) qualifiedColumnSuggestions(ctx context.Context, analysis sqlAnalysis) []Suggest {
+	schema := s.schemaForCompletion(ctx)
+	table, ok := analysis.tableOf(analysis.qualifier, schema.tables)
+	if !ok {
+		return nil
+	}
+	out := make([]Suggest, 0, len(schema.columns[table]))
+	for _, column := range schema.columns[table] {
+		out = append(out, Suggest{
+			Text:        analysis.qualifier + "." + column,
+			Description: "column: " + column + " in " + table + " table",
+		})
+	}
+	return filterHasPrefix(out, analysis.qualifier+"."+analysis.partial)
+}
+
+// orderedSuggestions builds the candidate list for an unqualified word, most
+// relevant category first.
+func (s *Shell) orderedSuggestions(ctx context.Context, analysis sqlAnalysis) []Suggest {
+	schema := s.schemaForCompletion(ctx)
+	tables := schema.tableSuggestions()
+	scoped, other := schema.columnSuggestions(analysis.tablesInScope())
+
+	switch analysis.position {
+	case posTable:
+		// A column cannot name a table, so it is left out entirely. Keywords stay
+		// because a table position also accepts a subquery.
+		return concatSuggestions(tables, sqlKeywordSuggestions(), s.commandSuggestions())
+	case posColumn:
+		// Columns of the tables this statement names come first; the rest follow,
+		// because the statement may still be growing a FROM clause. Tables are
+		// offered too, since a column can be written table-qualified.
+		return concatSuggestions(scoped, other, tables, sqlKeywordSuggestions(), s.commandSuggestions())
+	default: // posAny: the statement has not said, so nothing is held back or promoted
+		return concatSuggestions(sqlKeywordSuggestions(), s.commandSuggestions(), tables, scoped, other)
+	}
+}
+
+// concatSuggestions joins the ordered groups, keeping the first occurrence of
+// each suggestion text. A column and a table can share a name, and a name
+// offered twice reads as a menu that does not know what it holds.
+func concatSuggestions(groups ...[]Suggest) []Suggest {
+	total := 0
+	for _, g := range groups {
+		total += len(g)
+	}
+	seen := make(map[string]bool, total)
+	out := make([]Suggest, 0, total)
+	for _, g := range groups {
+		for _, sg := range g {
+			if seen[sg.Text] {
+				continue
+			}
+			seen[sg.Text] = true
+			out = append(out, sg)
+		}
+	}
+	return out
+}
+
+// sqlKeywordSuggestions is the SQL vocabulary sqly offers. It is a fixed list
+// rather than something read from the engine: what belongs here is what a user
+// writing an ad-hoc query over a file reaches for.
+func sqlKeywordSuggestions() []Suggest {
+	return []Suggest{
 		{Text: kwSelect, Description: "SQL: get records from table"},
 		{Text: "INSERT INTO", Description: "SQL: creates one or more new records in an existing table"},
 		{Text: kwUpdate, Description: "SQL: update one or more records"},
@@ -1102,30 +1206,8 @@ func (s *Shell) getRegularCompletions(ctx context.Context, input string) []Sugge
 		{Text: "NATURAL", Description: "SQL: natural join tables"},
 		{Text: "LIMIT", Description: "SQL: upper Limit of records"},
 		{Text: "OFFSET", Description: "SQL: identify the starting point to return result rows"},
-		{Text: "CASE", Description: "SQL: branching by conditions"},
+		{Text: kwCase, Description: "SQL: branching by conditions"},
 	}
-
-	// A command's argument values — dialects, output formats, row-mismatch
-	// policies — are offered at that command's argument position and nowhere
-	// else; see argumentCompletions. Listing them here made ".dialect m" answer
-	// "mysql, markdown" and ".mode m" the same pair, each half wrong.
-	suggest = append(suggest, s.commandSuggestions()...)
-
-	// A line still typing a dot-command (no argument yet) never references tables
-	// or columns, so skip the table/column metadata entirely for it.
-	if !isTypingDotCommand(input) {
-		suggest = append(suggest, s.tableColumnSuggestions(ctx)...)
-	}
-
-	// Get current word for filtering
-	lastSpace := strings.LastIndex(input, " ")
-	var currentWord string
-	if lastSpace >= 0 {
-		currentWord = input[lastSpace+1:]
-	} else {
-		currentWord = input
-	}
-	return filterHasPrefix(suggest, currentWord)
 }
 
 // outputFormatDescription is what completion says a format does. Most say only
@@ -1153,44 +1235,81 @@ func isTypingDotCommand(input string) bool {
 	return strings.HasPrefix(trimmed, ".") && !strings.ContainsAny(trimmed, " \t")
 }
 
-// tableColumnSuggestions returns table-name and column-header completion
-// suggestions, cached by the current table-name set. The headers are fetched
-// only when that set changes, so consecutive keystrokes reuse the cache instead
-// of querying every table's header on each one. Returns nil if the table list
-// cannot be read.
-func (s *Shell) tableColumnSuggestions(ctx context.Context) []Suggest {
+// completionSchema is the table and column vocabulary completion draws on: the
+// session's table names in the order the metadata reports them, and each
+// table's columns.
+type completionSchema struct {
+	tables  []string
+	columns map[string][]string
+}
+
+// schemaForCompletion returns the session's tables and their columns, cached by
+// the current table-name set. The headers are fetched only when that set
+// changes, so consecutive keystrokes reuse the cache instead of querying every
+// table's header on each one. Returns an empty schema if the table list cannot
+// be read.
+func (s *Shell) schemaForCompletion(ctx context.Context) *completionSchema {
 	tables, err := s.usecases.metadata.TablesName(ctx)
 	if err != nil {
-		return nil
+		return &completionSchema{columns: map[string][]string{}}
 	}
 
 	key := completionTableKey(tables)
-	if key == s.completionTableKey && s.completionTableCols != nil {
-		return s.completionTableCols
+	if key == s.completionTableKey && s.completionSchema != nil {
+		return s.completionSchema
 	}
 
-	var out []Suggest
+	schema := &completionSchema{
+		tables:  make([]string, 0, len(tables)),
+		columns: make(map[string][]string, len(tables)),
+	}
 	for _, v := range tables {
-		out = append(out, Suggest{
-			Text:        v.Name(),
-			Description: "table: " + v.Name(),
-		})
+		schema.tables = append(schema.tables, v.Name())
 
 		header, err := s.usecases.metadata.Header(ctx, v.Name())
 		if err != nil {
 			continue
 		}
-		for _, h := range header.Header() {
-			out = append(out, Suggest{
-				Text:        h,
-				Description: "header: " + h + " column in " + v.Name() + " table",
-			})
-		}
+		schema.columns[v.Name()] = header.Header()
 	}
 
 	s.completionTableKey = key
-	s.completionTableCols = out
-	return out
+	s.completionSchema = schema
+	return schema
+}
+
+// columnSuggestions splits the schema's columns into the ones belonging to the
+// tables inScope — those the statement being typed names — and the rest. The
+// split is what lets a WHERE clause offer the columns of its own FROM before
+// every column the session happens to hold, without hiding the rest while the
+// FROM clause is still being written.
+//
+// A column of two tables is offered once, described by the first table that has
+// it, because the name a user types is the same either way.
+func (c *completionSchema) columnSuggestions(inScope []string) (scoped, other []Suggest) {
+	scopedSet := make(map[string]bool, len(inScope))
+	for _, name := range inScope {
+		for _, known := range c.tables {
+			if strings.EqualFold(known, name) {
+				scopedSet[known] = true
+			}
+		}
+	}
+
+	for _, table := range c.tables {
+		for _, column := range c.columns[table] {
+			suggestion := Suggest{
+				Text:        column,
+				Description: "header: " + column + " column in " + table + " table",
+			}
+			if scopedSet[table] {
+				scoped = append(scoped, suggestion)
+				continue
+			}
+			other = append(other, suggestion)
+		}
+	}
+	return scoped, other
 }
 
 // completionTableKey builds a fingerprint of the table-name set used to decide
@@ -1208,7 +1327,7 @@ func completionTableKey(tables []*model.Table) string {
 // import, which can change a table's columns without changing the table-name set.
 func (s *Shell) invalidateCompletionCache() {
 	s.completionTableKey = ""
-	s.completionTableCols = nil
+	s.completionSchema = nil
 }
 
 // exec execute sqly helper command or sql query.
@@ -1998,13 +2117,18 @@ func rowMismatchDescription(name string) string {
 // command that names a table (.header, .schema, .describe, .dump) cannot take a
 // column or a SQL keyword there.
 func (s *Shell) tableNameSuggestions(ctx context.Context) []Suggest {
-	tables, err := s.usecases.metadata.TablesName(ctx)
-	if err != nil {
-		return nil
-	}
-	out := make([]Suggest, 0, len(tables))
-	for _, t := range tables {
-		out = append(out, Suggest{Text: t.Name(), Description: "table: " + t.Name()})
+	// The cached schema is what every other completion path reads, so taking the
+	// names from it keeps one metadata query per keystroke rather than one per
+	// category asking for them.
+	return s.schemaForCompletion(ctx).tableSuggestions()
+}
+
+// tableSuggestions lists the session's tables in the order the metadata reports
+// them.
+func (c *completionSchema) tableSuggestions() []Suggest {
+	out := make([]Suggest, 0, len(c.tables))
+	for _, name := range c.tables {
+		out = append(out, Suggest{Text: name, Description: "table: " + name})
 	}
 	return out
 }
