@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Bug Fixes
+
+* The cursor sits in front of the character it is in front of on a statement long enough to wrap. On the row a statement fills, pressing Left or Right across the wrap drew the cursor in the same cell twice, on top of the last character of the row above rather than in front of the one the next keystroke edits.
+
+* Completing a name on a short terminal reaches the last candidates. With more candidates than the menu lists at once and a window shorter than ten rows -- a split pane, a terminal a few rows tall -- holding Down froze the list partway while the selection went on advancing, marked on no row, and Enter accepted a candidate that had never been shown.
+
 ## [v1.5.0](https://github.com/nao1215/sqly/compare/v1.4.0...v1.5.0) (2026-09-01)
 
 ### Bug Fixes
