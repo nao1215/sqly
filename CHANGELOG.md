@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v1.5.0](https://github.com/nao1215/sqly/compare/v1.4.0...v1.5.0) (2026-09-01)
 
 ### Bug Fixes
 
@@ -25,6 +25,16 @@
 * Ctrl+C while the completion menu is open no longer leaves the terminal without a cursor. sqly exits on the second Ctrl+C, and the shell it returned to had no cursor for the rest of that terminal's life.
 
 * A pasted statement longer than 64KB no longer makes the history file unreadable. sqly could not start again until the file was deleted by hand, because loading the history is part of opening the prompt.
+
+* `--dialect mysql`, `--dialect postgresql` and `--dialect googlesql` answer more of each dialect and refuse the rest by name. A GoogleSQL `SUBSTRING` or `POSITION`, a PostgreSQL `ANY_VALUE`, and a `RETURNING` clause's column names all reached SQLite in a shape it did not have, so the error named a function nobody wrote; a GoogleSQL bitwise aggregate, an `UPDATE` or `DELETE` carrying `ORDER BY` or `LIMIT`, a row-locking clause and an `ALTER TABLE` SQLite cannot make are now refused with a message saying which construct has no SQLite form and where it stands.
+
+* A file whose first line is blank loads its columns from the first line that holds something, whichever format it is. A CSV skipped the blank line, a TSV read it as a header of one empty column and refused every row after it, and a sheet whose top row was cleared or merely formatted opened as a database with no tables and no error at all.
+
+* An Excel cell loads the number the workbook stores rather than the number its format draws, so a percentage, a rounded currency figure or a value shown in scientific notation is queried and summed at full precision. `.save` to `.xlsx` keeps a column that holds whole numbers a REAL column.
+
+* A `.save` that the file's encoding cannot write names the column and the character it stopped on, and leaves the file it was going to overwrite as it was.
+
+* A completion candidate or a recalled statement holding an escape sequence is drawn rather than obeyed, the completion menu and the Ctrl+R block stay inside the terminal they are drawn on, and Ctrl+Right no longer stops between a letter and the accent on it.
 
 * The twelve themes drop the two colors the prompt never drew. `Cursor` and the completion menu's `Match` were set on every theme and had no effect on screen; the prompt has removed the fields, so `.theme` shows exactly what it changes.
 
