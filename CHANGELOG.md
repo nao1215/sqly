@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.6.1](https://github.com/nao1215/sqly/compare/v1.6.0...v1.6.1) (2026-09-02)
+
+### Bug Fixes
+
+* A statement ending in a backslash can be typed. sqly reads a trailing backslash as "this statement continues on the next line" and takes it out of what it runs, so a statement that genuinely ends in one -- a Windows path, a SQL string holding an escaped backslash -- could not be written at all: doubling it, which is what a shell takes as an escaped backslash, continued the line as well and ate one of the two. Two now submit the statement with both of them, and one continues as before.
+
+* Pressing Alt+O no longer eats the next key. The prompt read what follows the escape sequence Alt+O sends as part of that sequence and threw it away, so the key after it did nothing: Enter did not submit the statement, and the second Enter did.
+
 ## [v1.6.0](https://github.com/nao1215/sqly/compare/v1.5.0...v1.6.0) (2026-09-02)
 
 ### Bug Fixes
