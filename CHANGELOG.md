@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v1.6.2](https://github.com/nao1215/sqly/compare/v1.6.1...v1.6.2) (2026-09-02)
+
+### Bug Fixes
+
+* `CURRENT_TIMESTAMP` reads the clock under `--dialect mysql`, `postgresql` and `googlesql`. It answered the text `CURRENT_TIMESTAMP` instead, and `CURRENT_DATE` and `CURRENT_TIME` answered theirs, with no error: a query stamping rows with the current time wrote the same word into every row, and an export of that result carried the word rather than a time. Under `--dialect sqlite` it was always right.
+
+* `UTC_TIMESTAMP()`, `UTC_DATE()`, `UTC_TIME()` and `SYSDATE()` work under `--dialect mysql`, and `BINARY(x)` casts the way `BINARY x` already did. All five failed with "no such function", which reads as a typo in a query that was written correctly.
+
+* A function one of the dialects has and SQLite has not is refused by name with the reason, rather than failing as a name SQLite does not know. That covers about a hundred and fifty MySQL names and five hundred PostgreSQL ones -- the spatial functions, the data dictionary, the catalog and administration functions, sequences, large objects, XML, text search, ranges, network addresses, and the array and record functions. The message now says the function has no SQLite form here instead of saying it does not exist.
+
 ## [v1.6.1](https://github.com/nao1215/sqly/compare/v1.6.0...v1.6.1) (2026-09-02)
 
 ### Bug Fixes
