@@ -4,9 +4,29 @@
 
 ### Bug Fixes
 
+* Ctrl-P and Ctrl-N walk the history. The manual has listed them beside the arrow keys since the shell's Emacs bindings were added, and they did nothing at all: the actions they are bound to had no case in the prompt's read loop, so both keys reached a reader that was not listening for them.
+
+* A statement taller than the terminal no longer scrolls the session away as it is typed. Every keystroke redrew the whole statement, so a twelve-line query on an eight-row terminal pushed four rows of results off the top of the screen per character, and editing a line that had scrolled off drew the cursor on some other row. The prompt now draws the rows around the cursor that the terminal has room for and redraws them in place.
+
+* A result is printed under the statement that produced it rather than through it. Submitting from a line above the last wrote the line break from the cursor's row, so the table was drawn over the rows of the statement below the cursor; Ctrl-C did the same with `^C` and left the rest of the statement on screen for the next prompt to draw into, and closing the session left the shell's own prompt in the middle of it.
+
+* Ctrl-R on a statement taller than what is left of the terminal no longer pushes the statement off the screen. The search block was measured against the whole terminal while being drawn from the cursor's row, so the rows the statement occupied above it were rows nothing counted.
+
+* Ctrl-L clears the screen and leaves the scrollback. It sent the terminal's "erase saved lines" as well, so the results a person had scrolled back to read were gone and nothing brought them back.
+
+* A second Ctrl-C during a running statement no longer kills sqly. The watch that turns the key into a cancellation gave the signal back to its default action after the first one, which is the moment a person presses it again because the query has not stopped yet.
+
+* Pasting a long statement is no longer a wait. A twenty-thousand-character query redrew the prompt once per character -- fifty megabytes of terminal traffic and about five seconds during which no key was read, which looks like a shell that has hung. The same paste now costs a hundred kilobytes and sixteen milliseconds.
+
+* A canceled context ends a session sitting in Ctrl-R, instead of waiting for a keystroke that is not coming.
+
 * The cursor sits in front of the character it is in front of on a statement long enough to wrap. On the row a statement fills, pressing Left or Right across the wrap drew the cursor in the same cell twice, on top of the last character of the row above rather than in front of the one the next keystroke edits.
 
 * Completing a name on a short terminal reaches the last candidates. With more candidates than the menu lists at once and a window shorter than ten rows -- a split pane, a terminal a few rows tall -- holding Down froze the list partway while the selection went on advancing, marked on no row, and Enter accepted a candidate that had never been shown.
+
+### Changes
+
+* Ctrl-U clears the line the cursor is on rather than the whole statement. On a statement typed across several lines the key that says "delete the line" discarded the statement, and there is no undo. What discards a whole statement is Ctrl-C, which says so on screen and leaves the session open.
 
 ## [v1.5.0](https://github.com/nao1215/sqly/compare/v1.4.0...v1.5.0) (2026-09-01)
 
