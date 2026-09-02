@@ -968,9 +968,15 @@ scenarios:
                 contains: ".help print usage, .exit exit sqly."
             - expect_screen:
                 contains: "...> FROM people"
-            # Ctrl-U clears the line so Ctrl-D is read as end of input rather
-            # than as a delete.
-            - send: { key: ctrl-u }
+            # Ctrl-C discards the whole statement, whichever of its lines the
+            # cursor is on, so Ctrl-D is read as end of input rather than as a
+            # delete. Ctrl-U was the key here, and it is the key whose scope
+            # over a multiline statement is the one thing about it worth
+            # arguing over -- readline clears the whole buffer, other line
+            # editors clear the line the cursor is on. This test does not need
+            # the answer: what it is about is the two lines above the prompt.
+            - send: { key: ctrl-c }
+            - expect: '\(table\)\$' # a fresh prompt, so the entry is gone
             - send: { key: ctrl-d }
       - assert:
           exit_code: 0
