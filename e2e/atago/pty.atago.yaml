@@ -1009,6 +1009,50 @@ scenarios:
           stdout:
             contains: "Bob"
 
+  # Ctrl-P and Ctrl-N walk the history, which is what the manual says and what a
+  # shell binds them to. They were keys nothing was listening for: sqly binds
+  # them to prompt's ActionHistoryUp and ActionHistoryDown, and until prompt
+  # v0.0.30 neither action had a case in its read loop, so both keys did nothing
+  # at all. The unit test that covers the binding could not see that, because
+  # what was missing was on the other side of it.
+  #
+  # The statement is typed by an earlier process, so the screen the keys are
+  # pressed on has never shown it: a statement typed into this session would
+  # still be on screen from the echo, and the recall would prove nothing.
+  - name: Ctrl-P and Ctrl-N walk the history
+    env:
+      SQLY_HISTORY_PATH: "${workdir}/history"
+    steps:
+      - fixture: *capability_people
+      - run:
+          command: sqly people.csv
+          stdin: "SELECT city FROM people WHERE age = 25;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "Osaka"
+      - pty:
+          command: sqly people.csv
+          rows: 30
+          cols: 220
+          timeout: 30s
+          session:
+            - expect: '\(table\)\$'
+            - send: { key: ctrl-p }
+            # The screen, not the stream: the stream holds what the prompt drew
+            # while the line was recalled, and the screen is where the line is.
+            # The history keeps the statement without its semicolon, which is
+            # what sqly strips before recording it.
+            - expect_screen:
+                contains: "SELECT city FROM people WHERE age = 25"
+            # And back to the line that was being typed, which is the empty one.
+            # Ctrl-D ends the session only from an empty line, so reaching the
+            # exit is what says Ctrl-N moved.
+            - send: { key: ctrl-n }
+            - send: { key: ctrl-d }
+      - assert:
+          exit_code: 0
+
   # A line can hold more than one statement, which is what pasting a snippet
   # produces. Every statement runs and every result is printed; the line used to
   # reach the engine as a single query, which kept one result and dropped the

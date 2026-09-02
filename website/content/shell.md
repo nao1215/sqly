@@ -155,7 +155,7 @@ piped session; write the SQL in a file and use `--sql-file`.
 | Key | Does |
 |:--|:--|
 | `Enter` | run the statement, or continue it on the next line while it is unfinished |
-| `Ctrl-C` | throw away the line being typed, or stop the statement that is running; the session stays open |
+| `Ctrl-C` | throw away the statement being typed, however many lines it spans, or stop the statement that is running; the session stays open |
 | `Ctrl-D` | quit, like `.exit` |
 | `Tab` | complete keywords, tables, columns, paths, and dot-command arguments |
 | `Esc` | close the completion list |
@@ -163,8 +163,8 @@ piped session; write the SQL in a file and use `--sql-file`.
 | `Ctrl-R` | search history |
 | `Ctrl-A` / `Ctrl-E` | start or end of line |
 | `Ctrl-F` / `Ctrl-B` | forward or back one character |
-| `Ctrl-K` / `Ctrl-U` / `Ctrl-W` | delete to end of line, the whole line, the previous word |
-| `Ctrl-L` | clear the screen |
+| `Ctrl-K` / `Ctrl-U` / `Ctrl-W` | delete to the end of the line, the line the cursor is on, the previous word |
+| `Ctrl-L` | clear the screen, keeping the scrollback |
 
 Ctrl-C reaches a statement that is already running, so a query that turns out to
 be slower than expected can be stopped:
