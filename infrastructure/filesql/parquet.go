@@ -100,7 +100,7 @@ func DumpTableToParquet(filePath string, table *model.Table) (err error) {
 
 	outDir := filepath.Join(tmpDir, "out")
 	opts := libfilesql.NewDumpOptions().WithFormat(libfilesql.OutputFormatParquet)
-	if err = libfilesql.DumpDatabase(db, outDir, opts); err != nil {
+	if err = libfilesql.DumpDatabase(ctx, db, outDir, opts); err != nil {
 		return fmt.Errorf("dump table to parquet: %w", err)
 	}
 

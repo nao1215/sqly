@@ -16,8 +16,7 @@ import (
 )
 
 func isTextImportPath(path string) bool {
-	compressionFactory := filesql.NewCompressionFactory()
-	base := strings.ToLower(compressionFactory.RemoveCompressionExtension(path))
+	base := strings.ToLower(filesql.RemoveCompressionExtension(path))
 	switch filepath.Ext(base) {
 	case model.ExtCSV, model.ExtTSV, model.ExtLTSV, model.ExtJSON, model.ExtJSONL:
 		return true
@@ -31,11 +30,11 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 		return path, nil, nil
 	}
 
-	compressionFactory := filesql.NewCompressionFactory()
-	reader, cleanupReader, err := compressionFactory.CreateReaderForFile(path)
+	reader, err := filesql.OpenReader(path)
 	if err != nil {
 		return "", nil, fmt.Errorf("open import reader for %s: %w", path, err)
 	}
+	cleanupReader := reader.Close
 
 	dir, err := os.MkdirTemp("", "sqly-text-")
 	if err != nil {
@@ -52,7 +51,7 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 		_ = os.RemoveAll(dir)
 	}
 
-	stagedPath := filepath.Join(dir, filepath.Base(compressionFactory.RemoveCompressionExtension(path)))
+	stagedPath := filepath.Join(dir, filepath.Base(filesql.RemoveCompressionExtension(path)))
 	file, err := os.Create(stagedPath) //nolint:gosec // stagedPath is under a sqly-created temp dir
 	if err != nil {
 		cleanup()

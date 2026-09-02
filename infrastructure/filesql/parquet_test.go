@@ -16,7 +16,7 @@ import (
 // filesql and returns the row count of the given table.
 func reimportRowCount(t *testing.T, parquetPath, tableName string) int {
 	t.Helper()
-	db, err := libfilesql.OpenContext(context.Background(), parquetPath)
+	db, err := libfilesql.Open(context.Background(), parquetPath)
 	if err != nil {
 		t.Fatalf("reimport parquet: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestDumpTableToParquet_RoundTrip(t *testing.T) {
 	}
 
 	// Schema fidelity: the reimported table exposes the same columns.
-	db, err := libfilesql.OpenContext(context.Background(), out)
+	db, err := libfilesql.Open(context.Background(), out)
 	if err != nil {
 		t.Fatalf("reimport: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestDumpTableToParquet_RoundTrip(t *testing.T) {
 // fidelity after a round-trip.
 func reimportStringColumn(t *testing.T, parquetPath, tableName, column string) []string {
 	t.Helper()
-	db, err := libfilesql.OpenContext(context.Background(), parquetPath)
+	db, err := libfilesql.Open(context.Background(), parquetPath)
 	if err != nil {
 		t.Fatalf("reimport parquet: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestDumpTableToParquet_PreservesNumericLookingText(t *testing.T) {
 // empty string after a round-trip.
 func reimportColumn(t *testing.T, parquetPath, tableName, column string) []sql.NullString {
 	t.Helper()
-	db, err := libfilesql.OpenContext(context.Background(), parquetPath)
+	db, err := libfilesql.Open(context.Background(), parquetPath)
 	if err != nil {
 		t.Fatalf("reimport parquet: %v", err)
 	}
