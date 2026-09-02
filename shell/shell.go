@@ -232,7 +232,7 @@ type Shell struct {
 type promptSession interface {
 	AddHistory(string)
 	Close() error
-	Run() (string, error)
+	Run(context.Context) (string, error)
 	SetPrefix(string)
 	// SetTheme changes the colors the prompt draws itself with, so .theme
 	// applies to the session it was typed in rather than the next one.
@@ -294,7 +294,7 @@ func NewShell(
 			prompt.WithCompleter(completer),
 			prompt.WithMemoryHistory(historySize),
 			prompt.WithTheme(shell.theme.prompt),
-			prompt.WithMultiline(true),
+			prompt.WithMultiline(),
 			prompt.WithIsComplete(func(input string) bool {
 				return sqlInputComplete(input, shell.dialect())
 			}),
@@ -586,7 +586,7 @@ func (s *Shell) communicate(ctx context.Context) error {
 	defer restoreOutput()
 
 	for {
-		input, err := s.prompt(p)
+		input, err := s.prompt(ctx, p)
 		if err != nil {
 			// Ctrl-D / EOF ends the session like ".exit": a normal exit, not a
 			// user-facing error. The prompt library reports this as io.EOF
@@ -981,9 +981,9 @@ func (s *Shell) printWelcomeMessage() {
 }
 
 // printPrompt print "sqly>" prompt and getting user input
-func (s *Shell) prompt(p promptSession) (string, error) {
+func (s *Shell) prompt(ctx context.Context, p promptSession) (string, error) {
 	p.SetPrefix(s.promptPrefix())
-	return p.Run()
+	return p.Run(ctx)
 }
 
 // continuationPrefix marks the lines of a statement sqly is still collecting.
