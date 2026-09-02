@@ -77,20 +77,22 @@ scenarios:
             line: 2
             equals: ab
 
-  - name: casting a boolean to text gives SQLite's 1, not the spelled-out word
+  - name: casting a boolean literal to text spells the word, and a column of ones does not
     description: >
-      BigQuery CAST(TRUE AS STRING) is 'true' and MySQL CAST(TRUE AS CHAR) is
-      '1'. SQLite has no boolean type, so TRUE is already the integer 1 before
-      the cast runs and nothing downstream can tell it from a plain 1.
+      BigQuery CAST(TRUE AS STRING) is 'true', and the translation answers it
+      where the expression is syntactically a boolean. A column loaded from a
+      file holds 0 and 1, because SQLite has no boolean type, so CAST(col AS
+      STRING) over it stays '1': nothing downstream can tell that column from a
+      plain integer one.
     steps:
       - fixture: *rows
       - run:
-          command: sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x, CAST(id AS STRING) AS y FROM t" t.csv
       - assert:
           exit_code: 0
           stdout:
             line: 2
-            equals: "1"
+            equals: "true,1"
 
   # ---- The boundary the translation never crosses.
   - name: loading a file always uses sqlite, whatever the query dialect

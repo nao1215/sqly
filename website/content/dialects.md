@@ -137,10 +137,12 @@ $ sqly --output-format csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
 $ sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
 a,10
 
-# BigQuery spells this 'true'. SQLite has no boolean type, so TRUE is already
-# the integer 1 before the cast runs.
-$ sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x" t.csv
-1
+# BigQuery spells this 'true', and so does sqly when the expression is
+# syntactically a boolean. A column loaded from a file holds numbers, because
+# SQLite has no boolean type, so a column of ones and zeros cast to STRING
+# answers '1' where BigQuery would answer 'true'.
+$ sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING) AS x, CAST(id AS STRING) AS y FROM t" t.csv
+true,1
 ```
 
 None of these is going to be fixed one dialect at a time. A rewrite that gives MySQL its answer and leaves PostgreSQL and GoogleSQL on SQLite's replaces one divergence you can look up with three that depend on which `--dialect` you passed. So a case is fixed when it can be fixed for every dialect that has an opinion about it, and documented here when it cannot. `SUBSTR` from position 0 is the one that left this list outright: MySQL's and PostgreSQL's rules were checked against their own engines, and GoogleSQL's was checked against a BigQuery once one could be run locally, so all three answer their own way now.

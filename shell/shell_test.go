@@ -1257,7 +1257,7 @@ func (f *fakePromptSession) Close() error {
 	return f.closeErr
 }
 
-func (f *fakePromptSession) Run() (string, error) {
+func (f *fakePromptSession) Run(context.Context) (string, error) {
 	call := f.runCalls
 	f.runCalls++
 
@@ -3872,8 +3872,8 @@ func TestSqlyKeyMap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := km.GetAction(tt.key); got != tt.want {
-				t.Errorf("GetAction(%q) = %v, want %v", tt.key, got, tt.want)
+			if got := km.Action(tt.key); got != tt.want {
+				t.Errorf("Action(%q) = %v, want %v", tt.key, got, tt.want)
 			}
 		})
 	}

@@ -1,8 +1,20 @@
 # CHANGELOG
 
-## [Unreleased]
+## [v1.6.0](https://github.com/nao1215/sqly/compare/v1.5.0...v1.6.0) (2026-09-02)
 
 ### Bug Fixes
+
+* Casting a boolean to text under `--dialect googlesql` or `--dialect postgresql` spells the word its engine spells, so `CAST(TRUE AS STRING)` answers `true` and `TRUE::text` answers `true` rather than `1`. This is filesql v0.55.0's boolean work; a column loaded from a file is still 0 and 1, because SQLite has no boolean type, so casting such a column to text still answers `1`, and the dialect notes say so.
+
+* Fifty-eight functions that MySQL, PostgreSQL or BigQuery define, and five aggregates, are refused by name under their dialect instead of reaching SQLite and failing with "no such function". The error now says the function has no SQLite form here rather than reading as a typo in the query.
+
+* Under `--dialect mysql`, `DATE()` reads a date as MySQL does rather than as SQLite does, `DATE_ADD` with a `YEAR_MONTH` interval moves the date once rather than twice, `STR_TO_DATE` reads a two-digit year on MySQL's pivot, an unpadded `2020-1-2` and a compact `20200229` are dates, and a fraction of a second survives the arithmetic. A date the arithmetic moves outside the year range is NULL rather than a year nothing can read.
+
+* MySQL's `0x41` hexadecimal literal is one literal rather than a refusal, PostgreSQL's `B'1010'` carries its bits and `'\x4142'::bytea` its bytes, and the bitwise operators work on byte strings under `--dialect mysql` and `--dialect googlesql`. A cast to a type the translation does not list is refused rather than left to SQLite's affinity, which answered the number a value's leading digits spelled.
+
+* PostgreSQL's `jsonb_set` and its three siblings take their path as a text array, as PostgreSQL does, and the JSON functions of each dialect answer what that dialect answers.
+
+* A workbook's boolean cells import as 1 and 0 rather than the words TRUE and FALSE, so `WHERE flag` and `SUM(flag)` work on a column of checkboxes and a join against the same column read from Parquet finds its rows.
 
 * Ctrl-P and Ctrl-N walk the history. The manual has listed them beside the arrow keys since the shell's Emacs bindings were added, and they did nothing at all: the actions they are bound to had no case in the prompt's read loop, so both keys reached a reader that was not listening for them.
 
@@ -25,6 +37,8 @@
 * Completing a name on a short terminal reaches the last candidates. With more candidates than the menu lists at once and a window shorter than ten rows -- a split pane, a terminal a few rows tall -- holding Down froze the list partway while the selection went on advancing, marked on no row, and Enter accepted a candidate that had never been shown.
 
 ### Changes
+
+* sqly builds on filesql v0.55.0 and prompt v0.1.0. Neither changes a command; what changed in each is the surface a Go program imports, which sqly followed.
 
 * Ctrl-U clears the line the cursor is on rather than the whole statement. On a statement typed across several lines the key that says "delete the line" discarded the statement, and there is no undo. What discards a whole statement is Ctrl-C, which says so on screen and leaves the session open.
 

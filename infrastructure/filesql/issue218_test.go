@@ -28,9 +28,9 @@ func TestIssue218LargeIntegerPreserved(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	db, err := filesql.OpenContext(ctx, csvPath)
+	db, err := filesql.Open(ctx, csvPath)
 	if err != nil {
-		t.Fatalf("OpenContext failed: %v", err)
+		t.Fatalf("Open failed: %v", err)
 	}
 	defer func() { _ = db.Close() }()
 

@@ -44,5 +44,9 @@ func NewCompressingWriter(w io.Writer, c model.Compression) (io.Writer, func() e
 	if err != nil {
 		return nil, nil, err
 	}
-	return libfilesql.NewCompressionHandler(ct).CreateWriter(w)
+	compressed, err := ct.NewWriter(w)
+	if err != nil {
+		return nil, nil, err
+	}
+	return compressed, compressed.Close, nil
 }

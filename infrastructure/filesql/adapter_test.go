@@ -1262,7 +1262,7 @@ func BenchmarkFilesqlOpenOnly(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		db, err := libfilesql.OpenContext(context.Background(), csv)
+		db, err := libfilesql.Open(context.Background(), csv)
 		if err != nil {
 			b.Fatal(err)
 		}
