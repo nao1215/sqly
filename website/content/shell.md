@@ -155,7 +155,7 @@ piped session; write the SQL in a file and use `--sql-file`.
 | Key | Does |
 |:--|:--|
 | `Enter` | run the statement, or continue it on the next line while it is unfinished |
-| `Ctrl-C` | throw away the line being typed, or stop the statement that is running; the session stays open |
+| `Ctrl-C` | throw away the statement being typed, however many lines it spans, or stop the statement that is running; the session stays open |
 | `Ctrl-D` | quit, like `.exit` |
 | `Tab` | complete keywords, tables, columns, paths, and dot-command arguments |
 | `Esc` | close the completion list |
