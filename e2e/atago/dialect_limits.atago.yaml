@@ -45,6 +45,18 @@ scenarios:
           exit_code: 1
           stderr:
             contains: "v is neither grouped nor aggregated"
+      - run:
+          command: sqly --output-format csv --dialect postgresql --sql "SELECT g, v FROM t GROUP BY g" t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "v is neither grouped nor aggregated"
+      - run:
+          command: sqly --output-format csv --dialect googlesql --sql "SELECT g, v FROM t GROUP BY g" t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "v is neither grouped nor aggregated"
 
   - name: grouping every column selected still answers
     description: >

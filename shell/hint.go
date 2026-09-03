@@ -63,18 +63,50 @@ func missingName(msg, marker string) (string, bool) {
 		return "", false
 	}
 	rest := msg[i+len(marker):]
+	// The engine prints a name it read as a quoted identifier with the quotes
+	// it was written with -- "no such column: \"first name\" - should this be a
+	// string literal in single-quotes?" -- and such a name may hold a space, so
+	// the closing quote ends it rather than the first blank. The quotes come
+	// off here because the hint quotes what it is given.
+	if name, ok := quotedName(rest); ok {
+		return name, true
+	}
 	if end := strings.IndexAny(rest, " \t\n"); end >= 0 {
 		rest = rest[:end]
 	}
-	// The engine quotes a name it read as a quoted identifier -- "no such
-	// column: \"namee\" - should this be a string literal in single-quotes?" --
-	// and the hint quotes what it is given, so the quotes come off here rather
-	// than reaching the reader doubled.
 	rest = strings.Trim(rest, `"`)
 	if rest == "" {
 		return "", false
 	}
 	return rest, true
+}
+
+// quotedName reads a double-quoted identifier from the front of s, with a
+// doubled quote inside it standing for one. It reports false when s does not
+// begin with a quote, when no quote closes it, and when the name is empty,
+// which leaves the caller reading the message the way it reads an unquoted
+// name.
+func quotedName(s string) (string, bool) {
+	if !strings.HasPrefix(s, `"`) {
+		return "", false
+	}
+	var name strings.Builder
+	for i := 1; i < len(s); i++ {
+		if s[i] != '"' {
+			name.WriteByte(s[i])
+			continue
+		}
+		if i+1 < len(s) && s[i+1] == '"' {
+			name.WriteByte('"')
+			i++
+			continue
+		}
+		if name.Len() == 0 {
+			return "", false
+		}
+		return name.String(), true
+	}
+	return "", false
 }
 
 // asMissingTableError rewrites the engine's report of an unknown table into the
