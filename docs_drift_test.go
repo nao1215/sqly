@@ -587,8 +587,12 @@ func TestDialectsPage_PassThroughClaimsAreSpecified(t *testing.T) {
 		t.Fatalf("read %s: %v", spec, err)
 	}
 
+	// Two is the floor rather than a count of the section: it catches a regex
+	// that stopped matching, which would otherwise pass by finding nothing.
+	// The list shrinks as a divergence is fixed -- the non-aggregated column in
+	// a GROUP BY left it in v1.7.0, and SUBSTR from position 0 before that.
 	queries := regexp.MustCompile(`--sql "([^"]+)"`).FindAllStringSubmatch(rest, -1)
-	if len(queries) < 3 {
+	if len(queries) < 2 {
 		t.Fatalf("only %d quoted queries found in the pass-through section; the page or the parser changed", len(queries))
 	}
 	for _, m := range queries {
