@@ -66,6 +66,11 @@ func missingName(msg, marker string) (string, bool) {
 	if end := strings.IndexAny(rest, " \t\n"); end >= 0 {
 		rest = rest[:end]
 	}
+	// The engine quotes a name it read as a quoted identifier -- "no such
+	// column: \"namee\" - should this be a string literal in single-quotes?" --
+	// and the hint quotes what it is given, so the quotes come off here rather
+	// than reaching the reader doubled.
+	rest = strings.Trim(rest, `"`)
 	if rest == "" {
 		return "", false
 	}

@@ -47,6 +47,19 @@ func TestMissingName(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name:   "a quoted name loses its quotes",
+			msg:    `SQL logic error: no such column: "namee" - should this be a string literal in single-quotes? (1): SELECT "namee" FROM t`,
+			marker: "no such column: ",
+			want:   "namee",
+			wantOK: true,
+		},
+		{
+			name:   "a name that is only quotes reads nothing",
+			msg:    `no such column: "" (1)`,
+			marker: "no such column: ",
+			wantOK: false,
+		},
+		{
 			name:   "a marker that is not there reads nothing",
 			msg:    "database is locked",
 			marker: "no such table: ",
