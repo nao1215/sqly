@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v1.7.0](https://github.com/nao1215/sqly/compare/v1.6.2...v1.7.0) (2026-09-03)
+
+### Bug Fixes
+
+* A mistyped column name in double quotes is an error rather than an answer. SQLite reads a quoted name that matches no column as a string literal, so `SELECT "namee" FROM t` printed the word `namee` on every row, and `SELECT * FROM t WHERE "namee" = 'ada'` compared that word against 'ada' and printed nothing at all -- a query that looks right, runs, and answers wrong. sqly now opens its database with that behavior turned off, and both say there is no such column. A double-quoted string written as a string, which SQLite had been accepting, is now an error too; single quotes are the spelling every engine here takes. The hint under the error names the column without the quotes the engine wraps it in.
+
+* A column that is neither grouped nor aggregated is rejected under `--dialect mysql`, `postgresql` and `googlesql`. `SELECT g, v FROM t GROUP BY g` printed one `v` from each group, chosen arbitrarily, where all three engines refuse the query: the numbers of a report came out right beside a label nobody picked. The reading is narrow -- grouping by a position or an alias counts, an aggregate anywhere in the item counts, and a grouping sqly cannot read exactly leaves the query answered -- and `--dialect sqlite`, the default, is unaffected.
+
+* The upsert MySQL callers write is translated: `INSERT INTO t (a, b) VALUES (1, 'y') ON DUPLICATE KEY UPDATE b = VALUES(b)` used to fail with "expected an expression" although the clause around it was already understood.
+
+* Under `--dialect postgresql`, a mathematical function outside its domain stops the query the way PostgreSQL stops it. `sqrt(-1)`, `ln(0)`, `log(2, -1)` and eleven more printed an empty cell, and `power(0, -1)` and `exp(1000)` printed `+Inf`; an empty cell reads as missing data rather than as arithmetic the engine refused. `cot(0)` moves the other way and now prints `Infinity`, which is PostgreSQL's answer. Under `--dialect mysql`, `POW(0, -1)` is refused as MySQL refuses it, and `TRUNCATE(1e308, 1)` answers `1e308` rather than `+Inf`.
+
+* A word an engine keeps for its own grammar is refused where a value goes, so `SELECT b + BETWEEN FROM t` under `--dialect mysql` is a syntax error naming the word, as it is in MySQL, rather than a query that answers. The words are per dialect and were read from each engine: MySQL keeps `BETWEEN`, `KEY` and `USE` where PostgreSQL takes them as column names, and PostgreSQL keeps `FULL` where MySQL takes it.
+
+* A query carrying a byte order mark runs. One pasted from a file an editor wrote was refused outright, because the mark was read as part of the first word.
+
+* Nine spellings that translated into SQL SQLite could not parse are refused or corrected instead, among them an alias on a star, a blob literal of an odd number of digits, and a table name of three parts.
+
+* An Excel number whose format draws nothing loads as the number, a sheet written by a tool other than Excel loads its rows, a workbook whose main part is not at the usual path loads, and a sheet holding a very long tag no longer crashes the import.
+
 ## [v1.6.2](https://github.com/nao1215/sqly/compare/v1.6.1...v1.6.2) (2026-09-02)
 
 ### Bug Fixes

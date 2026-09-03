@@ -21,8 +21,16 @@ type MemoryDB *sql.DB
 // per connection: a second connection would see an empty database. This also lets
 // filesql stream imported files directly into this database (filesql.LoadInto)
 // instead of building a separate database and copying every row across.
+//
+// _dqs=false turns off SQLite's double-quoted string literal quirk, under which
+// a quoted name that matches no column is read as a string rather than refused.
+// A mistyped column name answered its own spelling for every row, and one
+// written in a WHERE compared that spelling and matched nothing, which is a
+// query that looks right, runs, and answers wrong. The URI spelling of the
+// in-memory database is the one that takes the parameter; without cache=shared
+// it is private per connection, as ":memory:" is.
 func NewInMemDB() (MemoryDB, func(), error) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", "file::memory:?_dqs=false")
 	if err != nil {
 		return nil, nil, err
 	}

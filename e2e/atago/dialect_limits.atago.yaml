@@ -30,6 +30,36 @@ scenarios:
           stderr:
             contains: "DISTINCT ON is not supported"
 
+  - name: a non-aggregated column in GROUP BY is named rather than answered
+    description: >
+      This was a limit until filesql v0.57.0: SQLite picks an arbitrary row from
+      each group, so sqly answered where MySQL, which runs with
+      ONLY_FULL_GROUP_BY, rejects the query. It is rejected here now, naming the
+      column that is neither grouped nor aggregated. PostgreSQL and BigQuery
+      reject it too, so the refusal holds under those dialects as well.
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
+      - assert:
+          exit_code: 1
+          stderr:
+            contains: "v is neither grouped nor aggregated"
+
+  - name: grouping every column selected still answers
+    description: >
+      The refusal above is narrow: a query that groups what it selects is
+      unaffected, and so is one that aggregates the rest.
+    steps:
+      - fixture: *rows
+      - run:
+          command: sqly --output-format csv --dialect mysql --sql "SELECT g, count(*) AS n FROM t GROUP BY g" t.csv
+      - assert:
+          exit_code: 0
+          stdout:
+            line: 2
+            equals: "a,2"
+
   # ---- Passed through: SQLite runs it, and the answer can differ silently.
   - name: string comparison stays case-sensitive under mysql
     description: >
@@ -45,21 +75,6 @@ scenarios:
           stdout:
             line: 2
             equals: "0"
-
-  - name: a non-aggregated column in GROUP BY is answered, not rejected
-    description: >
-      MySQL runs with ONLY_FULL_GROUP_BY by default and rejects this query.
-      SQLite picks an arbitrary row from each group, so sqly answers where MySQL
-      would have told the user the query is ambiguous.
-    steps:
-      - fixture: *rows
-      - run:
-          command: sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
-      - assert:
-          exit_code: 0
-          stdout:
-            line: 2
-            equals: "a,10"
 
   - name: googlesql SUBSTR from position 0 answers BigQuery's rule
     description: >

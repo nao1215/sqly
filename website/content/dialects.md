@@ -121,6 +121,24 @@ function and an array are rejected for the same kind of reason — SQLite has no
 form for either — and the rejection is what keeps the message about the query
 you wrote rather than about a column or a table SQLite invented from it.
 
+A column that is neither grouped nor aggregated is rejected the same way. MySQL
+runs with `ONLY_FULL_GROUP_BY`, PostgreSQL follows the standard and BigQuery has
+its own rule, so all three refuse it; SQLite would answer with one row of each
+group, chosen arbitrarily, and a report whose numbers are right beside a label
+nobody picked is worse than an error.
+
+```shell
+$ sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
+translate error (mysql): v is neither grouped nor aggregated ...
+
+$ sqly --output-format csv --dialect mysql --sql "SELECT g, count(*) AS n FROM t GROUP BY g" t.csv
+a,2
+```
+
+The reading is narrow, because refusing a query the engines answer would be
+worse than the answer it replaces: grouping by a position or an alias counts,
+and a grouping sqly cannot read exactly leaves the query answered.
+
 In a batch script a translate error stops the run and names the statement.
 
 ## What passes through, and can differ
@@ -132,11 +150,6 @@ SQL that SQLite happens to accept is run as written. When the source dialect wou
 $ sqly --output-format csv --dialect mysql --sql "SELECT 'A' = 'a' AS eq" t.csv
 0
 
-# MySQL runs with ONLY_FULL_GROUP_BY and rejects this. SQLite picks an arbitrary
-# row per group, so sqly answers instead of telling you the query is ambiguous.
-$ sqly --output-format csv --dialect mysql --sql "SELECT g, v FROM t GROUP BY g" t.csv
-a,10
-
 # BigQuery spells this 'true', and so does sqly when the expression is
 # syntactically a boolean. A column loaded from a file holds numbers, because
 # SQLite has no boolean type, so a column of ones and zeros cast to STRING
@@ -145,12 +158,11 @@ $ sqly --output-format csv --dialect googlesql --sql "SELECT CAST(TRUE AS STRING
 true,1
 ```
 
-None of these is going to be fixed one dialect at a time. A rewrite that gives MySQL its answer and leaves PostgreSQL and GoogleSQL on SQLite's replaces one divergence you can look up with three that depend on which `--dialect` you passed. So a case is fixed when it can be fixed for every dialect that has an opinion about it, and documented here when it cannot. `SUBSTR` from position 0 is the one that left this list outright: MySQL's and PostgreSQL's rules were checked against their own engines, and GoogleSQL's was checked against a BigQuery once one could be run locally, so all three answer their own way now.
+None of these is going to be fixed one dialect at a time. A rewrite that gives MySQL its answer and leaves PostgreSQL and GoogleSQL on SQLite's replaces one divergence you can look up with three that depend on which `--dialect` you passed. So a case is fixed when it can be fixed for every dialect that has an opinion about it, and documented here when it cannot. `SUBSTR` from position 0 is one that left this list outright: MySQL's and PostgreSQL's rules were checked against their own engines, and GoogleSQL's was checked against a BigQuery once one could be run locally, so all three answer their own way now. A column that is neither grouped nor aggregated left it too, for the opposite reason: every dialect here has the same opinion about it, so the query is refused rather than answered with a row nobody picked.
 
 Each of these fails that test for its own reason:
 
 - Collation is a property of the column and the comparison, not of the call being rewritten. Supplying MySQL's would mean attaching it to every string comparison, `ORDER BY`, `DISTINCT`, `GROUP BY`, `LIKE`, and `IN`; doing less leaves `=` case-insensitive while `GROUP BY` stays case-sensitive, which is harder to reason about than one byte ordering everywhere.
-- `ONLY_FULL_GROUP_BY` is a strictness setting rather than a construct to translate, and reproducing it means refusing a query SQLite can answer. sqly answers with a row from each group instead, which is the more useful reading for a tool you point at a file to find out what is in it.
 - The boolean cast is only recoverable where the expression is syntactically a boolean. `CAST(col AS STRING)` over a column of 0 and 1 is not, because SQLite has no boolean type and nothing downstream can tell that column from a plain integer one.
 
 ## A translated expression keeps the name you wrote
