@@ -1,6 +1,6 @@
 module github.com/nao1215/sqly
 
-go 1.25.13
+go 1.26.0
 
 require (
 	github.com/adrg/xdg v0.5.3
@@ -18,7 +18,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/xuri/excelize/v2 v2.11.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.45.0
 	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.57.0
