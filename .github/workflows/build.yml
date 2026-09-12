@@ -21,3 +21,35 @@ jobs:
 
     - name: Build
       run: make build
+
+  cross_build:
+    name: Cross build (${{ matrix.goos }})
+
+    # The release ships linux, darwin and windows archives, but `go install
+    # github.com/nao1215/sqly@latest` is the first install method the README
+    # gives, and that runs on whatever the user has. sqly compiles for the three
+    # BSDs today; if a dependency stops doing so, the failure belongs here
+    # rather than in a FreeBSD user's terminal. A leg is seconds and builds no
+    # artifact.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [freebsd, openbsd, netbsd]
+
+    env:
+      GOOS: ${{ matrix.goos }}
+      CGO_ENABLED: "0"
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: "stable"
+
+    - name: Build
+      run: go build ./...
