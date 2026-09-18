@@ -53,10 +53,10 @@ The top 10 countries by row count of 100 000 customers (12 columns), from readin
 
 | Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative |
 |---|---|--:|--:|--:|--:|--:|--:|--:|--:|
-| top 10 countries 100k | sqly | 651.98ms | 690.68ms | 654.41ms | 24.77ms | 618.75ms | 694.70ms | 10 | 2.16x |
-| top 10 countries 100k | trdsql | 215.80ms | 225.68ms | 216.27ms | 6.75ms | 204.98ms | 229.15ms | 10 | 0.71x |
-| top 10 countries 100k | csvq | 192.58ms | 208.90ms | 193.23ms | 9.91ms | 178.49ms | 212.03ms | 10 | 0.64x |
-| top 10 countries 100k | textql | 302.26ms | 328.70ms | 303.91ms | 15.30ms | 285.30ms | 341.08ms | 10 | 1.00x |
+| top 10 countries 100k | sqly | 655.18ms | 683.80ms | 658.08ms | 21.70ms | 622.33ms | 685.98ms | 10 | 2.23x |
+| top 10 countries 100k | trdsql | 213.00ms | 228.82ms | 214.87ms | 8.72ms | 206.43ms | 237.60ms | 10 | 0.72x |
+| top 10 countries 100k | csvq | 187.17ms | 196.12ms | 187.79ms | 5.87ms | 176.88ms | 200.28ms | 10 | 0.64x |
+| top 10 countries 100k | textql | 293.93ms | 315.36ms | 297.88ms | 10.06ms | 288.39ms | 318.45ms | 10 | 1.00x |
 
 Relative is the median divided by the baseline command's median, or by the fastest command's.
 
@@ -64,10 +64,10 @@ Relative is the median divided by the baseline command's median, or by the faste
 
 | Benchmark | Command | User | System | Total | Total p95 | Utilization |
 |---|---|--:|--:|--:|--:|--:|
-| top 10 countries 100k | sqly | 831.09ms | 88.52ms | 917.11ms | 1.01s | 141.6% |
-| top 10 countries 100k | trdsql | 226.14ms | 28.33ms | 255.68ms | 267.19ms | 118.1% |
-| top 10 countries 100k | csvq | 558.51ms | 79.05ms | 638.96ms | 720.79ms | 335.5% |
-| top 10 countries 100k | textql | 318.96ms | 26.18ms | 343.81ms | 372.94ms | 113.6% |
+| top 10 countries 100k | sqly | 879.64ms | 84.76ms | 960.98ms | 1.02s | 145.8% |
+| top 10 countries 100k | trdsql | 227.69ms | 27.66ms | 255.69ms | 274.14ms | 119.9% |
+| top 10 countries 100k | csvq | 559.86ms | 68.59ms | 627.10ms | 684.74ms | 335.5% |
+| top 10 countries 100k | textql | 318.60ms | 22.94ms | 338.93ms | 358.93ms | 114.6% |
 
 CPU values are medians over runs of the process tree. Utilization is CPU time divided by wall-clock time; above 100% means more than one CPU was busy. Process tree: the command plus every descendant its parent waited for (rusage); a descendant left running or reaped by init is not counted.
 
@@ -75,14 +75,14 @@ CPU values are medians over runs of the process tree. Utilization is CPU time di
 
 | Benchmark | Command | Peak RSS (median) | Peak RSS (max) |
 |---|---|--:|--:|
-| top 10 countries 100k | sqly | 185.74MiB | 189.42MiB |
-| top 10 countries 100k | trdsql | 20.89MiB | 22.00MiB |
-| top 10 countries 100k | csvq | 187.64MiB | 192.68MiB |
-| top 10 countries 100k | textql | 32.36MiB | 33.28MiB |
+| top 10 countries 100k | sqly | 187.02MiB | 189.32MiB |
+| top 10 countries 100k | trdsql | 21.44MiB | 22.68MiB |
+| top 10 countries 100k | csvq | 188.42MiB | 191.68MiB |
+| top 10 countries 100k | textql | 31.97MiB | 33.55MiB |
 
 Peak RSS is a resident set size, not the heap size of a language runtime. Peak RSS is the largest peak of any single process of the tree (rusage ru_maxrss), not the combined memory of processes running at the same time.
 
-Measured with himorime v0.1.4-0.20260918050905-6e318e346ffe+dirty on linux/amd64, AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (32 logical CPUs), head caf6ca262a5a with uncommitted changes, seed 2685689083556177.
+Measured with himorime v0.2.0 on linux/amd64, AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (32 logical CPUs), head 94b063ed9963, seed 68008210526795.
 
 - trdsql: github.com/noborus/trdsql v1.2.3
 - csvq: csvq version 1.18.1
