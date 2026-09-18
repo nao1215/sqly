@@ -116,8 +116,9 @@ benchmarks:
   - name: import 1m
     description: Importing a CSV of 1 000 000 rows and counting them.
     tags: [large]
-    # One run takes seconds; five runs are enough to see a change of 10%.
-    runs: 5
+    # One run takes seconds, so this benchmark takes the fewest runs a
+    # comparison can judge (regression.min_samples, 10) instead of 20.
+    runs: 10
     setup:
       - command: [sh, "${head_root}/gen.sh", csv, "1000000", "${workdir}/bench.csv"]
     metrics:
