@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
+#
+# sqly against trdsql, csvq and textql: the same query on the same file, end
+# to end, with himorime (https://github.com/nao1215/himorime).
+#
+#   make bench-docs   run it and rewrite the Benchmark section of
+#                     website/content/about.md
+#
+# It needs trdsql, csvq and textql on PATH; bench/README.md has the pinned
+# go install lines. It is not a CI gate: CI only validates it.
+version: "1"
+
+suite:
+  name: sqly and other SQL-over-CSV tools
+  description: The top 10 countries by row count of 100 000 customers (12 columns), from reading the file to printing CSV.
+
+build:
+  command: [go, build, -trimpath, -o, "${artifact}", .]
+  cwd: ../..
+
+defaults:
+  warmup: 2
+  runs: 10
+  metrics:
+    cpu: true
+    memory: true
+    unsupported: skip
+
+benchmarks:
+  - name: top 10 countries 100k
+    description: >-
+      SELECT Country, COUNT(*) AS n ... GROUP BY Country ORDER BY n DESC,
+      Country LIMIT 10 over testdata/benchmark/customers100000.csv, printed as
+      CSV with a header. Before measuring, the four outputs are compared byte
+      for byte. Every tool loads the whole file into SQLite first except csvq,
+      which has its own engine; sqly is pure Go, trdsql and textql use SQLite
+      through cgo. textql has not had a release since 2015.
+    setup:
+      - command: [sh, -c, '"$1" --output-format csv --sql "$2" "$3" > sqly.csv && trdsql -icsv -ih -oh "$4" > trdsql.csv && csvq -r "$(dirname "$3")" -f csv "$2" > csvq.csv && textql -header -output-header -sql "$2" "$3" > textql.csv && cmp sqly.csv trdsql.csv && cmp sqly.csv csvq.csv && cmp sqly.csv textql.csv', sh,
+          "${artifact}",
+          "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10",
+          "${head_root}/../../testdata/benchmark/customers100000.csv",
+          "SELECT Country, COUNT(*) AS n FROM ${head_root}/../../testdata/benchmark/customers100000.csv GROUP BY Country ORDER BY n DESC, Country LIMIT 10"]
+        cwd: "${workdir}"
+    baseline: textql
+    commands:
+      sqly:
+        command: ["${artifact}", --output-format, csv, --sql, "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10", "${head_root}/../../testdata/benchmark/customers100000.csv"]
+      trdsql:
+        command: [trdsql, -icsv, -ih, -oh, "SELECT Country, COUNT(*) AS n FROM ${head_root}/../../testdata/benchmark/customers100000.csv GROUP BY Country ORDER BY n DESC, Country LIMIT 10"]
+      csvq:
+        command: [csvq, -r, "${head_root}/../../testdata/benchmark", -f, csv, "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10"]
+      textql:
+        command: [textql, -header, -output-header, -sql, "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10", "${head_root}/../../testdata/benchmark/customers100000.csv"]
+
+report:
+  # go install records the module version in the binary; textql has no
+  # version flag, and trdsql built by go install prints "devel".
+  versions:
+    trdsql: [sh, -c, 'go version -m "$(command -v trdsql)" | awk "\$1 == \"mod\" { print \$2, \$3 }"']
+    csvq: [csvq, --version]
+    textql: [sh, -c, 'go version -m "$(command -v textql)" | awk "\$1 == \"mod\" { print \$2, \$3 }"']

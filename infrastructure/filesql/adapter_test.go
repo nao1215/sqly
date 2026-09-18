@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	libfilesql "github.com/nao1215/filesql"
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
 	"github.com/nao1215/sqly/domain/repository"
@@ -1246,50 +1245,6 @@ func TestIsExcelFile(t *testing.T) {
 				t.Errorf("IsExcelFile(%q) = %v, want %v", tt.path, got, tt.expected)
 			}
 		})
-	}
-}
-
-// benchCSVPath returns the shared 100k-row benchmark CSV, relative to this
-// package directory.
-func benchCSVPath() string {
-	return filepath.Join("..", "..", "testdata", "benchmark", "customers100000.csv")
-}
-
-// BenchmarkFilesqlOpenOnly measures filesql's own load cost: parse the file and
-// build its temporary in-memory database, with no copy into a shared DB.
-func BenchmarkFilesqlOpenOnly(b *testing.B) {
-	csv := benchCSVPath()
-	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
-		db, err := libfilesql.Open(context.Background(), csv)
-		if err != nil {
-			b.Fatal(err)
-		}
-		_ = db.Close()
-	}
-}
-
-// BenchmarkAdapterLoadFiles measures the full sqly import. Since the refactor
-// that streams files directly into the shared DB (filesql.LoadInto), this should
-// track BenchmarkFilesqlOpenOnly closely instead of roughly doubling it.
-func BenchmarkAdapterLoadFiles(b *testing.B) {
-	csv := benchCSVPath()
-	sharedDB, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		b.Fatal(err)
-	}
-	// Match production: ":memory:" is private per connection, so pin the pool.
-	sharedDB.SetMaxOpenConns(1)
-	defer func() { _ = sharedDB.Close() }()
-	adapter := newTestAdapter(sharedDB)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
-		if err := adapter.LoadFiles(context.Background(), csv); err != nil {
-			b.Fatal(err)
-		}
 	}
 }
 

@@ -41,26 +41,53 @@ Issues and pull requests are welcome; see [CONTRIBUTING.md](https://github.com/n
 
 ## Benchmark
 
-**Historical measurement from sqly v0.30.0 on the environment shown below. It is
-not a performance guarantee for the current release.** The figures have not been
-re-measured since; treat them as a rough sense of scale rather than as a number
-to plan against, and run `make bench` on your own machine if the answer matters.
+The same query on the same file, measured end to end (from starting the process to its exit) with [himorime](https://github.com/nao1215/himorime): the top 10 countries by row count of `testdata/benchmark/customers100000.csv` (100,000 rows, 12 columns), printed as CSV. Before measuring, the outputs of the four tools are compared byte for byte. The suite is [`bench/compare/himorime.yaml`](https://github.com/nao1215/sqly/blob/main/bench/compare/himorime.yaml), and `make bench-docs` measures it again and rewrites what follows, with the machine and the tool versions it ran on. Numbers from different machines are not comparable.
 
-`make bench` measures one full run (import the CSV into the in-memory DB, then run the query) over `testdata/benchmark/customers100000.csv` (100,000 rows, 12 columns):
+<!-- himorime:begin benchmarks -->
 
-| Records | Columns | Time per op | Memory per op | Allocations per op |
-|--------:|--------:|------------:|--------------:|-------------------:|
-| 100,000 | 12 | 515 ms | 161 MB | 2.82M |
+### sqly and other SQL-over-CSV tools
 
-Measured on an AMD Ryzen 7 5800U, Go 1.25, sqly v0.30.0. The comparison below comes from the same run, so both are refreshed together rather than at each release.
+The top 10 countries by row count of 100 000 customers (12 columns), from reading the file to printing CSV.
 
-The same query on the same file (top 10 countries by row count), best of 5 end-to-end runs:
+#### Latency
 
-| Tool | Time | Reads |
-|:--|--:|:--|
-| [trdsql](https://github.com/noborus/trdsql) | 0.32s | CSV, LTSV, JSON, TBLN |
-| [csvq](https://github.com/mithrandie/csvq) | 0.34s | CSV, TSV, fixed-length, JSON |
-| sqly | 0.49s | CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, Fedwire (+ compression) |
-| [textql](https://github.com/dinedal/textql) | 0.52s | CSV, TSV |
+| Benchmark | Command | Median | P95 | Mean | Stddev | Min | Max | Runs | Relative |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| top 10 countries 100k | sqly | 655.18ms | 683.80ms | 658.08ms | 21.70ms | 622.33ms | 685.98ms | 10 | 2.23x |
+| top 10 countries 100k | trdsql | 213.00ms | 228.82ms | 214.87ms | 8.72ms | 206.43ms | 237.60ms | 10 | 0.72x |
+| top 10 countries 100k | csvq | 187.17ms | 196.12ms | 187.79ms | 5.87ms | 176.88ms | 200.28ms | 10 | 0.64x |
+| top 10 countries 100k | textql | 293.93ms | 315.36ms | 297.88ms | 10.06ms | 288.39ms | 318.45ms | 10 | 1.00x |
 
-sqly stays in the same sub-second range as the CSV-focused tools while reading the widest set of formats, shipping an interactive shell, and building as a pure-Go binary with no CGO.
+Relative is the median divided by the baseline command's median, or by the fastest command's.
+
+#### CPU
+
+| Benchmark | Command | User | System | Total | Total p95 | Utilization |
+|---|---|--:|--:|--:|--:|--:|
+| top 10 countries 100k | sqly | 879.64ms | 84.76ms | 960.98ms | 1.02s | 145.8% |
+| top 10 countries 100k | trdsql | 227.69ms | 27.66ms | 255.69ms | 274.14ms | 119.9% |
+| top 10 countries 100k | csvq | 559.86ms | 68.59ms | 627.10ms | 684.74ms | 335.5% |
+| top 10 countries 100k | textql | 318.60ms | 22.94ms | 338.93ms | 358.93ms | 114.6% |
+
+CPU values are medians over runs of the process tree. Utilization is CPU time divided by wall-clock time; above 100% means more than one CPU was busy. Process tree: the command plus every descendant its parent waited for (rusage); a descendant left running or reaped by init is not counted.
+
+#### Memory
+
+| Benchmark | Command | Peak RSS (median) | Peak RSS (max) |
+|---|---|--:|--:|
+| top 10 countries 100k | sqly | 187.02MiB | 189.32MiB |
+| top 10 countries 100k | trdsql | 21.44MiB | 22.68MiB |
+| top 10 countries 100k | csvq | 188.42MiB | 191.68MiB |
+| top 10 countries 100k | textql | 31.97MiB | 33.55MiB |
+
+Peak RSS is a resident set size, not the heap size of a language runtime. Peak RSS is the largest peak of any single process of the tree (rusage ru_maxrss), not the combined memory of processes running at the same time.
+
+Measured with himorime v0.2.0 on linux/amd64, AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (32 logical CPUs), head 94b063ed9963, seed 68008210526795.
+
+- trdsql: github.com/noborus/trdsql v1.2.3
+- csvq: csvq version 1.18.1
+- textql: github.com/dinedal/textql v0.0.0-20151217051953-1785cd353c68
+
+<!-- himorime:end benchmarks -->
+
+sqly, trdsql and textql load the file into SQLite before running the query; csvq runs it on its own engine. sqly also reads TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH and Fedwire files, and builds without cgo.

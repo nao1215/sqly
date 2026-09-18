@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -1426,28 +1425,6 @@ func TestShell_getRegularCompletions_skipsMetadataForDotCommand(t *testing.T) {
 	}
 }
 
-func BenchmarkRegularCompletionManyTables(b *testing.B) {
-	ctrl := gomock.NewController(b)
-	metadata := mock.NewMockMetadataUsecase(ctrl)
-
-	const tableCount = 50
-	tables := make([]*model.Table, 0, tableCount)
-	for i := range tableCount {
-		name := "table" + strconv.Itoa(i)
-		tables = append(tables, model.NewTable(name, nil, nil))
-		metadata.EXPECT().Header(gomock.Any(), name).Return(
-			model.NewTable(name, model.Header{"col_a", "col_b", "col_c", "col_d"}, nil), nil).AnyTimes()
-	}
-	metadata.EXPECT().TablesName(gomock.Any()).Return(tables, nil).AnyTimes()
-
-	s := newBoundaryTestShell(&testing.T{}, Usecases{metadata: metadata})
-
-	b.ResetTimer()
-	for range b.N {
-		_ = s.getRegularCompletions(context.Background(), "SEL")
-	}
-}
-
 func TestShell_getFilePathCompletions_dependsOnImportUsecase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	importer := mock.NewMockImportUsecase(ctrl)
@@ -1532,49 +1509,6 @@ func TestCompleterEdgeCases(t *testing.T) {
 			// Just verify we got a valid response (len cannot be negative)
 		})
 	}
-}
-
-// BenchmarkGetFilePathCompletions measures completion against a large synthetic
-// directory tree. The fix scopes traversal to the targeted directory, so latency
-// should track that single directory rather than the whole tree. The benchmark
-// compares completing inside one leaf directory against listing the shallow root,
-// making any regression to whole-tree scanning measurable.
-func BenchmarkGetFilePathCompletions(b *testing.B) {
-	b.Chdir(b.TempDir())
-
-	// Build a wide and deep tree: 50 top-level directories, each with 50 files.
-	const dirs, filesPerDir = 50, 50
-	for d := range dirs {
-		dir := filepath.Join("data", "dir"+strconv.Itoa(d))
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			b.Fatal(err)
-		}
-		for f := range filesPerDir {
-			name := filepath.Join(dir, "file"+strconv.Itoa(f)+".csv")
-			if err := os.WriteFile(name, []byte("a\n"), 0o600); err != nil {
-				b.Fatal(err)
-			}
-		}
-	}
-
-	shell, cleanup, err := newShell(b, []string{"sqly"})
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer cleanup()
-
-	leaf := filepath.ToSlash(filepath.Join("data", "dir25")) + "/"
-
-	b.Run("leaf directory", func(b *testing.B) {
-		for b.Loop() {
-			_ = shell.getFilePathCompletions(leaf)
-		}
-	})
-	b.Run("root directory", func(b *testing.B) {
-		for b.Loop() {
-			_ = shell.getFilePathCompletions("")
-		}
-	})
 }
 
 // slashSeparators rewrites backslashes to forward slashes so completion
