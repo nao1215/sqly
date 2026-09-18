@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e coverage smoke demo themes clean vet fmt chkfmt website website-serve
+.PHONY: build test test-e2e coverage smoke demo themes clean vet fmt chkfmt website website-serve bench bench-compare bench-docs
 
 APP         = sqly
 VERSION     = $(shell git describe --tags --abbrev=0)
@@ -46,8 +46,14 @@ themes: ## Render one screenshot per shell theme into doc/img/themes (requires v
 demo: build ## Render README demo GIFs from doc/vhs/*.tape (requires vhs, ttyd, ffmpeg)
 	for tape in doc/vhs/*.tape; do vhs "$$tape"; done
 
-bench: ## Start benchmark
-	env GOOS=$(GOOS) go test -bench=BenchmarkImport100000Records -benchmem
+bench: ## Measure sqly with the himorime suite in bench/ (requires himorime on PATH)
+	himorime run bench
+
+bench-compare: ## Compare main with the working tree on the himorime suite (BASE=main)
+	himorime compare --against $${BASE:-main} bench
+
+bench-docs: ## Measure sqly against trdsql, csvq and textql and rewrite the Benchmark section of website/content/about.md
+	himorime run --format markdown --output website/content/about.md --section benchmarks bench/compare
 
 smoke: ## Run Go binary smoke tests (portable; runs on Linux, macOS, Windows)
 	go test -tags smoke ./e2e/...
@@ -64,6 +70,7 @@ tools: ## Install dependency tools
 	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	$(GO_INSTALL) go.uber.org/mock/mockgen@latest
 	$(GO_INSTALL) github.com/fe3dback/go-arch-lint@v1.15.0
+	$(GO_INSTALL) github.com/nao1215/himorime@latest
 
 lint: ## Lint code
 	golangci-lint run --config .golangci.yml
