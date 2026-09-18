@@ -211,8 +211,8 @@ jobs:
           require "${dialects}" "SQLite semantics" "dialects"
 
           about=$(fetch "${SITE}about/?cachebust=${GITHUB_RUN_ID}")
-          require "${about}" "Historical measurement" "about"
-          require "${about}" "not a performance guarantee" "about"
+          require "${about}" "Numbers from different machines are not comparable" "about"
+          require "${about}" "Measured with himorime" "about"
           echo "the deployed pages state the v1.0.0 contracts"
 
       # The formal --inspect schema is a file, not a page, and it is the one
