@@ -13,7 +13,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.30
 	github.com/nao1215/filesql v0.57.0
 	github.com/nao1215/prompt v0.2.0
-	github.com/olekukonko/tablewriter v1.1.4
+	github.com/olekukonko/tablewriter v1.1.5
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/pflag v1.0.10
 	github.com/xuri/excelize/v2 v2.11.0
