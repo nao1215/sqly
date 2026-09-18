@@ -204,19 +204,6 @@ func TestSignalTrap(t *testing.T) {
 	})
 }
 
-func BenchmarkImport100000Records(b *testing.B) {
-	b.ResetTimer()
-
-	for range b.N {
-		run([]string{
-			"sqly",
-			"--sql",
-			"SELECT * FROM `customers100000` WHERE `Index` BETWEEN 1000 AND 2000 ORDER BY `Index` DESC LIMIT 1000",
-			"testdata/benchmark/customers100000.csv",
-		})
-	}
-}
-
 func getStdoutForRunFunc(t *testing.T, f func([]string) int, list []string) []byte {
 	t.Helper()
 	backupColorStdout := config.Stdout

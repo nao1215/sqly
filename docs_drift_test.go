@@ -1908,30 +1908,37 @@ func TestDocs_NoLinkToTheDeletedMigrationGuide(t *testing.T) {
 	}
 }
 
-// TestAbout_BenchmarkIsMarkedHistorical keeps an old measurement from reading as
-// a promise about the current release.
-func TestAbout_BenchmarkIsMarkedHistorical(t *testing.T) {
+// TestAbout_BenchmarkIsGeneratedByHimorime keeps the comparison on the about
+// page a measurement that states where and with which versions it was taken:
+// the figures between the markers are written by make bench-docs, never by
+// hand, and the README points to them instead of quoting numbers.
+func TestAbout_BenchmarkIsGeneratedByHimorime(t *testing.T) {
 	t.Parallel()
 
-	about := flatten(section(readDoc(t, "website/content/about.md"), "## Benchmark"))
+	about := section(readDoc(t, "website/content/about.md"), "## Benchmark")
 	if about == "" {
 		t.Fatal("the about page has no Benchmark section")
 	}
-	for _, claim := range []string{
-		"Historical measurement",
-		"v0.30.0",
-		"not a performance guarantee",
-	} {
-		if !strings.Contains(about, claim) {
-			t.Errorf("the about page's Benchmark section does not state: %s", claim)
+	begin := strings.Index(about, "<!-- himorime:begin benchmarks -->")
+	end := strings.Index(about, "<!-- himorime:end benchmarks -->")
+	if begin < 0 || end < begin {
+		t.Fatal("the about page's Benchmark section has no himorime:begin/end benchmarks markers for make bench-docs")
+	}
+	generated := about[begin:end]
+	for _, claim := range []string{"Measured with himorime", "- trdsql:", "- csvq:", "- textql:"} {
+		if !strings.Contains(generated, claim) {
+			t.Errorf("the generated benchmark section does not state %q; run make bench-docs", claim)
 		}
+	}
+	if !strings.Contains(flatten(about), "make bench-docs") {
+		t.Error("the about page's Benchmark section does not say how it is measured again")
 	}
 
 	readme := flatten(section(readDoc(t, "README.md"), "## Benchmark"))
 	if readme == "" {
 		t.Fatal("the README has no Benchmark section")
 	}
-	for _, claim := range []string{"historical measurement", "not a performance guarantee"} {
+	for _, claim := range []string{"himorime", "about/#benchmark", "bench/README.md"} {
 		if !strings.Contains(readme, claim) {
 			t.Errorf("the README's Benchmark section does not state: %s", claim)
 		}
@@ -2179,7 +2186,7 @@ func TestPagesVerification_ChecksTheRc3Contracts(t *testing.T) {
 		"default-deny",
 		"not a sandbox or an SSRF defense",
 		"schema/inspect-v1.schema.json",
-		"Historical measurement",
+		"Measured with himorime",
 	} {
 		if !strings.Contains(workflow, claim) {
 			t.Errorf("the Pages verification does not check the deployed site for: %s", claim)
