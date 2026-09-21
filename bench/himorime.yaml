@@ -14,9 +14,8 @@
 # working tree's gen.sh (${head_root}), so they read the same bytes.
 version: "1"
 
-suite:
-  name: sqly
-  description: Start-up, importing CSV of 10 to 1 000 000 rows, query output in each format, and the interactive shell typed key by key.
+name: sqly
+description: Start-up, importing CSV of 10 to 1 000 000 rows, query output in each format, and the interactive shell typed key by key.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", .]
@@ -38,10 +37,10 @@ defaults:
     latency:
       max_percent: 10
       min_difference: 1ms
-    cpu:
+    cpu_total:
       max_percent: 15
       min_difference: 2ms
-    memory:
+    peak_rss:
       max_percent: 15
       min_difference: 2MiB
 
