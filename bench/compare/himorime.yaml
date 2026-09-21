@@ -10,9 +10,8 @@
 # go install lines. It is not a CI gate: CI only validates it.
 version: "1"
 
-suite:
-  name: sqly and other SQL-over-CSV tools
-  description: The top 10 countries by row count of 100 000 customers (12 columns), from reading the file to printing CSV.
+name: sqly and other SQL-over-CSV tools
+description: The top 10 countries by row count of 100 000 customers (12 columns), from reading the file to printing CSV.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", .]
