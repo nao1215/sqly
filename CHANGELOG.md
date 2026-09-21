@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v1.7.1](https://github.com/nao1215/sqly/compare/v1.7.0...v1.7.1) (2026-09-21)
+
 ### Changes
 
 * filesql moves to v0.59.0 and prompt to v0.3.0. Through filesql, an XLSX whose cell points at shared string -1 is refused with a parse error instead of crashing sqly when the workbook's shared-string table is larger than 16 MiB (GO-2026-6452).
