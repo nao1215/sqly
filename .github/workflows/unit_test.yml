@@ -18,10 +18,10 @@ jobs:
           - "windows-latest"
           - "macos-latest"
         go:
-          # Pinned to the patch, not the minor. setup-go resolves a bare "1.25"
+          # Pinned to the patch, not the minor. setup-go resolves a bare "1.26"
           # from its own manifest and pins GOTOOLCHAIN to what it installs, so a
-          # runner that had 1.25.12 refused a go.mod asking for 1.25.13 and the
-          # job failed on a version this repository never chose.
+          # runner that had an older 1.26 patch would refuse a go.mod asking for
+          # 1.26.6 and the job would fail on a version this repository never chose.
           #
           # "1" and "stable" are both here, and they are not redundant: setup-go
           # resolves "1" from the same manifest, which lags a fresh Go release,
@@ -33,7 +33,6 @@ jobs:
           # names the "stable" contexts instead.
           - "1"
           - "stable"
-          - "1.25.13"
           - "1.26.6"
       fail-fast: false
     runs-on: ${{ matrix.os }}

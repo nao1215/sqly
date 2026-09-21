@@ -4,7 +4,7 @@ description: Install sqly with go install, Homebrew, the AUR, aqua, mise, or a p
 weight: 10
 ---
 
-Runs on Linux, macOS, and Windows. Building from source needs Go 1.25 or later.
+Runs on Linux, macOS, and Windows. Building from source needs Go 1.26.6 or later.
 
 ## go install
 
