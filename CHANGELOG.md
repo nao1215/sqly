@@ -4,6 +4,8 @@
 
 ### Changes
 
+* filesql moves to v0.59.0 and prompt to v0.3.0. Through filesql, an XLSX whose cell points at shared string -1 is refused with a parse error instead of crashing sqly when the workbook's shared-string table is larger than 16 MiB (GO-2026-6452).
+
 * Building sqly from source now needs Go 1.26.6 or later (was 1.25.13). The golang.org/x modules this update takes declare `go 1.26.0`, and 1.26.6 is the 1.26 release carrying the standard library fixes for GO-2026-6088 and GO-2026-5972 that the previous minimum pinned. Go 1.26 and 1.27 are the two releases the Go team still supports. Prebuilt binaries are unaffected.
 
 ## [v1.7.0](https://github.com/nao1215/sqly/compare/v1.6.2...v1.7.0) (2026-09-03)
