@@ -1,0 +1,45 @@
+name: diag-macos-e2e-timing
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  timing:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "stable"
+      - name: Install atago from main
+        run: go install github.com/nao1215/atago@main && echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Build sqly and prepare a sandbox
+        run: |
+          make build
+          sysctl -n hw.ncpu
+          mkdir -p "$RUNNER_TEMP/sb/home" "$RUNNER_TEMP/sb/bin"
+          cp sqly "$RUNNER_TEMP/sb/bin/"
+      - name: Time one sqly start
+        run: |
+          export PATH="$RUNNER_TEMP/sb/bin:$PATH" HOME="$RUNNER_TEMP/sb/home"
+          time (for i in $(seq 1 50); do sqly --version >/dev/null; done)
+          time (for i in $(seq 1 50); do sqly --sql "SELECT 1" testdata/sample.csv >/dev/null 2>&1 || true; done)
+      - name: Suite at default parallel, junit
+        run: |
+          export PATH="$RUNNER_TEMP/sb/bin:$PATH" HOME="$RUNNER_TEMP/sb/home" USERPROFILE="$RUNNER_TEMP/sb/home" XDG_CONFIG_HOME="$RUNNER_TEMP/sb/config" XDG_DATA_HOME="$RUNNER_TEMP/sb/data" XDG_CACHE_HOME="$RUNNER_TEMP/sb/cache" SQLY_HISTORY_PATH="$RUNNER_TEMP/sb/history" SQLY_E2E_SANDBOX="$RUNNER_TEMP/sb"
+          specs=$(ls e2e/atago/*.atago.yaml | grep -v pty.atago.yaml)
+          atago run --ci --report junit $specs > junit-default.xml || true
+          grep -o 'testcase name="[^"]*" [^>]*time="[^"]*"' junit-default.xml | sed 's/testcase name="\([^"]*\)".*time="\([^"]*\)"/\2 \1/' | sort -rn | head -25
+          grep -o 'testsuites[^>]*' junit-default.xml | head -2
+      - name: Suite at parallel 1, junit
+        run: |
+          export PATH="$RUNNER_TEMP/sb/bin:$PATH" HOME="$RUNNER_TEMP/sb/home" USERPROFILE="$RUNNER_TEMP/sb/home" XDG_CONFIG_HOME="$RUNNER_TEMP/sb/config" XDG_DATA_HOME="$RUNNER_TEMP/sb/data" XDG_CACHE_HOME="$RUNNER_TEMP/sb/cache" SQLY_HISTORY_PATH="$RUNNER_TEMP/sb/history" SQLY_E2E_SANDBOX="$RUNNER_TEMP/sb"
+          specs=$(ls e2e/atago/*.atago.yaml | grep -v pty.atago.yaml)
+          time atago run --ci --parallel 1 --report junit $specs > junit-serial.xml || true
+          grep -o 'testcase name="[^"]*" [^>]*time="[^"]*"' junit-serial.xml | sed 's/testcase name="\([^"]*\)".*time="\([^"]*\)"/\2 \1/' | sort -rn | head -25
+          awk -F'time="' '/<testcase/ {split($2,a,"\""); s+=a[1]; n++} END {print n, "cases, sum", s}' junit-serial.xml
