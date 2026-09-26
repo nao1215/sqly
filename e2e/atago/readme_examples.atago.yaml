@@ -100,8 +100,18 @@ scenarios:
       os: windows
     steps:
       - fixture: *user
+      - fixture:
+          file: serve.py
+          content: |
+            # Serves the working directory like `python3 -m http.server`, on a
+            # server that does not resolve its own address back to a name when
+            # it binds: HTTPServer does (socket.getfqdn), and on the macOS
+            # runner that lookup held the port closed for about 35 seconds.
+            import http.server, socketserver, sys
+            socketserver.ThreadingTCPServer.allow_reuse_address = True
+            socketserver.ThreadingTCPServer(("127.0.0.1", int(sys.argv[1])), http.server.SimpleHTTPRequestHandler).serve_forever()
       - run:
-          command: sh -c 'python3 -m http.server 18082 --bind 127.0.0.1 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18082)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
+          command: sh -c 'python3 serve.py 18082 >/tmp/sqly-http-readme.log 2>&1 & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18082)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT user_name FROM user ORDER BY identifier LIMIT 2" http://127.0.0.1:18082/user.csv'
       - assert:
           exit_code: 0
           stdout:

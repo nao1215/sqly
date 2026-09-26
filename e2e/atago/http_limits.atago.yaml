@@ -36,7 +36,12 @@ scenarios:
                 def log_message(self, *args):
                     pass
 
-            http.server.HTTPServer(("127.0.0.1", 18091), Handler).serve_forever()
+            # ThreadingTCPServer, not HTTPServer: HTTPServer resolves its own
+            # address back to a name when it binds (socket.getfqdn), which on
+            # the macOS runner held the port closed for about 35 seconds.
+            import socketserver
+            socketserver.ThreadingTCPServer.allow_reuse_address = True
+            socketserver.ThreadingTCPServer(("127.0.0.1", 18091), Handler).serve_forever()
       - run:
           command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18091)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --sql "SELECT 1" http://127.0.0.1:18091/data.csv'
       - assert:
@@ -64,7 +69,12 @@ scenarios:
                 def log_message(self, *args):
                     pass
 
-            http.server.HTTPServer(("127.0.0.1", 18092), Handler).serve_forever()
+            # ThreadingTCPServer, not HTTPServer: HTTPServer resolves its own
+            # address back to a name when it binds (socket.getfqdn), which on
+            # the macOS runner held the port closed for about 35 seconds.
+            import socketserver
+            socketserver.ThreadingTCPServer.allow_reuse_address = True
+            socketserver.ThreadingTCPServer(("127.0.0.1", 18092), Handler).serve_forever()
       - run:
           command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18092)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --sql "SELECT 1" http://127.0.0.1:18092/start.csv'
       - assert:
@@ -102,7 +112,12 @@ scenarios:
                 def log_message(self, *args):
                     pass
 
-            http.server.HTTPServer(("127.0.0.1", 18093), Handler).serve_forever()
+            # ThreadingTCPServer, not HTTPServer: HTTPServer resolves its own
+            # address back to a name when it binds (socket.getfqdn), which on
+            # the macOS runner held the port closed for about 35 seconds.
+            import socketserver
+            socketserver.ThreadingTCPServer.allow_reuse_address = True
+            socketserver.ThreadingTCPServer(("127.0.0.1", 18093), Handler).serve_forever()
       - run:
           command: sh -c 'python3 server.py & pid=$!; trap "kill $pid" EXIT; i=0; until python3 -c "import socket,sys; sys.exit(socket.socket().connect_ex((\"127.0.0.1\",18093)))"; do i=$((i+1)); [ $i -ge 50 ] && { echo "the local HTTP fixture never started listening" >&2; exit 1; }; sleep 0.1; done; sqly --allow-remote --output-format csv --sql "SELECT user_name FROM user" http://127.0.0.1:18093/go'
       - assert:
