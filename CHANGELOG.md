@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+## [v1.7.2](https://github.com/nao1215/sqly/compare/v1.7.1...v1.7.2) (2026-09-26)
+
+### Bug Fixes
+
+* An Excel file whose cell points at a shared string the workbook does not have is refused with an error naming the sheet and the cell, instead of importing that cell as empty text or, when the shared-string table is large, as a number nobody wrote (filesql v0.59.1). Opening such a file with `--sql`, `.import` in the shell, and the read before `.save` rewrites a workbook all stop at the broken cell.
+
 ### Changes
+
+* modernc.org/libc moves to v1.77.1, because v1.77.0 was retracted for a crash when C code parses "nan". moov-io/ach moves to v1.63.6 with filesql.
 
 * The README says when DuckDB is the better tool (analytics on data larger than memory, files in S3) and what sqly does that DuckDB does not: in-place write-back, ACH, Fedwire and LTSV input, legacy Japanese encodings kept on save, and `--dialect`.
 
