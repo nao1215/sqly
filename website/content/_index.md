@@ -56,9 +56,12 @@ Pick the tool that fits the job:
 | A CSV-native SQL dialect with its own engine and cursors | [csvq](https://github.com/mithrandie/csvq) |
 | SQL over CSV/TSV/JSON with a choice of backend engines | [trdsql](https://github.com/noborus/trdsql) |
 | SQL over CSV with mature Python tooling | [q](https://github.com/harelba/q), [textql](https://github.com/dinedal/textql) |
+| Analytics on data larger than memory, or on files in S3 | [DuckDB](https://duckdb.org/) |
 | SQL over files, with an interactive shell, cross-format joins, and write-back | sqly |
 
 sqly's own emphasis is the session: an interactive shell with completion and history, files of different formats joined as peers, and the ability to write your edits back into the source file.
+
+Against DuckDB, which is faster and has the richer SQL, sqly's ground is narrower: `UPDATE` a CSV or Excel file and `.save --in-place` it, read ACH, Fedwire and LTSV, keep a Shift-JIS or EUC-JP file in its encoding when it is saved, and write queries in MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
 
 ## The shell
 
