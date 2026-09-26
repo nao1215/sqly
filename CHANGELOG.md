@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changes
+
+* The README says when DuckDB is the better tool (analytics on data larger than memory, files in S3) and what sqly does that DuckDB does not: in-place write-back, ACH, Fedwire and LTSV input, legacy Japanese encodings kept on save, and `--dialect`.
+
 ## [v1.7.1](https://github.com/nao1215/sqly/compare/v1.7.0...v1.7.1) (2026-09-21)
 
 ### Changes
