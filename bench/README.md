@@ -6,7 +6,7 @@ sqly is measured the way a user runs it, one process per call from start to exit
 $ go install github.com/nao1215/himorime@latest
 $ make bench            # himorime run bench
 $ make bench-compare    # himorime compare --against main bench
-$ make bench-docs       # sqly against trdsql, csvq and textql, written into website/content/about.md
+$ make bench-docs       # sqly against trdsql, csvq, textql and DuckDB, for the Benchmark page
 ```
 
 ## Regression suite: himorime.yaml
@@ -39,9 +39,9 @@ Numbers from different machines are not comparable; compare revisions on one mac
 
 ## Comparison suite: compare/himorime.yaml
 
-`compare/himorime.yaml` runs the same query with sqly, [trdsql](https://github.com/noborus/trdsql), [csvq](https://github.com/mithrandie/csvq) and [textql](https://github.com/dinedal/textql) on the customers file: the top 10 countries by row count, printed as CSV. Before measuring, a setup step checks that the four outputs are the same bytes.
+`compare/himorime.yaml` runs four queries with sqly, [trdsql](https://github.com/noborus/trdsql), [csvq](https://github.com/mithrandie/csvq), [textql](https://github.com/dinedal/textql) and [DuckDB](https://duckdb.org/): the top 10 countries by row count of the customers file, the customers in one country, every row of the file written back out, and a count and a sum over 1 000 000 generated rows. Before measuring, a setup step checks that the tools' outputs are byte for byte the same. textql is left out of the export, since it turns the phone number `0389689232` into `389689232`.
 
-It is not a CI gate: CI only validates it. `make bench-docs` needs the three tools on PATH, runs the suite, and replaces what is between the `himorime:begin benchmarks` and `himorime:end benchmarks` markers in `website/content/about.md`, with the machine and the tool versions under the tables. The versions measured are:
+It is not a CI gate: CI only validates it. `make bench-docs` needs the four tools on PATH, runs the suite, and writes the JSON report, with the machine and the tool versions, to `website/data/benchmark.json`, from which the [Benchmark page](https://nao1215.github.io/sqly/benchmark/) draws its chart and tables. The versions measured are:
 
 ```console
 $ go install github.com/noborus/trdsql/cmd/trdsql@v1.2.3
@@ -49,4 +49,6 @@ $ go install github.com/mithrandie/csvq@v1.18.1
 $ go install github.com/dinedal/textql/textql@2.0.3
 ```
 
-trdsql and textql need cgo (SQLite); sqly and csvq do not.
+and the `duckdb` command line client v1.5.5 from its [release page](https://github.com/duckdb/duckdb/releases/tag/v1.5.5).
+
+trdsql and textql need cgo (SQLite), and DuckDB is C++; sqly and csvq are pure Go.

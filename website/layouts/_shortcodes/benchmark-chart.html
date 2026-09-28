@@ -1,0 +1,30 @@
+{{- /*
+  Bars of the median wall time and the median peak memory of every tool in
+  every benchmark of data/benchmark.json, the report `make bench-docs` writes.
+  Each benchmark is scaled to its own slowest tool, so the bars compare tools
+  within a benchmark, not benchmarks with each other.
+*/ -}}
+{{- $report := hugo.Data.benchmark -}}
+{{- if not $report }}{{ errorf "benchmark-chart: data/benchmark.json is missing; run make bench-docs" }}{{ end -}}
+{{- $suite := index $report.suites 0 -}}
+{{- range $metric := slice (dict "key" "latency" "title" "Time, start to exit (median)" "unit" "ns") (dict "key" "peak_rss" "title" "Peak memory (median of the peak RSS)" "unit" "bytes") }}
+<figure class="bench-chart">
+<figcaption>{{ $metric.title }}. Shorter is better.</figcaption>
+{{- range $bench := $suite.benchmarks }}
+{{- $max := 0.0 -}}
+{{- range $bench.commands }}{{ $v := (index .head.metrics $metric.key).stats.median }}{{ if gt $v $max }}{{ $max = $v }}{{ end }}{{ end }}
+<div class="bench-group">
+<div class="bench-name">{{ $bench.name }}</div>
+{{- range $cmd := $bench.commands }}
+{{- $v := (index $cmd.head.metrics $metric.key).stats.median -}}
+{{- $label := partial "benchmark-format.html" (dict "value" $v "unit" $metric.unit) -}}
+<div class="bench-row{{ if eq $cmd.name "sqly" }} bench-self{{ end }}" title="{{ $cmd.name }}, {{ $bench.name }}: {{ $label }}">
+<span class="bench-tool">{{ $cmd.name }}</span>
+<span class="bench-track"><span class="bench-bar" style="width: {{ printf "%.1f" (mul 100 (div $v $max)) }}%"></span></span>
+<span class="bench-value">{{ $label }}</span>
+</div>
+{{- end }}
+</div>
+{{- end }}
+</figure>
+{{- end }}

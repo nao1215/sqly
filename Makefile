@@ -52,8 +52,8 @@ bench: ## Measure sqly with the himorime suite in bench/ (requires himorime on P
 bench-compare: ## Compare main with the working tree on the himorime suite (BASE=main)
 	himorime compare --against $${BASE:-main} bench
 
-bench-docs: ## Measure sqly against trdsql, csvq and textql and rewrite the Benchmark section of website/content/about.md
-	himorime run --format markdown --output website/content/about.md --section benchmarks bench/compare
+bench-docs: ## Measure sqly against trdsql, csvq, textql and DuckDB into website/data/benchmark.json, which the Benchmark page renders
+	himorime run --format json --output website/data/benchmark.json bench/compare
 
 smoke: ## Run Go binary smoke tests (portable; runs on Linux, macOS, Windows)
 	go test -tags smoke ./e2e/...

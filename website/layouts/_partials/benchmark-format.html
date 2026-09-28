@@ -1,0 +1,13 @@
+{{- /*
+  Formats a himorime measurement for a reader. Takes a dict with "value" (a
+  number) and "unit" ("ns" or "bytes"); durations under a second print in
+  milliseconds, the rest in seconds, and sizes in MiB.
+*/ -}}
+{{- $v := .value -}}
+{{- if eq .unit "ns" -}}
+  {{- if lt $v 1e9 -}}{{ printf "%.0f ms" (div $v 1e6) }}{{- else -}}{{ printf "%.2f s" (div $v 1e9) }}{{- end -}}
+{{- else if eq .unit "bytes" -}}
+  {{- printf "%.0f MiB" (div $v 1048576.0) -}}
+{{- else -}}
+  {{- $v -}}
+{{- end -}}

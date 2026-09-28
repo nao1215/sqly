@@ -254,7 +254,7 @@ func TestSite_InternalLinksResolve(t *testing.T) {
 				target := m[1]
 				if strings.HasPrefix(target, "/img/") {
 					asset := filepath.Join("doc", filepath.Clean(strings.TrimPrefix(target, "/")))
-					if _, statErr := os.Stat(asset); statErr != nil {
+					if _, statErr := os.Stat(asset); statErr != nil { //nolint:gosec // asset is a doc/img path built from a link in the repository's own pages
 						t.Errorf("%s:%d links to %s, which is not a file under doc/img", doc, lineNo+1, target)
 					}
 					continue
@@ -1908,37 +1908,73 @@ func TestDocs_NoLinkToTheDeletedMigrationGuide(t *testing.T) {
 	}
 }
 
-// TestAbout_BenchmarkIsGeneratedByHimorime keeps the comparison on the about
+// TestBenchmarkPage_IsGeneratedByHimorime keeps the comparison on the Benchmark
 // page a measurement that states where and with which versions it was taken:
-// the figures between the markers are written by make bench-docs, never by
-// hand, and the README points to them instead of quoting numbers.
-func TestAbout_BenchmarkIsGeneratedByHimorime(t *testing.T) {
+// the page draws its chart and tables from website/data/benchmark.json, which
+// make bench-docs writes and nobody edits, and the README points to the page
+// instead of quoting numbers.
+func TestBenchmarkPage_IsGeneratedByHimorime(t *testing.T) {
 	t.Parallel()
 
-	about := section(readDoc(t, "website/content/about.md"), "## Benchmark")
-	if about == "" {
-		t.Fatal("the about page has no Benchmark section")
-	}
-	begin := strings.Index(about, "<!-- himorime:begin benchmarks -->")
-	end := strings.Index(about, "<!-- himorime:end benchmarks -->")
-	if begin < 0 || end < begin {
-		t.Fatal("the about page's Benchmark section has no himorime:begin/end benchmarks markers for make bench-docs")
-	}
-	generated := about[begin:end]
-	for _, claim := range []string{"Measured with himorime", "- trdsql:", "- csvq:", "- textql:"} {
-		if !strings.Contains(generated, claim) {
-			t.Errorf("the generated benchmark section does not state %q; run make bench-docs", claim)
+	page := readDoc(t, "website/content/benchmark.md")
+	for _, shortcode := range []string{"{{< benchmark-chart >}}", "{{< benchmark-tables >}}"} {
+		if !strings.Contains(page, shortcode) {
+			t.Errorf("the Benchmark page does not render %s", shortcode)
 		}
 	}
-	if !strings.Contains(flatten(about), "make bench-docs") {
-		t.Error("the about page's Benchmark section does not say how it is measured again")
+	if !strings.Contains(flatten(page), "make bench-docs") {
+		t.Error("the Benchmark page does not say how it is measured again")
+	}
+
+	var report struct {
+		Environment struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"environment"`
+		Suites []struct {
+			Benchmarks []struct {
+				Name     string `json:"name"`
+				Commands []struct {
+					Name   string `json:"name"`
+					Result string `json:"result"`
+				} `json:"commands"`
+			} `json:"benchmarks"`
+		} `json:"suites"`
+	}
+	if err := json.Unmarshal([]byte(readDoc(t, "website/data/benchmark.json")), &report); err != nil {
+		t.Fatalf("website/data/benchmark.json is not a himorime JSON report: %v", err)
+	}
+	versions := map[string]bool{}
+	for _, tool := range report.Environment.Tools {
+		versions[tool.Name] = true
+	}
+	for _, tool := range []string{"trdsql", "csvq", "textql", "duckdb"} {
+		if !versions[tool] {
+			t.Errorf("the report does not record the version of %s; run make bench-docs", tool)
+		}
+	}
+	if len(report.Suites) != 1 || len(report.Suites[0].Benchmarks) == 0 {
+		t.Fatal("the report holds no benchmarks; run make bench-docs")
+	}
+	for _, bench := range report.Suites[0].Benchmarks {
+		hasSqly := false
+		for _, cmd := range bench.Commands {
+			hasSqly = hasSqly || cmd.Name == "sqly"
+			if cmd.Result != "pass" {
+				t.Errorf("%s: %s did not complete (%q); run make bench-docs", bench.Name, cmd.Name, cmd.Result)
+			}
+		}
+		if !hasSqly {
+			t.Errorf("%s has no sqly measurement, which every relative figure on the page divides by", bench.Name)
+		}
 	}
 
 	readme := flatten(section(readDoc(t, "README.md"), "## Benchmark"))
 	if readme == "" {
 		t.Fatal("the README has no Benchmark section")
 	}
-	for _, claim := range []string{"himorime", "about/#benchmark", "bench/README.md"} {
+	for _, claim := range []string{"himorime", "sqly/benchmark/", "bench/README.md"} {
 		if !strings.Contains(readme, claim) {
 			t.Errorf("the README's Benchmark section does not state: %s", claim)
 		}
@@ -2076,14 +2112,15 @@ func TestCHANGELOG_ListsTheRc3BreakingChanges(t *testing.T) {
 // website workflow checks the live site with.
 var pagesVerifyRequire = regexp.MustCompile(`(?m)^\s*require "\$\{(\w+)\}" "([^"]*)" "(\w+)"`)
 
-// pagesVerifySources maps the page name the workflow uses to the Markdown it is
+// pagesVerifySources maps the page name the workflow uses to the files it is
 // rendered from, so a claim can be checked against the source before a deploy
-// has to check it against the live site.
-var pagesVerifySources = map[string]string{
-	"reference": "website/content/reference.md",
-	"formats":   "website/content/formats.md",
-	"dialects":  "website/content/dialects.md",
-	"about":     "website/content/about.md",
+// has to check it against the live site. The Benchmark page's measured lines
+// come from the shortcode that renders its data, so that file is a source too.
+var pagesVerifySources = map[string][]string{
+	"reference": {"website/content/reference.md"},
+	"formats":   {"website/content/formats.md"},
+	"dialects":  {"website/content/dialects.md"},
+	"benchmark": {"website/content/benchmark.md", "website/layouts/_shortcodes/benchmark-tables.html"},
 }
 
 // TestPagesVerification_EveryClaimIsInTheSourceItChecks runs the deploy check's
@@ -2103,8 +2140,13 @@ func TestPagesVerification_EveryClaimIsInTheSourceItChecks(t *testing.T) {
 	}
 
 	flattened := make(map[string]string, len(pagesVerifySources))
-	for page, path := range pagesVerifySources {
-		flattened[page] = flatten(readDoc(t, path))
+	for page, paths := range pagesVerifySources {
+		var text strings.Builder
+		for _, path := range paths {
+			text.WriteString(readDoc(t, path))
+			text.WriteByte('\n')
+		}
+		flattened[page] = flatten(text.String())
 	}
 
 	for _, m := range matches {

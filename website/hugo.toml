@@ -61,6 +61,11 @@ pageRef = "/reference"
 weight = 60
 
 [[menus.main]]
+name = "Benchmark"
+pageRef = "/benchmark"
+weight = 65
+
+[[menus.main]]
 name = "About"
 pageRef = "/about"
 weight = 70
