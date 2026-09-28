@@ -127,6 +127,32 @@ func TestWriteBack_SaveInPlaceTruncates(t *testing.T) {
 	}
 }
 
+// TestWriteBack_SaveInPlaceWritesNullOverEmptyString holds that a table whose
+// only change is an empty string set to NULL counts as changed. A NULL and an
+// empty string print alike, so the change check could not tell them apart and
+// the save reported nothing to do, while Parquet keeps the two apart and the
+// file kept the old value.
+func TestWriteBack_SaveInPlaceWritesNullOverEmptyString(t *testing.T) {
+	dir := t.TempDir()
+	seed := writeCSV(t, dir, "seed.csv", "id,a\n1,x\n")
+	parquetPath := filepath.Join(dir, "p.parquet")
+	if _, err := runScript(t, "CREATE TABLE p AS SELECT id, '' AS a FROM seed;\n.dump p "+parquetPath+"\n", seed); err != nil {
+		t.Fatalf("writing the Parquet file: %v", err)
+	}
+
+	if _, err := runScript(t, "UPDATE p SET a = NULL;\n.save --in-place\n", parquetPath); err != nil {
+		t.Fatalf(".save --in-place: %v", err)
+	}
+
+	out, err := runScript(t, ".mode csv\nSELECT a IS NULL AS is_null FROM p;\n", parquetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "is_null\n1") {
+		t.Errorf("the saved file does not hold NULL; got:\n%s", out)
+	}
+}
+
 // TestSaveRejectsPragmaBeforeRunning verifies that a script ending in .save
 // rejects a side-effecting PRAGMA before the first statement runs, so it never
 // implies a durable effect or prints a rowset that cannot be written back.

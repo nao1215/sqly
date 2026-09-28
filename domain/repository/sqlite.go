@@ -25,6 +25,9 @@ type SQLite3Repository interface {
 	SchemaObjects(ctx context.Context) ([]*model.Table, error)
 	// List get records in the specified table
 	List(ctx context.Context, tableName string) (*model.Table, error)
+	// Fingerprint returns a hash of the specified table's header and records,
+	// read one row at a time.
+	Fingerprint(ctx context.Context, tableName string) (string, error)
 	// Header get table header name.
 	Header(ctx context.Context, tableName string) (*model.Table, error)
 	// Query execute "SELECT" or "EXPLAIN" query

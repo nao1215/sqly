@@ -532,3 +532,62 @@ func TestSqlite3RepositoryListSchemaQualified(t *testing.T) {
 		t.Errorf("List(main.person) records = %v, want one row with Ann", table.Records())
 	}
 }
+
+// TestSqlite3RepositoryFingerprint holds that two tables share a fingerprint
+// exactly when their headers and rows are the same: equal content hashes
+// equally, and a changed value, a changed shape, a changed header, a
+// reordering, or NULL in place of an empty string each hash differently.
+func TestSqlite3RepositoryFingerprint(t *testing.T) {
+	t.Parallel()
+	memoryDB, cleanup, err := config.NewInMemDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	db := (*sql.DB)(memoryDB)
+	statements := []string{
+		`CREATE TABLE base (a TEXT, b TEXT)`,
+		`INSERT INTO base VALUES ('1', 'x'), ('2', '')`,
+		`CREATE TABLE same (a TEXT, b TEXT)`,
+		`INSERT INTO same VALUES ('1', 'x'), ('2', '')`,
+		`CREATE TABLE value_changed (a TEXT, b TEXT)`,
+		`INSERT INTO value_changed VALUES ('1', 'x'), ('2', 'y')`,
+		`CREATE TABLE null_for_empty (a TEXT, b TEXT)`,
+		`INSERT INTO null_for_empty VALUES ('1', 'x'), ('2', NULL)`,
+		`CREATE TABLE reordered (a TEXT, b TEXT)`,
+		`INSERT INTO reordered VALUES ('2', ''), ('1', 'x')`,
+		`CREATE TABLE renamed (a TEXT, c TEXT)`,
+		`INSERT INTO renamed VALUES ('1', 'x'), ('2', '')`,
+		`CREATE TABLE joined (a TEXT, b TEXT)`,
+		`INSERT INTO joined VALUES ('1x', ''), ('2', '')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.ExecContext(context.Background(), statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	repo := NewSQLite3Repository(memoryDB)
+	fingerprint := func(name string) string {
+		t.Helper()
+		fp, err := repo.Fingerprint(context.Background(), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fp
+	}
+
+	base := fingerprint("base")
+	if got := fingerprint("same"); got != base {
+		t.Errorf("a table with the same content hashed %s, want %s", got, base)
+	}
+	for _, name := range []string{"value_changed", "null_for_empty", "reordered", "renamed", "joined"} {
+		if fingerprint(name) == base {
+			t.Errorf("%s hashed the same as base", name)
+		}
+	}
+	if _, err := repo.Fingerprint(context.Background(), "missing"); err == nil {
+		t.Error("a missing table returned a fingerprint")
+	}
+}

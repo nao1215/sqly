@@ -100,6 +100,11 @@ func (si *SQLite3Interactor) List(ctx context.Context, tableName string) (*model
 	return si.r.List(ctx, tableName)
 }
 
+// Fingerprint returns a hash of the specified table's header and records.
+func (si *SQLite3Interactor) Fingerprint(ctx context.Context, tableName string) (string, error) {
+	return si.r.Fingerprint(ctx, tableName)
+}
+
 // Header get table header name.
 func (si *SQLite3Interactor) Header(ctx context.Context, tableName string) (*model.Table, error) {
 	return si.r.Header(ctx, tableName)
