@@ -4455,3 +4455,62 @@ func TestShellInputName(t *testing.T) {
 		}
 	})
 }
+
+// TestRunScript_StreamedResultLeavesNoTemporaryFile holds the temporary file a
+// large streamed result moves to: it is gone after the result is printed, and
+// after a script whose result was held back is refused for producing a second
+// one, which also leaves stdout empty.
+func TestRunScript_StreamedResultLeavesNoTemporaryFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	// About 7 MB of JSON, past the size a stream keeps in memory.
+	const large = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100000) SELECT i, printf('%040d', i) AS padded FROM n"
+
+	for _, tt := range []struct {
+		name    string
+		script  string
+		wantErr bool
+	}{
+		{name: "printed", script: large + ";\n"},
+		{name: "refused for a second result", script: large + ";\nSELECT 1;\n", wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, cleanup, err := newShell(t, []string{"sqly", "--output-format", "json"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			s.isTTY = func() bool { return false }
+			s.stdin = strings.NewReader(tt.script)
+
+			backupOut, backupErr := config.Stdout, config.Stderr
+			var out strings.Builder
+			config.Stdout, config.Stderr = &out, &strings.Builder{}
+			defer func() { config.Stdout, config.Stderr = backupOut, backupErr }()
+
+			err = s.Run(context.Background())
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("a script with two results was accepted")
+				}
+				if out.Len() != 0 {
+					t.Errorf("a refused script wrote %d bytes to stdout", out.Len())
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.HasPrefix(out.String(), "[\n  {\"i\":1,") || !strings.HasSuffix(out.String(), "\n]\n") {
+					t.Errorf("unexpected output around %q", out.String()[:min(40, out.Len())])
+				}
+			}
+			left, err := filepath.Glob(filepath.Join(dir, "sqly-output-*"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(left) != 0 {
+				t.Errorf("temporary files left behind: %v", left)
+			}
+		})
+	}
+}

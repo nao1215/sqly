@@ -121,6 +121,30 @@ func (si *SQLite3Interactor) Query(ctx context.Context, query string) (*model.Ta
 // - For INSERT/UPDATE/DELETE: (nil, affected_rows, error)
 // - For unsupported commands: (nil, 0, error)
 func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error) {
+	var table *model.Table
+	_, affected, err := si.run(ctx, statement, func(stmt string) error {
+		var err error
+		table, err = si.Query(ctx, stmt)
+		return err
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return table, affected, nil
+}
+
+// ExecSQLTo runs statement like ExecSQL, but hands a rowset to sink a row at a
+// time instead of returning it as a Table.
+func (si *SQLite3Interactor) ExecSQLTo(ctx context.Context, statement string, sink model.RowSink) (bool, int64, error) {
+	return si.run(ctx, statement, func(stmt string) error {
+		return si.r.QueryEach(ctx, stmt, sink)
+	})
+}
+
+// run prepares statement and runs it: through query when it produces a
+// rowset, reporting rowset true, and on the exec path otherwise, reporting the
+// affected-row count.
+func (si *SQLite3Interactor) run(ctx context.Context, statement string, query func(stmt string) error) (rowset bool, affected int64, err error) {
 	// Strip a leading BOM and leading comments so the statement classifies and
 	// runs the same way it does on the batch and --sql-file paths. The session's
 	// dialect decides what a comment is: MySQL and GoogleSQL open one with "#"
@@ -128,13 +152,13 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// engine as an empty statement.
 	stmt := sqltext.StripNoise(statement, si.Dialect())
 	if stmt == "" {
-		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
+		return false, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
 	// Translate the user statement from the configured dialect to SQLite before
 	// classification and execution. This is a no-op for the SQLite dialect.
 	translated, err := dialect.Translate(si.Dialect(), stmt)
 	if err != nil {
-		return nil, 0, fmt.Errorf("translate error (%s): %w: %s", si.Dialect(), err, color.CyanString(statement))
+		return false, 0, fmt.Errorf("translate error (%s): %w: %s", si.Dialect(), err, color.CyanString(statement))
 	}
 	stmt = translated
 	// Rewrite shorthands the engine does not accept (e.g. "TABLE name").
@@ -145,7 +169,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// translates to nothing at all. Asking the engine to run nothing is not a
 	// statement, so it is refused the same way an empty one is.
 	if sqltext.StripNoise(stmt, dialect.SQLite) == "" {
-		return nil, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
+		return false, 0, errors.New("no executable SQL statement: " + color.CyanString(statement))
 	}
 
 	// Reject statements sqly cannot run safely or correctly under its per-statement
@@ -153,7 +177,7 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// VACUUM, ATTACH/DETACH), with a clear error instead of SQLite's confusing
 	// internal message.
 	if reason := unsupportedStatementReason(stmt); reason != "" {
-		return nil, 0, fmt.Errorf("%s: %s", reason, color.CyanString(statement))
+		return false, 0, fmt.Errorf("%s: %s", reason, color.CyanString(statement))
 	}
 
 	// sqly targets SQLite, so every supported statement is routed by shape: a
@@ -162,9 +186,9 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 	// exec path and reports an affected-row count. SQLite is the authority on
 	// validity, so an unsupported statement surfaces SQLite's own error.
 	if si.sql.producesRowset(stmt) {
-		table, err := si.Query(ctx, stmt)
+		err := query(stmt)
 		if err == nil {
-			return table, 0, nil
+			return true, 0, nil
 		}
 		// A no-rowset PRAGMA (a setter like "PRAGMA user_version = 1" or a command
 		// like "PRAGMA incremental_vacuum") is routed here by keyword but yields no
@@ -172,15 +196,15 @@ func (si *SQLite3Interactor) ExecSQL(ctx context.Context, statement string) (*mo
 		// path so it commits and reports neutral success instead of a misleading "no
 		// records" error.
 		if !errors.Is(err, repository.ErrNoRows) || sqltext.LeadingKeyword(stmt, dialect.SQLite) != sqlPRAGMA {
-			return nil, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
+			return false, 0, fmt.Errorf("execute query error: %w: %s", err, color.CyanString(statement))
 		}
 	}
 
 	affectedRows, err := si.r.Exec(ctx, stmt)
 	if err != nil {
-		return nil, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
+		return false, 0, fmt.Errorf("execute statement error: %w: %s", err, color.CyanString(statement))
 	}
-	return nil, affectedRows, nil
+	return false, affectedRows, nil
 }
 
 // LoadFiles loads multiple files or directories into the database.

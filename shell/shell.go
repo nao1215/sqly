@@ -176,8 +176,9 @@ type Shell struct {
 	printedResults int
 	// capturedRowsets holds the rowset results produced while collectingOutput is
 	// set. The one-result-set contract is enforced after the script finishes: zero
-	// or more than one captured rowset is an error.
-	capturedRowsets []*model.Table
+	// or more than one captured rowset is an error. A rowset bound for stdout is
+	// held as a formatted stream, one bound for a file as a Table.
+	capturedRowsets []statementResult
 	// completionTableKey fingerprints the table-name set the cached completion
 	// schema was built from. completionSchema holds that schema. Together they
 	// let interactive completion reuse table and column metadata across
@@ -1638,6 +1639,11 @@ func (s *Shell) runScript(ctx context.Context, elements []scriptElement) (bool, 
 	s.capturedRowsets = nil
 	s.collectingOutput = true
 	defer func() {
+		// A result that was not printed -- the script failed, or produced more
+		// than one -- still holds its output, possibly in a temporary file.
+		for _, result := range s.capturedRowsets {
+			result.close()
+		}
 		s.collectingOutput = false
 		s.capturedRowsets = nil
 	}()
@@ -1651,8 +1657,11 @@ func (s *Shell) runScript(ctx context.Context, elements []scriptElement) (bool, 
 			"--output-format %s carries one result set, but the script produced %d; %s",
 			s.state.mode, len(s.capturedRowsets), multiResultAdvice)}
 	}
-	for _, table := range s.capturedRowsets {
-		if err := printResultTable(table, s.state.mode.PrintMode); err != nil {
+	for i, result := range s.capturedRowsets {
+		// print releases what it wrote, so it is dropped from the list the
+		// deferred cleanup closes.
+		s.capturedRowsets[i] = statementResult{}
+		if err := result.print(s.state.mode.PrintMode); err != nil {
 			return ranAny, err
 		}
 	}
@@ -1692,7 +1701,7 @@ func (s *Shell) runSQLFileToOutput(ctx context.Context, elements []scriptElement
 		return &resultCountError{Produced: 0, Err: errors.New(
 			"--output requires the --sql-file script to produce one result set, but it produced none; add a statement that returns rows (for example a SELECT)")}
 	case 1:
-		if err := s.outputToFile(s.capturedRowsets[0]); err != nil {
+		if err := s.outputToFile(s.capturedRowsets[0].table); err != nil {
 			return err
 		}
 		return s.finishNonInteractive(ctx)
@@ -1711,10 +1720,11 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	// warnDialectTranslationOnce.
 	s.warnDialectTranslationOnce(s.usecases.query.Dialect())
 	req = strings.TrimRight(req, ";")
-	table, affectedRows, err := s.usecases.query.ExecSQL(ctx, req)
+	result, affectedRows, err := s.runStatement(ctx, req)
 	if err != nil {
-		return s.withMissingNameHint(ctx, err)
+		return err
 	}
+	table := result.table
 	// A statement that changes what tables exist or what columns they have
 	// invalidates the completion schema. The cache is keyed by the table-name
 	// set, which an "ALTER TABLE t ADD COLUMN c" leaves untouched, so without
@@ -1725,15 +1735,15 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	// Track whether this statement actually changed data, so write-back runs only
 	// for a run that modified a table (not an EXPLAIN or a zero-row DML).
 	if statementModifiesData(req, s.dialect()) {
-		if table != nil {
-			if table.RowCount() > 0 {
+		if !result.empty() {
+			if result.rowCount() > 0 {
 				s.dataChanged = true
 			}
 		} else if affectedRows > 0 {
 			s.dataChanged = true
 		}
 	}
-	if table == nil {
+	if result.empty() {
 		// While a run's output is being collected — an --output export, or a
 		// machine-readable format, which carries one result and nothing else — a
 		// no-rowset statement (DDL, DML, PRAGMA) is a legitimate step whose status
@@ -1767,7 +1777,7 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	// While collecting a --sql-file script's output, capture each rowset instead
 	// of printing it. The script's single result set is exported after the run.
 	if s.collectingOutput {
-		s.capturedRowsets = append(s.capturedRowsets, table)
+		s.capturedRowsets = append(s.capturedRowsets, result)
 		return nil
 	}
 
@@ -1782,11 +1792,110 @@ func (s *Shell) execSQL(ctx context.Context, req string) error {
 	if s.printedResults > 0 {
 		fmt.Fprintln(config.Stdout)
 	}
-	if err := printResultTable(table, s.state.mode.PrintMode); err != nil {
+	if err := result.print(s.state.mode.PrintMode); err != nil {
 		return err
 	}
 	s.printedResults++
 	return nil
+}
+
+// statementResult is what one statement produced: a rowset held as a Table, a
+// rowset already formatted by a RowStream, or neither.
+type statementResult struct {
+	table  *model.Table
+	stream *model.RowStream
+}
+
+func (r statementResult) empty() bool {
+	return r.table == nil && r.stream == nil
+}
+
+// close releases a result that will not be printed.
+func (r statementResult) close() {
+	if r.stream != nil {
+		_ = r.stream.Close()
+	}
+}
+
+func (r statementResult) rowCount() int {
+	if r.stream != nil {
+		return r.stream.Rows()
+	}
+	return r.table.RowCount()
+}
+
+// print writes the rowset to stdout in mode.
+func (r statementResult) print(mode model.PrintMode) error {
+	if r.stream == nil {
+		return printResultTable(r.table, mode)
+	}
+	out := bufio.NewWriterSize(config.Stdout, 64*1024)
+	_, err := r.stream.WriteTo(out)
+	if err = errors.Join(err, out.Flush()); err != nil {
+		return &outputPathError{Path: stdoutDestination, Err: fmt.Errorf("failed to print table: %w", err)}
+	}
+	return nil
+}
+
+// runStatement runs one statement. A rowset bound for stdout in a format that
+// can be written a row at a time is formatted as it is read, so the result is
+// never held as a Table, including while a script's one result is held back
+// until the script has finished. Anything else -- the table, Markdown and
+// vertical formats, and a result bound for an --output file -- is returned as
+// a Table.
+func (s *Shell) runStatement(ctx context.Context, req string) (statementResult, int64, error) {
+	if s.state == nil || s.writesToFile() || !model.Streamable(s.state.mode.PrintMode) {
+		table, affected, err := s.usecases.query.ExecSQL(ctx, req)
+		if err != nil {
+			return statementResult{}, 0, s.withMissingNameHint(ctx, err)
+		}
+		return statementResult{table: table}, affected, nil
+	}
+
+	stream, err := model.NewRowStream(s.state.mode.PrintMode)
+	if err != nil {
+		return statementResult{}, 0, err
+	}
+	sink := &formatFailure{sink: stream}
+	rowset, affected, err := s.usecases.query.ExecSQLTo(ctx, req, sink)
+	if err != nil || !rowset {
+		_ = stream.Close()
+	}
+	if err != nil {
+		// A value the format cannot hold is an output failure, as it is when a
+		// Table is printed, not a failed statement.
+		if sink.err != nil {
+			return statementResult{}, 0, &outputPathError{Path: stdoutDestination, Err: fmt.Errorf("failed to print table: %w", sink.err)}
+		}
+		return statementResult{}, 0, s.withMissingNameHint(ctx, err)
+	}
+	if !rowset {
+		return statementResult{}, affected, nil
+	}
+	return statementResult{stream: stream}, affected, nil
+}
+
+// writesToFile reports whether the run's result goes to an --output file,
+// which is written from a Table.
+func (s *Shell) writesToFile() bool {
+	return s.argument != nil && s.argument.Output != nil && s.argument.Output.FilePath != ""
+}
+
+// formatFailure passes rows to sink and remembers the error sink returned, so
+// a failure to format a row can be told from a failure to run the statement.
+type formatFailure struct {
+	sink model.RowSink
+	err  error
+}
+
+func (f *formatFailure) Header(header []string) error {
+	f.err = f.sink.Header(header)
+	return f.err
+}
+
+func (f *formatFailure) Row(cells []model.Cell) error {
+	f.err = f.sink.Row(cells)
+	return f.err
 }
 
 // stdoutDestination is the Path an outputPathError carries when the destination

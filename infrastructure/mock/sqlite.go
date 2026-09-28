@@ -236,6 +236,44 @@ func (c *MockSQLite3RepositoryQueryCall) DoAndReturn(f func(context.Context, str
 	return c
 }
 
+// QueryEach mocks base method.
+func (m *MockSQLite3Repository) QueryEach(ctx context.Context, query string, sink model.RowSink) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryEach", ctx, query, sink)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QueryEach indicates an expected call of QueryEach.
+func (mr *MockSQLite3RepositoryMockRecorder) QueryEach(ctx, query, sink any) *MockSQLite3RepositoryQueryEachCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryEach", reflect.TypeOf((*MockSQLite3Repository)(nil).QueryEach), ctx, query, sink)
+	return &MockSQLite3RepositoryQueryEachCall{Call: call}
+}
+
+// MockSQLite3RepositoryQueryEachCall wrap *gomock.Call
+type MockSQLite3RepositoryQueryEachCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSQLite3RepositoryQueryEachCall) Return(arg0 error) *MockSQLite3RepositoryQueryEachCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSQLite3RepositoryQueryEachCall) Do(f func(context.Context, string, model.RowSink) error) *MockSQLite3RepositoryQueryEachCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSQLite3RepositoryQueryEachCall) DoAndReturn(f func(context.Context, string, model.RowSink) error) *MockSQLite3RepositoryQueryEachCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // SchemaObjects mocks base method.
 func (m *MockSQLite3Repository) SchemaObjects(ctx context.Context) ([]*model.Table, error) {
 	m.ctrl.T.Helper()

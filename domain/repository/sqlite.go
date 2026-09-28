@@ -32,6 +32,9 @@ type SQLite3Repository interface {
 	Header(ctx context.Context, tableName string) (*model.Table, error)
 	// Query execute "SELECT" or "EXPLAIN" query
 	Query(ctx context.Context, query string) (*model.Table, error)
+	// QueryEach runs a query like Query and hands its result to sink a row at a
+	// time instead of returning it as a Table.
+	QueryEach(ctx context.Context, query string, sink model.RowSink) error
 	// Exec execute "INSERT" or "UPDATE" or "DELETE" statement
 	Exec(ctx context.Context, statement string) (int64, error)
 }
