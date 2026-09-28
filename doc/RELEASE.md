@@ -42,7 +42,7 @@ The release workflow then:
 - Check the [Releases page](https://github.com/nao1215/sqly/releases) for the
   generated notes and artifacts.
 - Verify a downloaded artifact as described in
-  [Verifying release integrity](../README.md#verifying-release-integrity).
+  [Verify a release](https://nao1215.github.io/sqly/install/#verify-a-release).
 - Confirm `brew upgrade sqly` picks up the new version.
 
 ## If a release fails
