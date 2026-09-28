@@ -12,6 +12,8 @@
 
 * The comparison with other tools has its own [Benchmark page](https://nao1215.github.io/sqly/benchmark/), with a chart and tables drawn from the report `make bench-docs` writes. It now runs four queries (an aggregate, a filter, a full export, and an aggregate over 1 000 000 rows) and adds DuckDB to trdsql, csvq and textql.
 
+* Release artifacts now ship with SLSA build provenance as a release asset (`multiple.intoto.jsonl`), which `slsa-verifier verify-artifact` checks against a downloaded archive, verifying its signature against the Sigstore transparency log. The release run verifies every published archive against it before finishing. The GitHub attestation checked by `gh attestation verify` is still published.
+
 ## [v1.7.2](https://github.com/nao1215/sqly/compare/v1.7.1...v1.7.2) (2026-09-26)
 
 ### Bug Fixes
