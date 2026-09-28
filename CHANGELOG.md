@@ -4,7 +4,7 @@
 
 ### Bug Fixes
 
-* `.save` no longer skips a table whose only change is an empty string set to NULL, or NULL set to an empty string ([#995](https://github.com/nao1215/sqly/issues/995)). The change check printed NULL as the empty string, so the two looked equal, `.save` reported "no imported table changed in this session; nothing to save", and a Parquet file, which keeps the two apart, kept the old value. CSV, TSV, LTSV and Excel write both as an empty cell, so they were not affected.
+* `.save` no longer skips a table whose only change is an empty string set to NULL, or NULL set to an empty string ([#995](https://github.com/nao1215/sqly/issues/995)). The change check printed NULL as the empty string, so the two looked equal, `.save` reported "no imported table changed in this session; nothing to save", and a Parquet file, which keeps the two apart, kept the old value. The same was true of a value whose only change was its storage class, such as the text `'1'` set to the integer 1. CSV, TSV, LTSV and Excel write both sides of either change the same way, so they were not affected.
 
 ### Changes
 
