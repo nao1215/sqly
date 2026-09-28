@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+* `.save` no longer skips a table whose only change is an empty string set to NULL, or NULL set to an empty string ([#995](https://github.com/nao1215/sqly/issues/995)). The change check printed NULL as the empty string, so the two looked equal, `.save` reported "no imported table changed in this session; nothing to save", and a Parquet file, which keeps the two apart, kept the old value. CSV, TSV, LTSV and Excel write both as an empty cell, so they were not affected.
+
+### Changes
+
+* Importing is faster and uses less memory. `sqly --sql 'SELECT Country, COUNT(*) ...' customers100000.csv` (100 000 rows, 12 columns) went from about 690 ms to about 300 ms, and its peak memory from 188 MiB to 70 MiB. Three things add up to that. A run that cannot write back (`--sql`, `--sql-file`, `--inspect`) no longer reads every imported row a second time to record the table as imported; the shell and scripts still do, since `.save` needs it, but one row at a time instead of holding the whole table in memory, which lowers their peak memory by the same amount. filesql v0.59.2 inserts several rows per statement and parses the next rows while the previous ones are inserted. CSV and JSON query output reaches stdout through a buffer instead of one write per row, which takes about a fifth off printing 100 000 rows as JSON.
+
+* The comparison with other tools has its own [Benchmark page](https://nao1215.github.io/sqly/benchmark/), with a chart and tables drawn from the report `make bench-docs` writes. It now runs four queries (an aggregate, a filter, a full export, and an aggregate over 1 000 000 rows) and adds DuckDB to trdsql, csvq and textql.
+
 ## [v1.7.2](https://github.com/nao1215/sqly/compare/v1.7.1...v1.7.2) (2026-09-26)
 
 ### Bug Fixes
