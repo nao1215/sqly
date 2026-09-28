@@ -120,6 +120,46 @@ func (c *MockQueryUsecaseExecSQLCall) DoAndReturn(f func(context.Context, string
 	return c
 }
 
+// ExecSQLTo mocks base method.
+func (m *MockQueryUsecase) ExecSQLTo(ctx context.Context, statement string, sink model.RowSink) (bool, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecSQLTo", ctx, statement, sink)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ExecSQLTo indicates an expected call of ExecSQLTo.
+func (mr *MockQueryUsecaseMockRecorder) ExecSQLTo(ctx, statement, sink any) *MockQueryUsecaseExecSQLToCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecSQLTo", reflect.TypeOf((*MockQueryUsecase)(nil).ExecSQLTo), ctx, statement, sink)
+	return &MockQueryUsecaseExecSQLToCall{Call: call}
+}
+
+// MockQueryUsecaseExecSQLToCall wrap *gomock.Call
+type MockQueryUsecaseExecSQLToCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockQueryUsecaseExecSQLToCall) Return(rowset bool, affected int64, err error) *MockQueryUsecaseExecSQLToCall {
+	c.Call = c.Call.Return(rowset, affected, err)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockQueryUsecaseExecSQLToCall) Do(f func(context.Context, string, model.RowSink) (bool, int64, error)) *MockQueryUsecaseExecSQLToCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockQueryUsecaseExecSQLToCall) DoAndReturn(f func(context.Context, string, model.RowSink) (bool, int64, error)) *MockQueryUsecaseExecSQLToCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Query mocks base method.
 func (m *MockQueryUsecase) Query(ctx context.Context, query string) (*model.Table, error) {
 	m.ctrl.T.Helper()

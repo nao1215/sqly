@@ -327,6 +327,50 @@ func (r *sqlite3Repository) Query(ctx context.Context, query string) (*model.Tab
 	return model.NewTableFromCells(extractTableName(query), header, cells)
 }
 
+// QueryEach runs query and hands its result to sink a row at a time: the
+// column names, then each row, whose cell slice is reused for the next. It
+// returns repository.ErrNoRows, as Query does, for a statement that produced no
+// result columns, before sink is called at all.
+func (r *sqlite3Repository) QueryEach(ctx context.Context, query string, sink model.RowSink) error {
+	return r.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, query)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+
+		header, err := rows.Columns()
+		if err != nil {
+			return err
+		}
+		if len(header) == 0 {
+			return repository.ErrNoRows
+		}
+		if err := sink.Header(header); err != nil {
+			return err
+		}
+
+		scanDest := make([]any, len(header))
+		values := make([]any, len(header))
+		for i := range header {
+			scanDest[i] = &values[i]
+		}
+		row := make([]model.Cell, len(header))
+		for rows.Next() {
+			if err := rows.Scan(scanDest...); err != nil {
+				return err
+			}
+			for i, value := range values {
+				row[i] = model.NewCell(value)
+			}
+			if err := sink.Row(row); err != nil {
+				return err
+			}
+		}
+		return rows.Err()
+	})
+}
+
 // extractTableName returns the object named by the query's first FROM clause. It
 // names the result table, which is what an Excel export uses as its worksheet
 // name, so a query with no FROM (or none that names anything) yields "" and the

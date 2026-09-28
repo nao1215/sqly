@@ -19,6 +19,10 @@ type QueryUsecase interface {
 	// It is the only entry point for a statement the user typed: it decides by
 	// shape whether the statement produces rows, so a caller never has to.
 	ExecSQL(ctx context.Context, statement string) (*model.Table, int64, error)
+	// ExecSQLTo runs a statement like ExecSQL, but hands a rowset to sink a row
+	// at a time instead of returning it. rowset reports whether the statement
+	// produced one; when it did not, affected is its affected-row count.
+	ExecSQLTo(ctx context.Context, statement string, sink model.RowSink) (rowset bool, affected int64, err error)
 	// SetDialect sets the SQL dialect applied to subsequent user queries run via
 	// ExecSQL. Loading and internally generated statements always use SQLite.
 	SetDialect(d dialect.Dialect)
