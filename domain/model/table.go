@@ -518,21 +518,8 @@ const loneEmptyField = `""`
 // using encoding/csv. Every delimited destination goes through here, stdout and
 // file export alike.
 func (t *Table) writeDelimited(out io.Writer, comma rune) error {
-	w := csv.NewWriter(out)
-	w.Comma = comma
-	writeRecord := func(record []string) error {
-		if len(record) == 1 && record[0] == "" {
-			// Flushing first keeps the two writers' output in order.
-			w.Flush()
-			if err := w.Error(); err != nil {
-				return err
-			}
-			_, err := io.WriteString(out, loneEmptyField+"\n")
-			return err
-		}
-		return w.Write(record)
-	}
-	if err := writeRecord([]string(t.Header())); err != nil {
+	w := newDelimitedWriter(out, comma)
+	if err := w.write([]string(t.header)); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 	// One buffer, refilled per row: encoding/csv needs a []string, and the view
@@ -540,12 +527,44 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	buf := make([]string, 0, t.ColumnCount())
 	for _, v := range t.Rows {
 		buf = v.AppendTo(buf[:0])
-		if err := writeRecord(buf); err != nil {
+		if err := w.write(buf); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}
 	}
-	w.Flush()
-	return w.Error()
+	return w.flush()
+}
+
+// delimitedWriter writes records as delimiter-separated values with
+// encoding/csv, and a record of one empty field as loneEmptyField. It is the
+// one writer of a delimited record, shared by Table.Print, the file export and
+// RowStream.
+type delimitedWriter struct {
+	out io.Writer
+	w   *csv.Writer
+}
+
+func newDelimitedWriter(out io.Writer, comma rune) *delimitedWriter {
+	w := csv.NewWriter(out)
+	w.Comma = comma
+	return &delimitedWriter{out: out, w: w}
+}
+
+func (d *delimitedWriter) write(record []string) error {
+	if len(record) == 1 && record[0] == "" {
+		// Flushing first keeps the two writers' output in order.
+		d.w.Flush()
+		if err := d.w.Error(); err != nil {
+			return err
+		}
+		_, err := io.WriteString(d.out, loneEmptyField+"\n")
+		return err
+	}
+	return d.w.Write(record)
+}
+
+func (d *delimitedWriter) flush() error {
+	d.w.Flush()
+	return d.w.Error()
 }
 
 // printLTSV print all record with header; output format is ltsv. LTSV has no
@@ -797,27 +816,35 @@ func (t *Table) EnsureLTSVWritable() error {
 // keys are the column names already encoded (see jsonKeys), and the object is
 // written into b, which is reset first.
 func (t *Table) rowToJSONObject(b *bytes.Buffer, keys [][]byte, row int, record RecordView) error {
+	return appendJSONObject(b, keys, t.header, func(i int) any {
+		if cell, ok := t.cell(row, i); ok {
+			return cell.Value()
+		}
+		if i < record.Len() {
+			return record.At(i)
+		}
+		return nil
+	})
+}
+
+// appendJSONObject writes one JSON object into b, which is reset first: each
+// column's encoded key from keys and the value value(i) gives for it, in
+// header order. It is the one encoder of a row, shared by Table.Print and
+// RowStream so the two cannot write different bytes for the same values.
+func appendJSONObject(b *bytes.Buffer, keys [][]byte, header Header, value func(int) any) error {
 	b.Reset()
 	b.WriteByte('{')
-	// t.Columns, not t.Header(): this runs once per row, and Header() copies.
-	for i, h := range t.Columns {
+	for i, h := range header {
 		if i > 0 {
 			b.WriteByte(',')
 		}
 		b.Write(keys[i])
 		b.WriteByte(':')
-
-		var val any
-		if cell, ok := t.cell(row, i); ok {
-			val = cell.Value()
-		} else if i < record.Len() {
-			val = record.At(i)
-		}
-		value, err := jsonScalarToken(val)
+		token, err := jsonScalarToken(value(i))
 		if err != nil {
 			return fmt.Errorf("failed to encode value for column %q: %w", h, err)
 		}
-		b.Write(value)
+		b.Write(token)
 	}
 	b.WriteByte('}')
 	return nil
@@ -825,8 +852,13 @@ func (t *Table) rowToJSONObject(b *bytes.Buffer, keys [][]byte, row int, record 
 
 // jsonKeys encodes each column name once, for every row's object to reuse.
 func (t *Table) jsonKeys() ([][]byte, error) {
-	keys := make([][]byte, t.ColumnCount())
-	for i, h := range t.Columns {
+	return jsonKeysOf(t.header)
+}
+
+// jsonKeysOf encodes each column name of header once.
+func jsonKeysOf(header Header) ([][]byte, error) {
+	keys := make([][]byte, len(header))
+	for i, h := range header {
 		key, err := json.Marshal(h)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode column name %q: %w", h, err)
@@ -905,8 +937,14 @@ func jsonNonFiniteToken(value any) ([]byte, bool) {
 // keys are ambiguous for downstream parsers, so the JSON/NDJSON writers reject
 // such a result instead of emitting it.
 func (t *Table) duplicateColumnName() string {
-	seen := make(map[string]struct{}, len(t.header))
-	for _, h := range t.header {
+	return duplicateName(t.header)
+}
+
+// duplicateName returns the first name that appears more than once in header,
+// or "" when all names are unique.
+func duplicateName(header Header) string {
+	seen := make(map[string]struct{}, len(header))
+	for _, h := range header {
 		if _, ok := seen[h]; ok {
 			return h
 		}
