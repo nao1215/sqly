@@ -1013,3 +1013,44 @@ func TestValidatePath(t *testing.T) {
 		})
 	}
 }
+
+// TestImportBaselineOnlyWhereWriteBackCanRun holds that the content baseline
+// write-back compares against is taken by the runs that can write back and
+// skipped by the ones that cannot. Taking it reads every row of every table a
+// second time, which in a --sql run was the larger part of the import.
+func TestImportBaselineOnlyWhereWriteBackCanRun(t *testing.T) {
+	dir := t.TempDir()
+	csv := writeCSV(t, dir, "people.csv", "name,age\nAlice,30\n")
+
+	tests := []struct {
+		name         string
+		args         []string
+		wantBaseline bool
+	}{
+		{name: "--sql", args: []string{"sqly", "--sql", "SELECT 1", csv}, wantBaseline: false},
+		{name: "--inspect", args: []string{"sqly", "--inspect", csv}, wantBaseline: false},
+		{name: "a script on stdin", args: []string{"sqly", csv}, wantBaseline: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, cleanup, err := newShell(t, tt.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			s.isTTY = func() bool { return false }
+			s.stdin = strings.NewReader("SELECT 1;\n")
+
+			backupOut := config.Stdout
+			config.Stdout = &strings.Builder{}
+			defer func() { config.Stdout = backupOut }()
+
+			if err := s.Run(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if _, got := s.importBaseline["people"]; got != tt.wantBaseline {
+				t.Errorf("baseline taken = %v, want %v", got, tt.wantBaseline)
+			}
+		})
+	}
+}

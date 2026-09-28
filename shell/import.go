@@ -477,7 +477,14 @@ func localImportAccessError(path string, err error) error {
 // write-back can later tell whether the table changed. A fingerprint that cannot be
 // computed is left unset, which makes the table count as changed (a safe default
 // that never skips a real change).
+//
+// A run that cannot write back (--sql, --sql-file, --inspect) takes no
+// baseline: nothing would ever read it, and taking it reads every row of the
+// table a second time.
 func (s *Shell) snapshotBaseline(ctx context.Context, name string) {
+	if !s.plan.mode.allowsHelperCommands() {
+		return
+	}
 	fp, err := s.tableContentFingerprint(ctx, name)
 	if err != nil {
 		return
