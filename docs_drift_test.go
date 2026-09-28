@@ -254,7 +254,7 @@ func TestSite_InternalLinksResolve(t *testing.T) {
 				target := m[1]
 				if strings.HasPrefix(target, "/img/") {
 					asset := filepath.Join("doc", filepath.Clean(strings.TrimPrefix(target, "/")))
-					if _, statErr := os.Stat(asset); statErr != nil { //nolint:gosec // asset is a doc/img path built from a link in the repository's own pages
+					if _, statErr := os.Stat(asset); statErr != nil {
 						t.Errorf("%s:%d links to %s, which is not a file under doc/img", doc, lineNo+1, target)
 					}
 					continue
