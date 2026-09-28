@@ -77,7 +77,7 @@ Verify build provenance with the GitHub CLI:
 gh attestation verify sqly_<version>_<os>_<arch>.tar.gz --repo nao1215/sqly
 ```
 
-Or verify the archive offline against the attached provenance with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+Or download the `multiple.intoto.jsonl` release asset and verify the archive against it with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier), which checks the provenance signature against the Sigstore transparency log:
 
 ```shell
 slsa-verifier verify-artifact sqly_<version>_<os>_<arch>.tar.gz \
