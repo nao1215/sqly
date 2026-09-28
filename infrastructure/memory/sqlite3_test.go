@@ -536,7 +536,8 @@ func TestSqlite3RepositoryListSchemaQualified(t *testing.T) {
 // TestSqlite3RepositoryFingerprint holds that two tables share a fingerprint
 // exactly when their headers and rows are the same: equal content hashes
 // equally, and a changed value, a changed shape, a changed header, a
-// reordering, or NULL in place of an empty string each hash differently.
+// reordering, NULL in place of an empty string, or the same text stored as an
+// integer or a BLOB each hash differently.
 func TestSqlite3RepositoryFingerprint(t *testing.T) {
 	t.Parallel()
 	memoryDB, cleanup, err := config.NewInMemDB()
@@ -561,6 +562,10 @@ func TestSqlite3RepositoryFingerprint(t *testing.T) {
 		`INSERT INTO renamed VALUES ('1', 'x'), ('2', '')`,
 		`CREATE TABLE joined (a TEXT, b TEXT)`,
 		`INSERT INTO joined VALUES ('1x', ''), ('2', '')`,
+		`CREATE TABLE as_integer (a, b)`,
+		`INSERT INTO as_integer VALUES (1, 'x'), ('2', '')`,
+		`CREATE TABLE as_blob (a, b)`,
+		`INSERT INTO as_blob VALUES (CAST('1' AS BLOB), 'x'), ('2', '')`,
 	}
 	for _, statement := range statements {
 		if _, err := db.ExecContext(context.Background(), statement); err != nil {
@@ -582,7 +587,7 @@ func TestSqlite3RepositoryFingerprint(t *testing.T) {
 	if got := fingerprint("same"); got != base {
 		t.Errorf("a table with the same content hashed %s, want %s", got, base)
 	}
-	for _, name := range []string{"value_changed", "null_for_empty", "reordered", "renamed", "joined"} {
+	for _, name := range []string{"value_changed", "null_for_empty", "reordered", "renamed", "joined", "as_integer", "as_blob"} {
 		if fingerprint(name) == base {
 			t.Errorf("%s hashed the same as base", name)
 		}

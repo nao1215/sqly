@@ -142,7 +142,9 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 // length-prefixed so distinct shapes cannot collide (["a","b"] differs from
 // ["ab"]), and each row opens with a separator no value can forge. A NULL is
 // written as a length no string has, because it prints as the empty string and
-// a format such as Parquet keeps the two apart.
+// a format such as Parquet keeps the two apart. Every other value is preceded
+// by its storage class for the same reason: the integer 1, the text '1' and a
+// BLOB holding "1" all print as 1.
 //
 // It reads one row at a time rather than through List, which holds the whole
 // table in memory to hash it once and drop it.
@@ -191,6 +193,7 @@ func (r *sqlite3Repository) Fingerprint(ctx context.Context, tableName string) (
 					writeNull()
 					continue
 				}
+				_, _ = h.Write([]byte{storageClassTag(v)})
 				writeField(model.NewCell(v).String())
 			}
 		}
@@ -200,6 +203,23 @@ func (r *sqlite3Repository) Fingerprint(ctx context.Context, tableName string) (
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// storageClassTag names the kind of value the driver returned, one byte per
+// value of the fingerprint.
+func storageClassTag(v any) byte {
+	switch v.(type) {
+	case int64:
+		return 'i'
+	case float64:
+		return 'r'
+	case string:
+		return 't'
+	case []byte:
+		return 'b'
+	default:
+		return '?'
+	}
 }
 
 // Header get table header name. The result is re-wrapped with the requested table
