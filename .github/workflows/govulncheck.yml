@@ -57,7 +57,7 @@ jobs:
 
       # ACCEPTED lists advisories this repository is known to reach and has
       # defended against on its own side, one ID each, with why, which test holds
-      # the defence, and when to remove it. Leave it empty when there are none.
+      # the defense, and when to remove it. Leave it empty when there are none.
       # Any other reachable advisory fails the job and prints the text report.
       - name: Scan the module
         env:
