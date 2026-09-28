@@ -3,9 +3,13 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/nao1215/sqly/config"
@@ -131,6 +135,91 @@ func (r *sqlite3Repository) List(ctx context.Context, tableName string) (*model.
 		return nil, err
 	}
 	return table.WithName(tableName), nil
+}
+
+// Fingerprint returns a SHA-256 of a table's header and then every record in row
+// order, each value spelled the way model.Cell prints it. Fields are
+// length-prefixed so distinct shapes cannot collide (["a","b"] differs from
+// ["ab"]), and each row opens with a separator no value can forge. A NULL is
+// written as a length no string has, because it prints as the empty string and
+// a format such as Parquet keeps the two apart. Every other value is preceded
+// by its storage class for the same reason: the integer 1, the text '1' and a
+// BLOB holding "1" all print as 1.
+//
+// It reads one row at a time rather than through List, which holds the whole
+// table in memory to hash it once and drop it.
+func (r *sqlite3Repository) Fingerprint(ctx context.Context, tableName string) (string, error) {
+	ref, err := r.resolveTableRef(ctx, tableName)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	var lenBuf [8]byte
+	writeField := func(f string) {
+		binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(f)))
+		_, _ = h.Write(lenBuf[:])
+		_, _ = io.WriteString(h, f)
+	}
+	writeNull := func() {
+		binary.LittleEndian.PutUint64(lenBuf[:], ^uint64(0))
+		_, _ = h.Write(lenBuf[:])
+	}
+	err = r.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, "SELECT * FROM "+ref) //nolint:gosec // ref is a table name quoted by resolveTableRef, as List builds it
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+
+		header, err := rows.Columns()
+		if err != nil {
+			return err
+		}
+		for _, col := range header {
+			writeField(col)
+		}
+		scanDest := make([]any, len(header))
+		values := make([]any, len(header))
+		for i := range header {
+			scanDest[i] = &values[i]
+		}
+		for rows.Next() {
+			if err := rows.Scan(scanDest...); err != nil {
+				return err
+			}
+			writeField("\x00")
+			for _, v := range values {
+				if v == nil {
+					writeNull()
+					continue
+				}
+				_, _ = h.Write([]byte{storageClassTag(v)})
+				writeField(model.NewCell(v).String())
+			}
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// storageClassTag names the kind of value the driver returned, one byte per
+// value of the fingerprint.
+func storageClassTag(v any) byte {
+	switch v.(type) {
+	case int64:
+		return 'i'
+	case float64:
+		return 'r'
+	case string:
+		return 't'
+	case []byte:
+		return 'b'
+	default:
+		return '?'
+	}
 }
 
 // Header get table header name. The result is re-wrapped with the requested table

@@ -1,0 +1,40 @@
+{{- /*
+  The numbers behind the chart, one table per benchmark, from the same
+  data/benchmark.json, followed by the machine and the versions measured.
+  Relative is each tool's median time divided by sqly's.
+*/ -}}
+{{- $report := hugo.Data.benchmark -}}
+{{- $suite := index $report.suites 0 -}}
+{{- range $bench := $suite.benchmarks }}
+{{- $self := 0.0 -}}
+{{- range $bench.commands }}{{ if eq .name "sqly" }}{{ $self = .head.metrics.latency.stats.median }}{{ end }}{{ end }}
+<h3 id="{{ anchorize $bench.name }}">{{ $bench.name }}</h3>
+<p>{{ $bench.description }} Median of {{ $bench.rounds }} runs.</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tool</th><th style="text-align: right">Median</th><th style="text-align: right">P95</th><th style="text-align: right">Relative to sqly</th><th style="text-align: right">CPU time</th><th style="text-align: right">Peak memory</th></tr></thead>
+<tbody>
+{{- range $cmd := $bench.commands }}
+{{- $m := $cmd.head.metrics }}
+<tr>
+<td>{{ $cmd.name }}</td>
+<td style="text-align: right">{{ partial "benchmark-format.html" (dict "value" $m.latency.stats.median "unit" "ns") }}</td>
+<td style="text-align: right">{{ partial "benchmark-format.html" (dict "value" (index $m.latency.stats.percentiles "p95") "unit" "ns") }}</td>
+<td style="text-align: right">{{ printf "%.2fx" (div $m.latency.stats.median $self) }}</td>
+<td style="text-align: right">{{ partial "benchmark-format.html" (dict "value" $m.cpu_total.stats.median "unit" "ns") }}</td>
+<td style="text-align: right">{{ partial "benchmark-format.html" (dict "value" $m.peak_rss.stats.median "unit" "bytes") }}</td>
+</tr>
+{{- end }}
+</tbody>
+</table>
+</div>
+{{- end }}
+<p>CPU time is the user plus system time of the process and every child it waited for; more than the wall time means more than one core was busy. Peak memory is the largest resident set of any one process. Each tool gets two warm-up runs, then every round runs the tools in a shuffled order, so a busy moment on the machine lands on all of them.</p>
+{{- with $report.environment }}
+<p>Measured with himorime {{ $report.himorime_version }} on {{ .os }}/{{ .arch }}, {{ .cpu_model }} ({{ .logical_cpus }} logical CPUs), {{ time.Format "2006-01-02" $report.finished_at }}. sqly was built from commit {{ substr $report.git.head_sha 0 12 }}.</p>
+<ul>
+{{- range .tools }}
+<li>{{ .name }}: {{ .version }}</li>
+{{- end }}
+</ul>
+{{- end }}

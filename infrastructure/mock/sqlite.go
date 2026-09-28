@@ -80,6 +80,45 @@ func (c *MockSQLite3RepositoryExecCall) DoAndReturn(f func(context.Context, stri
 	return c
 }
 
+// Fingerprint mocks base method.
+func (m *MockSQLite3Repository) Fingerprint(ctx context.Context, tableName string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fingerprint", ctx, tableName)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Fingerprint indicates an expected call of Fingerprint.
+func (mr *MockSQLite3RepositoryMockRecorder) Fingerprint(ctx, tableName any) *MockSQLite3RepositoryFingerprintCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fingerprint", reflect.TypeOf((*MockSQLite3Repository)(nil).Fingerprint), ctx, tableName)
+	return &MockSQLite3RepositoryFingerprintCall{Call: call}
+}
+
+// MockSQLite3RepositoryFingerprintCall wrap *gomock.Call
+type MockSQLite3RepositoryFingerprintCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSQLite3RepositoryFingerprintCall) Return(arg0 string, arg1 error) *MockSQLite3RepositoryFingerprintCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSQLite3RepositoryFingerprintCall) Do(f func(context.Context, string) (string, error)) *MockSQLite3RepositoryFingerprintCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSQLite3RepositoryFingerprintCall) DoAndReturn(f func(context.Context, string) (string, error)) *MockSQLite3RepositoryFingerprintCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Header mocks base method.
 func (m *MockSQLite3Repository) Header(ctx context.Context, tableName string) (*model.Table, error) {
 	m.ctrl.T.Helper()

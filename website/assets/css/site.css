@@ -507,3 +507,77 @@ main h3 {
   --pagefind-ui-tag: var(--code-bg);
   --pagefind-ui-font: inherit;
 }
+
+/* --- benchmark chart (layouts/_shortcodes/benchmark-chart.html) ---
+   One row per tool: name, bar, value. sqly's bar wears the link color and the
+   other tools share one neutral, so the page's own tool is found at a glance
+   while the tools still read by their labels, not by color. */
+
+:root {
+  --bench-bar: #6e7781;
+  --bench-self: #0757ba;
+  --bench-track: #eaeef2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bench-bar: #6e7681;
+    --bench-self: #4493f8;
+    --bench-track: #21262d;
+  }
+}
+
+.bench-chart {
+  margin: 1.5rem 0 2rem;
+}
+
+.bench-chart figcaption {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.bench-group {
+  margin-bottom: 1rem;
+}
+
+.bench-name {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.bench-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 4.5rem;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.875rem;
+  min-height: 1.4rem;
+}
+
+.bench-self .bench-tool {
+  font-weight: 700;
+}
+
+.bench-track {
+  background: var(--bench-track);
+  border-radius: 0 4px 4px 0;
+  height: 0.75rem;
+}
+
+.bench-bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--bench-bar);
+  border-radius: 0 4px 4px 0;
+}
+
+.bench-self .bench-bar {
+  background: var(--bench-self);
+}
+
+.bench-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

@@ -3,6 +3,7 @@
 package shell
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -1802,8 +1803,15 @@ const stdoutDestination = "stdout"
 // the chosen --output-format or where the result goes, which is what the output
 // class tells a caller. Reporting it as a failed statement sent them back to the
 // query instead.
+//
+// The printers write a row at a time, and stdout is not buffered, so each row
+// used to be a system call of its own. What a failed print had written before
+// it failed is still flushed, as it was when it went straight to stdout.
 func printResultTable(table *model.Table, mode model.PrintMode) error {
-	if err := table.Print(config.Stdout, mode); err != nil {
+	out := bufio.NewWriterSize(config.Stdout, 64*1024)
+	err := table.Print(out, mode)
+	err = errors.Join(err, out.Flush())
+	if err != nil {
 		return &outputPathError{Path: stdoutDestination, Err: fmt.Errorf("failed to print table: %w", err)}
 	}
 	return nil

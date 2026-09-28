@@ -793,19 +793,18 @@ func (t *Table) EnsureLTSVWritable() error {
 // TEXT "123", "true", or "00123" is never reinterpreted as a number or boolean.
 // Why a manual builder: encoding's map marshaling sorts keys alphabetically,
 // which would drop column order.
-func (t *Table) rowToJSONObject(row int, record RecordView) ([]byte, error) {
-	var b bytes.Buffer
+//
+// keys are the column names already encoded (see jsonKeys), and the object is
+// written into b, which is reset first.
+func (t *Table) rowToJSONObject(b *bytes.Buffer, keys [][]byte, row int, record RecordView) error {
+	b.Reset()
 	b.WriteByte('{')
 	// t.Columns, not t.Header(): this runs once per row, and Header() copies.
 	for i, h := range t.Columns {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		key, err := json.Marshal(h)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encode column name %q: %w", h, err)
-		}
-		b.Write(key)
+		b.Write(keys[i])
 		b.WriteByte(':')
 
 		var val any
@@ -816,12 +815,25 @@ func (t *Table) rowToJSONObject(row int, record RecordView) ([]byte, error) {
 		}
 		value, err := jsonScalarToken(val)
 		if err != nil {
-			return nil, fmt.Errorf("failed to encode value for column %q: %w", h, err)
+			return fmt.Errorf("failed to encode value for column %q: %w", h, err)
 		}
 		b.Write(value)
 	}
 	b.WriteByte('}')
-	return b.Bytes(), nil
+	return nil
+}
+
+// jsonKeys encodes each column name once, for every row's object to reuse.
+func (t *Table) jsonKeys() ([][]byte, error) {
+	keys := make([][]byte, t.ColumnCount())
+	for i, h := range t.Columns {
+		key, err := json.Marshal(h)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode column name %q: %w", h, err)
+		}
+		keys[i] = key
+	}
+	return keys, nil
 }
 
 // jsonScalarToken serializes a value using its original Go/database type.
@@ -916,23 +928,27 @@ func (t *Table) printJSON(out io.Writer) error {
 		_, err := fmt.Fprintln(out, "[]")
 		return err
 	}
+	keys, err := t.jsonKeys()
+	if err != nil {
+		return err
+	}
 	if _, err := fmt.Fprintln(out, "["); err != nil {
 		return err
 	}
+	var obj bytes.Buffer
 	for i, record := range t.Rows {
-		obj, err := t.rowToJSONObject(i, record)
-		if err != nil {
+		if err := t.rowToJSONObject(&obj, keys, i, record); err != nil {
 			return err
 		}
 		sep := ""
 		if i < t.RowCount()-1 {
 			sep = ","
 		}
-		if _, err := fmt.Fprintf(out, "  %s%s\n", obj, sep); err != nil {
+		if _, err := fmt.Fprintf(out, "  %s%s\n", obj.Bytes(), sep); err != nil {
 			return err
 		}
 	}
-	_, err := fmt.Fprintln(out, "]")
+	_, err = fmt.Fprintln(out, "]")
 	return err
 }
 
@@ -945,12 +961,16 @@ func (t *Table) printNDJSON(out io.Writer) error {
 	if err := t.EnsureJSONWritable(); err != nil {
 		return err
 	}
+	keys, err := t.jsonKeys()
+	if err != nil {
+		return err
+	}
+	var obj bytes.Buffer
 	for i, record := range t.Rows {
-		obj, err := t.rowToJSONObject(i, record)
-		if err != nil {
+		if err := t.rowToJSONObject(&obj, keys, i, record); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(out, "%s\n", obj); err != nil {
+		if _, err := fmt.Fprintf(out, "%s\n", obj.Bytes()); err != nil {
 			return err
 		}
 	}

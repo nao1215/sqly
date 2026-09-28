@@ -41,6 +41,45 @@ func (m *MockMetadataUsecase) EXPECT() *MockMetadataUsecaseMockRecorder {
 	return m.recorder
 }
 
+// Fingerprint mocks base method.
+func (m *MockMetadataUsecase) Fingerprint(ctx context.Context, tableName string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fingerprint", ctx, tableName)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Fingerprint indicates an expected call of Fingerprint.
+func (mr *MockMetadataUsecaseMockRecorder) Fingerprint(ctx, tableName any) *MockMetadataUsecaseFingerprintCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fingerprint", reflect.TypeOf((*MockMetadataUsecase)(nil).Fingerprint), ctx, tableName)
+	return &MockMetadataUsecaseFingerprintCall{Call: call}
+}
+
+// MockMetadataUsecaseFingerprintCall wrap *gomock.Call
+type MockMetadataUsecaseFingerprintCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMetadataUsecaseFingerprintCall) Return(arg0 string, arg1 error) *MockMetadataUsecaseFingerprintCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMetadataUsecaseFingerprintCall) Do(f func(context.Context, string) (string, error)) *MockMetadataUsecaseFingerprintCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMetadataUsecaseFingerprintCall) DoAndReturn(f func(context.Context, string) (string, error)) *MockMetadataUsecaseFingerprintCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Header mocks base method.
 func (m *MockMetadataUsecase) Header(ctx context.Context, tableName string) (*model.Table, error) {
 	m.ctrl.T.Helper()

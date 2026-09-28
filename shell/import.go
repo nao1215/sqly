@@ -2,9 +2,6 @@ package shell
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -480,7 +477,14 @@ func localImportAccessError(path string, err error) error {
 // write-back can later tell whether the table changed. A fingerprint that cannot be
 // computed is left unset, which makes the table count as changed (a safe default
 // that never skips a real change).
+//
+// A run that cannot write back (--sql, --sql-file, --inspect) takes no
+// baseline: nothing would ever read it, and taking it reads every row of the
+// table a second time.
 func (s *Shell) snapshotBaseline(ctx context.Context, name string) {
+	if !s.plan.mode.allowsHelperCommands() {
+		return
+	}
 	fp, err := s.tableContentFingerprint(ctx, name)
 	if err != nil {
 		return
@@ -513,34 +517,13 @@ func (s *Shell) snapshotSourceFromTable(ctx context.Context, name string) {
 }
 
 // tableContentFingerprint returns a hash of a table's current relational content
-// (header then every record, in row order). Fields are length-prefixed so distinct
-// shapes cannot collide (["a","b"] differs from ["ab"]). Write-back compares this
-// against the import baseline to skip a table whose content did not change.
+// (header then every record, in row order). Write-back compares this against the
+// import baseline to skip a table whose content did not change.
 func (s *Shell) tableContentFingerprint(ctx context.Context, name string) (string, error) {
 	if s.usecases.metadata == nil {
 		return "", errors.New("metadata usecase is unavailable")
 	}
-	t, err := s.usecases.metadata.List(ctx, name)
-	if err != nil {
-		return "", err
-	}
-	h := sha256.New()
-	var lenBuf [8]byte
-	writeField := func(f string) {
-		binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(f)))
-		_, _ = h.Write(lenBuf[:])
-		_, _ = h.Write([]byte(f))
-	}
-	for _, col := range t.Columns {
-		writeField(col)
-	}
-	for _, rec := range t.Rows {
-		writeField("\x00") // row separator that no column value can forge
-		for i := range rec.Len() {
-			writeField(rec.At(i))
-		}
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return s.usecases.metadata.Fingerprint(ctx, name)
 }
 
 // tableChanged reports whether a table's current content differs from the baseline

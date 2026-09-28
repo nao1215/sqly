@@ -21,4 +21,7 @@ type MetadataUsecase interface {
 	Header(ctx context.Context, tableName string) (*model.Table, error)
 	// List get records in the specified table
 	List(ctx context.Context, tableName string) (*model.Table, error)
+	// Fingerprint returns a hash of the specified table's header and records.
+	// Two calls agree exactly when the table's content is the same.
+	Fingerprint(ctx context.Context, tableName string) (string, error)
 }

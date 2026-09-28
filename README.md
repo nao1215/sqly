@@ -348,7 +348,7 @@ sqly runs each statement in its own transaction on an in-memory database, so a f
 
 ## Benchmark
 
-sqly is measured end to end with [himorime](https://github.com/nao1215/himorime). The same query run by sqly, trdsql, csvq and textql, with the machine and the versions it was measured on, is on the [about page](https://nao1215.github.io/sqly/about/#benchmark); what the regression suite measures on every pull request is in [bench/README.md](./bench/README.md).
+sqly is measured end to end with [himorime](https://github.com/nao1215/himorime). The same queries run by sqly, trdsql, csvq, textql and DuckDB, with the machine and the versions they were measured on, are on the [Benchmark page](https://nao1215.github.io/sqly/benchmark/); what the regression suite measures on every pull request is in [bench/README.md](./bench/README.md).
 
 ## Contributing
 

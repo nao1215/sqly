@@ -1,17 +1,23 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nao1215/himorime/main/schema/himorime.schema.json
 #
-# sqly against trdsql, csvq and textql: the same query on the same file, end
-# to end, with himorime (https://github.com/nao1215/himorime).
+# sqly against trdsql, csvq, textql and DuckDB: the same query on the same
+# file, end to end, with himorime (https://github.com/nao1215/himorime).
 #
-#   make bench-docs   run it and rewrite the Benchmark section of
-#                     website/content/about.md
+#   make bench-docs   run it and rewrite the tables of
+#                     website/content/benchmark.md and the chart data in
+#                     website/data/benchmark.json
 #
-# It needs trdsql, csvq and textql on PATH; bench/README.md has the pinned
-# go install lines. It is not a CI gate: CI only validates it.
+# It needs trdsql, csvq, textql and duckdb on PATH; bench/README.md has the
+# pinned versions. It is not a CI gate: CI only validates it.
+#
+# Every benchmark first runs each tool once and compares the outputs byte for
+# byte, so a tool that answers a different question is not timed against the
+# others. DuckDB writes CSV through COPY, whose quoting is the same as the
+# others'; its -csv mode quotes more than it has to.
 version: "1"
 
 name: sqly and other SQL-over-CSV tools
-description: The top 10 countries by row count of 100 000 customers (12 columns), from reading the file to printing CSV.
+description: The same query on the same CSV file, from starting the process to its exit.
 
 build:
   command: [go, build, -trimpath, -o, "${artifact}", .]
@@ -26,22 +32,18 @@ defaults:
     unsupported: skip
 
 benchmarks:
-  - name: top 10 countries 100k
+  - name: aggregate 100k
     description: >-
-      SELECT Country, COUNT(*) AS n ... GROUP BY Country ORDER BY n DESC,
-      Country LIMIT 10 over testdata/benchmark/customers100000.csv, printed as
-      CSV with a header. Before measuring, the four outputs are compared byte
-      for byte. Every tool loads the whole file into SQLite first except csvq,
-      which has its own engine; sqly is pure Go, trdsql and textql use SQLite
-      through cgo. textql has not had a release since 2015.
+      The top 10 countries by row count of the 100 000 customers in
+      testdata/benchmark/customers100000.csv (12 columns, 17 MB), printed as CSV.
     setup:
-      - command: [sh, -c, '"$1" --output-format csv --sql "$2" "$3" > sqly.csv && trdsql -icsv -ih -oh "$4" > trdsql.csv && csvq -r "$(dirname "$3")" -f csv "$2" > csvq.csv && textql -header -output-header -sql "$2" "$3" > textql.csv && cmp sqly.csv trdsql.csv && cmp sqly.csv csvq.csv && cmp sqly.csv textql.csv', sh,
+      - command: [sh, -c, '"$1" --output-format csv --sql "$2" "$3" > sqly.csv && trdsql -icsv -ih -oh "$4" > trdsql.csv && csvq -r "$(dirname "$3")" -f csv "$2" > csvq.csv && textql -header -output-header -sql "$2" "$3" > textql.csv && duckdb -c "COPY ($5) TO ''/dev/stdout'' (HEADER)" > duckdb.csv && cmp sqly.csv trdsql.csv && cmp sqly.csv csvq.csv && cmp sqly.csv textql.csv && cmp sqly.csv duckdb.csv', sh,
           "${artifact}",
           "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10",
           "${head_root}/../../testdata/benchmark/customers100000.csv",
-          "SELECT Country, COUNT(*) AS n FROM ${head_root}/../../testdata/benchmark/customers100000.csv GROUP BY Country ORDER BY n DESC, Country LIMIT 10"]
+          "SELECT Country, COUNT(*) AS n FROM ${head_root}/../../testdata/benchmark/customers100000.csv GROUP BY Country ORDER BY n DESC, Country LIMIT 10",
+          "SELECT Country, COUNT(*) AS n FROM '${head_root}/../../testdata/benchmark/customers100000.csv' GROUP BY Country ORDER BY n DESC, Country LIMIT 10"]
         cwd: "${workdir}"
-    baseline: textql
     commands:
       sqly:
         command: ["${artifact}", --output-format, csv, --sql, "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10", "${head_root}/../../testdata/benchmark/customers100000.csv"]
@@ -51,6 +53,82 @@ benchmarks:
         command: [csvq, -r, "${head_root}/../../testdata/benchmark", -f, csv, "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10"]
       textql:
         command: [textql, -header, -output-header, -sql, "SELECT Country, COUNT(*) AS n FROM customers100000 GROUP BY Country ORDER BY n DESC, Country LIMIT 10", "${head_root}/../../testdata/benchmark/customers100000.csv"]
+      duckdb:
+        command: [duckdb, -c, "COPY (SELECT Country, COUNT(*) AS n FROM '${head_root}/../../testdata/benchmark/customers100000.csv' GROUP BY Country ORDER BY n DESC, Country LIMIT 10) TO '/dev/stdout' (HEADER)"]
+
+  - name: filter 100k
+    description: >-
+      The e-mail address and city of every customer in Japan, sorted by
+      address: a scan of all 100 000 rows that keeps 418 of them.
+    setup:
+      - command: [sh, -c, '"$1" --output-format csv --sql "$2" "$3" > sqly.csv && trdsql -icsv -ih -oh "$4" > trdsql.csv && csvq -r "$(dirname "$3")" -f csv "$2" > csvq.csv && textql -header -output-header -sql "$2" "$3" > textql.csv && duckdb -c "COPY ($5) TO ''/dev/stdout'' (HEADER)" > duckdb.csv && cmp sqly.csv trdsql.csv && cmp sqly.csv csvq.csv && cmp sqly.csv textql.csv && cmp sqly.csv duckdb.csv', sh,
+          "${artifact}",
+          "SELECT Email, City FROM customers100000 WHERE Country = 'Japan' ORDER BY Email",
+          "${head_root}/../../testdata/benchmark/customers100000.csv",
+          "SELECT Email, City FROM ${head_root}/../../testdata/benchmark/customers100000.csv WHERE Country = 'Japan' ORDER BY Email",
+          "SELECT Email, City FROM '${head_root}/../../testdata/benchmark/customers100000.csv' WHERE Country = 'Japan' ORDER BY Email"]
+        cwd: "${workdir}"
+    commands:
+      sqly:
+        command: ["${artifact}", --output-format, csv, --sql, "SELECT Email, City FROM customers100000 WHERE Country = 'Japan' ORDER BY Email", "${head_root}/../../testdata/benchmark/customers100000.csv"]
+      trdsql:
+        command: [trdsql, -icsv, -ih, -oh, "SELECT Email, City FROM ${head_root}/../../testdata/benchmark/customers100000.csv WHERE Country = 'Japan' ORDER BY Email"]
+      csvq:
+        command: [csvq, -r, "${head_root}/../../testdata/benchmark", -f, csv, "SELECT Email, City FROM customers100000 WHERE Country = 'Japan' ORDER BY Email"]
+      textql:
+        command: [textql, -header, -output-header, -sql, "SELECT Email, City FROM customers100000 WHERE Country = 'Japan' ORDER BY Email", "${head_root}/../../testdata/benchmark/customers100000.csv"]
+      duckdb:
+        command: [duckdb, -c, "COPY (SELECT Email, City FROM '${head_root}/../../testdata/benchmark/customers100000.csv' WHERE Country = 'Japan' ORDER BY Email) TO '/dev/stdout' (HEADER)"]
+
+  - name: export 100k
+    description: >-
+      Every row and column of the customers file written back out as CSV, so
+      reading every value and writing every value is the whole cost. textql is
+      left out: it reads the phone number 0389689232 as the number 389689232
+      and writes that, so its output differs from the other four.
+    setup:
+      - command: [sh, -c, '"$1" --output-format csv --sql "$2" "$3" > sqly.csv && trdsql -icsv -ih -oh "$4" > trdsql.csv && csvq -r "$(dirname "$3")" -f csv "$2" > csvq.csv && duckdb -c "COPY ($5) TO ''/dev/stdout'' (HEADER)" > duckdb.csv && cmp sqly.csv trdsql.csv && cmp sqly.csv csvq.csv && cmp sqly.csv duckdb.csv', sh,
+          "${artifact}",
+          "SELECT * FROM customers100000",
+          "${head_root}/../../testdata/benchmark/customers100000.csv",
+          "SELECT * FROM ${head_root}/../../testdata/benchmark/customers100000.csv",
+          "SELECT * FROM '${head_root}/../../testdata/benchmark/customers100000.csv'"]
+        cwd: "${workdir}"
+    commands:
+      sqly:
+        command: ["${artifact}", --output-format, csv, --sql, "SELECT * FROM customers100000", "${head_root}/../../testdata/benchmark/customers100000.csv"]
+      trdsql:
+        command: [trdsql, -icsv, -ih, -oh, "SELECT * FROM ${head_root}/../../testdata/benchmark/customers100000.csv"]
+      csvq:
+        command: [csvq, -r, "${head_root}/../../testdata/benchmark", -f, csv, "SELECT * FROM customers100000"]
+      duckdb:
+        command: [duckdb, -c, "COPY (SELECT * FROM '${head_root}/../../testdata/benchmark/customers100000.csv') TO '/dev/stdout' (HEADER)"]
+
+  - name: aggregate 1m
+    description: >-
+      The row count and the sum of one column of a generated CSV of 1 000 000
+      rows (4 columns, 38 MB), where loading the file is nearly the whole cost.
+    runs: 5
+    setup:
+      - command: [sh, "${head_root}/../gen.sh", csv, "1000000", "${workdir}/bench.csv"]
+      - command: [sh, -c, '"$1" --output-format csv --sql "$2" "$3" > sqly.csv && trdsql -icsv -ih -oh "$4" > trdsql.csv && csvq -r "$(dirname "$3")" -f csv "$2" > csvq.csv && textql -header -output-header -sql "$2" "$3" > textql.csv && duckdb -c "COPY ($5) TO ''/dev/stdout'' (HEADER)" > duckdb.csv && cmp sqly.csv trdsql.csv && cmp sqly.csv csvq.csv && cmp sqly.csv textql.csv && cmp sqly.csv duckdb.csv', sh,
+          "${artifact}",
+          "SELECT COUNT(*) AS n, SUM(id) AS total FROM bench",
+          "${workdir}/bench.csv",
+          "SELECT COUNT(*) AS n, SUM(id) AS total FROM ${workdir}/bench.csv",
+          "SELECT COUNT(*) AS n, SUM(id) AS total FROM '${workdir}/bench.csv'"]
+        cwd: "${workdir}"
+    commands:
+      sqly:
+        command: ["${artifact}", --output-format, csv, --sql, "SELECT COUNT(*) AS n, SUM(id) AS total FROM bench", "${workdir}/bench.csv"]
+      trdsql:
+        command: [trdsql, -icsv, -ih, -oh, "SELECT COUNT(*) AS n, SUM(id) AS total FROM ${workdir}/bench.csv"]
+      csvq:
+        command: [csvq, -r, "${workdir}", -f, csv, "SELECT COUNT(*) AS n, SUM(id) AS total FROM bench"]
+      textql:
+        command: [textql, -header, -output-header, -sql, "SELECT COUNT(*) AS n, SUM(id) AS total FROM bench", "${workdir}/bench.csv"]
+      duckdb:
+        command: [duckdb, -c, "COPY (SELECT COUNT(*) AS n, SUM(id) AS total FROM '${workdir}/bench.csv') TO '/dev/stdout' (HEADER)"]
 
 report:
   # go install records the module version in the binary; textql has no
@@ -59,3 +137,4 @@ report:
     trdsql: [sh, -c, 'go version -m "$(command -v trdsql)" | awk "\$1 == \"mod\" { print \$2, \$3 }"']
     csvq: [csvq, --version]
     textql: [sh, -c, 'go version -m "$(command -v textql)" | awk "\$1 == \"mod\" { print \$2, \$3 }"']
+    duckdb: [duckdb, --version]
