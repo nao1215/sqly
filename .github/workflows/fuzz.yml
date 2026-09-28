@@ -14,8 +14,12 @@ on:
     - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
+      # A choice rather than free text, so a manual run cannot ask for more
+      # than the 30-minute job timeout allows.
       fuzztime:
-        description: "go test -fuzztime per target: <N>s, <N>m (at most 25m, the job times out at 30m) or <N>x"
+        description: "go test -fuzztime per target"
+        type: choice
+        options: ["30s", "1m", "5m", "20m"]
         default: "5m"
 
 permissions:
@@ -73,16 +77,7 @@ jobs:
           PKG: ${{ matrix.target.pkg }}
           NAME: ${{ matrix.target.name }}
           FUZZTIME: ${{ inputs.fuzztime || '5m' }}
-        run: |
-          # Keep a manual run inside timeout-minutes, which would otherwise
-          # kill the job before the search ends and report nothing.
-          case "$FUZZTIME" in
-            *[0-9]x) ;;
-            *[0-9]s) [ "${FUZZTIME%s}" -le 1500 ] || { echo "::error::fuzztime must be at most 25m"; exit 1; } ;;
-            *[0-9]m) [ "${FUZZTIME%m}" -le 25 ] || { echo "::error::fuzztime must be at most 25m"; exit 1; } ;;
-            *) echo "::error::fuzztime must be <N>s, <N>m or <N>x"; exit 1 ;;
-          esac
-          go test -run '^$' -fuzz "^${NAME}\$" -fuzztime "$FUZZTIME" "$PKG"
+        run: go test -run '^$' -fuzz "^${NAME}\$" -fuzztime "$FUZZTIME" "$PKG"
       # A failing input is written under testdata/fuzz/<Name>/. Download it,
       # commit it next to the target, and fix the bug with it as the
       # regression test (Phase 5 of ghq-go).
