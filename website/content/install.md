@@ -58,7 +58,7 @@ Every release ships supply-chain metadata:
 
 - `checksums.txt` is signed with [cosign](https://github.com/sigstore/cosign) (keyless), producing `checksums.txt.sigstore.json`.
 - An SPDX SBOM is attached to each release archive.
-- SLSA build provenance is attested via GitHub OIDC.
+- SLSA build provenance is attested via GitHub OIDC and attached to the release as `multiple.intoto.jsonl`.
 
 Verify the signed checksums, then your archive against them:
 
@@ -75,4 +75,13 @@ Verify build provenance with the GitHub CLI:
 
 ```shell
 gh attestation verify sqly_<version>_<os>_<arch>.tar.gz --repo nao1215/sqly
+```
+
+Or verify the archive offline against the attached provenance with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+
+```shell
+slsa-verifier verify-artifact sqly_<version>_<os>_<arch>.tar.gz \
+  --provenance-path multiple.intoto.jsonl \
+  --source-uri github.com/nao1215/sqly \
+  --source-tag v<version>
 ```
