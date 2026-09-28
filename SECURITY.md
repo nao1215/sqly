@@ -29,5 +29,5 @@ anonymous.
 
 ## Verifying releases
 Release artifacts are signed with cosign and ship with an SBOM and build
-provenance. See [Verifying release integrity](./README.md#verifying-release-integrity)
+provenance. See [Verify a release](https://nao1215.github.io/sqly/install/#verify-a-release)
 for how to check what you download.

@@ -46,7 +46,7 @@ release:
 
     Install or upgrade, then see the grouped highlights below. Every artifact is
     signed and ships with an SBOM and build provenance — see
-    [Verifying release integrity](https://github.com/nao1215/sqly#verifying-release-integrity).
+    [Verify a release](https://nao1215.github.io/sqly/install/#verify-a-release).
   footer: |
     **Full changelog**: https://github.com/nao1215/sqly/compare/{{ .PreviousTag }}...{{ .Tag }}
 changelog:
