@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       fuzztime:
-        description: "go test -fuzztime per target"
+        description: "go test -fuzztime per target: <N>s, <N>m (at most 25m, the job times out at 30m) or <N>x"
         default: "5m"
 
 permissions:
@@ -42,8 +42,11 @@ jobs:
                 d=$dir; nested=""
                 while [ "$d" != "." ]; do [ -f "$d/go.mod" ] && nested=1; d=$(dirname "$d"); done
                 [ -n "$nested" ] && continue
+                # id names the crash artifact: the package path without "/",
+                # so targets of the same name in two packages do not collide.
+                id=$(printf '%s' "${dir#./}" | tr '/' '-'); [ -z "$id" ] || [ "$id" = "." ] && id=root
                 grep -oE '^func Fuzz[A-Za-z0-9_]*' "$f" | awk '{print $2}' \
-                  | while read -r name; do printf '{"pkg":"%s","name":"%s"}\n' "$dir" "$name"; done
+                  | while read -r name; do printf '{"pkg":"%s","name":"%s","id":"%s"}\n' "$dir" "$name" "$id"; done
               done \
             | jq -sc '{target: .}' > matrix.json
           cat matrix.json
@@ -70,12 +73,21 @@ jobs:
           PKG: ${{ matrix.target.pkg }}
           NAME: ${{ matrix.target.name }}
           FUZZTIME: ${{ inputs.fuzztime || '5m' }}
-        run: go test -run '^$' -fuzz "^${NAME}\$" -fuzztime "$FUZZTIME" "$PKG"
+        run: |
+          # Keep a manual run inside timeout-minutes, which would otherwise
+          # kill the job before the search ends and report nothing.
+          case "$FUZZTIME" in
+            *[0-9]x) ;;
+            *[0-9]s) [ "${FUZZTIME%s}" -le 1500 ] || { echo "::error::fuzztime must be at most 25m"; exit 1; } ;;
+            *[0-9]m) [ "${FUZZTIME%m}" -le 25 ] || { echo "::error::fuzztime must be at most 25m"; exit 1; } ;;
+            *) echo "::error::fuzztime must be <N>s, <N>m or <N>x"; exit 1 ;;
+          esac
+          go test -run '^$' -fuzz "^${NAME}\$" -fuzztime "$FUZZTIME" "$PKG"
       # A failing input is written under testdata/fuzz/<Name>/. Download it,
       # commit it next to the target, and fix the bug with it as the
       # regression test (Phase 5 of ghq-go).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: fuzz-crashers-${{ matrix.target.name }}
+          name: fuzz-crashers-${{ matrix.target.id }}-${{ matrix.target.name }}
           path: "**/testdata/fuzz/**"
