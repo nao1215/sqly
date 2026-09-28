@@ -1,11 +1,18 @@
 name: reviewdog
 on: [pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   golangci-lint:
     name: golangci-lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # github-pr-review posts review comments on the pull request.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -22,6 +29,10 @@ jobs:
     name: misspell
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # github-pr-review posts review comments on the pull request.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +49,10 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # github-pr-review posts review comments on the pull request.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0

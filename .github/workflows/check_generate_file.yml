@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   check_generate_file:
     name: Check auto generate files
@@ -25,7 +28,7 @@ jobs:
 
       - name: Install tools
         run: |
-          go install go.uber.org/mock/mockgen@latest
+          go install go.uber.org/mock/mockgen@v0.6.0
       
       - name: check go mod tidy
         run: |
