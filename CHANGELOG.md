@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changes
+
+* Building sqly from source now needs Go 1.26.9 or later (was 1.26.6). Go 1.26.9 fixes standard library advisories in `net/http`, `net/textproto` and `crypto/tls` that sqly reaches (GO-2026-6603, GO-2026-6605, GO-2026-6607, GO-2026-6608, GO-2026-6610 to GO-2026-6613 and GO-2026-6617). Prebuilt binaries are unaffected.
+
+* Dependencies: modernc.org/sqlite v1.60.1, nao1215/prompt v0.3.1, klauspost/compress v1.20.1, golang.org/x/net v0.60.0.
+
 ## [v1.7.3](https://github.com/nao1215/sqly/compare/v1.7.2...v1.7.3) (2026-09-28)
 
 ### Bug Fixes
