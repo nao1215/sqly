@@ -44,9 +44,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The "1" leg installs "stable": its manifest answer (go1.26.8 on
+      # 2026-10-09) is below the go.mod directive and cannot build the module.
+      # The leg is kept only for the required "(<os>, 1)" context names.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ matrix.go }}
+          go-version: ${{ matrix.go == '1' && 'stable' || matrix.go }}
 
       - name: Run tests with coverage report output
         run: go test -v -cover -coverprofile coverage.out ./...
