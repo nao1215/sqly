@@ -1,6 +1,6 @@
 module github.com/nao1215/sqly
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/adrg/xdg v0.5.3
@@ -35,7 +35,7 @@ require (
 	github.com/igrmk/treemap/v2 v2.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-tty v0.0.8 // indirect
-	github.com/moov-io/ach v1.64.0 // indirect
+	github.com/moov-io/ach v1.65.1 // indirect
 	github.com/moov-io/base v0.64.0 // indirect
 	github.com/moov-io/iso3166 v0.4.0 // indirect
 	github.com/moov-io/iso4217 v0.4.0 // indirect
@@ -57,12 +57,12 @@ require (
 	github.com/ulikunitz/xz v0.5.17 // indirect
 	github.com/xuri/efp v0.0.2 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/exp v0.0.0-20261007192929-f45ad48fbe92 // indirect
-	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
+	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	modernc.org/libc v1.77.1 // indirect
+	modernc.org/libc v1.79.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
