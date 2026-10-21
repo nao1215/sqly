@@ -6,6 +6,9 @@ before:
   hooks:
     - go mod tidy
     #- go generate ./...
+    - sh -c 'GOROOT="$(go env GOROOT)" CGO_ENABLED=0 GOOS=linux go-licenses save . --save_path=third_party_licenses/linux --force'
+    - sh -c 'GOROOT="$(go env GOROOT)" CGO_ENABLED=0 GOOS=windows go-licenses save . --save_path=third_party_licenses/windows --force'
+    - sh -c 'GOROOT="$(go env GOROOT)" CGO_ENABLED=0 GOOS=darwin go-licenses save . --save_path=third_party_licenses/darwin --force'
 builds:
   - main: .
     ldflags:
@@ -25,6 +28,14 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
+    # Listing files replaces goreleaser's defaults, so the project's own
+    # LICENSE, README and CHANGELOG are named here too.
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+      - src: "third_party_licenses/{{ .Os }}/**/*"
+        dst: THIRD_PARTY_LICENSES
 checksum:
   name_template: "checksums.txt"
 snapshot:
@@ -104,6 +115,10 @@ nfpms:
       - deb
       - rpm
       - apk
+    contents:
+      - src: ./third_party_licenses/linux
+        dst: /usr/share/doc/sqly/THIRD_PARTY_LICENSES
+        type: tree
 brews:
   - name: sqly
     description: SQL shell for CSV/TSV/LTSV/JSON/JSONL/Parquet/Excel/ACH/Fedwire + compressed

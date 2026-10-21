@@ -31,3 +31,4 @@ dist
 /website/public/
 /website/resources/
 /website/.hugo_build.lock
+/third_party_licenses/
