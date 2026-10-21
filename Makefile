@@ -67,7 +67,7 @@ generate: ## Regenerate the gomock doubles declared by go:generate (requires moc
 tools: ## Install dependency tools 
 	$(GO_INSTALL) github.com/Songmu/ghch/cmd/ghch@latest
 	$(GO_INSTALL) github.com/charmbracelet/vhs@latest
-	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 	$(GO_INSTALL) go.uber.org/mock/mockgen@latest
 	$(GO_INSTALL) github.com/fe3dback/go-arch-lint@v1.15.0
 	$(GO_INSTALL) github.com/nao1215/himorime@latest
