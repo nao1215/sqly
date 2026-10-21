@@ -1,6 +1,6 @@
 ### Prerequisites
 
-- Go 1.26.9 or later (`go.mod` is the source of truth for the minimum)
+- Go 1.26.10 or later (`go.mod` is the source of truth for the minimum)
 - `make`, `git` command
 
 ### Install tools for development
@@ -32,7 +32,7 @@ E2E suite runs the built `sqly` binary rather than linking a library; install it
 separately with the version CONTRIBUTING.md pins, which is the one CI uses:
 
 ```shell
-$ go install github.com/nao1215/atago@v0.25.0
+$ go install github.com/nao1215/atago@v0.25.2
 ```
 
 ### Build & Test

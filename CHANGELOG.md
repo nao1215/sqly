@@ -4,9 +4,11 @@
 
 ### Changes
 
-* Building sqly from source now needs Go 1.26.9 or later (was 1.26.6). Go 1.26.9 fixes standard library advisories in `net/http`, `net/textproto` and `crypto/tls` that sqly reaches (GO-2026-6603, GO-2026-6605, GO-2026-6607, GO-2026-6608, GO-2026-6610 to GO-2026-6613 and GO-2026-6617). Prebuilt binaries are unaffected.
+* Building sqly from source now needs Go 1.26.10 or later (was 1.26.6). Go 1.26.9 fixes standard library advisories in `net/http`, `net/textproto` and `crypto/tls` that sqly reaches (GO-2026-6603, GO-2026-6605, GO-2026-6607, GO-2026-6608, GO-2026-6610 to GO-2026-6613 and GO-2026-6617), and Go 1.26.10 adds the `crypto/x509` intermediate-certificate denylist (GO-2026-6809). Prebuilt binaries are unaffected.
 
-* Dependencies: modernc.org/sqlite v1.60.1, nao1215/prompt v0.3.1, klauspost/compress v1.20.1, golang.org/x/net v0.60.0.
+* Dependencies: modernc.org/sqlite v1.60.1, modernc.org/libc v1.79.0, nao1215/prompt v0.3.1, moov-io/ach v1.65.1, klauspost/compress v1.20.1, golang.org/x/net v0.61.0, golang.org/x/crypto v0.58.0.
+
+* Release archives and Linux packages now include the license texts of the linked dependencies under THIRD_PARTY_LICENSES/. CI checks dependency licenses on Linux, Windows, and macOS.
 
 ## [v1.7.3](https://github.com/nao1215/sqly/compare/v1.7.2...v1.7.3) (2026-09-28)
 
