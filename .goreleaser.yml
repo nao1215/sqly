@@ -28,7 +28,12 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
+    # Listing files replaces goreleaser's defaults, so the project's own
+    # LICENSE, README and CHANGELOG are named here too.
     files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
       - src: "third_party_licenses/{{ .Os }}/**/*"
         dst: THIRD_PARTY_LICENSES
 checksum:
