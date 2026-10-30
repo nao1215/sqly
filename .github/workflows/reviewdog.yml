@@ -55,7 +55,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: reviewdog/action-actionlint@419a49378266e892f40c773b4f2fc6de9aa87499 # v1.80.4
+      - uses: reviewdog/action-actionlint@cfa6a621f27735ccc88d35af9d0608692fd9b9f7 # v1.80.8
         with:
           reporter: github-pr-review
           level: warning
