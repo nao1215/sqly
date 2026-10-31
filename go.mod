@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/compress v1.20.3
 	github.com/mattn/go-colorable v0.1.16
 	github.com/mattn/go-runewidth v0.0.31
-	github.com/nao1215/filesql v0.59.2
+	github.com/nao1215/filesql v0.60.0
 	github.com/nao1215/prompt v0.3.1
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -21,7 +21,7 @@ require (
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0
-	modernc.org/sqlite v1.60.1
+	modernc.org/sqlite v1.61.0
 )
 
 require (
@@ -59,7 +59,7 @@ require (
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	modernc.org/libc v1.79.0 // indirect
