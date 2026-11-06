@@ -15,7 +15,7 @@ require (
 	github.com/nao1215/prompt v0.3.1
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/xuri/excelize/v2 v2.11.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/sys v0.49.0
