@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v1.7.4](https://github.com/nao1215/sqly/compare/v1.7.3...v1.7.4) (2026-11-09)
+
 ### Bug Fixes
 
 * Excel dates in January and February 1900 are read as the day the workbook shows, and a fraction stored in an integer column of an Excel file keeps all its digits when `.save` writes it back. Both come from filesql v0.60.1, which adapts to excelize v2.11.1.
