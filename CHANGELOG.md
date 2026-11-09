@@ -2,7 +2,17 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+* Excel dates in January and February 1900 are read as the day the workbook shows, and a fraction stored in an integer column of an Excel file keeps all its digits when `.save` writes it back. Both come from filesql v0.60.1, which adapts to excelize v2.11.1.
+
+### Security
+
+* excelize v2.11.1 fixes GO-2026-6684, GO-2026-6685, GO-2026-6688 and GO-2026-6689, and andybalholm/brotli v1.2.7 fixes GO-2026-6888 (excessive memory allocation when decompressing a crafted `.br` file).
+
 ### Changes
+
+* Dependencies: nao1215/filesql v0.60.1, xuri/excelize v2.11.1, modernc.org/sqlite v1.61.1, spf13/pflag v1.1.0, caarlos0/env v11.4.2, andybalholm/brotli v1.2.7, moov-io/ach v1.68.0.
 
 * Building sqly from source now needs Go 1.26.10 or later (was 1.26.6). Go 1.26.9 fixes standard library advisories in `net/http`, `net/textproto` and `crypto/tls` that sqly reaches (GO-2026-6603, GO-2026-6605, GO-2026-6607, GO-2026-6608, GO-2026-6610 to GO-2026-6613 and GO-2026-6617), and Go 1.26.10 adds the `crypto/x509` intermediate-certificate denylist (GO-2026-6809). Prebuilt binaries are unaffected.
 
