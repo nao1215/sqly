@@ -40,14 +40,13 @@ func assertNoResidueDiagnostics(t *testing.T, label, stderr string) {
 	}
 }
 
-// parseCSVRecords parses delimited output into records, so a comparison does
-// not depend on quoting or on where the writer chose to put a newline. comma
-// selects CSV or TSV.
-func parseCSVRecords(t *testing.T, label, payload string, comma rune) [][]string {
+// parseCSVRecords parses CSV output into records, so a comparison does not
+// depend on quoting or on where the writer chose to put a newline. TSV has no
+// quoting and is split by parseTSVRecords instead.
+func parseCSVRecords(t *testing.T, label, payload string) [][]string {
 	t.Helper()
 
 	r := csv.NewReader(strings.NewReader(dropStatusLines(payload)))
-	r.Comma = comma
 	r.FieldsPerRecord = -1
 	records, err := r.ReadAll()
 	if err != nil {

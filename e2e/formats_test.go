@@ -32,7 +32,7 @@ func TestSmoke_MixedFormatInputs(t *testing.T) {
 		for table, wantRows := range map[string]int{"people": 2, "cities": 2, "teams": 2} {
 			out := runQueryAs(t, "count "+table, "csv",
 				"SELECT COUNT(*) AS n FROM "+table, people, cities, teams)
-			records := parseCSVRecords(t, table, out, ',')
+			records := parseCSVRecords(t, table, out)
 			if len(records) != 2 || records[1][0] != strconv.Itoa(wantRows) {
 				t.Errorf("%s row count = %v, want %d", table, records, wantRows)
 			}
@@ -103,7 +103,7 @@ func TestSmoke_MixedFormatInputs(t *testing.T) {
 		// nothing behind that a retry trips over.
 		out := runQueryAs(t, "retry after rollback", "csv",
 			"SELECT COUNT(*) AS n FROM people", people, cities)
-		if records := parseCSVRecords(t, "retry", out, ','); records[1][0] != "2" {
+		if records := parseCSVRecords(t, "retry", out); records[1][0] != "2" {
 			t.Errorf("retry row count = %v, want 2", records)
 		}
 	})
@@ -134,8 +134,9 @@ const tsvAgreementQuery = "SELECT empty_col, null_col, int_col, real_col, unicod
 // parseTSVRecords splits TSV output the way sqly's TSV reader does: a field is
 // the bytes between two tabs, with no quoting.
 func parseTSVRecords(payload string) [][]string {
-	var records [][]string
-	for _, line := range strings.Split(strings.TrimSuffix(dropStatusLines(payload), "\n"), "\n") {
+	lines := strings.Split(strings.TrimSuffix(dropStatusLines(payload), "\n"), "\n")
+	records := make([][]string, 0, len(lines))
+	for _, line := range lines {
 		records = append(records, strings.Split(line, "\t"))
 	}
 	return records
@@ -160,7 +161,7 @@ func TestSmoke_OutputFormatsAgreeOnAwkwardValues(t *testing.T) {
 	jsonOut := mustRunScript(t, "json", agreementFixture+query, "json")
 	tableOut := mustRunScript(t, "table", agreementFixture+query, "table")
 
-	csvRecords := parseCSVRecords(t, "csv", csvOut, ',')
+	csvRecords := parseCSVRecords(t, "csv", csvOut)
 	tsvRecords := parseTSVRecords(tsvOut)
 	jsonRows := parseJSONRows(t, "json", jsonOut)
 
@@ -336,7 +337,7 @@ func TestSmoke_ParquetExportKeepsValuesSQLCannotParse(t *testing.T) {
 	// Reading it back through sqly is the check that matters: the bytes are
 	// compared as hex so a NUL is visible rather than swallowed by the terminal.
 	got := runQueryAs(t, "reimport", "csv", "SELECT hex(payload) AS h FROM odd ORDER BY id", out)
-	records := parseCSVRecords(t, "reimport", got, ',')
+	records := parseCSVRecords(t, "reimport", got)
 	if len(records) != 3 {
 		t.Fatalf("reimported %d records (with header), want 3:\n%s", len(records), got)
 	}
