@@ -128,6 +128,19 @@ INSERT INTO t VALUES ('', NULL, 42, -1.25, '東京 🗾', 'a,b', 'a' || char(9) 
                       'line1' || char(10) || 'line2', '{"k":1}', '00123');
 `
 
+// tsvAgreementQuery selects every agreementFixture column TSV can hold.
+const tsvAgreementQuery = "SELECT empty_col, null_col, int_col, real_col, unicode_col, comma_col, jsonish_col, padded_col FROM t;\n"
+
+// parseTSVRecords splits TSV output the way sqly's TSV reader does: a field is
+// the bytes between two tabs, with no quoting.
+func parseTSVRecords(payload string) [][]string {
+	var records [][]string
+	for _, line := range strings.Split(strings.TrimSuffix(dropStatusLines(payload), "\n"), "\n") {
+		records = append(records, strings.Split(line, "\t"))
+	}
+	return records
+}
+
 // TestSmoke_OutputFormatsAgreeOnAwkwardValues is the CLI-level detector for the
 // record/cell divergence the Table ownership rules exist to prevent.
 //
@@ -141,12 +154,14 @@ func TestSmoke_OutputFormatsAgreeOnAwkwardValues(t *testing.T) {
 	query := "SELECT * FROM t;\n"
 
 	csvOut := mustRunScript(t, "csv", agreementFixture+query, "csv")
-	tsvOut := mustRunScript(t, "tsv", agreementFixture+query, "tsv")
+	// TSV has no quoting, so it cannot hold the tab and newline columns: the
+	// whole row is refused, and the agreement is checked on the other columns.
+	tsvOut := mustRunScript(t, "tsv", agreementFixture+tsvAgreementQuery, "tsv")
 	jsonOut := mustRunScript(t, "json", agreementFixture+query, "json")
 	tableOut := mustRunScript(t, "table", agreementFixture+query, "table")
 
 	csvRecords := parseCSVRecords(t, "csv", csvOut, ',')
-	tsvRecords := parseCSVRecords(t, "tsv", tsvOut, '\t')
+	tsvRecords := parseTSVRecords(tsvOut)
 	jsonRows := parseJSONRows(t, "json", jsonOut)
 
 	if len(csvRecords) != 2 || len(tsvRecords) != 2 || len(jsonRows) != 1 {
@@ -154,7 +169,11 @@ func TestSmoke_OutputFormatsAgreeOnAwkwardValues(t *testing.T) {
 			len(csvRecords), len(tsvRecords), len(jsonRows))
 	}
 	columns := csvRecords[0]
-	csvRow, tsvRow, jsonRow := csvRecords[1], tsvRecords[1], jsonRows[0]
+	csvRow, jsonRow := csvRecords[1], jsonRows[0]
+	tsvRow := map[string]string{}
+	for i, column := range tsvRecords[0] {
+		tsvRow[column] = tsvRecords[1][i]
+	}
 
 	// The display string every text format must agree on, per column.
 	wantDisplay := map[string]string{
@@ -178,9 +197,17 @@ func TestSmoke_OutputFormatsAgreeOnAwkwardValues(t *testing.T) {
 		if csvRow[i] != want {
 			t.Errorf("%s: csv = %q, want %q", column, csvRow[i], want)
 		}
-		if tsvRow[i] != want {
-			t.Errorf("%s: tsv = %q, want %q", column, tsvRow[i], want)
+		if got, ok := tsvRow[column]; ok && got != want {
+			t.Errorf("%s: tsv = %q, want %q", column, got, want)
 		}
+	}
+
+	if len(tsvRecords[0]) != 8 {
+		t.Errorf("tsv columns = %q, want the 8 columns TSV can hold", tsvRecords[0])
+	}
+	_, stderr, code := run(t, agreementFixture+query, "--output-format", "tsv")
+	if code != 4 || !strings.Contains(stderr, "TSV cannot represent") {
+		t.Errorf("tsv of the tab and newline columns: exit %d, stderr %q; want exit 4 naming the refusal", code, stderr)
 	}
 
 	// JSON reaches the same values through the native cells, so its types carry
