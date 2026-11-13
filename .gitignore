@@ -32,3 +32,6 @@ dist
 /website/resources/
 /website/.hugo_build.lock
 /third_party_licenses/
+
+# Failure files pgregory.net/rapid writes to reproduce a failed property test.
+testdata/rapid/
