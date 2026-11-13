@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
+	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
@@ -141,21 +143,20 @@ func (m *schemaCacheMachine) checkCompletionSchema(rt *rapid.T) {
 }
 
 func (m *schemaCacheMachine) checkHighlightNames(rt *rapid.T) {
-	want := m.fresh(rt)
 	got := m.s.schemaNames(context.Background())
-	wantColumns := 0
-	seen := map[string]bool{}
-	for _, cols := range want {
+	// Highlighting keys its names lowercased, so the expected sets are built the
+	// same way. Comparing the sets, not their sizes, is what catches a renamed
+	// column: the stale and the fresh schema both hold one column.
+	wantTables, wantColumns := map[string]bool{}, map[string]bool{}
+	for table, cols := range m.fresh(rt) {
+		wantTables[strings.ToLower(table)] = true
 		for _, c := range cols {
-			if !seen[c] {
-				seen[c] = true
-				wantColumns++
-			}
+			wantColumns[strings.ToLower(c)] = true
 		}
 	}
-	if len(got.tables) != len(want) || len(got.columns) != wantColumns {
-		rt.Fatalf("highlight names: %d tables, %d columns; database has %d tables, %d columns (%v)",
-			len(got.tables), len(got.columns), len(want), wantColumns, want)
+	if !maps.Equal(got.tables, wantTables) || !maps.Equal(got.columns, wantColumns) {
+		rt.Fatalf("highlight names: tables %v, columns %v; database has tables %v, columns %v",
+			got.tables, got.columns, wantTables, wantColumns)
 	}
 }
 
@@ -187,6 +188,7 @@ func TestShellWriteBackStateMachine(t *testing.T) {
 			rt.Fatal(err)
 		}
 		m := &writeBackMachine{s: s, source: source, outDir: filepath.Join(dir, "out"), t: t}
+		m.imported = m.snapshot(rt)
 		rt.Repeat(m.actions())
 	})
 }
@@ -216,6 +218,26 @@ type writeBackMachine struct {
 	source string
 	outDir string
 	saves  int
+	// imported is the table as it was loaded, which decides whether .save DIR
+	// has to write a file: it exports only a table the session changed.
+	imported [][]string
+}
+
+// snapshot returns the session's table as the values it prints.
+func (m *writeBackMachine) snapshot(rt *rapid.T) [][]string {
+	table, err := m.s.usecases.metadata.List(context.Background(), "people")
+	if err != nil {
+		rt.Fatalf("List: %v", err)
+	}
+	rows := make([][]string, 0, table.RowCount())
+	for r := range table.RowCount() {
+		row := make([]string, 0, table.ColumnCount())
+		for c := range table.ColumnCount() {
+			row = append(row, table.ValueAt(r, c))
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func (m *writeBackMachine) run(rt *rapid.T, line string) error {
@@ -262,13 +284,22 @@ func (m *writeBackMachine) actions() map[string]func(*rapid.T) {
 			// gets a directory of its own.
 			m.saves++
 			dir := filepath.Join(m.outDir, strconv.Itoa(m.saves))
-			if err := m.run(rt, ".save "+dir); err != nil {
-				m.checkRefusal(rt, err, filepath.Join(dir, filepath.Base(m.source)), nil)
+			// Quoted, because a dot-command line is split by shell quoting rules
+			// and a temporary directory may hold a space.
+			dest := filepath.Join(dir, filepath.Base(m.source))
+			if err := m.run(rt, ".save '"+dir+"'"); err != nil {
+				m.checkRefusal(rt, err, dest, nil)
 				return
 			}
-			if _, err := os.Stat(filepath.Join(dir, filepath.Base(m.source))); err == nil {
-				m.checkFile(rt, filepath.Join(dir, filepath.Base(m.source)))
+			if _, err := os.Stat(dest); err != nil {
+				// No file is right only for a table the session left as it was
+				// loaded; a changed table that writes nothing loses the change.
+				if !slices.EqualFunc(m.snapshot(rt), m.imported, slices.Equal[[]string]) {
+					rt.Fatalf(".save DIR wrote no %s for a changed table: %v", dest, err)
+				}
+				return
 			}
+			m.checkFile(rt, dest)
 		},
 	}
 }
@@ -331,15 +362,25 @@ func (m *writeBackMachine) checkFile(rt *rapid.T, path string) {
 
 // sameCellValue compares a saved value with the one read back. The file keeps
 // the text as written, but a re-import infers a numeric column's type, so "1.50"
-// read back from a column of numbers prints as 1.5. Two values that are the same
-// number are the same value here; everything else must match exactly.
+// read back from a column of numbers prints as 1.5. Two decimal values that are
+// exactly the same number are the same value here; everything else must match
+// exactly. The comparison is exact rather than through float64, which would take
+// two integers past 2^53 that round to the same double for one value.
 func sameCellValue(got, want string) bool {
 	if got == want {
 		return true
 	}
-	g, errG := strconv.ParseFloat(got, 64)
-	w, errW := strconv.ParseFloat(want, 64)
-	return errG == nil && errW == nil && g == w
+	// ParseFloat first, so only decimal spellings count as numbers: big.Rat
+	// would also read base prefixes such as 0x.
+	if _, err := strconv.ParseFloat(got, 64); err != nil {
+		return false
+	}
+	if _, err := strconv.ParseFloat(want, 64); err != nil {
+		return false
+	}
+	g, okG := new(big.Rat).SetString(got)
+	w, okW := new(big.Rat).SetString(want)
+	return okG && okW && g.Cmp(w) == 0
 }
 
 func readFileForLog(path string) string {
