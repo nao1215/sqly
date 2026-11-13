@@ -1,6 +1,6 @@
 ### Prerequisites
 
-- Go 1.26.10 or later (`go.mod` is the source of truth for the minimum)
+- Go 1.26.11 or later (`go.mod` is the source of truth for the minimum)
 - `make`, `git` command
 
 ### Install tools for development
