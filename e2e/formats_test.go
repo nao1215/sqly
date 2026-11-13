@@ -5,6 +5,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -128,8 +129,11 @@ INSERT INTO t VALUES ('', NULL, 42, -1.25, '東京 🗾', 'a,b', 'a' || char(9) 
                       'line1' || char(10) || 'line2', '{"k":1}', '00123');
 `
 
-// tsvAgreementQuery selects every agreementFixture column TSV can hold.
-const tsvAgreementQuery = "SELECT empty_col, null_col, int_col, real_col, unicode_col, comma_col, jsonish_col, padded_col FROM t;\n"
+// tsvAgreementColumns are the agreementFixture columns TSV can hold, and
+// tsvAgreementQuery selects them in that order.
+var tsvAgreementColumns = []string{"empty_col", "null_col", "int_col", "real_col", "unicode_col", "comma_col", "jsonish_col", "padded_col"}
+
+var tsvAgreementQuery = "SELECT " + strings.Join(tsvAgreementColumns, ", ") + " FROM t;\n"
 
 // parseTSVRecords splits TSV output the way sqly's TSV reader does: a field is
 // the bytes between two tabs, with no quoting.
@@ -171,10 +175,6 @@ func TestSmoke_OutputFormatsAgreeOnAwkwardValues(t *testing.T) {
 	}
 	columns := csvRecords[0]
 	csvRow, jsonRow := csvRecords[1], jsonRows[0]
-	tsvRow := map[string]string{}
-	for i, column := range tsvRecords[0] {
-		tsvRow[column] = tsvRecords[1][i]
-	}
 
 	// The display string every text format must agree on, per column.
 	wantDisplay := map[string]string{
@@ -198,13 +198,20 @@ func TestSmoke_OutputFormatsAgreeOnAwkwardValues(t *testing.T) {
 		if csvRow[i] != want {
 			t.Errorf("%s: csv = %q, want %q", column, csvRow[i], want)
 		}
-		if got, ok := tsvRow[column]; ok && got != want {
-			t.Errorf("%s: tsv = %q, want %q", column, got, want)
-		}
 	}
 
-	if len(tsvRecords[0]) != 8 {
-		t.Errorf("tsv columns = %q, want the 8 columns TSV can hold", tsvRecords[0])
+	// TSV is checked column by column against the names it was asked for, so a
+	// renamed, missing or repeated column fails rather than being skipped.
+	if !slices.Equal(tsvRecords[0], tsvAgreementColumns) {
+		t.Fatalf("tsv header = %q, want %q", tsvRecords[0], tsvAgreementColumns)
+	}
+	if len(tsvRecords[1]) != len(tsvAgreementColumns) {
+		t.Fatalf("tsv row = %q, want %d fields", tsvRecords[1], len(tsvAgreementColumns))
+	}
+	for i, column := range tsvAgreementColumns {
+		if got, want := tsvRecords[1][i], wantDisplay[column]; got != want {
+			t.Errorf("%s: tsv = %q, want %q", column, got, want)
+		}
 	}
 	_, stderr, code := run(t, agreementFixture+query, "--output-format", "tsv")
 	if code != 4 || !strings.Contains(stderr, "TSV cannot represent") {
