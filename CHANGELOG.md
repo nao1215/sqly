@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changes
+
+* Building sqly from source now needs Go 1.26.11 or later (was 1.26.10). Go 1.26.11 fixes GO-2026-6859 in `net/http`, which sqly reaches through remote input downloads. Prebuilt binaries are unaffected.
+
 ## [v1.7.4](https://github.com/nao1215/sqly/compare/v1.7.3...v1.7.4) (2026-11-09)
 
 ### Bug Fixes
