@@ -107,12 +107,13 @@ func readDelimitedAsTable(t *testing.T, path string, delimiter rune) *model.Tabl
 	return model.NewTable(filepath.Base(path), header, records)
 }
 
-// TestDelimitedRepositoryDumpLoneEmptyField pins that a one-column row whose
-// only value is empty is written as "".
+// TestDelimitedRepositoryDumpLoneEmptyField pins how a one-column row whose
+// only value is empty is written.
 //
-// Written plainly it is a blank line, and a blank line is not a record: a reader
-// skips it. `SELECT v FROM t` over alice, "", bob wrote three rows and read back
-// as two, and the export reported success.
+// In CSV it is "": written plainly it is a blank line, and a blank line is not a
+// CSV record, so `SELECT v FROM t` over alice, "", bob wrote three rows and read
+// back as two. TSV has no quoting, and a one-column TSV reads a blank line as a
+// record holding an empty value, so there it is the blank line.
 func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 	t.Parallel()
 
@@ -122,7 +123,7 @@ func TestDelimitedRepositoryDumpLoneEmptyField(t *testing.T) {
 		want string
 	}{
 		{name: "csv", dump: DumpCSV, want: "v\nalice\n\"\"\nbob\n"},
-		{name: "tsv", dump: DumpTSV, want: "v\nalice\n\"\"\nbob\n"},
+		{name: "tsv", dump: DumpTSV, want: "v\nalice\n\nbob\n"},
 	}
 
 	for _, tt := range tests {

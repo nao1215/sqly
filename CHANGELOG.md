@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+* TSV is written without quoting, so a value holding a double quote or a leading space reads back as it was. TSV output went through a CSV writer, which quoted such a value, and sqly's TSV reader takes quotes as data: `.save --in-place` of a TSV turned `"q"` into `"""q"""`, and every later save added another layer. A one-column row holding an empty value is now an empty line, which reads back as empty. A value or column name holding a tab, a newline or a carriage return cannot be written as TSV and is refused at exit `4`, as LTSV already refused it, leaving the destination as it was; use csv or json for such values.
+
 ### Changes
+
+* Tests: property-based state machine tests (pgregory.net/rapid) run random edits and saves, read each saved file back, and check the completion schema against the database after random schema changes.
 
 * Building sqly from source now needs Go 1.26.11 or later (was 1.26.10). Go 1.26.11 fixes GO-2026-6859 in `net/http`, which sqly reaches through remote input downloads. Prebuilt binaries are unaffected.
 

@@ -1,8 +1,10 @@
 # A one-column result whose value is empty has to survive being written and read
-# again. In CSV and TSV a record of one empty field, written plainly, is a blank
-# line — and a blank line is not a record, so a reader skips it. An export of
+# again. In CSV a record of one empty field, written plainly, is a blank line —
+# and a blank line is not a CSV record, so a reader skips it. An export of
 # `SELECT v FROM t` over alice, "", bob wrote three rows and read back as two,
-# and the export reported success.
+# and the export reported success. TSV has no quoting and a one-column TSV reads
+# a blank line as an empty value, so there the blank line is the right spelling:
+# the CSV one, "", read back as two quote characters.
 #
 # Run with: make test-e2e
 version: "1"
@@ -63,15 +65,18 @@ scenarios:
           exit_code: 0
           file:
             path: out.tsv
-            equals: "v\nalice\n\"\"\nbob\n"
+            equals: "v\nalice\n\nbob\n"
       - run:
-          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
+          command: sqly --output-format json --sql "SELECT v FROM out" out.tsv
       - assert:
           exit_code: 0
           stdout:
             equals: |
-              n
-              3
+              [
+                {"v":"alice"},
+                {"v":""},
+                {"v":"bob"}
+              ]
 
   - name: a redirected one-column CSV result keeps its empty rows through a reimport
     # --output and a redirect have to produce the same file. Only the export path
@@ -110,15 +115,18 @@ scenarios:
           exit_code: 0
           file:
             path: out.tsv
-            equals: "v\nalice\n\"\"\nbob\n"
+            equals: "v\nalice\n\nbob\n"
       - run:
-          command: sqly --output-format csv --sql "SELECT COUNT(*) AS n FROM out" out.tsv
+          command: sqly --output-format json --sql "SELECT v FROM out" out.tsv
       - assert:
           exit_code: 0
           stdout:
             equals: |
-              n
-              3
+              [
+                {"v":"alice"},
+                {"v":""},
+                {"v":"bob"}
+              ]
 
   - name: .mode csv in a script keeps a lone empty field readable
     skip:

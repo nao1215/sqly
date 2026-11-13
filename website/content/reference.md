@@ -320,7 +320,7 @@ and nothing is written.
 | a BLOB, or any bytes that are not valid UTF-8 | refused | base64 string | refused | the bytes are kept, typed as text on re-import |
 | Infinity, -Infinity | `Infinity`, `-Infinity` | the strings `"Infinity"`, `"-Infinity"` | the same words, as text | kept as a double |
 | NaN | `NaN` | the string `"NaN"` | `NaN` | NULL, which is what SQLite has for it |
-| a tab or a newline inside a value | kept, quoted where the delimiter needs it; ltsv refuses | kept | kept | kept |
+| a tab, a newline or a carriage return inside a value | csv keeps it, quoted; tsv and ltsv refuse | kept | kept | kept |
 | a result with no rows | csv and tsv write a header; ltsv refuses | `[]` | written | refused |
 | a value longer than 32,767 characters | kept | kept | refused, because a cell holds no more | kept |
 
