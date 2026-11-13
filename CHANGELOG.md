@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+* TSV is written without quoting, so a value holding a double quote or a leading space reads back as it was. TSV output went through a CSV writer, which quoted such a value, and sqly's TSV reader takes quotes as data: `.save --in-place` of a TSV turned `"q"` into `"""q"""`, and every later save added another layer. A one-column row holding an empty value is now an empty line, which reads back as empty. A value or column name holding a tab, a newline or a carriage return cannot be written as TSV and is refused at exit `4`, as LTSV already refused it, leaving the destination as it was; use csv or json for such values.
+
 ## [v1.7.4](https://github.com/nao1215/sqly/compare/v1.7.3...v1.7.4) (2026-11-09)
 
 ### Bug Fixes

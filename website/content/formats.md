@@ -125,10 +125,14 @@ name would fall under the prefix is refused at exit `3` rather than loaded into 
 table no listing would admit existed.
 
 A format that cannot represent a value refuses the export rather than writing
-something else. LTSV has no way to hold a tab or a newline inside a value, and
-XLSX — being XML — has no way to hold a control character other than tab,
-newline, and carriage return, nor the two noncharacters `U+FFFE` and `U+FFFF`. Either one names the column and exits `4`, leaving
-the destination as it was; csv, tsv, and json carry all of them.
+something else. TSV and LTSV have no way to hold a tab, a newline or a carriage
+return inside a value, and XLSX — being XML — has no way to hold a control character other than tab,
+newline, and carriage return, nor the two noncharacters `U+FFFE` and `U+FFFF`. Each names the column and exits `4`, leaving
+the destination as it was; csv and json carry all of them.
+
+TSV is written without quoting, because sqly's TSV reader takes every byte
+between two tabs as the value. A double quote or a leading space is
+written as it is, and a one-column row holding an empty value is an empty line.
 
 An export also refuses a header sqly could not read back, by the same rule the
 read side applies: names compared with surrounding whitespace removed, and again

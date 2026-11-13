@@ -80,6 +80,11 @@ func (s *RowStream) Header(header []string) error {
 		if err := EnsureHeaderReimportable(s.format, s.header); err != nil {
 			return err
 		}
+		if s.mode == PrintModeTSV {
+			if err := ensureTSVHeaderWritable(s.header); err != nil {
+				return err
+			}
+		}
 		if err := s.delimited.write([]string(s.header)); err != nil {
 			return fmt.Errorf("failed to write header: %w", err)
 		}
@@ -107,7 +112,7 @@ func (s *RowStream) Row(cells []Cell) error {
 		s.display = s.display[:0]
 		for i, cell := range cells {
 			value := cell.String()
-			if err := ensureTextValueRepresentable(s.format, s.header[i], value); err != nil {
+			if err := ensureDelimitedValueRepresentable(s.format, s.header[i], value); err != nil {
 				return err
 			}
 			s.display = append(s.display, value)

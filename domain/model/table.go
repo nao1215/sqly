@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/csv"
@@ -499,19 +500,22 @@ func (t *Table) printTSV(out io.Writer) error {
 	if err := EnsureHeaderReimportable(formatTSV, t.Header()); err != nil {
 		return err
 	}
+	if err := ensureTSVHeaderWritable(t.Header()); err != nil {
+		return err
+	}
 	if err := t.ensureDelimitedWritable(formatTSV); err != nil {
 		return err
 	}
 	return t.writeDelimited(out, '\t')
 }
 
-// loneEmptyField is how a record of one empty field is written.
+// loneEmptyField is how a record of one empty field is written as CSV.
 //
-// Written plainly it is a blank line, and a blank line is not a record: a reader
-// skips it. SELECT v FROM t giving alice, an empty value, bob printed three rows
-// and read back as two. The quotes say "one field, and it is empty", which
-// cannot be read as anything else. encoding/csv's writer does not quote an empty
-// field, because it has no way to know it is the only one on the line.
+// Written plainly it is a blank line, and a blank line is not a CSV record: a
+// reader skips it. SELECT v FROM t giving alice, an empty value, bob printed
+// three rows and read back as two. The quotes say "one field, and it is empty",
+// which cannot be read as anything else. encoding/csv's writer does not quote an
+// empty field, because it has no way to know it is the only one on the line.
 const loneEmptyField = `""`
 
 // writeDelimited writes the header and records as delimiter-separated values
@@ -534,22 +538,47 @@ func (t *Table) writeDelimited(out io.Writer, comma rune) error {
 	return w.flush()
 }
 
-// delimitedWriter writes records as delimiter-separated values with
-// encoding/csv, and a record of one empty field as loneEmptyField. It is the
-// one writer of a delimited record, shared by Table.Print, the file export and
-// RowStream.
+// delimitedWriter writes records as CSV with encoding/csv, or as TSV with no
+// quoting at all. It is the one writer of a delimited record, shared by
+// Table.Print, the file export and RowStream.
+//
+// TSV is not CSV with a tab for a comma. It has no quoting: a field is the bytes
+// between two tabs, which is how sqly's own reader takes it. Writing TSV through
+// encoding/csv quoted a value holding a double quote or a leading space, and the
+// reader then kept those quotes as part of the value, so every save of the file
+// added another layer. A value TSV cannot hold is refused before writing, by
+// ensureDelimitedValueRepresentable, rather than escaped in a way no reader undoes.
 type delimitedWriter struct {
 	out io.Writer
 	w   *csv.Writer
+	tsv *bufio.Writer
 }
 
 func newDelimitedWriter(out io.Writer, comma rune) *delimitedWriter {
+	if comma == '\t' {
+		return &delimitedWriter{out: out, tsv: bufio.NewWriter(out)}
+	}
 	w := csv.NewWriter(out)
 	w.Comma = comma
 	return &delimitedWriter{out: out, w: w}
 }
 
 func (d *delimitedWriter) write(record []string) error {
+	if d.tsv != nil {
+		// A one-column record holding an empty value is an empty line, which a
+		// one-column TSV reads back as exactly that.
+		for i, field := range record {
+			if i > 0 {
+				if err := d.tsv.WriteByte('\t'); err != nil {
+					return err
+				}
+			}
+			if _, err := d.tsv.WriteString(field); err != nil {
+				return err
+			}
+		}
+		return d.tsv.WriteByte('\n')
+	}
 	if len(record) == 1 && record[0] == "" {
 		// Flushing first keeps the two writers' output in order.
 		d.w.Flush()
@@ -563,6 +592,9 @@ func (d *delimitedWriter) write(record []string) error {
 }
 
 func (d *delimitedWriter) flush() error {
+	if d.tsv != nil {
+		return d.tsv.Flush()
+	}
 	d.w.Flush()
 	return d.w.Error()
 }
@@ -688,7 +720,7 @@ func EnsureLTSVHeaderWritable(header Header) error {
 // output that cannot be re-imported as LTSV.
 func ensureLTSVValueRepresentable(label, value string) error {
 	if strings.ContainsAny(value, "\t\n\r") {
-		return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv/tsv/json for such values", label)
+		return fmt.Errorf("ltsv: value for column %q contains a tab or newline, which LTSV cannot represent; use csv or json for such values", label)
 	}
 	return nil
 }
@@ -719,9 +751,31 @@ func ensureTextValueRepresentable(format, label, value string) error {
 func (t *Table) ensureDelimitedWritable(format string) error {
 	for _, v := range t.Rows {
 		for i := range v.Len() {
-			if err := ensureTextValueRepresentable(format, t.ColumnName(i), v.At(i)); err != nil {
+			if err := ensureDelimitedValueRepresentable(format, t.ColumnName(i), v.At(i)); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// ensureDelimitedValueRepresentable returns an error for a value csv or tsv
+// cannot hold. CSV quotes whatever it has to, so only the UTF-8 check applies to
+// it; TSV has no quoting, so a tab, a newline or a carriage return in a value
+// would end the field or the record it belongs to.
+func ensureDelimitedValueRepresentable(format, label, value string) error {
+	if format == formatTSV && strings.ContainsAny(value, "\t\n\r") {
+		return fmt.Errorf("tsv: value for column %q contains a tab or newline, which TSV cannot represent; use csv or json for such values", label)
+	}
+	return ensureTextValueRepresentable(format, label, value)
+}
+
+// ensureTSVHeaderWritable refuses a column name TSV cannot hold, for the reason
+// ensureDelimitedValueRepresentable refuses such a value.
+func ensureTSVHeaderWritable(header Header) error {
+	for _, name := range header {
+		if strings.ContainsAny(name, "\t\n\r") {
+			return fmt.Errorf("tsv: column name %q contains a tab or newline, which TSV cannot represent; alias the column or use csv or json", name)
 		}
 	}
 	return nil

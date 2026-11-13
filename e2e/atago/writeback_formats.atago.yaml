@@ -30,6 +30,43 @@ scenarios:
               - "1,Z"
               - "2,b"
 
+  - name: a TSV value holding a double quote or a leading space survives repeated saves
+    # TSV has no quoting. Writing it through a CSV writer quoted such a value, the
+    # reader kept the quotes, and every save of the file added another layer.
+    steps:
+      - fixture:
+          file: d.tsv
+          content: "id\tv\n1\ta\n2\tb\n"
+      - run:
+          command: sqly d.tsv
+          stdin: "UPDATE d SET v='\"q\"' WHERE id=1;\nUPDATE d SET v=' lead' WHERE id=2;\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+      - run:
+          command: sqly d.tsv
+          stdin: "UPDATE d SET id=id+10;\n.save --in-place\n"
+      - assert:
+          exit_code: 0
+          file:
+            path: d.tsv
+            equals: "id\tv\n11\t\"q\"\n12\t lead\n"
+
+  - name: a TSV value holding a tab is refused and the source is left as it was
+    steps:
+      - fixture:
+          file: d.tsv
+          content: "id\tv\n1\ta\n"
+      - run:
+          command: sqly d.tsv
+          stdin: "UPDATE d SET v='x'||char(9)||'y';\n.save --in-place\n"
+      - assert:
+          exit_code: 4
+          stderr:
+            contains: "TSV cannot represent"
+          file:
+            path: d.tsv
+            equals: "id\tv\n1\ta\n"
+
   - name: writes an UPDATE back to an LTSV source in place
     steps:
       - fixture:

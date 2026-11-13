@@ -886,21 +886,43 @@ func TestTablePrintEscaping(t *testing.T) {
 		}
 	})
 
-	t.Run("TSV quotes a value containing a tab and newline", func(t *testing.T) {
+	t.Run("TSV writes a double quote and surrounding spaces as they are", func(t *testing.T) {
 		t.Parallel()
-		tbl := NewTable("t", Header{"c"}, []Record{{"a\tb\nc"}})
+		// TSV has no quoting, so sqly's own reader takes every byte between two
+		// tabs as the value. A quote added on the way out came back as part of
+		// the value, and grew with every save.
+		tbl := NewTable("t", Header{"a", "b", "c"}, []Record{{`"q"`, " lead", "a,b"}})
 		var buf bytes.Buffer
 		if err := tbl.Print(&buf, PrintModeTSV); err != nil {
 			t.Fatalf("Print TSV: %v", err)
 		}
-		r := csv.NewReader(bytes.NewReader(buf.Bytes()))
-		r.Comma = '\t'
-		rows, err := r.ReadAll()
-		if err != nil {
-			t.Fatalf("output is not valid TSV: %v", err)
+		if got, want := buf.String(), "a\tb\tc\n\"q\"\t lead\ta,b\n"; got != want {
+			t.Errorf("Print TSV = %q, want %q", got, want)
 		}
-		if len(rows) != 2 || rows[1][0] != "a\tb\nc" {
-			t.Errorf("TSV did not round-trip, got rows=%v", rows)
+	})
+
+	t.Run("TSV refuses a value holding a tab, a newline or a carriage return", func(t *testing.T) {
+		t.Parallel()
+		for _, v := range []string{"a\tb", "a\nb", "a\rb"} {
+			tbl := NewTable("t", Header{"c"}, []Record{{"ok"}, {v}})
+			var buf bytes.Buffer
+			err := tbl.Print(&buf, PrintModeTSV)
+			if err == nil {
+				t.Errorf("Print TSV of %q: want error, got output %q", v, buf.String())
+				continue
+			}
+			if buf.Len() != 0 {
+				t.Errorf("Print TSV of %q failed after writing %q", v, buf.String())
+			}
+		}
+	})
+
+	t.Run("TSV refuses a column name holding a tab", func(t *testing.T) {
+		t.Parallel()
+		tbl := NewTable("t", Header{"a\tb"}, []Record{{"x"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeTSV); err == nil {
+			t.Errorf("want error for a tab in a TSV column name, got output %q", buf.String())
 		}
 	})
 
@@ -914,7 +936,6 @@ func TestTablePrintEscaping(t *testing.T) {
 			comma rune
 		}{
 			{name: "CSV", mode: PrintModeCSV, comma: ','},
-			{name: "TSV", mode: PrintModeTSV, comma: '\t'},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
@@ -934,6 +955,20 @@ func TestTablePrintEscaping(t *testing.T) {
 					t.Errorf("re-read mismatch (-want +got):\n%s\nprinted %q", diff, buf.String())
 				}
 			})
+		}
+	})
+
+	t.Run("TSV writes a one-column row whose only value is empty as an empty line", func(t *testing.T) {
+		t.Parallel()
+		// A one-column TSV reads an empty line as a record holding an empty
+		// value. The CSV spelling, "", is two quote characters to a TSV reader.
+		tbl := NewTable("t", Header{"v"}, []Record{{"alice"}, {""}, {"bob"}})
+		var buf bytes.Buffer
+		if err := tbl.Print(&buf, PrintModeTSV); err != nil {
+			t.Fatalf("Print TSV: %v", err)
+		}
+		if got, want := buf.String(), "v\nalice\n\nbob\n"; got != want {
+			t.Errorf("Print TSV = %q, want %q", got, want)
 		}
 	})
 
