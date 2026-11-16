@@ -293,13 +293,13 @@ func parquetInsertArgs(t *model.Table, rowIdx int, types []string) []any {
 // copyFile copies src to dst. A copy (not rename) is used because the temporary
 // directory and the destination may live on different filesystems.
 func copyFile(src, dst string) (err error) {
-	data, err := os.ReadFile(src) //nolint:gosec // src is a sqly-generated temp path
+	data, err := os.ReadFile(src) // #nosec G304 -- src is a sqly-generated temp path
 	if err != nil {
 		return err
 	}
 	// dst is the user-chosen output path (already filepath.Clean'd by the caller);
 	// writing there is the intended behavior of an export command.
-	if err = os.WriteFile(dst, data, 0o600); err != nil { //nolint:gosec // user-specified output path
+	if err = os.WriteFile(dst, data, 0o600); err != nil { // #nosec G703 -- user-specified output path
 		return err
 	}
 	return nil

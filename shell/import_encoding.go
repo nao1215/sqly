@@ -52,7 +52,7 @@ func (s *Shell) prepareImportLoadPath(path string) (string, func(), error) {
 	}
 
 	stagedPath := filepath.Join(dir, filepath.Base(filesql.RemoveCompressionExtension(path)))
-	file, err := os.Create(stagedPath) //nolint:gosec // stagedPath is under a sqly-created temp dir
+	file, err := os.Create(stagedPath) // #nosec G304 -- stagedPath is under a sqly-created temp dir
 	if err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("create staging file for %s: %w", path, err)

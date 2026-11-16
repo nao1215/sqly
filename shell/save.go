@@ -483,7 +483,7 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 // mode was copied onto the new content, so the protection outlived the data it
 // was protecting.
 func refuseUnwritableSource(path string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY, 0) //nolint:gosec // path is the source the session imported
+	f, err := os.OpenFile(path, os.O_WRONLY, 0) // #nosec G304 -- path is the source the session imported
 	if err == nil {
 		return f.Close()
 	}

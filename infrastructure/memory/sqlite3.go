@@ -165,7 +165,7 @@ func (r *sqlite3Repository) Fingerprint(ctx context.Context, tableName string) (
 		_, _ = h.Write(lenBuf[:])
 	}
 	err = r.inTx(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, "SELECT * FROM "+ref) //nolint:gosec // ref is a table name quoted by resolveTableRef, as List builds it
+		rows, err := tx.QueryContext(ctx, "SELECT * FROM "+ref) // #nosec G202 -- ref is a table name quoted by resolveTableRef, as List builds it
 		if err != nil {
 			return err
 		}

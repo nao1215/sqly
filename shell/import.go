@@ -670,7 +670,7 @@ func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup fu
 	if !isAllowedPseudoFile(abs) {
 		return "", nil, false
 	}
-	data, err := os.ReadFile(path) //nolint:gosec // path is a validated pseudo-file input
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a validated pseudo-file input
 	if err != nil {
 		return "", nil, false
 	}
@@ -682,7 +682,7 @@ func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup fu
 	// The staged path is a freshly created temp dir joined with the sanitized table
 	// name, so it cannot escape the temp dir.
 	stagedPath = filepath.Join(dir, s.usecases.importer.GetTableNameFromFilePath(path)+model.ExtCSV)
-	if err := os.WriteFile(stagedPath, data, 0o600); err != nil { //nolint:gosec // stagedPath is under a sqly-created temp dir with a sanitized name
+	if err := os.WriteFile(stagedPath, data, 0o600); err != nil { // #nosec G703 -- stagedPath is under a sqly-created temp dir with a sanitized name
 		cleanup()
 		return "", nil, false
 	}
