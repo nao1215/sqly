@@ -198,7 +198,7 @@ func corruptBytes(t reporter, kind CorruptKind) []byte {
 func verifyCorrupt(t reporter, path string, kind CorruptKind) {
 	t.Helper()
 
-	data, err := os.ReadFile(path) //nolint:gosec // a path this helper just wrote
+	data, err := os.ReadFile(path) // #nosec G304 -- a path this helper just wrote
 	if err != nil {
 		t.Fatalf("read back the %s fixture: %v", kind, err)
 	}

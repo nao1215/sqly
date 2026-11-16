@@ -14,7 +14,7 @@ import (
 func AssertFileEquals(t *testing.T, path string, got []byte) {
 	t.Helper()
 
-	want, err := os.ReadFile(path) //nolint:gosec // callers pass repository fixture paths
+	want, err := os.ReadFile(path) // #nosec G304 -- callers pass repository fixture paths
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", path, err)
 	}

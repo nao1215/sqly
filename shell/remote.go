@@ -274,8 +274,13 @@ func (s *Shell) downloadRemoteInput(ctx context.Context, rawURL string) (string,
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 
-	localPath := filepath.Join(dir, filepath.Base(filename))
-	f, err := os.Create(localPath) //nolint:gosec // localPath is under a sqly-created temp dir
+	base := filepath.Base(filename)
+	if strings.Contains(base, "..") {
+		cleanup()
+		return "", nil, fmt.Errorf("unsafe remote file name: %s", base)
+	}
+	localPath := filepath.Join(dir, base)
+	f, err := os.Create(localPath) // #nosec G304 -- localPath is under a sqly-created temp dir
 	if err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("create staging file for %s: %w", redactURL(rawURL), err)

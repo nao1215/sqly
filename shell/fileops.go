@@ -64,13 +64,13 @@ func defaultFileOps() fileOps {
 // there. It is the fallback for a rename the platform refuses, and the way a
 // backup is taken.
 func copyFileContents(src, dest string) error {
-	in, err := os.Open(src) //nolint:gosec // src is a file sqly created or was given as the output
+	in, err := os.Open(src) // #nosec G304 -- src is a file sqly created or was given as the output
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // dest is the destination the caller asked to save to
+	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- dest is the destination the caller asked to save to
 	if err != nil {
 		return err
 	}

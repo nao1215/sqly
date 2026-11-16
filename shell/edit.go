@@ -68,7 +68,7 @@ func (s *Shell) runEditor(ctx context.Context, seed string) (string, error) {
 		return "", err
 	}
 
-	edited, err := os.ReadFile(path) //nolint:gosec // the path is the temp file written just above
+	edited, err := os.ReadFile(path) // #nosec G304 -- the path is the temp file written just above
 	if err != nil {
 		return "", fmt.Errorf("failed to read back what the editor saved: %w", err)
 	}
@@ -148,7 +148,7 @@ func writeEditedFile(seed string) (path string, cleanup func(), err error) {
 func runEditorProcess(ctx context.Context, argv []string, path string) error {
 	// The session's context, so an editor is not orphaned by a sqly that is
 	// itself being shut down.
-	cmd := exec.CommandContext(ctx, argv[0], append(argv[1:], path)...) //nolint:gosec // the command is the editor the user chose
+	cmd := exec.CommandContext(ctx, argv[0], append(argv[1:], path)...) // #nosec G204 -- the command is the editor the user chose
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError

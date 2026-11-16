@@ -359,7 +359,7 @@ const msgStatementExecuted = "statement executed successfully\n"
 // the same reason as a --sql-file: a run that does nothing and exits 0 is
 // indistinguishable from one that worked.
 func readScriptFile(path string) (string, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // path is the user-specified --script-file
+	data, err := os.ReadFile(path) // #nosec G304 -- path is the user-specified --script-file
 	if err != nil {
 		return "", &scriptSourceError{Err: fmt.Errorf("failed to read --script-file %q: %w", path, err)}
 	}
@@ -379,7 +379,7 @@ func readSQLFile(path string, d dialect.Dialect) (string, error) {
 	// cannot be read is a problem with the file, like any other input; a file that
 	// was read and holds no statement is a problem with what the user wrote. They
 	// exit with different codes, so they are different types here.
-	data, err := os.ReadFile(path) //nolint:gosec // path is the user-specified --sql-file
+	data, err := os.ReadFile(path) // #nosec G304 -- path is the user-specified --sql-file
 	if err != nil {
 		return "", &scriptSourceError{Err: fmt.Errorf("failed to read --sql-file %q: %w", path, err)}
 	}
