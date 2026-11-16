@@ -667,10 +667,11 @@ func (s *Shell) stagePseudoFileAsCSV(path string) (stagedPath string, cleanup fu
 	if a, err := filepath.Abs(path); err == nil {
 		abs = a
 	}
-	if !isAllowedPseudoFile(abs) {
+	// abs is already cleaned; refusing ".." keeps the read inside the allowlist.
+	if !isAllowedPseudoFile(abs) || strings.Contains(abs, "..") {
 		return "", nil, false
 	}
-	data, err := os.ReadFile(path) // #nosec G304 -- path is a validated pseudo-file input
+	data, err := os.ReadFile(abs) // #nosec G304 -- abs is a validated pseudo-file input
 	if err != nil {
 		return "", nil, false
 	}
