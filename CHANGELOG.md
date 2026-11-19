@@ -4,7 +4,7 @@
 
 ### Changed
 
-* The E2E suite runs on atago v0.26.3 (setup-atago v0.1.5) and the benchmark uses setup-himorime v0.2.0. Mutation testing caps each mutant at 4 GiB of memory, so a mutant that allocates without bound fails as killed instead of taking the runner down, and a second edit in a git diff hunk is no longer skipped.
+* The E2E suite runs on atago v0.26.3 (setup-atago v0.1.5) and the benchmark uses setup-himorime v0.2.1, which comments on pull requests. Mutation testing caps each mutant at 4 GiB of memory, so a mutant that allocates without bound fails as killed instead of taking the runner down, and a second edit in a git diff hunk is no longer skipped.
 
 ## [v1.7.5](https://github.com/nao1215/sqly/compare/v1.7.4...v1.7.5) (2026-11-19)
 
