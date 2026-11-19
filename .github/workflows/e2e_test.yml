@@ -39,9 +39,9 @@ jobs:
           go-version: "stable"
 
       - name: Install atago
-        uses: nao1215/setup-atago@51e9eb92d8363b0b5627e8171a4f3936dc401e82 # v0.1.4
+        uses: nao1215/setup-atago@5dca90fe652651408ccd1c2aee030767484482a9 # v0.1.5
         with:
-          version: v0.26.2
+          version: v0.26.3
 
       - name: Run atago end-to-end tests
         # The hermetic runner builds sqly and runs the suite in a temp-backed
@@ -80,9 +80,9 @@ jobs:
           go-version: "stable"
 
       - name: Install atago
-        uses: nao1215/setup-atago@51e9eb92d8363b0b5627e8171a4f3936dc401e82 # v0.1.4
+        uses: nao1215/setup-atago@5dca90fe652651408ccd1c2aee030767484482a9 # v0.1.5
         with:
-          version: v0.26.2
+          version: v0.26.3
 
       - name: Build sqly
         run: go build -o sqly.exe main.go
