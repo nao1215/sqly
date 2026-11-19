@@ -356,6 +356,21 @@ sqly runs each statement in its own transaction on an in-memory database, so a f
 
 sqly is measured end to end with [himorime](https://github.com/nao1215/himorime). The same queries run by sqly, trdsql, csvq, textql and DuckDB, with the machine and the versions they were measured on, are on the [Benchmark page](https://nao1215.github.io/sqly/benchmark/); what the regression suite measures on every pull request is in [bench/README.md](./bench/README.md).
 
+## Testing
+
+| Technique | Bug class caught here |
+|---|---|
+| Unit and golden tests ([main_test.go](./main_test.go), [testdata/golden](./testdata/golden)) | A flag or an output format that prints something other than it did |
+| End-to-end specs with atago ([e2e/atago](./e2e/atago)) | The built binary behaving differently from the documentation: exit codes, stderr, files written back, the interactive shell over a pty |
+| Snapshot specs ([e2e/atago/snapshot.atago.yaml](./e2e/atago/snapshot.atago.yaml)) | A change in a whole rendered table that a line-by-line assertion would miss |
+| Property-based state machine tests ([shell/state_machine_property_test.go](./shell/state_machine_property_test.go)) | A sequence of edits and saves that leaves a file or the completion schema out of step with the database |
+| Metamorphic tests ([main_property_test.go](./main_property_test.go)) | The same table answering a query differently when it comes as TSV, LTSV or a compressed CSV |
+| Differential tests ([main_property_test.go](./main_property_test.go)) | sqly printing other rows or values than the database it loaded answers with |
+| Fuzzing ([shell/batch_fuzz_test.go](./shell/batch_fuzz_test.go), [infrastructure/sql_property_test.go](./infrastructure/sql_property_test.go)) | A crash or a broken identifier on input sqly did not expect |
+| Benchmarks with himorime ([bench/himorime.yaml](./bench/himorime.yaml)) | A pull request that makes a command measurably slower |
+
+How to run each one is in [how to build and test](./doc/build_and_test.md).
+
 ## Contributing
 
 Thanks for taking the time to contribute; see [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). Contributions are not only about code: a GitHub Star also motivates development.

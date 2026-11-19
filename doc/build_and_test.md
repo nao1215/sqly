@@ -52,6 +52,29 @@ $ make test-e2e
 $ make smoke
 ```
 
+### Generated inputs
+
+The property-based, metamorphic and differential tests draw their inputs with
+[rapid](https://pkg.go.dev/pgregory.net/rapid), a hundred per test in `make test`.
+`main_property_test.go` writes one generated table as CSV, TSV, LTSV and
+gzip-compressed CSV and checks that sqly answers the same query the same way
+from each (metamorphic), and that what sqly prints is what the database filesql
+loads from the file answers through `database/sql` (differential). Draw more, or
+replay a failure from the seed it prints:
+
+```shell
+$ go test . -run '^Test(Metamorphic|Differential)_' -rapid.checks=5000
+$ go test . -run '^TestMetamorphic_' -rapid.seed=<seed>
+```
+
+The fuzz targets (`FuzzQuoteRoundTrip` and the others under `shell/` and
+`infrastructure/`) run their seed corpus in `make test`; the Fuzz workflow
+searches each one every night:
+
+```shell
+$ go test ./shell -run '^$' -fuzz '^FuzzSplitSQLStatements$' -fuzztime 1m
+```
+
 ### Generated code
 
 `make generate` runs `go generate ./...`, which today means one generator: the
