@@ -36,7 +36,11 @@ jobs:
       # that built for one platform, and goreleaser then compiled every
       # release target from scratch. The job keeps its own build cache for the
       # cross builds, saved from main and restored on pull requests. The real
-      # release workflow builds without a cache.
+      # release workflow builds without a cache. The key is the Go version and
+      # go.sum, not the commit: a per-commit key saved a new 900 MB entry on
+      # every push to main and filled the repository's 10 GB cache quota. main
+      # saves only when the exact key is missing, so the entry is refreshed
+      # when go.sum or the Go version changes.
       - name: Set up Go
         id: setup-go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -51,9 +55,8 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          key: ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}-
             ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-
 
       - name: Install go-licenses
@@ -69,7 +72,7 @@ jobs:
         run: sh scripts/smoke_artifacts.sh
 
       - name: Save the cross build cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
