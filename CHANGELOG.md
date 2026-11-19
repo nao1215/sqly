@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v1.7.5](https://github.com/nao1215/sqly/compare/v1.7.4...v1.7.5) (2026-11-19)
+
 ### Changed
 
 * CI scans the repository with gosec and Trivy on every pull request (Trivy covers dependency vulnerabilities, committed secrets and misconfigurations, and also runs daily). Workflow actions are recorded in `.github/workflows/actions.lock`, which CI verifies against the pinned commits.
@@ -18,6 +20,8 @@
 ### Changes
 
 * Tests: property-based state machine tests (pgregory.net/rapid) run random edits and saves, read each saved file back, and check the completion schema against the database after random schema changes.
+
+* Tests: a metamorphic test checks that one table answers a query the same way as CSV, TSV, LTSV and gzip-compressed CSV, a differential test checks that sqly prints what the loaded database answers, and gremlins mutation testing runs on the changed lines of every pull request and on every package weekly. The README has a Testing section listing each technique.
 
 * Building sqly from source now needs Go 1.26.11 or later (was 1.26.10). Go 1.26.11 fixes GO-2026-6859 in `net/http`, which sqly reaches through remote input downloads. Prebuilt binaries are unaffected.
 
