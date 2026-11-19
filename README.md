@@ -367,6 +367,7 @@ sqly is measured end to end with [himorime](https://github.com/nao1215/himorime)
 | Metamorphic tests ([main_property_test.go](./main_property_test.go)) | The same table answering a query differently when it comes as TSV, LTSV or a compressed CSV |
 | Differential tests ([main_property_test.go](./main_property_test.go)) | sqly printing other rows or values than the database it loaded answers with |
 | Fuzzing ([shell/batch_fuzz_test.go](./shell/batch_fuzz_test.go), [infrastructure/sql_property_test.go](./infrastructure/sql_property_test.go)) | A crash or a broken identifier on input sqly did not expect |
+| Mutation testing ([.github/workflows/mutation.yml](./.github/workflows/mutation.yml)) | A test that runs a changed comparison or bound without noticing the change |
 | Benchmarks with himorime ([bench/himorime.yaml](./bench/himorime.yaml)) | A pull request that makes a command measurably slower |
 
 How to run each one is in [how to build and test](./doc/build_and_test.md).

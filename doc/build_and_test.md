@@ -122,3 +122,36 @@ intentionally not given one: its result goes to a file rather than the terminal,
 so there is nothing visually distinct to capture beyond the existing `--sql-file`
 and `--output` demos. Add a tape only when a workflow has a meaningful on-screen
 result.
+
+### Mutation testing
+
+[gremlins](https://github.com/go-gremlins/gremlins) v0.6.0 changes one
+comparison, bound or arithmetic operator at a time and runs the package's tests;
+a mutant no test notices is a line the tests execute without checking it. The
+Mutation workflow mutates the lines a pull request changes, and every package
+once a week in one job per package:
+
+```shell
+$ gremlins unleash --workers 4 --timeout-coefficient 10 --exclude-files / ./shell
+$ git config diff.context 0   # one hunk per edit, so --diff sees every changed line
+$ gremlins unleash --diff origin/main --workers 4 .
+```
+
+`--exclude-files /` keeps a run to the one directory it is given. Run `--diff`
+from the module root, where the paths git prints match the files gremlins mutates.
+
+Efficacy (killed / (killed + lived)) on 2026-11-19, the first full run:
+
+| Package | Killed | Lived | Efficacy |
+|---|---|---|---|
+| `shell` | 894 | 138 | 86.63% |
+| `domain/model` | 171 | 17 | 90.96% |
+| `domain/sqltext` | 78 | 16 | 82.98% |
+| `config` | 79 | 6 | 92.94% |
+| `infrastructure/filesql` | 49 | 8 | 85.96% |
+| `infrastructure/memory` | 54 | 7 | 88.52% |
+| `infrastructure/persistence` | 53 | 4 | 92.98% |
+
+The root package, `di`, `domain/cleanup`, `infrastructure` and `interactor`
+hold fewer than twenty mutants each and are measured by the weekly run. A pull
+request should not lower a package's efficacy below this table.
