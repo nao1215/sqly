@@ -27,16 +27,16 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'k1low/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278'
-        - 'nao1215/setup-atago@5c563dcd9d85e114f8abe8bbdcd058e51de09efb'
+        - 'nao1215/setup-atago@51e9eb92d8363b0b5627e8171a4f3936dc401e82'
     '.github/workflows/e2e_test.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-        - 'nao1215/setup-atago@5c563dcd9d85e114f8abe8bbdcd058e51de09efb'
+        - 'nao1215/setup-atago@51e9eb92d8363b0b5627e8171a4f3936dc401e82'
     '.github/workflows/fuzz.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-    '.github/workflows/git-leaks.yml':
+    '.github/workflows/gitleaks.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e'
     '.github/workflows/golangci-lint.yml':
@@ -207,9 +207,9 @@ dependencies:
         uses:
             - 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3'
             - 'k1low/gh-setup@5fb38d34ea857e5a942b6fe10f1723e55055f6c0'
-    'nao1215/setup-atago@5c563dcd9d85e114f8abe8bbdcd058e51de09efb':
-        ref: 'v0.1.3'
-        commit: 'sha1-5c563dcd9d85e114f8abe8bbdcd058e51de09efb'
+    'nao1215/setup-atago@51e9eb92d8363b0b5627e8171a4f3936dc401e82':
+        ref: 'v0.1.4'
+        commit: 'sha1-51e9eb92d8363b0b5627e8171a4f3936dc401e82'
         owner_id: 22737008
         repo_id: 1286059375
     'nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897':

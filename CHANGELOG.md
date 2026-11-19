@@ -5,6 +5,7 @@
 ### Changed
 
 * CI scans the repository with gosec and Trivy on every pull request (Trivy covers dependency vulnerabilities, committed secrets and misconfigurations, and also runs daily). Workflow actions are recorded in `.github/workflows/actions.lock`, which CI verifies against the pinned commits.
+* Dependencies: modernc.org/sqlite v1.62.0 (with modernc.org/libc v1.80.1) and klauspost/compress v1.20.4. The E2E suite runs on atago v0.26.2 (setup-atago v0.1.4) and the benchmark on himorime v0.6.1. The gitleaks workflow is renamed to `gitleaks.yml` and now also scans pushes to main, and the README badges follow the order shared by the nao1215 repositories.
 
 ### Security
 
