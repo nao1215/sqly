@@ -133,6 +133,7 @@ once a week in one job per package:
 
 ```shell
 $ gremlins unleash --workers 4 --timeout-coefficient 10 --exclude-files / ./shell
+$ git config diff.context 0   # one hunk per edit, so --diff sees every changed line
 $ gremlins unleash --diff origin/main --workers 4 .
 ```
 
