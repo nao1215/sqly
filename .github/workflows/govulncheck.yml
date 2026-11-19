@@ -23,6 +23,12 @@ on:
 permissions:
   contents: read
 
+# Cancel the superseded run of a pull request when it is pushed again; runs
+# on main are grouped by commit so none of them is ever canceled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   govulncheck:
     name: govulncheck (Go ${{ matrix.go }})
@@ -53,7 +59,7 @@ jobs:
       # Pinned so a scanner release cannot change the verdict on its own. The
       # advisory database is intentionally not pinned.
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
 
       # ACCEPTED lists advisories this repository is known to reach and has
       # defended against on its own side, one ID each, with why, which test holds

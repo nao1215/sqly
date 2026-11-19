@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# Cancel the superseded run of a pull request when it is pushed again; runs
+# on main are grouped by commit so none of them is ever canceled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   release-smoke:
     name: release artifact smoke
@@ -25,10 +31,30 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # setup-go's cache is keyed only on go.sum and the Go version, so this
+      # job restored whichever job saved that key first, usually a unit test
+      # that built for one platform, and goreleaser then compiled every
+      # release target from scratch. The job keeps its own build cache for the
+      # cross builds, saved from main and restored on pull requests. The real
+      # release workflow builds without a cache.
       - name: Set up Go
+        id: setup-go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "stable"
+          cache: false
+
+      - name: Restore the cross build cache
+        id: build-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}-
+            ${{ runner.os }}-release-smoke-go${{ steps.setup-go.outputs.go-version }}-
 
       - name: Install go-licenses
         run: go install github.com/google/go-licenses/v2@v2.0.1
@@ -41,3 +67,12 @@ jobs:
 
       - name: Validate artifacts
         run: sh scripts/smoke_artifacts.sh
+
+      - name: Save the cross build cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
