@@ -225,7 +225,7 @@ sqly --allow-remote \
   https://example.com/users.csv
 ```
 
-A command line mixing a local file and a URL imports neither and leaves stdout empty. `.import URL` is refused the same way whether typed, piped in, or read from a `--script-file`; a script is checked whole before its first statement runs. At the interactive prompt the command fails and the session continues unchanged.
+Without the flag, a command line mixing a local file and a URL imports neither and leaves stdout empty. `.import URL` is refused the same way whether typed, piped in, or read from a `--script-file`; a script is checked whole before its first statement runs. At the interactive prompt the command fails and the session continues unchanged.
 
 A session started with `--allow-remote` keeps the capability for later `.import` commands. Giving the flag without a URL is not an error, and the flag supplies no input: a bare `sqly --allow-remote` with empty non-interactive stdin exits `2`, as a bare `sqly` does.
 
@@ -389,6 +389,6 @@ Only JSON shows the types. INTEGER and REAL become JSON numbers, TEXT becomes a 
 
 An empty CSV field is an empty string, as `note` is above. A NULL comes from SQL: an outer join with no match, an explicit `NULL`, an aggregate over no rows. `table` and `csv` print both the same way; JSON prints `""` and `null`.
 
-In `csv` and `tsv`, a one-column result writes an empty value as `""`, because a reader would skip a blank line. Rows with several columns need no marking, since the delimiters show the field count.
+In `csv`, a one-column result writes an empty value as `""`, because a reader would skip a blank line. `tsv` has no quoting and writes an empty line. Rows with several columns need no marking, since the delimiters show the field count.
 
-`tsv`, `ltsv`, `markdown`, `jsonl`, `vertical`, `excel`, and `parquet` are the remaining formats; see the [reference](/reference/#output-formats).
+`tsv`, `ltsv`, `markdown`, `jsonl`, `vertical`, `excel`, and `parquet` are the remaining formats; see the [reference](../reference/#output).

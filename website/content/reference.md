@@ -233,9 +233,9 @@ A format that cannot carry a value refuses the export. Every refusal names the c
 | a result with no rows | csv and tsv write a header; ltsv refuses | `[]` | written | refused |
 | a value longer than 32,767 characters | kept | kept | refused, because a cell holds no more | kept |
 
-JSON quotes `Infinity`, `-Infinity`, and `NaN` the way PostgreSQL's `row_to_json` does. Parquet keeps them as doubles, so an infinity written there re-imports as a REAL.
+JSON quotes `Infinity`, `-Infinity`, and `NaN` the way PostgreSQL's `row_to_json` does. Parquet keeps the infinities as doubles, so one written there re-imports as a REAL, and stores NaN as NULL.
 
-The text formats and Excel refuse a BLOB, because the bytes are usually not text and sqly's own import refuses input that is not UTF-8. `--output-format json` base64-encodes it.
+The text formats and Excel refuse a BLOB, because the bytes are usually not text and sqly's own import refuses input that is not UTF-8. `--output-format json` writes a BLOB as text when its bytes are valid UTF-8 and as base64 otherwise.
 
 ### Where the destination's extension leaves off
 
