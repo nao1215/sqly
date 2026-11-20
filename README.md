@@ -20,9 +20,9 @@
 
 # sqly
 
-sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It loads them into an in-memory SQLite3 database, so joins, CTEs, window functions, and aggregates all work — across formats, in one query. Compressed files (`.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`) are read transparently.
+sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It loads them into an in-memory SQLite3 database, so joins, CTEs, window functions, and aggregates work across formats in one query. Compressed files (`.gz`, `.bz2`, `.xz`, `.zst`, `.z`, `.snappy`, `.s2`, `.lz4`) are read transparently.
 
-Documentation: **https://nao1215.github.io/sqly/**
+Documentation: https://nao1215.github.io/sqly/
 
 ![demo](./doc/img/demo.gif)
 
@@ -44,11 +44,9 @@ go run github.com/nao1215/sqly@latest --sql "SELECT dept, ROUND(AVG(salary)) AS 
 +-------+-----+
 ```
 
-The file is the table: `staff.csv` became `staff`. No schema to declare, no import step.
+The file is the table: `staff.csv` became `staff`, with no schema to declare and no import step.
 
 ## Why sqly?
-
-Pick the tool that fits the job:
 
 | You want | Use |
 |:--|:--|
@@ -59,9 +57,9 @@ Pick the tool that fits the job:
 | Analytics on data larger than memory, or on files in S3 | [DuckDB](https://duckdb.org/) |
 | SQL over files, with an interactive shell, cross-format joins, and write-back | sqly |
 
-sqly's emphasis is the session: an interactive shell with completion and history, files of different formats joined as peers, and the ability to write edits back into the source file.
+sqly is built around the session: an interactive shell with completion and history, files of different formats joined as peers, and edits written back into the source file.
 
-Against DuckDB, which is faster and has the richer SQL, sqly's ground is narrower: `UPDATE` a CSV or Excel file and `.save --in-place` it, read ACH, Fedwire and LTSV, keep a Shift-JIS or EUC-JP file in its encoding when it is saved, and write queries in MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
+DuckDB is faster and has the richer SQL. What sqly adds over it is narrower: `UPDATE` a CSV or Excel file and `.save --in-place` it, read ACH, Fedwire and LTSV, keep a Shift-JIS or EUC-JP file in its encoding when it is saved, and write queries in MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
 
 ## Install
 
@@ -86,13 +84,13 @@ aqua g -i nao1215/sqly
 mise use aqua:nao1215/sqly
 ```
 
-Prebuilt binaries are on the [release page](https://github.com/nao1215/sqly/releases). Runs on Windows, macOS, and Linux; building from source needs Go 1.26.11 or later. Releases ship cosign-signed checksums, an SPDX SBOM, and SLSA provenance — see [Install](https://nao1215.github.io/sqly/install/) for the verification commands.
+Prebuilt binaries are on the [release page](https://github.com/nao1215/sqly/releases). Runs on Windows, macOS, and Linux; building from source needs Go 1.26.11 or later. Releases ship cosign-signed checksums, an SPDX SBOM, and SLSA provenance; see [Install](https://nao1215.github.io/sqly/install/) for the verification commands.
 
 ## Recipes
 
 ### Look at a file you have never seen
 
-`--inspect` prints the tables a file becomes, their columns, and their row counts — as JSON, so `jq` can read it too. It is schema-only: it does not print the data.
+`--inspect` prints the tables a file becomes, their columns, and their row counts as JSON, so `jq` can read it too. It prints no data rows.
 
 ```shell
 sqly --inspect user.csv
@@ -117,7 +115,7 @@ sqly --inspect user.csv
 }
 ```
 
-Add `--inspect-sample N` when you do want rows, and you get at most `N` per table:
+Add `--inspect-sample N` to include at most `N` rows per table:
 
 ```shell
 sqly --inspect --inspect-sample 1 user.csv
@@ -204,7 +202,7 @@ gross             | 936.7
 
 ### Pipe the result into another tool
 
-`jsonl` for `jq`, `tsv` for `cut`/`awk`/`sort`. Both write nothing but the rows, so a pipeline stays a pipeline.
+Use `jsonl` for `jq` and `tsv` for `cut`/`awk`/`sort`. Both write only the rows, with no header or status line.
 
 ```shell
 sqly --output-format jsonl --sql "SELECT user_name, identifier FROM user" user.csv | jq -r '.user_name'
@@ -224,18 +222,17 @@ sqly --allow-remote --sql "SELECT * FROM user" https://example.com/user.csv
 cat user.csv | sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
 ```
 
-A URL needs `--allow-remote`: without it sqly refuses the input and makes no HTTP
-request at all, so a wrapper that never passes the flag has turned sqly's
-downloading off. It is a network capability, not a sandbox or an SSRF defense —
-it decides whether a request happens, not where it may go. The download limits,
-and what the capability does not protect against, are on the
-[formats page](https://nao1215.github.io/sqly/formats/#remote-inputs).
+A URL needs `--allow-remote`. Without it sqly refuses the input and makes no HTTP
+request, so a wrapper that never passes the flag has turned downloading off. The
+flag is not a sandbox or an SSRF defense: it decides whether a request happens,
+not where it may go. The download limits, and what the flag does not protect against,
+are on the [formats page](https://nao1215.github.io/sqly/formats/#remote-inputs).
 
 ![stdin demo](./doc/img/stdin-demo.gif)
 
 ### Rank, window, aggregate
 
-SQLite is the engine, so its whole query language is available — window functions, CTEs, `json_*`, and the rest.
+SQLite is the engine, so its whole query language is available, including window functions, CTEs, and `json_*`.
 
 ```shell
 sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM actor" actor.csv
@@ -259,7 +256,7 @@ sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM a
 sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" user.csv
 ```
 
-`--dialect` is translation, not emulation: constructs with no SQLite equivalent are rejected by name, and SQL that SQLite accepts is passed through, where the answer can differ from the source dialect. The [dialects page](https://nao1215.github.io/sqly/dialects/) lists both, with the divergences sqly knows about.
+`--dialect` translates syntax and does not emulate the other database: constructs with no SQLite equivalent are rejected by name, and SQL that SQLite accepts is passed through, where the answer can differ from the source dialect. The [dialects page](https://nao1215.github.io/sqly/dialects/) lists both, with the divergences sqly knows about.
 
 ### Run SQL or a sqly script from a file
 
@@ -269,8 +266,8 @@ sqly --script-file examples/update.sqly examples/data/sales.csv
 ```
 
 `--sql-file` takes SQL only; a dot-command in it is a usage error. `--script-file`
-takes what the shell takes — SQL and dot-commands alike — so it is the one to use
-when the script has a side effect such as `.save`. `--script-file` rejects
+takes what the shell takes, SQL and dot-commands, so use it when the script has a
+side effect such as `.save`. `--script-file` rejects
 `--output`; use `.dump` inside the script instead.
 
 ![sql-file demo](./doc/img/sql-file-demo.gif)
@@ -282,7 +279,7 @@ in full and the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
 
 ## The shell
 
-`sqly` with no `--sql` opens a REPL: tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for everything SQL has no syntax for. Completion reads the statement being typed — a table position offers tables, a condition offers the columns of the tables in the `FROM`, and `alias.` offers that table's columns.
+`sqly` with no `--sql` opens a REPL: tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for everything SQL has no syntax for. Completion reads the statement being typed: a table position offers tables, a condition offers the columns of the tables in the `FROM`, and `alias.` offers that table's columns.
 
 ![shell demo](./doc/img/shell-demo.gif)
 
@@ -296,7 +293,7 @@ sqly:~/data(json)$ .save ./out
 ```
 
 `.edit` reopens the last statement in `$VISUAL` or `$EDITOR` and runs what you
-save, so a long query is edited rather than retyped. SQL is colored as you type
+save. SQL is colored as you type
 it; `.theme` switches between the
 [themes](https://nao1215.github.io/sqly/themes/) and remembers the choice.
 
@@ -305,7 +302,7 @@ it; `.theme` switches between the
 ## Write changes back
 
 A session is in-memory only. `.save` writes the tables the session changed back
-out — in the shell, or in a script piped to sqly:
+out, from the shell or from a script piped to sqly:
 
 ![save demo](./doc/img/save-demo.gif)
 
@@ -320,8 +317,7 @@ new file and is created `0600`. A table the session did not change is not
 rewritten, and a save covering several files is all-or-nothing. See the [shell
 page](https://nao1215.github.io/sqly/shell/) for what it can and cannot write.
 
-Writing a *query result* somewhere is a different job, and that one is a flag:
-`--output`.
+To write a query result to a file, use the `--output` flag instead.
 
 ## Formats
 
@@ -340,13 +336,13 @@ All except ACH and Fedwire also read the compression extensions above. Text inpu
 
 ## Flags
 
-sqly has no subcommands: `sqly --help`, not `sqly help`. The flags fall into five groups — input, query, output, inspection, and the two meta ones — and `sqly --help` lists them that way. Everything else, including writing changes back, is a dot-command inside the shell, run at the prompt, from a piped script, or from a `--script-file`.
+sqly has no subcommands: `sqly --help`, not `sqly help`. `sqly --help` lists the flags in five groups: input, query, output, inspection, and the two meta ones. Everything else, including writing changes back, is a dot-command inside the shell, run at the prompt, from a piped script, or from a `--script-file`.
 
 The [reference](https://nao1215.github.io/sqly/reference/) lists every flag and what it applies to, the multi-result rules, the table name rules, and the exit codes.
 
 ## Limitations
 
-sqly runs each statement in its own transaction on an in-memory database, so a few SQLite statements are rejected with a clear error rather than failing confusingly:
+sqly runs each statement in its own transaction on an in-memory database, so it rejects these SQLite statements with an error:
 
 - Explicit transaction control: `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`
 - `VACUUM` / `VACUUM INTO`, and `ATTACH` / `DETACH DATABASE`
@@ -374,7 +370,7 @@ How to run each one is in [how to build and test](./doc/build_and_test.md).
 
 ## Contributing
 
-Thanks for taking the time to contribute; see [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). Contributions are not only about code: a GitHub Star also motivates development.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). A GitHub Star also motivates development.
 
 When adding features or fixing bugs, please write unit tests. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`); the commands they show are separately asserted against the real binary by the atago specs in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
 
@@ -382,9 +378,9 @@ Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/
 
 ## Libraries and tools used
 
-- [filesql](https://github.com/nao1215/filesql) — the `database/sql` driver that loads and writes back every supported file format, and the dialect translation behind `--dialect`
-- [prompt](https://github.com/nao1215/prompt) — the line editor behind the interactive shell
-- [atago](https://github.com/nao1215/atago) — the end-to-end test runner: it drives the real `sqly` binary, not a mock, from the plain-YAML specs in `e2e/atago/`. `make test-e2e` runs that suite locally, and CI runs it on Linux, macOS, and Windows after installing atago with [setup-atago](https://github.com/nao1215/setup-atago)
+- [filesql](https://github.com/nao1215/filesql): the `database/sql` driver that loads and writes back every supported file format, and the dialect translation behind `--dialect`
+- [prompt](https://github.com/nao1215/prompt): the line editor behind the interactive shell
+- [atago](https://github.com/nao1215/atago): the end-to-end test runner, which drives the real `sqly` binary from the plain-YAML specs in `e2e/atago/`. `make test-e2e` runs that suite locally, and CI runs it on Linux, macOS, and Windows after installing atago with [setup-atago](https://github.com/nao1215/setup-atago)
 
 ## Acknowledgments
 

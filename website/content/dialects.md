@@ -62,7 +62,7 @@ Your query goes through three possible fates, and it is worth knowing which one 
 |:--|:--|
 | Translated | Rewritten, or backed by a helper function, so the answer matches the source dialect |
 | Rejected | A construct with no SQLite equivalent fails with an error naming it |
-| Passed through | SQLite runs it as written — and the answer may differ from the source dialect, with no error |
+| Passed through | SQLite runs it as written, and the answer may differ from the source dialect, with no error |
 
 The third row is the one to watch. Everything below is asserted by [`e2e/atago/dialect_limits.atago.yaml`](https://github.com/nao1215/sqly/blob/main/e2e/atago/dialect_limits.atago.yaml), which runs in CI.
 
@@ -117,8 +117,8 @@ sits between `OR` and `AND`, so `XOR`'s operands are whole `AND`-expressions
 rather than the primaries a rewrite can pick out: translating it would
 reassociate `a AND b XOR c` into something MySQL never meant. The error says
 what to write instead, `(a AND NOT b) OR (NOT a AND b)`. A set-returning
-function and an array are rejected for the same kind of reason — SQLite has no
-form for either — and the rejection is what keeps the message about the query
+function and an array are rejected for the same kind of reason (SQLite has no
+form for either), and the rejection is what keeps the message about the query
 you wrote rather than about a column or a table SQLite invented from it.
 
 A column that is neither grouped nor aggregated is rejected the same way. MySQL
@@ -169,7 +169,7 @@ Each of these fails that test for its own reason:
 
 SQLite names an unaliased result column after the text of the expression that
 produced it, so rewriting the expression would rename the column. sqly puts the
-original text back, and that is what the result is labeled with — a JSON key, a
+original text back, and that is what the result is labeled with: a JSON key, a
 CSV header, a column in a table:
 
 ```shell
@@ -212,4 +212,4 @@ Behavior sqly cannot currently reproduce is kept as executable specs under [`e2e
 sh scripts/run_known_bugs.sh
 ```
 
-If you hit a divergence that is not listed here, it is worth [an issue](https://github.com/nao1215/sqly/issues) — several of the translations above started that way.
+If you hit a divergence that is not listed here, please open [an issue](https://github.com/nao1215/sqly/issues); several of the translations above started that way.
