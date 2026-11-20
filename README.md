@@ -202,7 +202,7 @@ gross             | 936.7
 
 ### Pipe the result into another tool
 
-Use `jsonl` for `jq` and `tsv` for `cut`/`awk`/`sort`. Both write only the rows, with no header or status line.
+Use `jsonl` for `jq` and `tsv` for `cut`/`awk`/`sort`. `jsonl` writes only the rows; `tsv` writes a header line first, which the next tool reads as data unless it skips it.
 
 ```shell
 sqly --output-format jsonl --sql "SELECT user_name, identifier FROM user" user.csv | jq -r '.user_name'

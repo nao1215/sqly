@@ -44,7 +44,7 @@ sqly --output-format jsonl --sql "SELECT path FROM logs WHERE status >= 500" log
 sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
 ```
 
-Filter with `WHERE`, `GROUP BY`, and `JOIN` in SQL, and `jq` only sees the rows you kept. For nested JSON, `json_extract` reaches into the document, so sqly can replace `jq` there. A failed query exits non-zero, so `set -e` works. [Pipe data out](/cookbook/#pipe-data-out) has the details.
+Filter with `WHERE`, `GROUP BY`, and `JOIN` in SQL, and `jq` only sees the rows you kept. For nested JSON, `json_extract` reaches into the document, so sqly can replace `jq` there. A failed query exits non-zero, but in a pipeline the shell reports the last command's status, so use `pipefail` if `set -e` should stop on it. [Pipe data out](/cookbook/#pipe-data-out) has the details.
 
 ## Why sqly?
 
