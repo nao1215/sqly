@@ -54,7 +54,7 @@ sqly --output-format markdown --sql "SELECT * FROM user" user.csv
 sqly --output-format json --output user.json --sql "SELECT * FROM user" user.csv
 ```
 
-Full list on the [reference page](/reference/#output-formats).
+Full list on the [reference page](/reference/#output).
 
 ### A row too wide to read across
 
