@@ -57,9 +57,7 @@ The file is the table: `staff.csv` became `staff`, with no schema to declare and
 | Analytics on data larger than memory, or on files in S3 | [DuckDB](https://duckdb.org/) |
 | SQL over files, with an interactive shell, cross-format joins, and write-back | sqly |
 
-sqly is built around the session: an interactive shell with completion and history, files of different formats joined as peers, and edits written back into the source file.
-
-DuckDB is faster and has the richer SQL. What sqly adds over it is narrower: `UPDATE` a CSV or Excel file and `.save --in-place` it, read ACH, Fedwire and LTSV, keep a Shift-JIS or EUC-JP file in its encoding when it is saved, and write queries in MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
+DuckDB is faster and has the richer SQL. sqly adds `.save --in-place` for an edited CSV or Excel file, ACH, Fedwire and LTSV input, Shift-JIS and EUC-JP files saved in their own encoding, and MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
 
 ## Install
 
@@ -71,20 +69,7 @@ go install github.com/nao1215/sqly@latest
 brew install nao1215/tap/sqly
 ```
 
-Arch Linux users can install the [AUR package](https://aur.archlinux.org/packages/sqly-bin):
-
-```shell
-yay -S sqly-bin
-```
-
-sqly is in the [aqua](https://aquaproj.github.io/) standard registry, and [mise](https://mise.jdx.dev/) installs it through the same registry:
-
-```shell
-aqua g -i nao1215/sqly
-mise use aqua:nao1215/sqly
-```
-
-Prebuilt binaries are on the [release page](https://github.com/nao1215/sqly/releases). Runs on Windows, macOS, and Linux; building from source needs Go 1.26.11 or later. Releases ship cosign-signed checksums, an SPDX SBOM, and SLSA provenance; see [Install](https://nao1215.github.io/sqly/install/) for the verification commands.
+The [install page](https://nao1215.github.io/sqly/install/) covers the [AUR package](https://aur.archlinux.org/packages/sqly-bin), aqua, mise, the prebuilt binaries on the [release page](https://github.com/nao1215/sqly/releases), and verifying a release. sqly runs on Windows, macOS, and Linux; building from source needs Go 1.26.11 or later.
 
 ## Recipes
 
@@ -115,13 +100,7 @@ sqly --inspect user.csv
 }
 ```
 
-Add `--inspect-sample N` to include at most `N` rows per table:
-
-```shell
-sqly --inspect --inspect-sample 1 user.csv
-```
-
-`schema_version` says how to read the document and `sqly_version` says which binary wrote it. The contract, the compatibility policy, and the [JSON Schema](https://nao1215.github.io/sqly/schema/inspect-v1.schema.json) are on the [reference page](https://nao1215.github.io/sqly/reference/#inspect-json-schema).
+`--inspect-sample N` adds at most `N` rows per table. The [JSON Schema](https://nao1215.github.io/sqly/schema/inspect-v1.schema.json) and the compatibility policy are on the [reference page](https://nao1215.github.io/sqly/reference/#inspect-json-schema).
 
 ![inspect demo](./doc/img/inspect-demo.gif)
 
@@ -182,24 +161,6 @@ sqly --sql "SELECT json_extract(data, '$.name') AS name,
 
 ![json demo](./doc/img/json-demo.gif)
 
-### Read a row too wide for the terminal
-
-`--output-format vertical` prints one column per line, in a block per record.
-
-```shell
-sqly --output-format vertical --sql "SELECT * FROM actor LIMIT 1" actor.csv
-```
-
-```text
--[ RECORD 1 ]-----------------------------------------------
-actor             | Harrison Ford
-total_gross       | 4871.7
-number_of_movies  | 41
-average_per_movie | 118.8
-best_movie        | Star Wars: The Force Awakens
-gross             | 936.7
-```
-
 ### Pipe the result into another tool
 
 Use `jsonl` for `jq` and `tsv` for `cut`/`awk`/`sort`. `jsonl` writes only the rows; `tsv` writes a header line first, which the next tool reads as data unless it skips it.
@@ -222,11 +183,9 @@ sqly --allow-remote --sql "SELECT * FROM user" https://example.com/user.csv
 cat user.csv | sqly --stdin-format csv --sql "SELECT COUNT(*) FROM stdin"
 ```
 
-A URL needs `--allow-remote`. Without it sqly refuses the input and makes no HTTP
-request, so a wrapper that never passes the flag has turned downloading off. The
-flag is not a sandbox or an SSRF defense: it decides whether a request happens,
-not where it may go. The download limits, and what the flag does not protect against,
-are on the [formats page](https://nao1215.github.io/sqly/formats/#remote-inputs).
+A URL needs `--allow-remote`; without it sqly makes no HTTP request. The flag is
+not a sandbox or an SSRF defense: it decides whether a request happens, not where
+it may go. See the [formats page](https://nao1215.github.io/sqly/formats/#remote-inputs).
 
 ![stdin demo](./doc/img/stdin-demo.gif)
 
@@ -256,7 +215,7 @@ sqly --sql "SELECT actor, RANK() OVER (ORDER BY total_gross DESC) AS rank FROM a
 sqly --dialect postgresql --sql "SELECT user_name, identifier::text FROM \"user\" WHERE user_name ILIKE 'b%'" user.csv
 ```
 
-`--dialect` translates syntax and does not emulate the other database: constructs with no SQLite equivalent are rejected by name, and SQL that SQLite accepts is passed through, where the answer can differ from the source dialect. The [dialects page](https://nao1215.github.io/sqly/dialects/) lists both, with the divergences sqly knows about.
+`--dialect` translates syntax to SQLite. Constructs with no SQLite equivalent are rejected by name; the [dialects page](https://nao1215.github.io/sqly/dialects/) lists them and the known divergences.
 
 ### Run SQL or a sqly script from a file
 
@@ -272,14 +231,12 @@ side effect such as `.save`. `--script-file` rejects
 
 ![sql-file demo](./doc/img/sql-file-demo.gif)
 
-Both are runnable in [`examples/`](./examples/), along with `join.sql`, which
-answers one query over a CSV and a JSONL at once. The
-[reference](https://nao1215.github.io/sqly/reference/) compares the script flags
-in full and the [cookbook](https://nao1215.github.io/sqly/cookbook/) has more.
+Both are runnable in [`examples/`](./examples/), and the
+[cookbook](https://nao1215.github.io/sqly/cookbook/) has more recipes.
 
 ## The shell
 
-`sqly` with no `--sql` opens a REPL: tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for everything SQL has no syntax for. Completion reads the statement being typed: a table position offers tables, a condition offers the columns of the tables in the `FROM`, and `alias.` offers that table's columns.
+`sqly` with no `--sql` opens a REPL with context-aware tab completion for keywords, tables, columns, and paths, history across sessions, and dot-commands for what SQL has no syntax for.
 
 ![shell demo](./doc/img/shell-demo.gif)
 
@@ -292,12 +249,9 @@ sqly:~/data(table)$ .mode json
 sqly:~/data(json)$ .save ./out
 ```
 
-`.edit` reopens the last statement in `$VISUAL` or `$EDITOR` and runs what you
-save. SQL is colored as you type
-it; `.theme` switches between the
-[themes](https://nao1215.github.io/sqly/themes/) and remembers the choice.
-
-`.help` lists every command; the [shell page](https://nao1215.github.io/sqly/shell/) documents them.
+`.edit` opens the last statement in `$EDITOR`, `.theme` picks a
+[theme](https://nao1215.github.io/sqly/themes/), and `.help` lists every command; the
+[shell page](https://nao1215.github.io/sqly/shell/) documents them.
 
 ## Write changes back
 
@@ -310,14 +264,10 @@ out, from the shell or from a script piped to sqly:
 printf "UPDATE user SET first_name = 'Rachelle' WHERE identifier = 1;\n.save ./out\n" | sqly user.csv
 ```
 
-`.save DIR` writes copies into `DIR` and leaves the sources alone; `.save
---in-place` overwrites them. Format and compression are preserved either way,
-and an in-place save keeps the source file's permissions; a copy into `DIR` is a
-new file and is created `0600`. A table the session did not change is not
-rewritten, and a save covering several files is all-or-nothing. See the [shell
-page](https://nao1215.github.io/sqly/shell/) for what it can and cannot write.
-
-To write a query result to a file, use the `--output` flag instead.
+`.save DIR` writes copies into `DIR`; `.save --in-place` overwrites the sources.
+Format and compression are preserved, and a save covering several files is
+all-or-nothing. See the [shell page](https://nao1215.github.io/sqly/shell/) for
+details. To write a query result to a file, use `--output` instead.
 
 ## Formats
 
@@ -336,9 +286,7 @@ All except ACH and Fedwire also read the compression extensions above. Text inpu
 
 ## Flags
 
-sqly has no subcommands: `sqly --help`, not `sqly help`. `sqly --help` lists the flags in five groups: input, query, output, inspection, and the two meta ones. Everything else, including writing changes back, is a dot-command inside the shell, run at the prompt, from a piped script, or from a `--script-file`.
-
-The [reference](https://nao1215.github.io/sqly/reference/) lists every flag and what it applies to, the multi-result rules, the table name rules, and the exit codes.
+sqly has no subcommands. `sqly --help` lists the flags by group, and the [reference](https://nao1215.github.io/sqly/reference/) lists every flag, the table name rules, and the exit codes.
 
 ## Limitations
 
@@ -350,7 +298,7 @@ sqly runs each statement in its own transaction on an in-memory database, so it 
 
 ## Benchmark
 
-sqly is measured end to end with [himorime](https://github.com/nao1215/himorime). The same queries run by sqly, trdsql, csvq, textql and DuckDB, with the machine and the versions they were measured on, are on the [Benchmark page](https://nao1215.github.io/sqly/benchmark/); what the regression suite measures on every pull request is in [bench/README.md](./bench/README.md).
+The [Benchmark page](https://nao1215.github.io/sqly/benchmark/) compares sqly, trdsql, csvq, textql and DuckDB, measured with [himorime](https://github.com/nao1215/himorime). The per-PR regression suite is in [bench/README.md](./bench/README.md).
 
 ## Testing
 
@@ -372,9 +320,7 @@ How to run each one is in [how to build and test](./doc/build_and_test.md).
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) and [how to build and test](./doc/build_and_test.md). A GitHub Star also motivates development.
 
-When adding features or fixing bugs, please write unit tests. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`); the commands they show are separately asserted against the real binary by the atago specs in `e2e/atago/` (`make test-e2e`). The documentation site is built from `website/` with `make website`.
-
-Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/issues).
+When adding features or fixing bugs, please write unit tests. The README demos are recorded with [charmbracelet/vhs](https://github.com/charmbracelet/vhs) from `doc/vhs/*.tape` (`make demo`). Bugs and feature requests go to [GitHub Issues](https://github.com/nao1215/sqly/issues).
 
 ## Libraries and tools used
 
