@@ -226,7 +226,7 @@ A format that cannot carry a value refuses the export. Every refusal names the c
 
 | Value | csv, tsv, ltsv | json, jsonl | excel | parquet |
 |:--|:--|:--|:--|:--|
-| a BLOB, or any bytes that are not valid UTF-8 | refused | base64 string | refused | the bytes are kept, typed as text on re-import |
+| a BLOB, or any bytes that are not valid UTF-8 | refused | a string: the bytes when they are valid UTF-8, base64 otherwise | refused | the bytes are kept, typed as text on re-import |
 | Infinity, -Infinity | `Infinity`, `-Infinity` | the strings `"Infinity"`, `"-Infinity"` | the same words, as text | kept as a double |
 | NaN | `NaN` | the string `"NaN"` | `NaN` | NULL, which is what SQLite has for it |
 | a tab, a newline or a carriage return inside a value | csv keeps it, quoted; tsv and ltsv refuse | kept | kept | kept |
