@@ -4,22 +4,15 @@ description: Every sqly flag, the table name rules, and the exit codes.
 weight: 60
 ---
 
-sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version` — `sqly help` and `sqly version` are read as input paths.
-
-The groups below are the ones `sqly --help` prints.
+sqly is flag-driven and has no subcommands. Use `sqly --help` and `sqly --version`; `sqly help` and `sqly version` are read as input paths. The groups below are the ones `sqly --help` prints.
 
 ## Input
 
-Positional arguments are the inputs: files, directories, and `http(s)` URLs. Each
-becomes a table named after the file. They are loaded as one operation — see
-[Multiple inputs](#multiple-inputs). A workbook becomes one table per sheet it
-shows, and an ACH or Fedwire file becomes its related set of tables; you pick the
-one you want by name in SQL, the same way you pick among a directory's files.
+Positional arguments are the inputs: files, directories, and `http(s)` URLs. Each becomes a table named after the file, and all of them load as one operation (see [Multiple inputs](#multiple-inputs)). A workbook becomes one table per shown sheet, and an ACH or Fedwire file becomes its set of related tables; you pick one by name in SQL.
 
 A URL is read only with [`--allow-remote`](#remote-inputs).
 
-`--` ends the flags. Everything after it is an input, which is the only way to
-name a file whose own name begins with `-`:
+`--` ends the flags. Everything after it is an input, which is the only way to name a file whose name begins with `-`:
 
 ```shell
 sqly --inspect -- -.csv
@@ -43,8 +36,7 @@ unknown shorthand flag: '.' in -.csv
 
 ### Remote inputs
 
-**Remote input is default-deny.** Without `--allow-remote`, an `http` or `https`
-URL is refused as a usage error — exit `2` — before any request is made:
+Remote input is default-deny. Without `--allow-remote`, an `http` or `https` URL is refused as a usage error, exit `2`, before any request is made:
 
 ```shell
 # refused, and no HTTP request happens
@@ -56,28 +48,15 @@ sqly --allow-remote \
   https://example.com/users.csv
 ```
 
-The capability covers every way a URL can reach sqly: positional arguments to
-any run mode (a query, `--sql-file`, `--script-file`, `--inspect`, the
-interactive shell), and `.import URL` typed at the prompt, piped in, or read from
-a `--script-file`. A session started with `--allow-remote` keeps the capability
-for the `.import` commands typed later.
+The rule covers positional arguments in every run mode (a query, `--sql-file`, `--script-file`, `--inspect`, the interactive shell) and `.import URL` typed at the prompt, piped in, or read from a `--script-file`. A session started with `--allow-remote` keeps the capability for later `.import` commands.
 
-Granting the capability without using it is fine: `sqly --allow-remote data.csv`
-runs, and so does `sqly --allow-remote` with no input at all. A wrapper does not
-have to know in advance whether the command line holds a URL.
+Giving the flag without a URL is fine: `sqly --allow-remote data.csv` runs, and so does `sqly --allow-remote` with no input. A wrapper can always pass it.
 
-`--allow-remote` is an explicit network capability, not a sandbox or an SSRF
-defense. It decides *whether* sqly makes a request, not *where* the request may
-go, and it does not lift any of the limits on
-[the download itself](../formats/#remote-inputs). See
-[what it does not protect against](../formats/#what-allow-remote-is-not).
+`--allow-remote` is an explicit network capability, not a sandbox or an SSRF defense. It decides whether sqly makes a request, not where the request goes, and it does not lift any of the limits on [the download itself](../formats/#remote-inputs). See [what it does not protect against](../formats/#what-allow-remote-is-not).
 
 ### What each option applies to
 
-`--encoding`, `--row-mismatch`, and `--include-hidden-sheets` apply to **every**
-input of the run that they can affect — file arguments, the files inside a directory argument, a URL, and
-the `--stdin-format` dataset alike. There is one encoding and one policy per run;
-sqly has no per-file syntax for them.
+`--encoding`, `--row-mismatch`, and `--include-hidden-sheets` apply to every input of the run they can affect: file arguments, the files inside a directory, a URL, and the `--stdin-format` dataset. There is one encoding and one policy per run, with no per-file syntax.
 
 | Flag | Applies to | Does not apply to |
 |:--|:--|:--|
@@ -85,80 +64,35 @@ sqly has no per-file syntax for them.
 | `--row-mismatch` | csv, tsv | every other format: none of them has a header row a later row can disagree with |
 | `--include-hidden-sheets` | xlsx | every other format: none of them has sheets |
 
-"Does not apply to" means the option has no effect on that input, not that
-typing it is tolerated. A run whose inputs are *all* of the formats an option
-cannot affect is rejected — `--row-mismatch skip data.json` fails rather than
-exiting 0 having done nothing. A run with a CSV and a JSON accepts it and applies
-it to the CSV.
+A Unicode BOM wins over `--encoding`.
 
-A Unicode BOM wins over `--encoding`: a file that declares its own encoding is
-read the way it declares itself.
+Giving an option that cannot apply to any input is an error. `--encoding shift-jis` with no text input, or `--row-mismatch skip data.json`, stops the run before anything is imported. A directory or a URL counts as applicable, because its contents are not known until it is read. In a mixed run, such as one CSV and one Parquet, the option applies where it can and the run proceeds. `--stdin-table` is rejected without `--stdin-format` for the same reason.
 
-**Typing an option that cannot apply is an error.** If you pass `--encoding
-shift-jis` and no input is a text format, or `--row-mismatch skip` and no input is
-CSV or TSV, the run stops before importing anything rather than accepting a flag
-and ignoring it. A directory or a URL counts as applicable, because what it holds
-is not known until it is read. In a mixed run — one CSV and one Parquet — the
-option applies to the inputs it can and the run proceeds.
-
-`--stdin-table` is rejected without `--stdin-format`, for the same reason.
-
-`--include-hidden-sheets` is the one exception to the "reject a flag that cannot
-apply" rule, and only in one case: a shell started with no inputs at all accepts
-it, because the flag is the session's sheet policy and a later `.import` can name
-a workbook. A batch run whose inputs are all known and none is a workbook is
-still rejected.
+The one exception is `--include-hidden-sheets` in a shell started with no inputs, because a later `.import` can name a workbook. A batch run whose known inputs include no workbook still rejects it.
 
 ### Multiple inputs
 
-Several inputs are one import, not a sequence of them.
-Either every file loads or none of them does: if any input is unreadable or malformed, the tables from the
-inputs already read are rolled back, the inputs after it are never opened, and
-the run exits `3` having changed nothing. There is no half-loaded state to clear
-before trying again.
+Several inputs are one import: every file loads or none of them does. If any input is unreadable or malformed, the tables already read are rolled back, the remaining inputs are never opened, and the run exits `3` having changed nothing. This holds for file arguments, a directory argument, `.import` inside a session, and a mix of files and URLs. A download that succeeded before the failure is rolled back too, and its temporary file is removed.
 
-This applies to file arguments, a directory argument, `.import` inside a session,
-and a mix of local files and URLs alike. A download that succeeded before a later
-failure is rolled back with the rest, and its temporary file is removed.
+Two inputs that would create the same table are refused before anything is loaded, naming both sources and the table. Files in different directories are different inputs even with the same base name; a file named twice, or named alongside the directory holding it, is read once.
 
-Two inputs that would create the same table are
-refused before anything is loaded, naming both sources and the table they share. Picking one would leave the
-other's rows missing with nothing said about it. Files in different directories
-are different inputs even when they share a base name; a file named twice, or
-named alongside the directory holding it, is one input and is read once.
-
-Explicit arguments are processed in the order given. The files inside a directory
-argument are processed in a fixed order that does not vary by platform, so which
-input a failure names is the same on every run and every machine.
+Explicit arguments are processed in the order given, and the files of a directory in a fixed order that is the same on every platform, so a failure names the same input on every run.
 
 ### Excel sheets
 
-sqly imports only the sheets a workbook shows. A hidden sheet usually holds the
-spreadsheet's own working-out — intermediate calculations, lookup tables, an old
-draft — and turning that into a queryable table surprises the reader of a file
-they did not build.
-
-An import that leaves sheets behind says so on stderr, as a count:
+sqly imports only the sheets a workbook shows, since hidden sheets usually hold working-out such as lookup tables or old drafts. An import that skips sheets prints a count on stderr:
 
 ```text
 Skipped 2 hidden sheets in book.xlsx; start sqly with --include-hidden-sheets to import them.
 ```
 
-It is a count and not a list. The names of hidden sheets are the part of a
-workbook its author chose not to present, so an ordinary query does not print
-them; [`--inspect`](#inspect) names them, because a report of what a file holds
-is exactly what it was asked for.
+The notice does not name the sheets; [`--inspect`](#inspection) does.
 
-`--include-hidden-sheets` imports them too, and it is a session setting: a shell
-started with it keeps that policy for every later `.import`.
+`--include-hidden-sheets` imports them too. It is a session setting, so a shell started with it applies it to every later `.import`.
 
-Excel separates *hidden*, which a reader can undo from the sheet tabs, from *very
-hidden*, which only the VBA editor can. sqly does not tell the two apart — the
-library it reads workbooks with reports one flag covering both — so neither kind
-is imported by default and both are imported with the flag.
+Excel has *hidden* sheets, which a reader can unhide from the sheet tabs, and *very hidden* ones, which only the VBA editor can. The library sqly reads workbooks with reports one flag for both, so neither kind is imported by default and both are imported with the flag.
 
-There is no way to select individual sheets on the command line. Import the
-workbook and pick the table you want in SQL.
+There is no way to select individual sheets on the command line. Import the workbook and pick the table in SQL.
 
 ## Query
 
@@ -169,16 +103,11 @@ workbook and pick the table you want in SQL.
 | `--script-file FILE` | run a sqly script from a file: SQL and dot-commands, then exit |
 | `--dialect NAME` | write the query in `sqlite` (default), `mysql`, `postgresql`, or `googlesql` and have it translated |
 
-`--sql`, `--sql-file`, and `--script-file` each name the work to run, so any two
-of them together is rejected. Without one, sqly opens the interactive shell on a
-terminal and reads a script from stdin when it is piped. `--stdin-format` takes
-stdin for the data, so it needs one of the three, or `--inspect`, to say what to
-run.
+`--sql`, `--sql-file`, and `--script-file` each name the work to run, so any two together are rejected. Without one, sqly opens the interactive shell on a terminal and reads a script from stdin when it is piped. `--stdin-format` uses stdin for data, so it needs one of the three, or `--inspect`.
 
 ### SQL file or script file
 
-A `--sql-file` holds SQL. A `--script-file` holds what the shell reads: SQL
-statements and dot-commands alike, exactly the text a pipe would carry.
+A `--sql-file` holds SQL. A `--script-file` holds what the shell reads, SQL statements and dot-commands, the same text a pipe would carry.
 
 | | `--sql-file` | `--script-file` | piped stdin |
 |:--|:--|:--|:--|
@@ -190,13 +119,7 @@ statements and dot-commands alike, exactly the text a pipe would carry.
 | Several result sets | `table`, `vertical`, `markdown` only | same | same |
 | On a failing statement | stops there, non-zero | stops there, non-zero | stops there, non-zero |
 
-The two flags are separate rather than one flag with a relaxed rule because they
-make different promises. A `.sql` file is a thing other tools read too, and one
-that silently ran `.save` would be a shell script wearing a SQL extension. The
-flag that permits side effects says `script` in its name.
-
-Everything else is the same, deliberately: a script that works piped in works
-from a file unchanged, which is what makes it worth keeping in version control.
+The flags are separate because other tools read `.sql` files too, and one that ran `.save` would have side effects nobody expects from SQL. A script that works piped in works unchanged from a file, so it can live in version control.
 
 ```shell
 sqly --script-file monthly.sqly sales.csv
@@ -208,23 +131,18 @@ UPDATE sales SET region = 'APAC' WHERE region = 'ASIA';
 .save --in-place
 ```
 
-An empty `--script-file` is rejected rather than exiting 0 having done nothing. A
-script that is only dot-commands is fine — it has no SQL statement in it and does
-not need one.
+An empty `--script-file` is rejected. A script holding only dot-commands is fine.
 
 ### What a `--sql-file` may contain
 
-A `--sql-file` holds SQL. A dot-command in one is rejected by name and line
-before any statement runs:
+A dot-command in a `--sql-file` is rejected by name and line before any statement runs:
 
 ```text
 $ sqly --sql-file save.sql user.csv
 save.sql runs SQL only, but line 2 is the helper command ".save"; run it with --script-file, or pipe it to sqly
 ```
 
-The flag says SQL, and a `.sql` file that runs `.save` is a shell script wearing
-a SQL extension. A script that mixes both is what stdin is for, and it is the
-same text either way:
+To mix both, use `--script-file` or pipe the same text in:
 
 ```shell
 printf "UPDATE user SET name = 'x' WHERE id = 1;\n.save --in-place\n" | sqly user.csv
@@ -232,10 +150,7 @@ printf "UPDATE user SET name = 'x' WHERE id = 1;\n.save --in-place\n" | sqly use
 
 ### What sqly does with standard input
 
-Standard input is a script, a dataset, or unused, and which one it is never
-depends on what it contains — only on the flags and on what stdin is attached to.
-sqly never reads stdin to find out, so a pipe with a slow writer or a FIFO with
-no writer at all cannot hang it.
+Whether stdin is a script, a dataset, or unused depends only on the flags and on what stdin is attached to, never on its contents. sqly does not read stdin to find out, so a slow pipe or a FIFO with no writer cannot hang it.
 
 | Flags | stdin is | sqly does |
 |:--|:--|:--|
@@ -245,15 +160,21 @@ no writer at all cannot hang it.
 | `--sql` / `--sql-file` / `--script-file` / `--inspect` | a terminal, `/dev/null`, or an empty file | nothing; stdin is unused |
 | `--sql` / `--sql-file` / `--script-file` / `--inspect` | a pipe or a non-empty file | nothing, and says so on stderr |
 
-The last row is the one worth knowing. `cat data.csv \| sqly --sql "..." other.csv`
-looks like it feeds `data.csv` in, and it does not — the answer comes from
-`other.csv` alone and looks perfectly correct. sqly warns rather than failing:
-telling an empty pipe from a full one means reading it, and reading it is what
-hangs on a FIFO nobody is writing to. The exit code is unchanged, so a wrapper
-that hands every child an empty pipe keeps working.
+The last row catches `cat data.csv | sqly --sql "..." other.csv`, which looks like it feeds `data.csv` in but answers from `other.csv` alone:
 
-Naming standard input as an input file works and is not warned about, because
-nothing is being dropped:
+```text
+$ cat user.csv | sqly --sql "SELECT COUNT(*) AS n FROM user" user.csv
+warning: standard input was not read; --sql works from the statement on the command line. To query it, add --stdin-format FORMAT.
++---+
+| n |
++---+
+| 3 |
++---+
+```
+
+It is a warning, not a failure, because telling an empty pipe from a full one would mean reading it, which hangs on a FIFO nobody writes to. The exit code is unchanged, so a wrapper that hands every child an empty pipe keeps working.
+
+Naming standard input as an input file works without a warning:
 
 ```shell
 cat data.csv | sqly --sql "SELECT COUNT(*) FROM stdin" /dev/stdin
@@ -261,13 +182,9 @@ cat data.csv | sqly --sql "SELECT COUNT(*) FROM stdin" /dev/stdin
 
 ### How many results a run may produce
 
-`--sql` runs exactly one statement. Two would mean discarding a result, so it is
-rejected — the split is quote-, comment-, and trigger-aware, so a semicolon inside
-`'a;b'` or a `-- comment;` does not count as a second statement.
+`--sql` runs exactly one statement, and a second one is rejected. The split understands quotes, comments, and triggers, so a semicolon inside `'a;b'` or a `-- comment;` does not count.
 
-`--sql-file`, `--script-file`, and a piped script run every statement. How many of them may return
-rows depends on the output format, because only some formats can say where one
-result ends and the next begins:
+`--sql-file`, `--script-file`, and a piped script run every statement. How many may return rows depends on whether the format can mark where one result ends:
 
 | Format | Several results |
 |:--|:--|
@@ -277,13 +194,9 @@ result ends and the next begins:
 | `jsonl` | rejected: the format has no way to mark a result boundary |
 | `excel`, `parquet` | rejected: they need `--output`, which writes one file |
 
-A rejected run writes nothing to stdout and exits non-zero; it never prints the
-first result and then stops. A script that returns no rows at all (only DDL and
-DML) is fine in every format.
+A rejected run writes nothing to stdout and exits non-zero; it never prints the first result and then stops. A script returning no rows (only DDL and DML) is fine in every format.
 
-`--output` writes one file, so it needs exactly one result whatever the format. A
-script that produces none, or more than one, is rejected and no file is written —
-rather than a file holding whichever result happened to be last.
+`--output` writes one file, so it needs exactly one result in any format. A script producing none, or more than one, is rejected and no file is written.
 
 ## Output
 
@@ -305,15 +218,11 @@ rather than a file holding whichever result happened to be last.
 | `excel` | Excel workbook; needs `--output` or `.dump` |
 | `parquet` | Parquet; needs `--output` or `.dump` |
 
-`excel` and `parquet` are binary files with no on-screen form, so a `--sql` or
-`--sql-file` run that selects one without `--output` is rejected rather than
-printing something else.
+`excel` and `parquet` are binary with no on-screen form, so a `--sql` or `--sql-file` run that selects one without `--output` is rejected.
 
 ### What a format cannot hold
 
-A format that cannot carry a value refuses the export rather than writing
-something that will not read back. Every refusal names the column and exits `4`,
-and nothing is written.
+A format that cannot carry a value refuses the export. Every refusal names the column, exits `4`, and writes nothing.
 
 | Value | csv, tsv, ltsv | json, jsonl | excel | parquet |
 |:--|:--|:--|:--|:--|
@@ -324,21 +233,13 @@ and nothing is written.
 | a result with no rows | csv and tsv write a header; ltsv refuses | `[]` | written | refused |
 | a value longer than 32,767 characters | kept | kept | refused, because a cell holds no more | kept |
 
-The three words are how the text formats spell the floats that have no decimal
-form; JSON quotes the same words, which is what PostgreSQL's `row_to_json`
-writes, so a consumer that already handles one database's JSON handles sqly's.
-Parquet is the only format with a number type wide enough for them, and it keeps
-them as doubles: an infinity written there re-imports as a REAL.
+JSON quotes `Infinity`, `-Infinity`, and `NaN` the way PostgreSQL's `row_to_json` does. Parquet keeps them as doubles, so an infinity written there re-imports as a REAL.
 
-A BLOB has one place to go. `--output-format json` base64-encodes it; the text
-formats and Excel refuse it, because the bytes are usually not text at all and a
-file holding them cannot be read back — sqly's own import refuses input that is
-not UTF-8.
+The text formats and Excel refuse a BLOB, because the bytes are usually not text and sqly's own import refuses input that is not UTF-8. `--output-format json` base64-encodes it.
 
 ### Where the destination's extension leaves off
 
-`--output` and the extension of the path it names decide the format together,
-and the file that appears is not always the path that was typed:
+`--output` and the extension of its path decide the format together, and the file written is not always the path typed:
 
 | Destination | Written to | Format |
 |:--|:--|:--|
@@ -347,17 +248,11 @@ and the file that appears is not always the path that was typed:
 | `--output rep --output-format json` | `rep.json` | json |
 | `--output w.weird --output-format json` | `w.weird` | json |
 
-The three rules behind the table:
+- A known format extension picks the format. Contradicting it with `--output-format` is a usage error, exit `2`, decided before anything is read.
+- An unknown extension is kept as typed, and the format is whatever `--output-format` says (`csv` by default).
+- No extension gets the format's own appended.
 
-- A known format extension picks the format. Contradicting it with
-  `--output-format` is a usage error, exit `2`, decided before anything is read.
-- An unknown extension is left exactly as it was typed, and the format is
-  whatever `--output-format` says (`csv` by default).
-- No extension at all gets the format's own appended.
-
-So `--output report` writes `report.csv` and reading `report` afterwards finds
-nothing. The path that was actually written is always on stderr, and reading it
-is more reliable than reproducing these rules:
+The path actually written is always on stderr:
 
 ```text
 Output sql result to report.csv (output mode=csv)
@@ -367,58 +262,30 @@ Output sql result to report.csv (output mode=csv)
 
 ### Where a statement's status line goes
 
-A statement that returns no rows produces a count rather than a result, and
-where that count is printed depends on the output format:
+A statement that returns no rows prints a count instead of a result:
 
 | `--output-format` | `affected is N row(s)` |
 |:--|:--|
 | `table`, `vertical`, `markdown` | stdout |
 | `csv`, `tsv`, `ltsv`, `json`, `jsonl` | stderr |
 
-A format a person reads carries the count with everything else they are
-watching. A format a program parses keeps stdout to data alone, so a status line
-there would have to be skipped by every consumer; it goes to stderr instead.
-
-The session settings — `.mode`, `.dialect`, `.row-mismatch` — answer on stderr
-in every format, for the same reason: a setting is not data.
+Formats a program parses keep stdout for data only. The session settings `.mode`, `.dialect`, and `.row-mismatch` answer on stderr in every format.
 
 ### What `--output` guarantees
 
-The result is written to a temporary file beside the destination and moved into
-place only once it is complete. A query that fails, a result count that is wrong,
-a format that cannot represent a value, or a failed write all leave an existing
-destination exactly as it was — never truncated, half-written, or removed.
+The result goes to a temporary file beside the destination and is moved into place only when complete. A failed query, a wrong result count, an unrepresentable value, or a failed write leaves an existing destination exactly as it was.
 
-The checks that can run before the import do: a destination that is a directory,
-ends in a path separator, or whose parent directory does not exist is rejected
-before any input is read, as is an `--output-format` that contradicts the
-destination's extension.
+A destination that is a directory, ends in a path separator, or has no parent directory is rejected before any input is read, as is an `--output-format` that contradicts the extension.
 
-A destination that resolves to one of the input files is rejected too —
-overwriting a source is `.save --in-place`'s job, not a side effect of
-`--output`. Symlinks are resolved before that comparison, so an alias cannot get
-around it. This one is not a pre-import check: which files became which tables is
-only known once they have been imported, so the inputs are read before the
-destination is refused. It exits `4` either way.
+A destination that resolves to one of the input files is rejected too, symlinks included; overwriting a source is `.save --in-place`'s job. This check needs the imported tables, so it runs after the inputs are read. It exits `4` either way.
 
-An existing destination is **overwritten**. `--output` is how you name the file you
-want; it does not ask. The file's permissions are preserved when it already exists,
-and a new file is created with the usual `0600`.
+An existing destination is overwritten without asking. Its permissions are kept, and a new file is created with `0600`.
 
-A destination the filesystem will not open for writing is refused instead, at
-exit `4`, naming the file and its mode. A write stages a file beside the
-destination and renames over it, which needs only a writable directory, so
-without this check a file marked read-only was replaced and its mode copied onto
-the new content. `--output`, `.dump`, and `.save --in-place` all refuse it, and a
-`.save` covering several files refuses before any of them is touched.
+A destination the filesystem will not open for writing is refused at exit `4`, naming the file and its mode. Without this check, a read-only file would be replaced by the rename and its mode copied onto the new content. `--output`, `.dump`, and `.save --in-place` all refuse it, and a `.save` covering several files refuses before touching any of them.
 
-A `--output` destination that is a symlink is written *through*: the file it names
-receives the result and the link stays a link. A rename would replace the link
-itself, leaving a regular file where the link was and the real file still holding
-the old rows.
+A `--output` destination that is a symlink is written through: the target receives the result and the link stays a link.
 
-`.save --in-place` follows a symlinked source the same way, but only when asked.
-By default it refuses and names both the link and what it resolves to:
+`.save --in-place` follows a symlinked source only when asked. By default it refuses and names both the link and its target:
 
 ```shell
 sqly link.csv <<'EOF'
@@ -429,22 +296,14 @@ EOF
 #   - link: link.csv is a symlink to /srv/shared/real.csv; an in-place save would overwrite that file, which you did not name. Add --follow-symlinks to do it anyway, or save to a directory with .save DIR
 ```
 
-The reason is not that following the link is wrong — it is the only correct way
-to write through one. It is that an in-place save overwrites a path the user
-never typed, which can sit outside the directory they are working in and can be
-shared with something that did not expect sqly to rewrite it.
-
-`.save --in-place --follow-symlinks` does it, and prints the resolved path to
-stderr so the destination is visible:
+An in-place save through a link overwrites a path the user never typed, which can sit outside the working directory and be shared with other programs. `.save --in-place --follow-symlinks` does it and prints the resolved path:
 
 ```text
 following the symlink link.csv to /srv/shared/real.csv
 Saved link to link.csv
 ```
 
-The option applies to `--in-place` only. `.save DIR` writes elsewhere and never
-touches a source, so it is accepted with a symlinked source and rejects
-`--follow-symlinks` as meaningless there.
+The option applies to `--in-place` only. `.save DIR` never touches a source, so it accepts a symlinked source and rejects `--follow-symlinks`.
 
 ## Inspection
 
@@ -453,9 +312,7 @@ touches a source, so it is accepted with a symlinked source and rejects
 | `--inspect` | print schema, row counts, and source metadata as JSON, then exit |
 | `--inspect-sample N` | sample rows per table in `--inspect` (default `0`, which is schema only) |
 
-**`--inspect` is schema-only by default.** It describes what a file holds and
-does not print what is in it. Row data arrives only when `--inspect-sample N`
-asks for it, and then at most `N` rows per table:
+`--inspect` is schema-only by default. Row data appears only when `--inspect-sample N` asks for it, at most `N` rows per table:
 
 ```shell
 # schema, row counts, sources — and no row data
@@ -465,49 +322,31 @@ sqly --inspect data.csv
 sqly --inspect --inspect-sample 1 data.csv
 ```
 
-This is the default because `--inspect` is the command something reaches for
-when it has been handed a file nobody has read yet — an agent, a wrapper, a CI
-job. "Tell me what this is" must not answer with the contents.
+An agent, a wrapper, or a CI job handed an unread file can describe it without printing its contents.
 
-`--inspect` prints a report instead of running a query, so it is rejected together
-with `--sql`, `--sql-file`, `--output`, `--output-format`, and `--dialect`: each
-of those asks for a different action, a different shape, or a translation of SQL
-that `--inspect` never runs, and honoring one silently would mean ignoring the
-other. A flag left at its default is not rejected, so `sqly --inspect data.csv`
-is unaffected.
-`--inspect-sample` without `--inspect` is rejected too, as is a negative count;
-both exit `2` before anything is read.
+`--inspect` is rejected together with `--sql`, `--sql-file`, `--output`, `--output-format`, and `--dialect`, since it runs no query. A flag left at its default is not rejected. `--inspect-sample` without `--inspect`, or with a negative count, exits `2` before anything is read.
 
-The report is one JSON document on stdout and nothing else, so it can be piped
-straight into `jq` or a program. Import progress and warnings go to stderr, and a
-clean run keeps stderr empty. A run that fails writes nothing to stdout at all —
-there is no partial document to parse.
+The report is one JSON document on stdout, ready for `jq`. Progress and warnings go to stderr, and a clean run leaves stderr empty. A failed run writes nothing to stdout.
 
-The same binary, given the same inputs and the same options, produces the same
-bytes:
+The same binary with the same inputs and options produces the same bytes:
 
-- top-level fields are in a fixed order: `schema_version`, `sqly_version`,
-  `tables`, then `excel_sheets` when there is one.
+- top-level fields are in a fixed order: `schema_version`, `sqly_version`, `tables`, then `excel_sheets` when there is one.
 - `tables` is sorted by table name, and is always an array.
-- `columns` is in definition order — the file's column order.
-- `sample_rows` is the *first* rows of the table, in the order they were read
-  from the file, capped at `--inspect-sample`. It is always an array: with no
-  sample requested it is `[]`, never absent and never `null`.
+- `columns` is in definition order, the file's column order.
+- `sample_rows` is the first rows of the table in file order, capped at `--inspect-sample`. It is always an array: `[]` with no sample requested, never absent or `null`.
 
-Across sqly versions the bytes do change, because `sqly_version` changes. The
-shape is what `schema_version` promises, not the bytes.
+`sqly_version` changes between releases, so the bytes do too; `schema_version` promises the shape.
 
-Each table carries its name, its source (a path, a URL, or `stdin` for a piped
-dataset), its row count, its columns, and its sample.
+Each table carries its name, its source (a path, a URL, or `stdin` for a piped dataset), its row count, its columns, and its sample.
 
 ### Inspect JSON schema
 
-Every report opens with two fields that answer different questions:
+Every report opens with two fields:
 
 | Field | Type | Says |
 |:--|:--|:--|
 | `schema_version` | JSON number | how to read this document. It is `1`. |
-| `sqly_version` | JSON string | which binary wrote it — the same string `sqly --version` prints. Never empty. |
+| `sqly_version` | JSON string | which binary wrote it; the same string `sqly --version` prints. Never empty. |
 
 ```json
 {
@@ -517,23 +356,13 @@ Every report opens with two fields that answer different questions:
 }
 ```
 
-Branch on `schema_version`; report `sqly_version`. They are not
-interchangeable: two releases can write the same `schema_version` and different
-`sqly_version` values, which is exactly the case where the shape is stable and
-the bytes are not.
+Branch on `schema_version` and report `sqly_version`. Two releases can write the same `schema_version` with different `sqly_version` values.
 
-The formal contract is a JSON Schema (Draft 2020-12), published at
-[`/sqly/schema/inspect-v1.schema.json`](../schema/inspect-v1.schema.json). It is
-the single canonical copy — there is no second copy in the repository or in this
-page to drift from it — and sqly's own tests validate real `--inspect` output
-against it.
+The formal contract is a JSON Schema (Draft 2020-12) published at [`/sqly/schema/inspect-v1.schema.json`](../schema/inspect-v1.schema.json). It is the only copy, and sqly's tests validate real `--inspect` output against it.
 
 #### Compatibility policy for schema version 1
 
-**A v1 consumer must ignore fields it does not know.** That is what makes the
-list below possible: everything in the first group can be added without moving
-`schema_version`, and a consumer that fails on an unrecognized key would break
-on a change this policy calls compatible.
+A v1 consumer must ignore fields it does not know, so that the additions below do not break it.
 
 These changes keep `schema_version` at `1`:
 
@@ -554,10 +383,7 @@ These changes raise `schema_version`:
 - restructuring an array or an object
 - making `sample_rows` optional again
 
-A run whose inputs include an Excel workbook also gets an `excel_sheets` array,
-listing every sheet each workbook holds and which of them became a table. It is
-the only place a hidden sheet is named: a workbook contributes fewer tables than
-it has sheets, and nothing in `tables` says what is missing.
+A run whose inputs include an Excel workbook also gets an `excel_sheets` array listing every sheet of each workbook and which became a table. It is the only place a hidden sheet is named.
 
 ```json
 {
@@ -582,108 +408,73 @@ it has sheets, and nothing in `tables` says what is missing.
 }
 ```
 
-`visible` is what the workbook says; `imported` is what this run did, so
-`--include-hidden-sheets` turns `imported` true for a sheet whose `visible` stays
-false. `table` is absent for a sheet that was not imported, because there is no
-table to name. The array is absent entirely for a run with no workbook among its
-inputs, so a consumer reading only `tables` sees what it always saw.
+`visible` is what the workbook says and `imported` is what this run did, so `--include-hidden-sheets` makes `imported` true while `visible` stays false. `table` is absent for a sheet that was not imported. The whole array is absent when no workbook is among the inputs.
 
-`source` is the same string here as in the `tables` entries that workbook
-produced — an absolute file path, or the URL that was downloaded — whatever the
-workbook was called on the command line. `sqly --inspect book.xlsx`,
-`sqly --inspect ./book.xlsx`, and `sqly --inspect "$PWD/book.xlsx"` all report the
-same path, so the two arrays can be joined on it. Sources are sorted by that
-value and each workbook's sheets stay in the order the workbook stores them, so
-two runs over the same inputs still produce the same bytes.
+`source` is the same string as in the `tables` entries from that workbook: an absolute path or the downloaded URL. `sqly --inspect book.xlsx`, `sqly --inspect ./book.xlsx`, and `sqly --inspect "$PWD/book.xlsx"` all report the same path, so the two arrays can be joined on it. Sources are sorted by that value, and each workbook's sheets keep the workbook's order.
 
-Values use the same JSON encoding `--output-format json` uses:
+Values use the same JSON encoding as `--output-format json`:
 
 | Value | In the JSON |
 |:--|:--|
-| INTEGER, REAL | a JSON number — a 64-bit integer is emitted in full, and a consumer that parses JSON numbers as doubles will lose digits past 2^53 |
+| INTEGER, REAL | a JSON number; a 64-bit integer is emitted in full, and a consumer that parses JSON numbers as doubles will lose digits past 2^53 |
 | TEXT | a JSON string; `"123"` stays a string |
 | NULL | `null`, which is what distinguishes it from `""` |
 | BLOB | a JSON string: the bytes when they are valid UTF-8, base64 otherwise (see below) |
 | Infinity, -Infinity, NaN | the JSON strings `"Infinity"`, `"-Infinity"`, `"NaN"`, because JSON has no way to write them |
 | Bytes that are not valid UTF-8 in a TEXT column | the invalid bytes become U+FFFD. A text input carrying them is refused on import, so such a value reaches a TEXT column through a binary container (Parquet, Excel) or a SQL expression |
 
-The distinction JSON keeps is number / string / null, and that is the whole of
-it. Three of the rows above land on "a JSON string", and a reader of the output
-cannot tell them apart:
+JSON distinguishes number, string, and null only. These three all come out as a JSON string and cannot be told apart:
 
 - a TEXT value that happens to read `"YWJj"`,
 - a BLOB holding the three bytes `abc`, which is valid UTF-8 and is written `"abc"`,
 - a BLOB holding bytes that are not valid UTF-8, which is written base64 and
   carries no marker saying so.
 
-So **`--inspect` and `--output-format json` do not preserve the BLOB type**, and
-a program that has to distinguish a blob from text must get the type from
-elsewhere — `typeof(col)` in the query is the direct way:
+So `--inspect` and `--output-format json` do not preserve the BLOB type. A program that must tell a blob from text can ask with `typeof(col)`:
 
 ```shell
 sqly --output-format json --sql "SELECT typeof(payload) AS kind, payload FROM t" t.parquet
 ```
 
-Base64 for the invalid-UTF-8 case is not a type tag; it is what keeps the bytes
-recoverable at all. Written as a string, every invalid byte would become U+FFFD
-and the value could not be decoded back.
+Base64 keeps invalid bytes recoverable; written as a string, each would become U+FFFD.
 
 ## Write back
 
-Write-back is a shell command, not a flag. `.save` writes the tables a session
-changed back out to files — at the interactive prompt, or in a script piped to
-sqly.
+Write-back is the shell command `.save`, used at the interactive prompt or in a script piped to sqly. It writes the tables a session changed back out to files.
 
 | Command | Does |
 |:--|:--|
 | `.save DIR` | write every table the session changed into `DIR`, in its source format; the sources are untouched |
 | `.save --in-place` | overwrite the source file of every table the session changed |
 
-It is a command rather than a flag on purpose. Writing over the files you are
-reading is the one thing sqly does that cannot be undone, and it belongs at the
-end of a session, after the statements that changed something — where the same
-words describe it interactively and in a script:
+Overwriting the files you read cannot be undone, so it is a command placed after the statements that changed something, and it reads the same interactively and in a script:
 
 ```shell
 printf "UPDATE user SET name = 'x' WHERE id = 1;\n.save --in-place\n" | sqly user.csv
 ```
 
-Writing a *query result* somewhere is `--output`, a different job with different
-rules: it takes one result, in any format sqly can write.
+Writing a query result somewhere is `--output`, which takes one result in any format sqly can write.
 
 ### What "changed" means
 
-It is measured, not assumed. sqly fingerprints each table's contents at import and
-compares before writing, so a table the session did not modify is not rewritten
-even when a sibling table was, and a session that changed nothing writes no file
-at all and says so on stderr. A net-zero edit — a value changed and changed back —
-counts as unchanged.
+sqly fingerprints each table at import and compares before writing. A table the session did not modify is not rewritten even when a sibling was, and a session that changed nothing writes no file and says so on stderr. A value changed and changed back counts as unchanged.
 
-The two destinations measure against different things, because they write
-different files:
+The two destinations compare against different things:
 
 | Command | Writes a table when |
 |:--|:--|
-| `.save --in-place` | the table differs from what its **source file** holds |
-| `.save DIR` | the table differs from what it held **at import** |
+| `.save --in-place` | the table differs from what its source file holds |
+| `.save DIR` | the table differs from what it held at import |
 
-So the two can be used in either order, and each does its own job:
+So they can be used in either order:
 
 ```shell
 printf "UPDATE u SET name='zoe';\n.save out\n.save --in-place\n" | sqly u.csv
 ```
 
-The export is written, and the source is written too — the export changed nothing
-about the source, so the source still needs writing. Reversing the two commands
-works the same way: the in-place save brings the source up to date, and the
-export is still written, because it is a different file that does not hold the
-table yet. A second `.save --in-place` in either session reports "nothing to
-save", which by then is true.
+Both the export and the source are written, and the same happens with the commands reversed. A second `.save --in-place` in either session reports "nothing to save".
 
-Only `INSERT`/`UPDATE`/`DELETE` on an imported table are persisted. A script whose
-statements include a schema change or a maintenance statement is rejected before
-its first statement runs, because `.save` could not represent the result; a
-`CREATE TEMP TABLE` is fine, since scratch space was never going to be written.
+Only `INSERT`/`UPDATE`/`DELETE` on an imported table are persisted. A script containing a schema change or a maintenance statement is rejected before its first statement runs, because `.save` could not represent the result. `CREATE TEMP TABLE` is fine.
 
 ### What can and cannot be written
 
@@ -698,31 +489,17 @@ its first statement runs, because `.save` could not represent the result; a
 | a `--stdin-format` dataset | rejected: a piped dataset has no source file |
 | an `http(s)` input | rejected: a remote file is not sqly's to modify |
 
-`.save DIR` refuses a destination that already exists, and refuses a directory
-that would resolve back to a source file. Destinations are compared case-folded,
-so two tables that would land on the same file on macOS or Windows are rejected on
-every platform rather than only where it bites.
+`.save DIR` refuses a destination that already exists, and a directory that resolves back to a source file. Destinations are compared case-folded, so two tables that would land on the same file on macOS or Windows are rejected on every platform.
 
 ### How a multi-file save fails
 
-A save covering several files is all-or-nothing. Every table is written to a
-scratch file beside its destination first; only when all of them have been written
-are they moved into place. A failure while encoding the second file therefore
-leaves the first one untouched, and neither the scratch files nor the backups
-survive the run.
+A save covering several files writes every table to a scratch file beside its destination first, and moves them into place only when all are written. A failure while encoding the second file leaves the first untouched, and no scratch files or backups survive the run.
 
-If a move fails after an earlier one landed — which a rename can still do, and
-which Windows forces into a copy when another handle holds the destination open —
-the destinations already replaced are restored from backups taken before the first
-move. If a restore fails too, both errors are reported: the one that stopped the
-save, and the file left holding content from a save that did not finish.
+If a move fails after an earlier one landed (a rename can still fail, and Windows turns it into a copy when another handle holds the destination open), the files already replaced are restored from backups taken before the first move. If a restore also fails, both errors are reported, along with the file left holding partial content.
 
-An in-place save keeps the source file's permissions. It writes through a
-temporary file, so without this a world-readable CSV would come back owner-only.
+An in-place save keeps the source file's permissions.
 
-**The limit:** replacing several files cannot be atomic on any OS sqly runs on.
-What is guaranteed is that nothing is replaced until everything has been written,
-and that a failure after that point is reported with the exact files affected.
+Replacing several files cannot be atomic on any OS sqly runs on. sqly guarantees that nothing is replaced until everything is written, and that a later failure names the exact files affected.
 
 ## General
 
@@ -731,13 +508,16 @@ and that a failure after that point is reported with the exact files affected.
 | `-h`, `--help` | print the grouped option list and exit |
 | `-v`, `--version` | print the sqly version and exit |
 
-sqly has no subcommands, so these are flags and not words: `sqly help` and
-`sqly version` are read as input paths. Typing either is recognized as the
-mistake it is and answered with a hint rather than a "path does not exist".
+`sqly help` and `sqly version` are read as input paths, and sqly answers them with a hint:
+
+```text
+$ sqly help
+sqly is flag-driven and has no subcommands; use "--help". Run "sqly --help" for usage. Helper commands like .tables and .import run inside the shell or batch stdin.
+```
 
 ## Table name rules
 
-Spaces, hyphens, and dots become `_`. Punctuation and symbols are removed. A name starting with a digit gets a `sheet_` prefix, and a name left with nothing becomes `sheet`. Letters and digits in any script are kept, so a file named in Japanese, Chinese, Korean, Cyrillic, or accented Latin keeps its name — quote it in queries. Excel sheet names follow the same rules.
+Spaces, hyphens, and dots become `_`. Punctuation and symbols are removed. A name starting with a digit gets a `sheet_` prefix, and a name left with nothing becomes `sheet`. Letters and digits in any script are kept, so a file named in Japanese, Chinese, Korean, Cyrillic, or accented Latin keeps its name; quote it in queries. Excel sheet names follow the same rules.
 
 | Input | Table |
 |:--|:--|
@@ -749,71 +529,41 @@ Spaces, hyphens, and dots become `_`. Punctuation and symbols are removed. A nam
 
 A name that collides with a SQLite keyword is imported and a warning names it; quote it in queries.
 
-A query against a table this session does not have says so on stderr and lists
-the ones it does, so a name that was derived rather than typed can be checked
-without a second run:
+A query against a missing table lists the tables the session has on stderr:
 
 ```text
 hint: this session has no table "staf". Did you mean "staff"? Available tables: ident, staff. sqly derives table names from file names: https://nao1215.github.io/sqly/reference/#table-name-rules
 ```
 
-Twenty names are listed; past that the list is cut and the total follows it as
-`... (N total)`. A missing column gets a line of the same kind, pointing at
-`.describe TABLE` and `sqly --inspect FILE`. A mistyped helper command is
-answered the same way. The name offered is the nearest by edit distance, where a
-letter dropped, doubled, mistyped, or two swapped each count as one edit: a name
-of five characters or more may be two edits away, a shorter one only one, and a
-name of two characters or fewer is never guessed at, being one edit from too much
-to mean anything. Nothing is offered when no name is that close. All are hints,
-not errors: stdout stays empty and the run still exits `1`.
+Up to twenty names are listed, then `... (N total)`. A missing column gets a similar line pointing at `.describe TABLE` and `sqly --inspect FILE`, and so does a mistyped helper command. The suggestion is the nearest name by edit distance, where a dropped, doubled, mistyped, or swapped letter is one edit: up to two edits for names of five or more characters, one for shorter names, and no guess for names of two characters or fewer. These are hints: stdout stays empty and the run exits `1`.
 
 ## Exit codes
 
-A failing run says which stage failed, so a script can tell "the command line was
-wrong" from "that file would not load" without reading stderr.
+The exit code says which stage failed, so a script can tell a bad command line from a file that would not load without reading stderr.
 
 | Code | Meaning | What to change |
 |:--|:--|:--|
-| `0` | success | — |
+| `0` | success | |
 | `1` | a statement ran and failed: a SQL error, a missing table, a constraint | the SQL |
 | `2` | the command line or the script was not accepted: an unknown flag, two flags that contradict, a dot-command in a `--sql-file`, a dot-command missing an argument or given one it does not take, a script whose several result sets the chosen format cannot separate | the invocation |
 | `3` | an input could not be read: a missing path, an unsupported format, a download that failed or hit a limit, a malformed row under `--row-mismatch error` | the input |
-| `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback, a value or column set the chosen output format cannot represent — including when the destination is stdout | the destination |
-| `130` | SIGINT stopped the run — someone pressed Ctrl-C | — |
-| `143` | SIGTERM stopped the run — something else asked it to stop | — |
+| `4` | a destination could not be written: a missing parent directory, a source with no writable form, a collision, a failed commit or rollback, a value or column set the chosen output format cannot represent, including when the destination is stdout | the destination |
+| `130` | SIGINT stopped the run: someone pressed Ctrl-C | |
+| `143` | SIGTERM stopped the run: something else asked it to stop | |
 
-Most code-`2` failures are decided before anything is read or written. Two are
-not. A script whose result sets the chosen format cannot separate is only known
-once the script has run, so the inputs were read even though nothing was
-printed. A script whose `.mode` contradicts a `.dump` destination is the same
-case: the mode is session state, so the contradiction only exists at the
-statement that hits it. A `4` means the query may already have produced results.
+Most code-`2` failures are decided before anything is read or written. Two are found only while the script runs, after the inputs were read: result sets the chosen format cannot separate, and a `.mode` that contradicts a `.dump` destination. A `4` means the query may already have produced results.
 
-The class is the same whether a failure happens at the top level or inside a
-script: a `.save` that cannot write exits `4` as line 9 of a piped script exactly
-as it does on its own.
+A failure gets the same code at the top level or inside a script: a `.save` that cannot write exits `4` on line 9 of a piped script as it does alone.
 
-A dot-command written wrong is a `2`, whichever command it is. `.describe` with
-no table name, `.mode` naming a mode that does not exist, `.save` with two
-arguments, `.ls` with two paths — none of them ran, so none of them is a `1`.
-What the command does once it is accepted is classified on its own: `.cd` to a
-directory that is not there exits `1`, because that command ran and failed.
+A malformed dot-command is a `2`: `.describe` with no table, `.mode` naming an unknown mode, `.save` with two arguments, `.ls` with two paths. Once a command is accepted, its own failure is classified separately, so `.cd` to a missing directory exits `1`.
 
-`130` and `143` are `128` plus the signal number, which is what a shell reports
-for a process a signal killed. They are separate codes because the next move
-differs: a Ctrl-C is a person changing their mind, while a SIGTERM is the
-surrounding system — a canceled CI job, a service manager shutting down, a
-`timeout` giving up — taking the run away, which is the case a wrapper may want
-to retry or report.
+`130` and `143` are `128` plus the signal number, as a shell reports them. A Ctrl-C is usually a person changing their mind; a SIGTERM comes from a canceled CI job, a service manager, or `timeout`, which a wrapper may want to retry or report.
 
-An interrupted run cancels the query and returns through the normal cleanup, so
-the temp directories a download or a staged stdin dataset created are removed
-before sqly exits. A second signal skips that and kills the process outright.
+An interrupted run cancels the query and cleans up, removing the temp directories a download or a staged stdin dataset created. A second signal kills the process outright.
 
-A timeout inside sqly is not a signal: a download that ran out of time exits `3`,
-as the input failure it is.
+A timeout inside sqly is not a signal: a download that ran out of time exits `3`.
 
-Errors go to stderr; query results go to stdout, so a pipeline stays clean.
+Errors go to stderr and query results to stdout.
 
 ## Environment
 
