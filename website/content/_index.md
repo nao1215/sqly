@@ -2,7 +2,7 @@
 title: sqly
 ---
 
-sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It loads them into an in-memory SQLite database, so joins, CTEs, window functions, and aggregates all work — across formats, in one query.
+sqly runs SQL against CSV, TSV, LTSV, JSON, JSONL, Parquet, Excel, ACH, and Fedwire files. It loads them into an in-memory SQLite database, so joins, CTEs, window functions, and aggregates work across formats in one query.
 
 ![sqly running a query against a CSV file](/img/demo.gif)
 
@@ -22,9 +22,9 @@ go run github.com/nao1215/sqly@latest --sql "SELECT dept, ROUND(AVG(salary)) AS 
 +-------+-----+
 ```
 
-The file is the table: `staff.csv` became `staff`. Nothing to declare, no schema to write.
+The file is the table: `staff.csv` became `staff`, with no schema to write.
 
-## Three things to try next
+## Next steps
 
 ```shell
 sqly --output-format json --sql "SELECT * FROM staff" --output staff.json staff.csv   # convert
@@ -34,9 +34,9 @@ sqly staff.csv                                                          # open t
 
 The [cookbook](/cookbook/) has the rest: JSON extraction, Excel sheets, HTTP inputs, inspecting data, writing changes back, and MySQL/PostgreSQL/BigQuery syntax.
 
-## It reads and writes a pipe
+## Use it in a pipe
 
-sqly is a filter, not a destination. It takes standard input, and its non-table output is meant for the next command:
+sqly reads standard input, and its non-table output formats are meant for the next command:
 
 ```shell
 curl -s https://example.com/sales.csv | sqly --stdin-format csv --sql "SELECT region, SUM(amount) FROM stdin GROUP BY region"
@@ -44,11 +44,9 @@ sqly --output-format jsonl --sql "SELECT path FROM logs WHERE status >= 500" log
 sqly --output-format tsv --sql "SELECT status, path FROM logs" logs.csv | cut -f1 | sort -rn | head -n 1
 ```
 
-Filter in SQL, shape in `jq`: SQL has the `WHERE`, `GROUP BY`, and `JOIN`, so `jq` only ever sees the rows that matter. For nested JSON, `json_extract` reaches into the document and sqly can stand in for `jq` entirely. A failed query exits non-zero, so `set -e` works. [Pipe data out](/cookbook/#pipe-data-out) has the details.
+Filter with `WHERE`, `GROUP BY`, and `JOIN` in SQL, and `jq` only sees the rows you kept. For nested JSON, `json_extract` reaches into the document, so sqly can replace `jq` there. A failed query exits non-zero, but in a pipeline the shell reports the last command's status, so use `pipefail` if `set -e` should stop on it. [Pipe data out](/cookbook/#pipe-data-out) has the details.
 
 ## Why sqly?
-
-Pick the tool that fits the job:
 
 | You want | Use |
 |:--|:--|
@@ -59,13 +57,13 @@ Pick the tool that fits the job:
 | Analytics on data larger than memory, or on files in S3 | [DuckDB](https://duckdb.org/) |
 | SQL over files, with an interactive shell, cross-format joins, and write-back | sqly |
 
-sqly's own emphasis is the session: an interactive shell with completion and history, files of different formats joined as peers, and the ability to write your edits back into the source file.
+sqly is built around the session: an interactive shell with completion and history, files of different formats joined as peers, and edits written back into the source file.
 
-Against DuckDB, which is faster and has the richer SQL, sqly's ground is narrower: `UPDATE` a CSV or Excel file and `.save --in-place` it, read ACH, Fedwire and LTSV, keep a Shift-JIS or EUC-JP file in its encoding when it is saved, and write queries in MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
+DuckDB is faster and has the richer SQL. What sqly adds over it is narrower: `UPDATE` a CSV or Excel file and `.save --in-place` it, read ACH, Fedwire and LTSV, keep a Shift-JIS or EUC-JP file in its encoding when it is saved, and write queries in MySQL, PostgreSQL or GoogleSQL syntax with `--dialect`.
 
 ## The shell
 
-`sqly` with no `--sql` opens a REPL. Tab completes keywords, table names, and paths; history persists across sessions; dot-commands cover the things SQL has no syntax for.
+`sqly` with no `--sql` opens a REPL. Tab completes keywords, table names, and paths, history persists across sessions, and dot-commands cover what SQL has no syntax for.
 
 ![the sqly interactive shell](/img/shell-demo.gif)
 

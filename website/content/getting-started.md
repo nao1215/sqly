@@ -34,7 +34,7 @@ sqly --sql "SELECT u.user_name, i.position
             FROM user u JOIN identifier i ON u.identifier = i.id" user.csv identifier.csv
 ```
 
-Formats mix. A gzipped CSV joins a Parquet file joins an Excel sheet — once loaded, they are all SQLite tables.
+Formats mix. A gzipped CSV joins a Parquet file joins an Excel sheet, because once loaded they are all SQLite tables.
 
 A directory argument loads every supported file inside it.
 
@@ -60,7 +60,7 @@ Full list on the [reference page](/reference/#output-formats).
 
 Every format above lays a record out along the line, and that stops working on the
 files sqly was written for. A 300-column row is one 2700-character line as a table,
-as CSV, as TSV, and as LTSV alike — no terminal shows it, and the column holding the
+as CSV, as TSV, and as LTSV alike. No terminal shows it, and the column holding the
 bad value has no name beside it to search for.
 
 `--output-format vertical` turns the row on its side: one column per line, in a block per record.
@@ -83,8 +83,7 @@ away:
 sqly --output-format vertical --sql "SELECT * FROM wide" wide.csv | grep BAD
 ```
 
-In the shell it is `.mode vertical`. Vertical output is for reading, not for
-parsing — it names no file format, so `.dump` and `--output` take the format from
+In the shell it is `.mode vertical`. Vertical output is for reading. It names no file format, so `.dump` and `--output` take the format from
 the destination's extension, exactly as they do in table mode.
 
 ## 4. Four ways in

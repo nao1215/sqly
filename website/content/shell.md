@@ -1,6 +1,6 @@
 ---
 title: Shell
-description: The sqly interactive shell — completion, history, multi-line statements, and every dot-command.
+description: The sqly interactive shell, with completion, history, multi-line statements, and every dot-command.
 weight: 40
 ---
 
@@ -24,7 +24,7 @@ dot-command it completes that command's arguments: `.dialect m` reaches `mysql`,
 `.mode m` reaches `markdown`. What it offers depends on where the cursor is in
 the statement; see below. History persists across sessions, and records a
 line even when sqly rejected it, so the up-arrow brings it back to be fixed. It
-records the line as typed, so a URL carrying credentials is stored as typed too —
+records the line as typed, so a URL carrying credentials is stored as typed too.
 `SQLY_HISTORY_PATH` says where, and the file is a plain text one with an entry
 per line, readable and editable with anything (a statement typed across several
 lines is stored on one, with its newlines escaped). What sqly prints back is redacted: a password
@@ -105,7 +105,7 @@ indents nothing, and which is which follows the current dialect.
 
 SQL is colored as you type it: keywords, string literals, comments, numbers, and
 the names of tables and columns this session actually has. A name it does not
-recognize — an alias, a function, a table not imported yet — keeps the prompt's
+recognize (an alias, a function, a table not imported yet) keeps the prompt's
 own color, so a misspelled table is the one word on the line with no color of
 its own. `.theme` shows the theme in effect and the ones available, and takes
 one to switch to:
@@ -281,7 +281,7 @@ read from a file instead of a pipe:
 sqly --script-file monthly.sqly user.csv
 ```
 
-`--sql-file` holds SQL, and a dot-command in one is rejected by name and line — a
+`--sql-file` holds SQL, and a dot-command in one is rejected by name and line, because a
 `.sql` file that runs `.save` is a shell script wearing a SQL extension. The flag
 that permits side effects says `script` in its name. See the
 [reference](/reference/#sql-file-or-script-file) for what each one accepts.
@@ -297,4 +297,4 @@ Saved user to out/user.csv
 
 `.save DIR` never touches the sources. `.save --in-place` overwrites them. A session that changed no row writes no file and says so.
 
-Write-back lives here rather than on the command line: it is the one thing sqly does that cannot be undone, and `.save` puts it after the statements that changed something, where you can look first. The same commands work in a piped script, so a batch job writes back the same way a person does. The [reference](/reference/#write-back) has the full contract — which formats can be written, what happens when several files are saved at once, and what is guaranteed if one of them fails.
+Write-back lives here rather than on the command line: it is the one thing sqly does that cannot be undone, and `.save` puts it after the statements that changed something, where you can look first. The same commands work in a piped script, so a batch job writes back the same way a person does. The [reference](/reference/#write-back) has the full contract: which formats can be written, what happens when several files are saved at once, and what is guaranteed if one of them fails.
