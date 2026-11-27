@@ -24,6 +24,17 @@ scenarios:
           stdout:
             contains: booker12
 
+  - name: runs the statements after a DROP TRIGGER and a column named trigger
+    steps:
+      - fixture: *user
+      - run:
+          command: sqly --output-format csv user.csv
+          stdin: "CREATE TABLE t (trigger TEXT); INSERT INTO t VALUES ('x');\nCREATE TRIGGER tg AFTER INSERT ON t BEGIN SELECT 1; END;\nDROP TRIGGER tg; SELECT trigger FROM t;\n"
+      - assert:
+          exit_code: 0
+          stdout:
+            contains: "trigger\nx\n"
+
   - name: switches output mode and runs the following query
     steps:
       - fixture: *user
