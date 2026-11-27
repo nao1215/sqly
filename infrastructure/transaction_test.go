@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -313,6 +314,21 @@ func TestWithTransactionContextCancel(t *testing.T) {
 			return err
 		}
 		cancel()
+		// database/sql rolls the transaction back on a goroutine of its own
+		// once the context is done. Waiting for it here makes the rollback
+		// below the one that loses the race every time, which is the branch
+		// this test is about; returning at once left it to the scheduler.
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			_, err := tx.ExecContext(context.Background(), `SELECT 1`)
+			if errors.Is(err, sql.ErrTxDone) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the transaction was not rolled back after its context ended: %v", err)
+			}
+			time.Sleep(time.Millisecond)
+		}
 		return ctx.Err()
 	})
 
