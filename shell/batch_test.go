@@ -182,6 +182,24 @@ func TestSplitSQLStatements_TriggerBody(t *testing.T) {
 			wantRem:   "",
 		},
 		{
+			name:      "DROP TRIGGER is an ordinary statement",
+			input:     "DROP TRIGGER tg; SELECT 1;",
+			wantStmts: []string{"DROP TRIGGER tg", "SELECT 1"},
+			wantRem:   "",
+		},
+		{
+			name:      "a column named trigger does not open a body",
+			input:     "CREATE TABLE t (trigger TEXT); SELECT trigger FROM t; SELECT 2;",
+			wantStmts: []string{"CREATE TABLE t (trigger TEXT)", "SELECT trigger FROM t", "SELECT 2"},
+			wantRem:   "",
+		},
+		{
+			name:      "a TEMP table with a trigger column is not a trigger",
+			input:     "CREATE TEMP TABLE t (trigger TEXT); SELECT 1;",
+			wantStmts: []string{"CREATE TEMP TABLE t (trigger TEXT)", "SELECT 1"},
+			wantRem:   "",
+		},
+		{
 			name:      "incomplete trigger is left in the remainder, not split",
 			input:     "CREATE TRIGGER tg AFTER UPDATE ON t BEGIN UPDATE t SET a=1;\n",
 			wantStmts: nil,
