@@ -64,13 +64,14 @@ jobs:
           git config diff.context 0
           git config diff.interHunkContext 0
           ulimit -v "$MUTANT_MEMORY_KIB"
-          # gremlins v0.6.0 reports 0% efficacy when no mutant on the changed
-          # lines ran (a pull request that changes only tests or comments), and
-          # the threshold in .gremlins.yaml then fails it. Nothing was assessed
-          # there, so that one case passes.
+          # gremlins v0.6.0 keeps the mutants outside the diff in its results as
+          # SKIPPED, so a pull request that changes only tests or comments reads
+          # 0% efficacy and the threshold in .gremlins.yaml fails it. Nothing was
+          # assessed there, so a report holding only SKIPPED mutants passes; one
+          # with any other status, a timeout included, keeps its failure.
           status=0
           gremlins unleash --diff "$BASE_SHA" --workers 2 --timeout-coefficient 10 --output mutation.json . || status=$?
-          if [ "$status" -ne 0 ] && [ -f mutation.json ] && [ "$(jq '.mutants_killed + .mutants_lived' mutation.json)" = 0 ]; then
+          if [ "$status" -ne 0 ] && [ -f mutation.json ] && [ "$(jq '[.files[]?.mutations[]? | select(.status != "SKIPPED")] | length' mutation.json)" = 0 ]; then
             echo "::notice::No mutant on the changed lines was run; there is nothing to assess."
             exit 0
           fi
