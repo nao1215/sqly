@@ -63,6 +63,7 @@ func TestHistoryLineCodecRoundTrips(t *testing.T) {
 		"SELECT '日本語'",
 		`C:\Users\nao\data.csv`,
 		"SELECT 1 -- trailing backslash \\",
+		"SELECT 1\r\nFROM t", // a statement pasted from a CRLF file
 		strings.Repeat("SELECT 1; ", 5000),
 	} {
 		line := encodeHistoryLine(request)
@@ -73,6 +74,25 @@ func TestHistoryLineCodecRoundTrips(t *testing.T) {
 		got, ok := decodeHistoryLine(line)
 		if !ok || got != request {
 			t.Errorf("round trip of %q = (%q, %v), want (%q, true)", request, got, ok, request)
+		}
+	}
+}
+
+// TestDecodeHistoryLineKeepsWhatItDoesNotDefine covers lines encodeHistoryLine
+// never writes but a hand-edited file can hold: an escape with no meaning and a
+// lone backslash at the end are read as the characters they are.
+func TestDecodeHistoryLineKeepsWhatItDoesNotDefine(t *testing.T) {
+	t.Parallel()
+
+	for line, want := range map[string]string{
+		`SELECT '\t'`: `SELECT '\t'`,
+		`SELECT 1 \`:  `SELECT 1 \`,
+		`SELECT '\é'`: `SELECT '\é'`,
+		`a\nb\rc\\d`:  "a\nb\rc\\d",
+	} {
+		got, ok := decodeHistoryLine(line)
+		if !ok || got != want {
+			t.Errorf("decodeHistoryLine(%q) = (%q, %v), want (%q, true)", line, got, ok, want)
 		}
 	}
 }
@@ -338,5 +358,31 @@ func TestHistoryEmptyPathFailsInit(t *testing.T) {
 
 	if err := NewHistoryRepository("").Init(context.Background()); err == nil {
 		t.Error("Init with an empty path = nil error, want error")
+	}
+}
+
+// TestRewriteRemovesItsStagingFileOnFailure checks that a rewrite that cannot
+// replace the history file leaves nothing behind it: the staging file is
+// removed, so a failing trim does not fill the directory with copies.
+func TestRewriteRemovesItsStagingFileOnFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	// A non-empty directory where the history file should be: the rename of
+	// the staging file over it fails.
+	path := filepath.Join(dir, "history")
+	if err := os.MkdirAll(filepath.Join(path, "keep"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	h := &historyRepository{path: path}
+	if err := h.rewrite([]string{"SELECT 1"}); err == nil {
+		t.Fatal("rewrite over a directory succeeded")
+	}
+	staged, err := filepath.Glob(filepath.Join(dir, ".sqly-history-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(staged) != 0 {
+		t.Errorf("staging files left behind: %v", staged)
 	}
 }

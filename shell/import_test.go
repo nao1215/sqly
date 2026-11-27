@@ -169,6 +169,35 @@ func TestImportCommand_UsesContentDispositionFilenameForHTTPURL(t *testing.T) {
 	}
 }
 
+// TestSaveRefusesATableDownloadedFromAURL checks that .save --in-place of a
+// changed table imported from a URL fails naming the URL, because there is no
+// file of the user's to write back to.
+func TestSaveRefusesATableDownloadedFromAURL(t *testing.T) {
+	s, cleanup, err := newShell(t, []string{"sqly", "--allow-remote"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	server := newHTTPImportServer(t)
+	defer server.Close()
+	s.httpClient = server.Client()
+
+	if err := s.commands.importCommand(context.Background(), s, []string{server.URL + "/user.csv"}); err != nil {
+		t.Fatalf("importCommand: %v", err)
+	}
+	if _, err := getExecStdOutput(t, s.exec, "UPDATE user SET first_name='P' WHERE identifier=1"); err != nil {
+		t.Fatalf("UPDATE failed: %v", err)
+	}
+	var saveErr error
+	withStderr(t, func() {
+		saveErr = s.commands.saveCommand(context.Background(), s, []string{inPlaceArg})
+	})
+	if saveErr == nil || !strings.Contains(saveErr.Error(), "came from a remote URL") {
+		t.Fatalf(".save --in-place = %v, want an error saying the table came from a remote URL", saveErr)
+	}
+}
+
 func TestImportCommand_DecodesShiftJISHTTPURL(t *testing.T) {
 	s, cleanup, err := newShell(t, []string{"sqly", "--allow-remote", "--encoding", "shift-jis"})
 	if err != nil {

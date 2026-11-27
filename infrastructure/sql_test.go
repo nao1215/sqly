@@ -23,6 +23,9 @@ func TestQuoteTableRef(t *testing.T) {
 		{"a.b", "`a.b`"},
 		{".leadingdot", "`.leadingdot`"},
 		{"trailingdot.", "`trailingdot.`"},
+		// A schema name with nothing after the dot names no table in it.
+		{"main.", "`main.`"},
+		{"temp.", "`temp.`"},
 		{"has`tick", "`has``tick`"},
 	}
 	for _, tt := range tests {
