@@ -157,6 +157,16 @@ func TestExtractTableName(t *testing.T) {
 			want: "logs",
 		},
 		{
+			name: "a name made of the first and last character of each range",
+			args: args{query: "SELECT * FROM aA0_zZ9"},
+			want: "aA0_zZ9",
+		},
+		{
+			name: "an empty quoted name is read as empty, not as unclosed",
+			args: args{query: `SELECT * FROM "".t`},
+			want: ".t",
+		},
+		{
 			name: "no from clause returns empty",
 			args: args{query: "SELECT 1"},
 			want: "",

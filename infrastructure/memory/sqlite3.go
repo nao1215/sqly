@@ -431,25 +431,20 @@ func readIdentifierPart(s string) (part, rest string, ok bool) {
 		}
 		return s[1 : 1+end], s[end+2:], true
 	}
-	end := 0
-	for end < len(s) && isIdentifierByte(s[end]) {
-		end++
+	// An unquoted name is a word as the statement scanner reads one, so the
+	// two cannot disagree on where a name ends.
+	for tok := range sqltext.Tokens(s, dialect.SQLite) {
+		if tok.Kind == sqltext.Word && tok.Start == 0 {
+			return s[:tok.End], s[tok.End:], true
+		}
+		break
 	}
-	if end == 0 {
-		return "", s, false
-	}
-	return s[:end], s[end:], true
+	return "", s, false
 }
 
 // identifierQuotes maps each character that opens a quoted identifier in SQLite
 // to the one that closes it.
 var identifierQuotes = map[byte]byte{'`': '`', '"': '"', '[': ']'}
-
-// isIdentifierByte reports whether c can be part of an unquoted identifier.
-func isIdentifierByte(c byte) bool {
-	return c == '_' ||
-		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-}
 
 // Exec execute "INSERT" or "UPDATE" or "DELETE" statement
 //
