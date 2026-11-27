@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v1.7.6](https://github.com/nao1215/sqly/compare/v1.7.5...v1.7.6) (2026-11-27)
+
 ### Bug Fixes
 
 * A statement holding the word `TRIGGER` that is not a `CREATE TRIGGER`, such as `DROP TRIGGER tg` or a table with a column named `trigger`, no longer swallows the statements after it in a script or on standard input. The splitter took the word for the start of a trigger body and stopped splitting at `;`, so `DROP TRIGGER tg; SELECT 1;` ran as one statement and printed nothing for the `SELECT`.
