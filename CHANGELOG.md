@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+* Dependencies: filesql v0.60.5, which allocates less when `.dump` or `--output` writes Parquet or TSV (about a fifth fewer bytes for Parquet, half for TSV) and applies the `rtrim` and `ltrim` prep tags faster.
+
 ## [v1.7.7](https://github.com/nao1215/sqly/compare/v1.7.6...v1.7.7) (2026-11-27)
 
 ### Changed
