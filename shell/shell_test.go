@@ -2796,6 +2796,24 @@ func TestShellExec_SchemaAndDescribe(t *testing.T) {
 		}
 	})
 
+	t.Run(".schema sqlite_master builds the statement from its columns", func(t *testing.T) {
+		// SQLite keeps no CREATE statement for its own catalog, so this is the
+		// table the fallback from the stored SQL to PRAGMA table_info exists for.
+		shell, cleanup := newImportedShell(t)
+		defer cleanup()
+
+		got, err := getExecStdOutput(t, shell.exec, ".schema sqlite_master")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := string(got)
+		for _, want := range []string{"CREATE TABLE", "sqlite_master", "type", "tbl_name", "rootpage", "sql"} {
+			if !strings.Contains(out, want) {
+				t.Fatalf(".schema sqlite_master output %q lacks %q", out, want)
+			}
+		}
+	})
+
 	t.Run(".schema on a missing table returns an error", func(t *testing.T) {
 		shell, cleanup := newImportedShell(t)
 		defer cleanup()

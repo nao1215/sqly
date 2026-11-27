@@ -11,6 +11,7 @@ import (
 
 	"github.com/nao1215/sqly/config"
 	"github.com/nao1215/sqly/domain/model"
+	"github.com/nao1215/sqly/internal/sqlname"
 )
 
 // schemaTableColumn names the column of the structured `.schema` result that
@@ -151,21 +152,6 @@ func injectTempKeyword(createSQL string) string {
 	return createSQL[:i+len(kw)] + " TEMP" + after
 }
 
-// splitTableQualifier splits a possibly schema-qualified table reference such as
-// "main.user" or "temp.t" into its schema and object name. A bare name yields an
-// empty schema. The split happens only when the prefix before the first dot is a
-// real SQLite schema (main or temp); sqly rejects ATTACH/DETACH, so those are the
-// only schemas a session can have. Any other dotted name (e.g. "a.b") is a literal
-// table identifier and is returned whole, matching `SELECT * FROM "a.b"`. This is
-// why `.schema "a.b"` reaches its table instead of querying a non-existent
-// "a.sqlite_master".
-func splitTableQualifier(name string) (schema, object string) {
-	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 && isSchemaName(name[:i]) {
-		return name[:i], name[i+1:]
-	}
-	return "", name
-}
-
 // resolveObjectName disambiguates a user-supplied helper-command argument between
 // a literal dotted identifier and a schema-qualified reference. The shell tokenizer
 // strips the quotes the user typed, so "main.x" and main.x arrive identically and
@@ -178,7 +164,7 @@ func (s *Shell) resolveObjectName(ctx context.Context, tableName string) (schema
 	if s.objectExists(ctx, tableName) {
 		return "", tableName
 	}
-	return splitTableQualifier(tableName)
+	return sqlname.SplitQualifier(tableName)
 }
 
 // objectExists reports whether a table or view named exactly name exists in either
@@ -193,19 +179,6 @@ func (s *Shell) objectExists(ctx context.Context, name string) bool {
 		return false
 	}
 	return res.RowCount() > 0
-}
-
-// isSchemaName reports whether prefix is a SQLite schema name a sqly session can
-// reference. Only "main" and "temp" (case-insensitive) qualify: ATTACH/DETACH are
-// rejected, so no other database can be attached. A dotted prefix that is not one
-// of these is therefore part of a literal table name, not a schema qualifier.
-func isSchemaName(prefix string) bool {
-	switch strings.ToLower(prefix) {
-	case "main", "temp":
-		return true
-	default:
-		return false
-	}
 }
 
 // buildCreateStatement assembles a CREATE TABLE statement from PRAGMA

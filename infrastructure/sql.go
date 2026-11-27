@@ -2,6 +2,8 @@ package infrastructure
 
 import (
 	"strings"
+
+	"github.com/nao1215/sqly/internal/sqlname"
 )
 
 // Quote returns quoted string.
@@ -23,26 +25,11 @@ func Quote(s string) string {
 // QuoteTableRef quotes a possibly schema-qualified table reference. A bare name
 // "user" becomes `user`; a qualified name "main.user" becomes `main`.`user`, so a
 // helper command can reference the same schema-qualified table SQLite accepts in a
-// query. The split happens only when the prefix is a real SQLite schema (main or
-// temp); sqly rejects ATTACH/DETACH, so those are the only schemas a session can
-// have. Any other dotted name (e.g. "a.b") is a single literal identifier and is
-// quoted whole as `a.b`, matching `SELECT * FROM "a.b"`.
+// query. What counts as a qualifier is sqlname.SplitQualifier's rule, so any other
+// dotted name (e.g. "a.b") is quoted whole as `a.b`, matching `SELECT * FROM "a.b"`.
 func QuoteTableRef(name string) string {
-	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 && isSchemaName(name[:i]) {
-		return Quote(name[:i]) + "." + Quote(name[i+1:])
+	if schema, object := sqlname.SplitQualifier(name); schema != "" {
+		return Quote(schema) + "." + Quote(object)
 	}
 	return Quote(name)
-}
-
-// isSchemaName reports whether prefix is a SQLite schema name a sqly session can
-// reference: only "main" or "temp" (case-insensitive), since ATTACH/DETACH is
-// rejected. A dotted prefix that is not one of these belongs to a literal table
-// name rather than a schema qualifier.
-func isSchemaName(prefix string) bool {
-	switch strings.ToLower(prefix) {
-	case "main", "temp":
-		return true
-	default:
-		return false
-	}
 }
