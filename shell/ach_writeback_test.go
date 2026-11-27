@@ -252,6 +252,7 @@ func TestWriteBack_ACHSaveDirRefusesWhatItWouldOverwrite(t *testing.T) {
 		{
 			name: "an existing file",
 			prepare: func(t *testing.T, dir string) string {
+				t.Helper()
 				out := filepath.Join(dir, "out")
 				if err := os.MkdirAll(out, 0o750); err != nil {
 					t.Fatal(err)
@@ -266,6 +267,7 @@ func TestWriteBack_ACHSaveDirRefusesWhatItWouldOverwrite(t *testing.T) {
 		{
 			name: "an existing directory",
 			prepare: func(t *testing.T, dir string) string {
+				t.Helper()
 				out := filepath.Join(dir, "out")
 				if err := os.MkdirAll(filepath.Join(out, "ppd-debit.ach"), 0o750); err != nil {
 					t.Fatal(err)

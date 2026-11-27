@@ -2,6 +2,7 @@ package shell
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"testing"
 	"testing/iotest"
@@ -24,16 +25,16 @@ func TestValidatingReadersDoNotDependOnHowTheInputIsSplit(t *testing.T) {
 	t.Parallel()
 
 	le := func(units ...uint16) []byte {
-		var b []byte
+		b := make([]byte, 0, 2*len(units))
 		for _, u := range units {
-			b = append(b, byte(u), byte(u>>8))
+			b = binary.LittleEndian.AppendUint16(b, u)
 		}
 		return b
 	}
 	be := func(units ...uint16) []byte {
-		var b []byte
+		b := make([]byte, 0, 2*len(units))
 		for _, u := range units {
-			b = append(b, byte(u>>8), byte(u))
+			b = binary.BigEndian.AppendUint16(b, u)
 		}
 		return b
 	}

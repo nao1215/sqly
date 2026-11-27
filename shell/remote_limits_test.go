@@ -593,7 +593,7 @@ func TestIsWindowsDrivePath(t *testing.T) {
 func TestCheckRemoteRedirectStopsAtTheLimit(t *testing.T) {
 	t.Parallel()
 
-	first, err := http.NewRequest(http.MethodGet, "https://example.com/a.csv", nil)
+	first, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/a.csv", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
