@@ -32,6 +32,10 @@ env:
   # hosted runner down with "runner has received a shutdown signal" and no log.
   # A 4 GiB cap per process makes it die as a killed mutant instead.
   MUTANT_MEMORY_KIB: '4194304'
+  # Every mutant must be a fresh run of the tests. setup-go restores the build
+  # cache, test results included, and a cached run takes milliseconds: every
+  # mutant then "times out", none is killed or lives, and the efficacy is 0.
+  GOFLAGS: '-count=1'
 
 jobs:
   diff:

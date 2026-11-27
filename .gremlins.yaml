@@ -1,0 +1,9 @@
+# Read by gremlins from the module root, locally and in the Mutation workflow.
+unleash:
+  threshold:
+    # Exit with an error when killed / (killed + lived) is at or below this
+    # percentage, in each package of the weekly run and on the lines a pull
+    # request changes. Every package measured above it on 2026-11-27
+    # (doc/build_and_test.md). It is set here rather than with
+    # --threshold-efficacy: gremlins v0.6.0 does not read that flag's value.
+    efficacy: 90

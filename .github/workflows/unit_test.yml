@@ -56,3 +56,61 @@ jobs:
 
       - name: Run tests with coverage report output
         run: go test -v -cover -coverprofile coverage.out ./...
+
+  race_test:
+    name: Unit test (race detector)
+
+    # The shell runs the import, the query and the interrupt handler on
+    # separate goroutines. The detector sees a data race only when it happens,
+    # so one Linux leg on the newest Go watches for it on every pull request.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "stable"
+
+      - name: Run tests with the race detector
+        run: go test -race ./...
+
+  unit_test_32bit:
+    name: Unit test (GOARCH=386)
+
+    # int is 32 bits here, so a size or offset computed in int overflows where
+    # the 64-bit legs cannot see it. A linux/amd64 runner runs 386 binaries
+    # natively. github.com/moov-io/ach, which filesql reads ACH files with, does
+    # not compile for 386 (its amount limits overflow int), so the packages
+    # that import it, with their tests, are left out; the release builds only
+    # 64-bit binaries.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOARCH: "386"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "stable"
+
+      - name: Test the packages that build for 386
+        run: |
+          pkgs=""
+          for pkg in $(go list ./...); do
+            # A failing go list stops the step here rather than letting the
+            # package through untested or skipping it.
+            deps=$(go list -test -deps "$pkg")
+            printf '%s\n' "$deps" | grep -qx 'github.com/moov-io/ach' || pkgs="$pkgs $pkg"
+          done
+          echo "packages:$pkgs"
+          test -n "$pkgs"
+          # shellcheck disable=SC2086
+          go test $pkgs

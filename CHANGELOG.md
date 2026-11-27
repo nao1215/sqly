@@ -2,8 +2,15 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+* A statement holding the word `TRIGGER` that is not a `CREATE TRIGGER`, such as `DROP TRIGGER tg` or a table with a column named `trigger`, no longer swallows the statements after it in a script or on standard input. The splitter took the word for the start of a trigger body and stopped splitting at `;`, so `DROP TRIGGER tg; SELECT 1;` ran as one statement and printed nothing for the `SELECT`.
+* The table output format reports a failed write. A full disk or a closed pipe used to print part of the table and exit `0`, because the table renderer drops the errors of its writes; the other formats already reported them.
+* An Excel export reports an error from closing the workbook. The error was kept only when an earlier step had already failed, so a close that failed after a successful write was reported as success.
+
 ### Changed
 
+* CI runs the unit tests under the race detector and as `GOARCH=386`, fuzzes each target for 15 seconds on every pull request, fails a pull request that lowers coverage or takes it below 94% (was 90%, now measured with the unit and E2E tests together), and fails mutation testing at 90% efficacy or less. Every job has a timeout.
 * The E2E suite runs on atago v0.26.3 (setup-atago v0.1.5) and the benchmark uses setup-himorime v0.2.1, which comments on pull requests. Mutation testing caps each mutant at 4 GiB of memory, so a mutant that allocates without bound fails as killed instead of taking the runner down, and a second edit in a git diff hunk is no longer skipped.
 
 ## [v1.7.5](https://github.com/nao1215/sqly/compare/v1.7.4...v1.7.5) (2026-11-19)
