@@ -11,8 +11,8 @@ import "strings"
 // "a.b", is one literal table identifier and is returned whole, matching
 // SELECT * FROM "a.b".
 func SplitQualifier(name string) (schema, object string) {
-	if i := strings.IndexByte(name, '.'); i > 0 && i < len(name)-1 && isSchema(name[:i]) {
-		return name[:i], name[i+1:]
+	if prefix, rest, found := strings.Cut(name, "."); found && rest != "" && isSchema(prefix) {
+		return prefix, rest
 	}
 	return "", name
 }
