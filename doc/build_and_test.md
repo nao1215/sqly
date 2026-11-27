@@ -82,8 +82,8 @@ $ go test . -run '^TestMetamorphic_' -rapid.seed=<seed>
 
 The fuzz targets (`FuzzQuoteRoundTrip` and the others under `shell/` and
 `infrastructure/`) run their seed corpus in `make test`. The Fuzz workflow
-searches each one for 15 seconds on every pull request and for five minutes
-every night:
+searches each one for 15 seconds on every pull request that changes Go code
+or a fuzz corpus, and for five minutes every night:
 
 ```shell
 $ go test ./shell -run '^$' -fuzz '^FuzzSplitSQLStatements$' -fuzztime 1m

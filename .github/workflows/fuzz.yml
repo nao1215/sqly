@@ -19,6 +19,7 @@ on:
       - '**.go'
       - go.mod
       - go.sum
+      - '**/testdata/fuzz/**'
       - .github/workflows/fuzz.yml
   schedule:
     - cron: "0 5 * * *"
