@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v1.7.7](https://github.com/nao1215/sqly/compare/v1.7.6...v1.7.7) (2026-11-27)
+
 ### Changed
 
 * Dependencies: filesql v0.60.4. With `--dialect postgresql`, `0b101`, `0o17` and `0x1F` are the integers PostgreSQL reads (`0b` and `0o` were refused, and `0x8000000000000000` came back negative), and a `$` inside a name such as `abc$foo` is part of it, as it is with `--dialect mysql`. With `--dialect mysql`, `SELECT 1abc FROM t` names the column `1abc` instead of answering `1` under the alias `abc`; `--dialect googlesql` refuses it, as BigQuery does. An export of a table with generated columns includes them. A script whose multi-statement line fails after a `BEGIN` no longer leaves a transaction open that sqly does not know about.
