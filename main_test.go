@@ -90,6 +90,23 @@ func Test_run(t *testing.T) {
 	})
 }
 
+// TestRunSucceedsQuietly checks the exit code and the stderr of a statement
+// that succeeds: 0 and nothing written, so a script can tell a warning from a
+// clean run by stderr alone.
+func TestRunSucceedsQuietly(t *testing.T) {
+	var code int
+	got := getStderrForRunFunc(t, func(args []string) int {
+		code = run(args)
+		return code
+	}, []string{"sqly", "--sql", "SELECT 1", "--output-format", "csv", "testdata/user.csv"})
+	if code != shell.ExitOK {
+		t.Errorf("run() = %d, want %d", code, shell.ExitOK)
+	}
+	if len(got) != 0 {
+		t.Errorf("stderr = %q, want nothing", got)
+	}
+}
+
 func Test_runErrPatern(t *testing.T) {
 	t.Run("empty argument is a usage error", func(t *testing.T) {
 		got := run([]string{})

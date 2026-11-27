@@ -260,3 +260,66 @@ func TestPrintNDJSONEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+// limitWriter takes the first limit bytes and fails every write after them,
+// like a disk that fills up part way through.
+type limitWriter struct {
+	limit int
+	n     int
+}
+
+func (w *limitWriter) Write(p []byte) (int, error) {
+	room := w.limit - w.n
+	if room >= len(p) {
+		w.n += len(p)
+		return len(p), nil
+	}
+	if room > 0 {
+		w.n += room
+		return room, errors.New("limitWriter: no space left")
+	}
+	return 0, errors.New("limitWriter: no space left")
+}
+
+// TestPrintReportsEveryShortWrite is the property a caller of Print relies on to
+// tell a complete result from a cut one: whatever the mode, and wherever the
+// destination stops taking bytes, Print returns an error unless all of the
+// output was written.
+func TestPrintReportsEveryShortWrite(t *testing.T) {
+	t.Parallel()
+
+	plain := NewTable("t", Header{"id", "name", "note"}, []Record{
+		Record([]string{"1", "Alice", "line 1\nline 2"}),
+		Record([]string{"2", "Bob", ""}),
+		Record([]string{"3", "日本語", "x"}),
+	})
+	native, err := NewTableFromCells("n", Header{"id", "v"}, [][]Cell{
+		{NewCell(int64(1)), NewCell(float64(2.5))},
+		{NewCell(int64(2)), NewCell(nil)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modes := []PrintMode{
+		PrintModeTable, PrintModeMarkdownTable, PrintModeCSV, PrintModeTSV,
+		PrintModeLTSV, PrintModeExcel, PrintModeJSON, PrintModeJSONL,
+		PrintModeParquet, PrintModeVertical,
+	}
+	for _, table := range []*Table{plain, native} {
+		for _, mode := range modes {
+			if (mode == PrintModeTSV || mode == PrintModeLTSV) && table == plain {
+				continue // a newline in a value cannot be written as TSV or LTSV
+			}
+			var full bytes.Buffer
+			if err := table.Print(&full, mode); err != nil {
+				t.Fatalf("Print(%v) of %s: %v", mode, table.Name(), err)
+			}
+			for limit := range full.Len() {
+				if err := table.Print(&limitWriter{limit: limit}, mode); err == nil {
+					t.Errorf("Print(%v) of %s stopped after %d of %d bytes and returned nil",
+						mode, table.Name(), limit, full.Len())
+				}
+			}
+		}
+	}
+}

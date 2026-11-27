@@ -495,3 +495,117 @@ func TestRedactURL(t *testing.T) {
 		})
 	}
 }
+
+// TestDownloadRemoteInput_AcceptsABodyOfExactlyTheLimit checks both size
+// checks at their edge: a body the server declares and sends at exactly the
+// limit is downloaded whole, and one byte more is refused.
+func TestDownloadRemoteInput_AcceptsABodyOfExactlyTheLimit(t *testing.T) {
+	t.Parallel()
+
+	body := "a\n" + strings.Repeat("x", int(testDownloadLimit)-3) + "\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		send := body
+		if r.URL.Path == "/over.csv" {
+			send += "y"
+		}
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Length", strconv.Itoa(len(send)))
+		fmt.Fprint(w, send)
+	}))
+	defer server.Close()
+
+	s, cleanup := newLimitShell(t, server)
+	defer cleanup()
+
+	path, done, err := s.downloadRemoteInput(context.Background(), server.URL+"/exact.csv")
+	if done != nil {
+		defer done()
+	}
+	if err != nil {
+		t.Fatalf("a body of exactly the limit was refused: %v", err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != body { //nolint:gosec // the staged download
+		t.Errorf("the staged file holds %d bytes (err %v), want %d", len(got), err, len(body))
+	}
+
+	_, done, err = s.downloadRemoteInput(context.Background(), server.URL+"/over.csv")
+	if done != nil {
+		done()
+	}
+	if err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Errorf("a body one byte over the limit = %v, want a too large error", err)
+	}
+}
+
+// TestDownloadRemoteInput_TakesOnlyA2xxStatus checks the edges of the status
+// range a download accepts: 200 and 299 succeed, 300 and 404 fail naming the
+// status.
+func TestDownloadRemoteInput_TakesOnlyA2xxStatus(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		code, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".csv"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv")
+		w.WriteHeader(code)
+		fmt.Fprint(w, "a\n1\n")
+	}))
+	defer server.Close()
+
+	s, cleanup := newLimitShell(t, server)
+	defer cleanup()
+
+	for code, ok := range map[int]bool{200: true, 299: true, 300: false, 404: false} {
+		_, done, err := s.downloadRemoteInput(context.Background(), fmt.Sprintf("%s/%d.csv", server.URL, code))
+		if done != nil {
+			done()
+		}
+		if ok && err != nil {
+			t.Errorf("status %d: %v, want the download", code, err)
+		}
+		if !ok && (err == nil || !strings.Contains(err.Error(), strconv.Itoa(code))) {
+			t.Errorf("status %d: %v, want an error naming the status", code, err)
+		}
+	}
+}
+
+// TestIsWindowsDrivePath checks the letters a drive may be named with, and
+// that the characters just outside each letter range are not one.
+func TestIsWindowsDrivePath(t *testing.T) {
+	t.Parallel()
+
+	for p, want := range map[string]bool{
+		"a:/x": true, "z:/x": true, "A:/x": true, "Z:x": true, "C:": true,
+		"@:/x": false, "[:/x": false, "`:/x": false, "{:/x": false, "1:/x": false,
+		"C": false, "": false, "C/x": false, "/C:/x": false,
+	} {
+		if got := isWindowsDrivePath(p); got != want {
+			t.Errorf("isWindowsDrivePath(%q) = %v, want %v", p, got, want)
+		}
+	}
+}
+
+// TestCheckRemoteRedirectStopsAtTheLimit checks the redirect chain's edge: the
+// last redirect allowed is followed and the next is refused.
+func TestCheckRemoteRedirectStopsAtTheLimit(t *testing.T) {
+	t.Parallel()
+
+	first, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/a.csv", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	via := make([]*http.Request, 0, maxRemoteRedirects)
+	for range maxRemoteRedirects - 1 {
+		via = append(via, first)
+	}
+	if err := checkRemoteRedirect(first, via); err != nil {
+		t.Errorf("redirect %d of %d refused: %v", len(via), maxRemoteRedirects, err)
+	}
+	via = append(via, first)
+	if err := checkRemoteRedirect(first, via); err == nil {
+		t.Errorf("redirect past the limit of %d followed", maxRemoteRedirects)
+	}
+}

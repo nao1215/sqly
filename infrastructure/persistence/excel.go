@@ -39,9 +39,7 @@ func excelSheetName(name string) string {
 		b.WriteRune(r)
 	}
 	sheet := []rune(b.String())
-	if len(sheet) > excelSheetNameMaxLen {
-		sheet = sheet[:excelSheetNameMaxLen]
-	}
+	sheet = sheet[:min(len(sheet), excelSheetNameMaxLen)]
 	name = strings.Trim(string(sheet), "'")
 	if name == "" {
 		return "Sheet1"
@@ -55,9 +53,9 @@ func excelSheetName(name string) string {
 func DumpExcel(excelFilePath string, table *model.Table) (err error) {
 	f := excelize.NewFile()
 	defer func() {
-		if e := f.Close(); err != nil {
-			err = errors.Join(err, e)
-		}
+		// The close error was dropped when everything before it succeeded,
+		// which is when it matters: the export then reported success.
+		err = errors.Join(err, f.Close())
 	}()
 
 	// Excel worksheet names are limited to 31 characters and cannot contain

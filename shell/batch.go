@@ -145,26 +145,33 @@ func splitSQLStatements(s string, d dialect.Dialect) (stmts []string, remainder 
 // trigger body at its inner semicolons.
 type triggerState struct {
 	tokens    int  // significant word tokens observed from the statement start
+	ruledOut  bool // the prefix is not CREATE [TEMP|TEMPORARY] TRIGGER
 	isTrigger bool // statement starts with CREATE [TEMP|TEMPORARY] TRIGGER
 	bodyOpen  bool // the trigger's BEGIN has been seen
 	depth     int  // open BEGIN/CASE blocks awaiting an END
 }
 
 // observe updates the state from the next upper-cased word token of the statement.
+//
+// Once the prefix rules the statement out, later words are not looked at: a
+// TRIGGER further on is a column name or a DROP TRIGGER, and reading it as the
+// start of a body held every ";" after it, so the statements that followed were
+// never run.
 func (t *triggerState) observe(word string) {
-	t.tokens++
+	if t.ruledOut {
+		return
+	}
 	if !t.isTrigger {
+		t.tokens++
 		switch {
 		case t.tokens == 1:
-			if word != sqlCreate {
-				t.tokens = notTriggerPrefix // first token is not CREATE: not a trigger
-			}
+			t.ruledOut = word != sqlCreate
 		case word == "TEMP" || word == "TEMPORARY":
 			// still within the "CREATE [TEMP] TRIGGER" prefix
 		case word == "TRIGGER":
 			t.isTrigger = true
 		default:
-			t.tokens = notTriggerPrefix // CREATE <something other than a trigger>
+			t.ruledOut = true // CREATE <something other than a trigger>
 		}
 		return
 	}
@@ -189,10 +196,6 @@ func (t *triggerState) observe(word string) {
 func (t *triggerState) insideBody() bool {
 	return t.isTrigger && (!t.bodyOpen || t.depth > 0)
 }
-
-// notTriggerPrefix is a sentinel token count marking a statement whose prefix has
-// already ruled it out as a CREATE TRIGGER, so further tokens are ignored.
-const notTriggerPrefix = 99
 
 // sqlCreate is the CREATE keyword, matched when detecting a CREATE TRIGGER prefix.
 const sqlCreate = "CREATE"

@@ -386,18 +386,6 @@ func SanitizeForSQL(name string) string {
 	return finalResult
 }
 
-// FileSQLError represents an error from filesql operations
-//
-//nolint:revive // Name maintained for consistency with FileSQLAdapter and clear context indication
-type FileSQLError struct {
-	Op  string
-	Err string
-}
-
-func (e *FileSQLError) Error() string {
-	return "filesql " + e.Op + ": " + e.Err
-}
-
 // supportedBaseExts lists the base file extensions that filesql can handle.
 var supportedBaseExts = []string{".csv", ".tsv", ".ltsv", ".parquet", ".xlsx", ".json", ".jsonl"}
 

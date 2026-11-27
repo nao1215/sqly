@@ -243,6 +243,41 @@ func TestDumpTableToParquet_TextStagedColumnKeepsTheDisplayedNumber(t *testing.T
 	}
 }
 
+// TestDumpTableToParquet_WidensMixedIntegerAndRealToReal checks a column whose
+// values are integers and reals: it is staged as REAL, which holds both, so the
+// Parquet column is a number and none of its values is lost.
+func TestDumpTableToParquet_WidensMixedIntegerAndRealToReal(t *testing.T) {
+	t.Parallel()
+
+	table, err := model.NewTableFromCells("mixed", model.Header{"n"}, [][]model.Cell{
+		{model.NewCell(int64(3))},
+		{model.NewCell(float64(2.5))},
+	})
+	if err != nil {
+		t.Fatalf("NewTableFromCells: %v", err)
+	}
+	if got := parquetStagingColumnType(table, 0); got != "REAL" {
+		t.Errorf("staging type = %q, want REAL", got)
+	}
+	out := filepath.Join(t.TempDir(), "mixed.parquet")
+	if err := DumpTableToParquet(out, table); err != nil {
+		t.Fatalf("DumpTableToParquet: %v", err)
+	}
+
+	db, err := libfilesql.Open(context.Background(), out)
+	if err != nil {
+		t.Fatalf("reimport: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	var sum float64
+	if err := db.QueryRowContext(context.Background(), "SELECT SUM(n) FROM mixed").Scan(&sum); err != nil {
+		t.Fatal(err)
+	}
+	if sum != 5.5 {
+		t.Errorf("SUM(n) after the round trip = %v, want 5.5", sum)
+	}
+}
+
 // TestDumpTableToParquet_RefusesDuplicateColumnNames pins that two columns of
 // one name are refused in sqly's own words.
 //

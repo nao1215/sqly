@@ -62,10 +62,8 @@ type replacementDetectingReader struct {
 
 func (r *replacementDetectingReader) Read(p []byte) (int, error) {
 	n, err := r.reader.Read(p)
-	if n > 0 {
-		if invalid := r.scan(p[:n]); invalid != nil {
-			return n, invalid
-		}
+	if invalid := r.scan(p[:n]); invalid != nil {
+		return n, invalid
 	}
 	return n, err
 }
@@ -108,10 +106,8 @@ type utf16ValidatingReader struct {
 
 func (r *utf16ValidatingReader) Read(p []byte) (int, error) {
 	n, err := r.reader.Read(p)
-	if n > 0 {
-		if invalid := r.scan(p[:n]); invalid != nil {
-			return n, invalid
-		}
+	if invalid := r.scan(p[:n]); invalid != nil {
+		return n, invalid
 	}
 	if errors.Is(err, io.EOF) {
 		if len(r.half) > 0 {

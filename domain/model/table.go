@@ -394,7 +394,11 @@ func (t *Table) printTable(out io.Writer) error {
 		headerAlignment[i] = tw.AlignCenter
 	}
 
-	table := tablewriter.NewTable(out,
+	// tablewriter drops the errors of the writes it makes, so a full disk or a
+	// closed pipe printed half a table and reported success. The writer below
+	// keeps the first one for Render to return.
+	sticky := &stickyErrorWriter{w: out}
+	table := tablewriter.NewTable(sticky,
 		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
 		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
 		tablewriter.WithAlignment(alignment),
@@ -418,10 +422,26 @@ func (t *Table) printTable(out io.Writer) error {
 			return fmt.Errorf("failed to append table row: %w", err)
 		}
 	}
-	if err := table.Render(); err != nil {
+	if err := errors.Join(table.Render(), sticky.err); err != nil {
 		return fmt.Errorf("failed to render table: %w", err)
 	}
 	return nil
+}
+
+// stickyErrorWriter passes writes to w until one fails, then fails every later
+// write with that error and keeps it in err for the caller to report.
+type stickyErrorWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (s *stickyErrorWriter) Write(p []byte) (int, error) {
+	if s.err != nil {
+		return 0, s.err
+	}
+	n, err := s.w.Write(p)
+	s.err = err
+	return n, err
 }
 
 // markdownCell renders a cell for a Markdown table. A "|" is escaped so it does

@@ -233,3 +233,114 @@ func TestWriteBack_ACHRejectsIncompleteSet(t *testing.T) {
 		t.Errorf("error should name the missing companion table or call the set incomplete; got: %v", saveErr)
 	}
 }
+
+// TestWriteBack_ACHSaveDirRefusesWhatItWouldOverwrite covers the destinations
+// .save DIR refuses for an ACH set, as it does for a CSV: the source file
+// itself, an existing file, and an existing directory. Each refusal names the
+// reason and leaves what is on disk as it was.
+func TestWriteBack_ACHSaveDirRefusesWhatItWouldOverwrite(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(t *testing.T, dir string) (outDir string)
+		want    string
+	}{
+		{
+			name:    "the source's own directory",
+			prepare: func(_ *testing.T, dir string) string { return dir },
+			want:    "is the source file",
+		},
+		{
+			name: "an existing file",
+			prepare: func(t *testing.T, dir string) string {
+				t.Helper()
+				out := filepath.Join(dir, "out")
+				if err := os.MkdirAll(out, 0o750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(out, "ppd-debit.ach"), []byte("PRE-EXISTING\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				return out
+			},
+			want: "already exists",
+		},
+		{
+			name: "an existing directory",
+			prepare: func(t *testing.T, dir string) string {
+				t.Helper()
+				out := filepath.Join(dir, "out")
+				if err := os.MkdirAll(filepath.Join(out, "ppd-debit.ach"), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				return out
+			},
+			want: "is an existing directory",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			src := copyFixture(t, "ppd-debit.ach", dir)
+			orig, err := os.ReadFile(src) //nolint:gosec // test path
+			if err != nil {
+				t.Fatal(err)
+			}
+			outDir := tt.prepare(t, dir)
+
+			shell, cleanup, err := newShell(t, []string{"sqly"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := getExecStdOutput(t, shell.exec,
+				"UPDATE ppd_debit_entries SET individual_name='Nobody' WHERE entry_index=0"); err != nil {
+				t.Fatalf("UPDATE failed: %v", err)
+			}
+			var saveErr error
+			withStderr(t, func() {
+				saveErr = shell.commands.saveCommand(context.Background(), shell, []string{outDir})
+			})
+			if saveErr == nil || !strings.Contains(saveErr.Error(), tt.want) {
+				t.Fatalf(".save %s = %v, want an error saying %q", outDir, saveErr, tt.want)
+			}
+			if after, _ := os.ReadFile(src); string(after) != string(orig) { //nolint:gosec // test path
+				t.Error("the source ACH file changed")
+			}
+		})
+	}
+}
+
+// TestWriteBack_ACHSaveSkipsAnUnchangedSet checks that .save leaves an ACH set
+// alone when none of its tables changed: the file is not rewritten.
+func TestWriteBack_ACHSaveSkipsAnUnchangedSet(t *testing.T) {
+	dir := t.TempDir()
+	src := copyFixture(t, "ppd-debit.ach", dir)
+	before, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	shell, cleanup, err := newShell(t, []string{"sqly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := shell.commands.importCommand(context.Background(), shell, []string{src}); err != nil {
+		t.Fatal(err)
+	}
+	withStderr(t, func() {
+		if err := shell.commands.saveCommand(context.Background(), shell, []string{inPlaceArg}); err != nil {
+			t.Fatalf(".save --in-place of an unchanged ACH set: %v", err)
+		}
+	})
+	after, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) || !os.SameFile(before, after) {
+		t.Error("an unchanged ACH set was rewritten")
+	}
+}

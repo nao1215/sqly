@@ -52,6 +52,19 @@ $ make test-e2e
 $ make smoke
 ```
 
+CI also runs the unit tests under the race detector, and as `GOARCH=386`, where
+`int` is 32 bits. The 386 job leaves out the packages that import
+github.com/moov-io/ach, which does not compile for 386; the release ships only
+64-bit binaries.
+
+```shell
+$ go test -race ./...
+$ GOARCH=386 go test ./config ./domain/... ./infrastructure ./infrastructure/memory ./infrastructure/persistence
+```
+
+`make coverage` measures the unit and E2E tests together. The Coverage workflow
+fails a pull request that lowers the total or takes it below 94%.
+
 ### Generated inputs
 
 The property-based, metamorphic and differential tests draw their inputs with
@@ -68,8 +81,9 @@ $ go test . -run '^TestMetamorphic_' -rapid.seed=<seed>
 ```
 
 The fuzz targets (`FuzzQuoteRoundTrip` and the others under `shell/` and
-`infrastructure/`) run their seed corpus in `make test`; the Fuzz workflow
-searches each one every night:
+`infrastructure/`) run their seed corpus in `make test`. The Fuzz workflow
+searches each one for 15 seconds on every pull request that changes Go code
+or a fuzz corpus, and for five minutes every night:
 
 ```shell
 $ go test ./shell -run '^$' -fuzz '^FuzzSplitSQLStatements$' -fuzztime 1m
@@ -140,18 +154,26 @@ $ gremlins unleash --diff origin/main --workers 4 .
 `--exclude-files /` keeps a run to the one directory it is given. Run `--diff`
 from the module root, where the paths git prints match the files gremlins mutates.
 
-Efficacy (killed / (killed + lived)) on 2026-11-19, the first full run:
+Efficacy (killed / (killed + lived)) on 2026-11-27:
 
 | Package | Killed | Lived | Efficacy |
 |---|---|---|---|
-| `shell` | 894 | 138 | 86.63% |
-| `domain/model` | 171 | 17 | 90.96% |
-| `domain/sqltext` | 78 | 16 | 82.98% |
+| `shell` | 923 | 101 | 90.14% |
+| `domain/model` | 172 | 17 | 91.01% |
+| `domain/sqltext` | 93 | 1 | 98.94% |
 | `config` | 79 | 6 | 92.94% |
-| `infrastructure/filesql` | 49 | 8 | 85.96% |
-| `infrastructure/memory` | 54 | 7 | 88.52% |
-| `infrastructure/persistence` | 53 | 4 | 92.98% |
+| `infrastructure/filesql` | 51 | 4 | 92.73% |
+| `infrastructure/memory` | 61 | 0 | 100% |
+| `infrastructure/persistence` | 49 | 5 | 90.74% |
+| `infrastructure` | 15 | 1 | 93.75% |
 
-The root package, `di`, `domain/cleanup`, `infrastructure` and `interactor`
-hold fewer than twenty mutants each and are measured by the weekly run. A pull
-request should not lower a package's efficacy below this table.
+The root package, `di`, `domain/cleanup` and `interactor` hold fewer than
+twenty mutants each and none lived. `.gremlins.yaml` fails a run at 90% or
+less: a pull request fails when one mutant in ten of its changed lines lives,
+and a weekly job fails when its package falls to 90%. Most of
+the mutants still alive are equivalent: a bound that cannot be reached, or a
+guard whose other branch gives the same result.
+
+The workflow sets `GOFLAGS=-count=1`. setup-go restores the test cache, and a
+cached test run takes milliseconds, so without it every mutant times out and the
+efficacy reads 0%.
