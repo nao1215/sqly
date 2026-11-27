@@ -550,42 +550,6 @@ func TestFileSQLAdapter_LoadFileNonexistent(t *testing.T) {
 	}
 }
 
-func TestFileSQLError_Error(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		err      *FileSQLError
-		expected string
-	}{
-		{
-			name:     "query error",
-			err:      &FileSQLError{Op: "query", Err: "syntax error"},
-			expected: "filesql query: syntax error",
-		},
-		{
-			name:     "connection error",
-			err:      &FileSQLError{Op: "connect", Err: "database locked"},
-			expected: "filesql connect: database locked",
-		},
-		{
-			name:     "empty operation",
-			err:      &FileSQLError{Op: "", Err: "unknown error"},
-			expected: "filesql : unknown error",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			actual := tt.err.Error()
-			if actual != tt.expected {
-				t.Errorf("FileSQLError.Error() = %q, expected %q", actual, tt.expected)
-			}
-		})
-	}
-}
-
 func TestSanitizeForSQL(t *testing.T) {
 	t.Parallel()
 

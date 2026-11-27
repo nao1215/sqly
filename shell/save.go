@@ -404,10 +404,6 @@ func (s *Shell) planWriteBack(ctx context.Context, destDir string, skipUnchanged
 			problems = append(problems, fmt.Sprintf("%s: came from a directory import (%s)", name, source))
 			continue
 		}
-		if info, statErr := os.Stat(source); statErr == nil && info.IsDir() {
-			problems = append(problems, fmt.Sprintf("%s: came from a directory import (%s)", name, source))
-			continue
-		}
 		if tablesPerSource[source] > 1 {
 			// An ACH or Fedwire source never reaches here: its tables are written as
 			// one set above. What is left is a workbook, where the sheets are

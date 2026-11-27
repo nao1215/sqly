@@ -277,15 +277,12 @@ func parquetInsertArgs(t *model.Table, rowIdx int, types []string) []any {
 			args = append(args, record.At(col))
 			continue
 		}
-		// Bind the driver's own value when there is one, so an INTEGER stays an
-		// integer through the staging table and into the Parquet schema. The
-		// display string is the fallback for a table built from strings, where
-		// there is no other value to bind.
-		if cell, ok := t.NativeCell(rowIdx, col); ok {
-			args = append(args, cell.Value())
-			continue
-		}
-		args = append(args, record.At(col))
+		// Bind the driver's own value, so an INTEGER stays an integer through
+		// the staging table and into the Parquet schema. A column is staged as
+		// a number only when every row has that value (parquetStagingColumnType);
+		// a table built from strings is staged as TEXT and took the branch above.
+		cell, _ := t.NativeCell(rowIdx, col)
+		args = append(args, cell.Value())
 	}
 	return args
 }
