@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v1.7.8](https://github.com/nao1215/sqly/compare/v1.7.7...v1.7.8) (2026-11-27)
+
 ### Changed
 
 * Dependencies: filesql v0.60.5, which allocates about a fifth fewer bytes when a table is written to a Parquet file.
