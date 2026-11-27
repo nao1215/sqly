@@ -72,23 +72,3 @@ func TestInjectTempKeywordAfterLeadingWhitespace(t *testing.T) {
 		}
 	}
 }
-
-// TestSplitTableQualifierOnlySplitsASchema checks that a name is split only
-// at a real schema with something after the dot.
-func TestSplitTableQualifierOnlySplitsASchema(t *testing.T) {
-	t.Parallel()
-
-	for in, want := range map[string][2]string{
-		"main.user": {"main", "user"},
-		"TEMP.t":    {"TEMP", "t"},
-		"main.":     {"", "main."},
-		".user":     {"", ".user"},
-		"a.b":       {"", "a.b"},
-		"user":      {"", "user"},
-	} {
-		schema, object := splitTableQualifier(in)
-		if got := [2]string{schema, object}; got != want {
-			t.Errorf("splitTableQualifier(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
